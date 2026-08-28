@@ -1,6 +1,6 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-08-29 (Storefront phase design spec written, awaiting plan)
+**Last updated:** 2026-08-29 (Storefront Shell & Catalog implementation plan written, ready to execute)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 ---
@@ -65,7 +65,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | # | Phase | Status | Spec | Plan |
 |---|---|---|---|---|
 | 1 | **Foundation** — architecture, data model, security rules, repo scaffold | ✅ **Complete**, merged to `master` | [design](docs/superpowers/specs/2026-08-28-foundation-design.md) | [plan](docs/superpowers/plans/2026-08-28-foundation-implementation.md) |
-| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Design spec written, plan not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | — |
+| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Plan A written (shell/catalog), ready to execute. Plan B (PDP) not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md) |
 | 3 | Personalization engine — upload/crop/zoom/rotate/reposition/DPI/preview | Not started | — | — |
 | 4 | Cart, checkout, Razorpay, accounts, order tracking | Not started | — | — |
 | 5 | Admin panel & production queue | Not started | — | — |
@@ -120,4 +120,4 @@ These were raised during Foundation-phase review and intentionally deferred — 
 
 ## 7. Next action
 
-Write the implementation plan(s) for **Phase 2 (Storefront)** from the approved design spec, then execute via subagent-driven development. The spec anticipates two plans: (1) data/denormalization + shell/homepage/listing/search, (2) the product detail page (dense enough to warrant its own plan).
+Execute **Storefront Shell & Catalog** (Plan A, 10 tasks) via subagent-driven development: new Category/Review/HomepageSection schemas, denormalized product filtering, interim Firestore search, an expanded placeholder catalogue, the layout shell, the data-driven homepage, and category listing/search. Plan B (product detail page) gets written once Plan A is built and merged.
