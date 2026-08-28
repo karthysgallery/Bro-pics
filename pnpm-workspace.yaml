@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - functions
+  - services/*
+  - packages/*
+  - scripts/*
+  - firestore-rules-tests
