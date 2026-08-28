@@ -1,3 +1,4 @@
+import 'server-only';
 import { type App, getApps, initializeApp, cert } from 'firebase-admin/app';
 
 export function getAdminApp(): App {
