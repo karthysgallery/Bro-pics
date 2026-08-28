@@ -4,3 +4,5 @@ export * from './schemas/coupon';
 export * from './schemas/order';
 export * from './schemas/customization';
 export * from './schemas/settings';
+export * from './pricing/money';
+export * from './pricing/coupon';
