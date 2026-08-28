@@ -1,0 +1,116 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isStaffOrAdmin() {
+      return isSignedIn() &&
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'staff');
+    }
+
+    // Public catalog — readable by anyone, writable only by server (Admin SDK bypasses rules).
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow write: if false;
+
+      match /variants/{variantId} {
+        allow read: if true;
+        allow write: if false;
+      }
+      match /media/{mediaId} {
+        allow read: if true;
+        allow write: if false;
+      }
+      match /frameTemplates/{templateId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    match /homepageSections/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /testimonials/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /reviews/{id} {
+      allow read: if resource.data.status == 'approved' || isStaffOrAdmin();
+      allow write: if false;
+    }
+
+    match /settings/{key} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Customer-owned data — readable only by the owner or staff/admin.
+    match /orders/{orderId} {
+      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
+      allow write: if false;
+
+      match /items/{itemId} {
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow write: if false;
+      }
+      match /events/{eventId} {
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow write: if false;
+      }
+    }
+
+    match /uploads/{uploadId} {
+      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
+      allow write: if false;
+    }
+
+    match /customizations/{id} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaffOrAdmin();
+      allow write: if false;
+
+      match /addresses/{addressId} {
+        allow read: if isOwner(userId) || isStaffOrAdmin();
+        allow write: if false;
+      }
+    }
+
+    match /coupons/{code} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+
+    match /carts/{sessionId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /webhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /counters/{id} {
+      allow read, write: if false;
+    }
+  }
+}
