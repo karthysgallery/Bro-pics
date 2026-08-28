@@ -6,3 +6,4 @@ export * from './schemas/customization';
 export * from './schemas/settings';
 export * from './pricing/money';
 export * from './pricing/coupon';
+export * from './dpi/calculate';
