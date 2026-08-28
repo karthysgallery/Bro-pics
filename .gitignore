@@ -1,5 +1,6 @@
 node_modules/
 dist/
+lib/
 .next/
 .firebase/
 firebase-debug.log
@@ -9,3 +10,4 @@ ui-debug.log
 .env
 .env.local
 .DS_Store
+*.tsbuildinfo

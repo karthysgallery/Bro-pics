@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "pnpm --filter @bro-pics/web dev",
     "build": "pnpm -r --if-present build",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --if-present --filter=\"!@bro-pics/firestore-rules-tests\" test",
+    "test:rules": "pnpm --filter @bro-pics/firestore-rules-tests test",
     "lint": "pnpm -r --if-present lint"
   },
   "devDependencies": {

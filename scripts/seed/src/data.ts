@@ -23,6 +23,8 @@ export const seedProducts: Product[] = [
       title: 'Classic Wooden Photo Frame | BroPics',
       description: 'Personalize a classic wooden photo frame with your own photo.',
     },
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
   },
 ];
 

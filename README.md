@@ -22,6 +22,9 @@ for the full architecture.
 5. Start emulators: `firebase emulators:start`
 6. Run the web app: `pnpm dev`
 7. Run all tests: `pnpm test`
+   - Firestore security rules tests run separately via `pnpm test:rules` — they
+     require a JDK 21+ (the Firebase emulator's requirement) in addition to the
+     Firebase CLI installed above.
 
 ## Environments
 

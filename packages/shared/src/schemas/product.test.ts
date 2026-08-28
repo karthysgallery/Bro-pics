@@ -20,6 +20,8 @@ const validProduct = {
   photoSlots: 1,
   allowsTextPersonalization: false,
   seo: { title: 'Classic Wooden Frame', description: 'Buy now' },
+  createdAt: new Date('2026-01-01'),
+  updatedAt: new Date('2026-01-01'),
 };
 
 describe('ProductSchema', () => {
