@@ -560,6 +560,8 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 - [ ] **Step 9: Create `packages/shared/src/index.ts`**
 
+Task 2 exports only the schemas created so far. Tasks 3 and 4 each append one `export * from` line to this same file when they add `pricing/money`, `pricing/coupon`, and `dpi/calculate` — do not add those lines yet, those files don't exist until those tasks run.
+
 ```ts
 export * from './schemas/product';
 export * from './schemas/variant';
@@ -567,15 +569,12 @@ export * from './schemas/coupon';
 export * from './schemas/order';
 export * from './schemas/customization';
 export * from './schemas/settings';
-export * from './pricing/money';
-export * from './pricing/coupon';
-export * from './dpi/calculate';
 ```
 
 - [ ] **Step 10: Run full package test suite**
 
 Run: `pnpm --filter @bro-pics/shared test`
-Expected: PASS (index.ts import will fail until Task 3/4 files exist — remove the pricing/dpi export lines temporarily if this task is executed standalone, or proceed directly to Task 3 before running this step)
+Expected: PASS (schema tests only — pricing and DPI tests are added in Tasks 3 and 4)
 
 - [ ] **Step 11: Commit**
 
@@ -797,10 +796,24 @@ export function calculateCouponDiscount(
 Run: `pnpm --filter @bro-pics/shared test coupon`
 Expected: PASS (8 tests)
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Add the new exports to `packages/shared/src/index.ts`**
+
+Append these two lines after the existing `export * from './schemas/settings';` line:
+
+```ts
+export * from './pricing/money';
+export * from './pricing/coupon';
+```
+
+- [ ] **Step 10: Run the full shared package suite**
+
+Run: `pnpm --filter @bro-pics/shared test`
+Expected: PASS (schema tests + money tests + coupon tests, all green)
+
+- [ ] **Step 11: Commit**
 
 ```bash
-git add packages/shared/src/pricing
+git add packages/shared/src/pricing packages/shared/src/index.ts
 git commit -m "feat(shared): add money and coupon pricing utilities"
 ```
 
@@ -910,15 +923,23 @@ export function calculateEffectiveDpi(
 Run: `pnpm --filter @bro-pics/shared test dpi`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Run the full shared package suite**
+- [ ] **Step 5: Add the new export to `packages/shared/src/index.ts`**
+
+Append this line after the existing `export * from './pricing/coupon';` line:
+
+```ts
+export * from './dpi/calculate';
+```
+
+- [ ] **Step 6: Run the full shared package suite**
 
 Run: `pnpm --filter @bro-pics/shared test`
 Expected: PASS (all tests across schemas, pricing, dpi)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add packages/shared/src/dpi
+git add packages/shared/src/dpi packages/shared/src/index.ts
 git commit -m "feat(shared): add effective DPI calculation"
 ```
 
