@@ -108,6 +108,19 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@26.4.0)(jsdom@25.0.1)
 
+  scripts/seed:
+    dependencies:
+      '@bro-pics/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@26.4.0)(jsdom@25.0.1)
+
   services/print-render:
     dependencies:
       express:
