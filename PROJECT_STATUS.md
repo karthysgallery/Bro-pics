@@ -1,6 +1,6 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-08-28 (after Foundation phase merge)
+**Last updated:** 2026-08-29 (Storefront phase design spec written, awaiting plan)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 ---
@@ -20,7 +20,7 @@ Core flow: **Category → Product → Customize (upload/crop/zoom/rotate/DPI-che
 | yazhlicollection.com | Visual design, product cards, catalogue presentation |
 | wa.me/c/916381120479 | Product catalogue reference (client will supply final catalogue separately) |
 
-None of these have been studied yet — deliberately deferred to Phase 2 (Storefront), where their UX actually drives decisions.
+All four studied via `/browse` on 2026-08-29 for the Storefront phase design. Key findings: Ritwikas (PDF's own "closer match") — pill-button variant selectors, upload/preview in the buy box, delivery-timeline widget, WhatsApp help box, tabbed info, rating-breakdown reviews. Picloopz — chip+slider filtering, paginated grids. Parul Packaging — video files mixed directly into the image thumbnail rail (9:16 vertical). Yazhli — visual inspiration only (circular tiles, whitespace, badges).
 
 ---
 
@@ -42,6 +42,20 @@ None of these have been studied yet — deliberately deferred to Phase 2 (Storef
 
 Full detail: [docs/superpowers/specs/2026-08-28-foundation-design.md](docs/superpowers/specs/2026-08-28-foundation-design.md)
 
+### Storefront phase decisions (2026-08-29)
+
+| Area | Decision | Why |
+|---|---|---|
+| Filter data | Denormalized onto `ProductSchema` (`availableSizes[]`, `minPrice`/`maxPrice`, etc.), synced by a Cloud Function on variant writes | Firestore can't do arbitrary multi-field filtering across a variants subcollection at the PDF's 500-product/400ms target |
+| Search | Firestore-only interim (`titleLower`/`searchTokens[]`) behind a swappable `searchProducts()` interface | No Algolia account yet; interface means the swap later touches no call sites |
+| Homepage | Data-driven section registry, not hardcoded | Matches "every list is admin-manageable" ground rule; Phase 5 only adds an admin UI on top |
+| Personalize CTA | Visually complete, opens a "coming soon" placeholder modal | Editor is Phase 3; proves the layout/interaction point now |
+| Cart/wishlist | Local-only mock state this phase | Real persistence needs Phase 4's checkout/accounts work |
+| Video | Fully built with placeholder clips, not stubbed | Verifiable now; real assets drop in later without touching components |
+| Visual system | Cream/charcoal/terracotta/sage palette, serif display + sans body — original, distinct from all 4 reference sites | Client's requirement for original BroPics identity |
+
+Full detail: [docs/superpowers/specs/2026-08-29-storefront-design.md](docs/superpowers/specs/2026-08-29-storefront-design.md)
+
 ---
 
 ## 3. Phase roadmap
@@ -51,7 +65,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | # | Phase | Status | Spec | Plan |
 |---|---|---|---|---|
 | 1 | **Foundation** — architecture, data model, security rules, repo scaffold | ✅ **Complete**, merged to `master` | [design](docs/superpowers/specs/2026-08-28-foundation-design.md) | [plan](docs/superpowers/plans/2026-08-28-foundation-implementation.md) |
-| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | Not started | — | — |
+| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Design spec written, plan not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | — |
 | 3 | Personalization engine — upload/crop/zoom/rotate/reposition/DPI/preview | Not started | — | — |
 | 4 | Cart, checkout, Razorpay, accounts, order tracking | Not started | — | — |
 | 5 | Admin panel & production queue | Not started | — | — |
@@ -92,7 +106,7 @@ These were raised during Foundation-phase review and intentionally deferred — 
 - **`CustomizationSchema`/`uploads` ownership model** doesn't yet cleanly support guest checkout (upload-before-login). **Phase 3's problem to solve.**
 - **No lint/typecheck/CI workflow yet.** Should land before Phase 2 code volume grows.
 - **`OrderSchema` doesn't self-validate its own money invariants** (subtotal − discount + shipping = total, amountPaidOnline + amountDueOnDelivery = total). Cheap to add now, expensive to retrofit once real orders exist — worth doing early in Phase 4.
-- **`scripts/seed` has no category data**, and its one seed product's `categoryId` points at a category that doesn't exist yet. Fine for now (no `CategorySchema` exists yet); needs real data once the client supplies the catalogue.
+- **`scripts/seed` has no category data**, and its one seed product's `categoryId` points at a category that doesn't exist yet. **Resolved by the Storefront phase plan** — `CategorySchema` is being added and seed data expanded to ~3-4 categories / 8-10 products.
 
 ## 6. Open items still waiting on the client (from the original spec, §21)
 
@@ -106,4 +120,4 @@ These were raised during Foundation-phase review and intentionally deferred — 
 
 ## 7. Next action
 
-Brainstorm and spec **Phase 2 (Storefront)** — this is where the reference sites (Picloopz, Ritwikas, Parul Packaging, Yazhli Collection) get studied via the `/browse` skill and actually inform decisions.
+Write the implementation plan(s) for **Phase 2 (Storefront)** from the approved design spec, then execute via subagent-driven development. The spec anticipates two plans: (1) data/denormalization + shell/homepage/listing/search, (2) the product detail page (dense enough to warrant its own plan).
