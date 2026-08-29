@@ -17,6 +17,7 @@ export interface ProductDenormalizedFields {
   minPrice: number;
   maxPrice: number;
   inStock: boolean;
+  [key: string]: unknown;
 }
 
 export function calculateDenormalizedFields(
@@ -65,6 +66,6 @@ export const onVariantWritten = onDocumentWritten(
     const variants = variantsSnapshot.docs.map((doc) => doc.data() as VariantForDenormalization);
 
     const denormalized = calculateDenormalizedFields(variants);
-    await db.collection('products').doc(productId).update(denormalized as Record<string, any>);
+    await db.collection('products').doc(productId).update(denormalized);
   }
 );
