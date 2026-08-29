@@ -105,4 +105,27 @@ describe('buildProductQueryPlan', () => {
     const plan = buildProductQueryPlan('', {}, 1);
     expect(plan.constraints.some((c) => c.field === 'titleLower')).toBe(false);
   });
+
+  it('forces orderByField to titleLower for a text query even when a different sort is requested', () => {
+    const plan = buildProductQueryPlan('Classic', { sort: 'newest' }, 1);
+    expect(plan.orderByField).toBe('titleLower');
+    expect(plan.orderByDirection).toBe('asc');
+  });
+
+  it('forces orderByField to minPrice for a price-range filter with no sort requested', () => {
+    const plan = buildProductQueryPlan('', { minPrice: 50000, maxPrice: 100000 }, 1);
+    expect(plan.orderByField).toBe('minPrice');
+    expect(plan.orderByDirection).toBe('asc');
+  });
+
+  it('keeps price sort direction when a price-range filter is combined with a price sort', () => {
+    const plan = buildProductQueryPlan('', { minPrice: 50000, sort: 'price_desc' }, 1);
+    expect(plan.orderByField).toBe('minPrice');
+    expect(plan.orderByDirection).toBe('desc');
+  });
+
+  it('text query still wins orderByField over a simultaneous price-range filter', () => {
+    const plan = buildProductQueryPlan('Classic', { minPrice: 50000 }, 1);
+    expect(plan.orderByField).toBe('titleLower');
+  });
 });

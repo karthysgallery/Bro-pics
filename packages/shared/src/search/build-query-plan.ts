@@ -96,7 +96,27 @@ export function buildProductQueryPlan(
     constraints.push({ field: 'titleLower', op: '<=', value: `${normalized}` });
   }
 
-  const { orderByField, orderByDirection } = SORT_MAP[filters.sort ?? 'relevance'];
+  let { orderByField, orderByDirection } = SORT_MAP[filters.sort ?? 'relevance'];
+
+  // Firestore requires the first orderBy to be on the same field as any
+  // range/inequality filter in the query. When a text search or a price
+  // range is active, the corresponding inequality field must win over
+  // whatever the user's sort preference would otherwise pick.
+  const hasTitleLowerInequality = constraints.some(
+    (c) => c.field === 'titleLower' && (c.op === '>=' || c.op === '<=')
+  );
+  const hasPriceInequality = constraints.some(
+    (c) => (c.field === 'minPrice' || c.field === 'maxPrice') && (c.op === '>=' || c.op === '<=')
+  );
+
+  if (hasTitleLowerInequality) {
+    orderByField = 'titleLower';
+    orderByDirection = 'asc';
+  } else if (hasPriceInequality) {
+    orderByField = 'minPrice';
+    orderByDirection =
+      filters.sort === 'price_asc' || filters.sort === 'price_desc' ? orderByDirection : 'asc';
+  }
 
   return {
     constraints,
