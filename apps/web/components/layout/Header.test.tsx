@@ -21,7 +21,7 @@ describe('Header', () => {
   it('renders the logo, category links, and a search input', () => {
     render(
       <CartProvider>
-        <Header categories={categories} />
+        <Header categories={categories} onCartClick={() => {}} />
       </CartProvider>
     );
     expect(screen.getByText('BroPics')).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('Header', () => {
   it('shows a cart badge with the current item count', () => {
     render(
       <CartProvider>
-        <Header categories={categories} />
+        <Header categories={categories} onCartClick={() => {}} />
       </CartProvider>
     );
     expect(screen.getByTestId('cart-count').textContent).toBe('0');

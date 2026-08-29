@@ -6,9 +6,10 @@ import { useCart } from '../../lib/cart-context';
 
 interface HeaderProps {
   categories: Category[];
+  onCartClick: () => void;
 }
 
-export function Header({ categories }: HeaderProps) {
+export function Header({ categories, onCartClick }: HeaderProps) {
   const { totalCount } = useCart();
 
   return (
@@ -45,7 +46,7 @@ export function Header({ categories }: HeaderProps) {
           <Link href="/account" aria-label="Account" className="text-charcoal">
             ◐
           </Link>
-          <button aria-label="Cart" className="relative text-charcoal">
+          <button aria-label="Cart" onClick={onCartClick} className="relative text-charcoal">
             🛒
             <span
               data-testid="cart-count"
