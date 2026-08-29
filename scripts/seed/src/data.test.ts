@@ -51,6 +51,13 @@ describe('seed products', () => {
       expect(product.availableSizes.sort()).toEqual(
         [...new Set(productVariants.map((v) => v.sizeLabel))].sort()
       );
+      expect(product.availableColours.sort()).toEqual(
+        [...new Set(productVariants.map((v) => v.frameColour))].sort()
+      );
+      expect(product.availableMaterials.sort()).toEqual(
+        [...new Set(productVariants.map((v) => v.material))].sort()
+      );
+      expect(product.inStock).toBe(productVariants.some((v) => v.stockStatus === 'in_stock'));
     }
   });
 

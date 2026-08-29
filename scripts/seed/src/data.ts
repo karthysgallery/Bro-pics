@@ -226,9 +226,12 @@ function toPrintPixels(widthIn: number, heightIn: number): { printWidthPx: numbe
 }
 
 export const seedProducts: Product[] = productInputs.map((input) => {
-  const activeVariants = input.variants.filter((v) => v.stockStatus !== 'out_of_stock');
+  // All seed variants have isActive: true, so every variant participates in
+  // the facet/price fields below, matching calculateDenormalizedFields in
+  // functions/src/products/denormalize.ts (which filters by isActive, not
+  // stockStatus). stockStatus only affects the `inStock` boolean.
   const allPrices = input.variants.map((v) => v.price);
-  const activePrices = activeVariants.length > 0 ? activeVariants.map((v) => v.price) : allPrices;
+  const inStock = input.variants.some((v) => v.stockStatus === 'in_stock');
   const ratings = input.reviews.map((r) => r.rating);
   const ratingAverage = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
 
@@ -253,13 +256,13 @@ export const seedProducts: Product[] = productInputs.map((input) => {
     seo: { title: `${input.title} | BroPics`, description: input.shortDesc },
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
-    availableSizes: [...new Set(activeVariants.map((v) => v.sizeLabel))],
-    availableColours: [...new Set(activeVariants.map((v) => v.frameColour))],
-    availableMaterials: [...new Set(activeVariants.map((v) => v.material))],
-    minPrice: Math.min(...activePrices),
-    maxPrice: Math.max(...activePrices),
+    availableSizes: [...new Set(input.variants.map((v) => v.sizeLabel))],
+    availableColours: [...new Set(input.variants.map((v) => v.frameColour))],
+    availableMaterials: [...new Set(input.variants.map((v) => v.material))],
+    minPrice: Math.min(...allPrices),
+    maxPrice: Math.max(...allPrices),
     occasionTags: input.occasionTags,
-    inStock: activeVariants.length > 0,
+    inStock,
     ratingAverage: Math.round(ratingAverage * 10) / 10,
     ratingCount: ratings.length,
     titleLower: input.title.toLowerCase(),
