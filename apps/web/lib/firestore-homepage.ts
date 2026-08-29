@@ -1,6 +1,13 @@
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
 import type { HomepageSection, Product } from '@bro-pics/shared';
+
+function toDateOrNull(value: unknown): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  return null;
+}
 
 export async function getActiveHomepageSections(): Promise<HomepageSection[]> {
   const db = getFirestore(getAdminApp());
@@ -12,7 +19,14 @@ export async function getActiveHomepageSections(): Promise<HomepageSection[]> {
     .get();
 
   return snapshot.docs
-    .map((doc) => doc.data() as HomepageSection)
+    .map((doc) => {
+      const data = doc.data() as HomepageSection;
+      return {
+        ...data,
+        startsAt: toDateOrNull(data.startsAt),
+        endsAt: toDateOrNull(data.endsAt),
+      };
+    })
     .filter((section) => {
       if (section.startsAt && section.startsAt > now) return false;
       if (section.endsAt && section.endsAt < now) return false;
