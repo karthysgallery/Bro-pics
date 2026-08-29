@@ -37,15 +37,32 @@ export async function searchProducts(
   }
   firestoreQuery = firestoreQuery.orderBy(plan.orderByField, plan.orderByDirection);
 
-  // Post-filters may remove documents from the page, so overfetch by the
-  // offset plus a generous buffer, then filter and slice in memory.
-  const snapshot = await firestoreQuery.limit(plan.offset + plan.limit * 3).get();
+  if (plan.postFilters.length === 0) {
+    // No in-memory filtering needed, so Firestore's own offset/limit and a
+    // count() aggregation give an efficient and exactly-correct result.
+    const [pageSnapshot, countSnapshot] = await Promise.all([
+      firestoreQuery.offset(plan.offset).limit(plan.limit).get(),
+      firestoreQuery.count().get(),
+    ]);
+    const page_ = pageSnapshot.docs.map((doc) => doc.data() as Product);
+    return { products: page_, totalCount: countSnapshot.data().count };
+  }
+
+  // Post-filters (minRating and/or a second array-type filter) can only be
+  // applied in memory, so we fetch every document matching the native
+  // constraints (capped generously — this interim Firestore search is
+  // designed for the current catalogue scale, not the eventual Algolia
+  // target), filter, and only then compute the true total and slice the
+  // requested page.
+  const MAX_DOCS = 1000;
+  const snapshot = await firestoreQuery.limit(MAX_DOCS).get();
   let products = snapshot.docs.map((doc) => doc.data() as Product);
 
   for (const postFilter of plan.postFilters) {
     products = products.filter((product) => applyPostFilter(product, postFilter));
   }
 
+  const totalCount = products.length;
   const page_ = products.slice(plan.offset, plan.offset + plan.limit);
-  return { products: page_, totalCount: products.length };
+  return { products: page_, totalCount };
 }
