@@ -1,16 +1,33 @@
-import { dpiTier } from '@bro-pics/shared';
+import { getActiveHomepageSections, getBestSellingProducts, getFeaturedProducts } from '../../lib/firestore-homepage';
+import { getActiveCategories } from '../../lib/firestore-categories';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminApp } from '../../lib/firebase-admin';
+import { renderHomeSection } from '../../components/home/registry';
+import type { Review } from '@bro-pics/shared';
 
-// Proves apps/web's transpilePackages config actually resolves
-// @bro-pics/shared's TypeScript source at build time (see next.config.ts).
-// Real storefront UI arrives in Phase 2 — this is a placeholder page.
-const sampleDpiTier = dpiTier(300);
+export const revalidate = 60;
 
-export default function HomePage() {
+async function getApprovedReviews(limit: number): Promise<Review[]> {
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('reviews').where('status', '==', 'approved').limit(limit).get();
+  return snapshot.docs.map((doc) => doc.data() as Review);
+}
+
+export default async function HomePage() {
+  const sections = await getActiveHomepageSections();
+  const categories = await getActiveCategories();
+  const bestSellers = await getBestSellingProducts(8);
+  const featuredSection = sections.find((s) => s.type === 'featured_collection');
+  const featured = featuredSection?.config?.categoryId
+    ? await getFeaturedProducts(featuredSection.config.categoryId as string, 8)
+    : [];
+  const reviews = await getApprovedReviews(12);
+
   return (
-    <main>
-      <h1>BroPics</h1>
-      <p>Personalized photo frames — storefront coming in Phase 2.</p>
-      <p data-sample-dpi-tier={sampleDpiTier} style={{ display: 'none' }} />
-    </main>
+    <div>
+      {sections.map((section) =>
+        renderHomeSection(section, { categories, bestSellers, featured, reviews })
+      )}
+    </div>
   );
 }
