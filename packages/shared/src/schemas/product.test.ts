@@ -22,6 +22,17 @@ const validProduct = {
   seo: { title: 'Classic Wooden Frame', description: 'Buy now' },
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
+  availableSizes: ['8x12 in', '12x18 in'],
+  availableColours: ['Black', 'White'],
+  availableMaterials: ['Wood'],
+  minPrice: 79900,
+  maxPrice: 129900,
+  occasionTags: ['birthday', 'anniversary'],
+  inStock: true,
+  ratingAverage: 4.5,
+  ratingCount: 12,
+  titleLower: 'classic wooden frame',
+  searchTokens: ['classic', 'wooden', 'frame'],
 };
 
 describe('ProductSchema', () => {
@@ -37,5 +48,21 @@ describe('ProductSchema', () => {
   it('rejects a negative photoSlots', () => {
     const invalid = { ...validProduct, photoSlots: 0 };
     expect(() => ProductSchema.parse(invalid)).toThrow();
+  });
+
+  it('rejects a ratingAverage above 5', () => {
+    const invalid = { ...validProduct, ratingAverage: 5.1 };
+    expect(() => ProductSchema.parse(invalid)).toThrow();
+  });
+
+  it('rejects a non-integer minPrice', () => {
+    const invalid = { ...validProduct, minPrice: 799.5 };
+    expect(() => ProductSchema.parse(invalid)).toThrow();
+  });
+
+  it('defaults occasionTags to an empty array when omitted', () => {
+    const { occasionTags, ...withoutOccasionTags } = validProduct;
+    const parsed = ProductSchema.parse(withoutOccasionTags);
+    expect(parsed.occasionTags).toEqual([]);
   });
 });

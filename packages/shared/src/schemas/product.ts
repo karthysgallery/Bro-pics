@@ -24,6 +24,24 @@ export const ProductSchema = z.object({
   }),
   createdAt: z.date(),
   updatedAt: z.date(),
+
+  // Denormalized filter fields — kept in sync by a Cloud Function trigger
+  // on variant writes (see functions/src/products/denormalize.ts).
+  availableSizes: z.array(z.string()),
+  availableColours: z.array(z.string()),
+  availableMaterials: z.array(z.string()),
+  minPrice: z.number().int().nonnegative(),
+  maxPrice: z.number().int().nonnegative(),
+  occasionTags: z.array(z.string()).default([]),
+  inStock: z.boolean(),
+
+  // Denormalized rating — kept in sync when a review is approved.
+  ratingAverage: z.number().min(0).max(5),
+  ratingCount: z.number().int().nonnegative(),
+
+  // Interim Firestore-only search fields (see packages/shared/src/search).
+  titleLower: z.string(),
+  searchTokens: z.array(z.string()),
 });
 
 export type Product = z.infer<typeof ProductSchema>;
