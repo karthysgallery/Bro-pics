@@ -14,14 +14,17 @@ async function getApprovedReviews(limit: number): Promise<Review[]> {
 }
 
 export default async function HomePage() {
-  const sections = await getActiveHomepageSections();
-  const categories = await getActiveCategories();
-  const bestSellers = await getBestSellingProducts(8);
+  const [sections, categories, bestSellers, reviews] = await Promise.all([
+    getActiveHomepageSections(),
+    getActiveCategories(),
+    getBestSellingProducts(8),
+    getApprovedReviews(12),
+  ]);
+
   const featuredSection = sections.find((s) => s.type === 'featured_collection');
   const featured = featuredSection?.config?.categoryId
     ? await getFeaturedProducts(featuredSection.config.categoryId as string, 8)
     : [];
-  const reviews = await getApprovedReviews(12);
 
   return (
     <div>

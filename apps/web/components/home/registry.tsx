@@ -36,9 +36,12 @@ export function renderHomeSection(section: HomepageSection, data: HomeSectionDat
     case 'offer_strip':
       return <OfferStrip key={section.id} section={section} />;
     case 'recently_viewed':
-      // Client-side only (reads localStorage) — rendered by a separate
-      // client component mounted directly in the page, not through this
-      // server-rendered registry. See apps/web/app/(shop)/page.tsx.
+      // Client-side only (reads localStorage) — NOT YET IMPLEMENTED. This
+      // section type is seeded and active but currently renders nothing.
+      // A future task should add a client component reading recently-viewed
+      // product IDs from localStorage and mount it directly in
+      // apps/web/app/(shop)/page.tsx, since this registry only handles
+      // server-renderable sections.
       return null;
     default:
       return null;

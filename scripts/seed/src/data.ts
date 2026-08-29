@@ -279,7 +279,7 @@ export const seedProducts: Product[] = productInputs.map((input) => {
 
 export const seedVariants: Variant[] = productInputs.flatMap((input) =>
   input.variants.map((v) => ({
-    id: `var_${v.idSuffix}`,
+    id: `var_${input.id.replace('prod_', '')}_${v.idSuffix}`,
     productId: input.id,
     sku: v.sku,
     sizeLabel: v.sizeLabel,
