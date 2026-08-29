@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import './globals.css';
+import type { Category } from '@bro-pics/shared';
 import { CartProvider } from '../lib/cart-context';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
+import { getAnnouncementBarSettings } from '../lib/firestore-settings';
 
 export const metadata = {
   title: 'BroPics — Personalized Photo Frames',
@@ -10,13 +12,27 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const categories = await getActiveCategories();
+  let categories: Category[] = [];
+  try {
+    categories = await getActiveCategories();
+  } catch (error) {
+    console.error('Failed to load categories for navigation:', error);
+  }
+
+  let announcementBar: { text: string; link?: string } | null = null;
+  try {
+    announcementBar = await getAnnouncementBarSettings();
+  } catch (error) {
+    console.error('Failed to load announcement bar settings:', error);
+  }
 
   return (
     <html lang="en">
       <body className="bg-cream text-charcoal font-sans">
         <CartProvider>
-          <LayoutChrome categories={categories}>{children}</LayoutChrome>
+          <LayoutChrome categories={categories} announcementBar={announcementBar}>
+            {children}
+          </LayoutChrome>
         </CartProvider>
       </body>
     </html>
