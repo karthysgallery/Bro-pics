@@ -11,7 +11,7 @@ function formatPaise(paise: number): string {
 
 export function ProductCard({ product }: ProductCardProps) {
   return (
-    <Link href={`/product/${product.slug}`} className="block rounded-lg overflow-hidden bg-white group">
+    <Link href={`/product/${product.slug}`} className="block rounded-lg overflow-hidden bg-surface group">
       <div className="relative aspect-square bg-cream">
         <img
           src={`/placeholders/products/${product.slug}-1.svg`}

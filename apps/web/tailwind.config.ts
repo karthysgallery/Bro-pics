@@ -9,6 +9,7 @@ const config: Config = {
         charcoal: '#2A2622',
         terracotta: '#C1592A',
         sage: '#7C8B6F',
+        surface: '#FFFFFF',
       },
       fontFamily: {
         display: ['var(--font-display)', 'serif'],

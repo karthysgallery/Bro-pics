@@ -2,7 +2,7 @@ import type { HomepageSection } from '@bro-pics/shared';
 
 export function ProductsInMotion({ section }: { section: HomepageSection }) {
   return (
-    <section className="px-4 py-10 md:px-8 bg-white">
+    <section className="px-4 py-10 md:px-8 bg-surface">
       <h2 className="font-display text-2xl text-center mb-6">{section.title}</h2>
       <div className="flex gap-4 overflow-x-auto pb-2 justify-center">
         <video

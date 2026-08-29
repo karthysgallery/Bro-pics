@@ -17,7 +17,7 @@ export function ReviewsTestimonials({ title, reviews }: ReviewsTestimonialsProps
       </p>
       <div className="flex gap-4 overflow-x-auto pb-2 justify-center">
         {reviews.slice(0, 6).map((review) => (
-          <div key={review.id} className="w-64 flex-shrink-0 bg-white rounded-lg p-4 text-left">
+          <div key={review.id} className="w-64 flex-shrink-0 bg-surface rounded-lg p-4 text-left">
             <p className="text-sm">★ {review.rating}</p>
             <p className="font-medium">{review.title}</p>
             <p className="text-sm text-charcoal/70">{review.body}</p>
