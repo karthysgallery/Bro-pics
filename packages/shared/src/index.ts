@@ -10,6 +10,7 @@ export * from './schemas/homepage-section';
 export * from './search/types';
 export * from './search/build-query-plan';
 export * from './search/search-products';
+export * from './search/parse-search-params';
 export * from './pricing/money';
 export * from './pricing/coupon';
 export * from './dpi/calculate';

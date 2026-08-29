@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { SearchFilters } from '@bro-pics/shared';
+import { parseSearchFilters, type SearchFilters } from '@bro-pics/shared';
 
 export interface ProductFiltersController {
   filters: SearchFilters;
@@ -24,28 +24,7 @@ function toggleListParam(params: URLSearchParams, key: string, value: string): U
 }
 
 export function useProductFilters(params: URLSearchParams): ProductFiltersController {
-  const filters = useMemo<SearchFilters>(() => {
-    const sizes = params.getAll('size');
-    const colours = params.getAll('colour');
-    const materials = params.getAll('material');
-    const occasionTags = params.getAll('occasion');
-    const minPrice = params.get('minPrice');
-    const maxPrice = params.get('maxPrice');
-    const minRating = params.get('minRating');
-    const sort = params.get('sort') as SearchFilters['sort'] | null;
-
-    return {
-      ...(sizes.length > 0 && { sizes }),
-      ...(colours.length > 0 && { colours }),
-      ...(materials.length > 0 && { materials }),
-      ...(occasionTags.length > 0 && { occasionTags }),
-      ...(minPrice && { minPrice: Number(minPrice) }),
-      ...(maxPrice && { maxPrice: Number(maxPrice) }),
-      ...(minRating && { minRating: Number(minRating) }),
-      ...(params.get('inStockOnly') === 'true' && { inStockOnly: true }),
-      ...(sort && { sort }),
-    };
-  }, [params]);
+  const filters = useMemo<SearchFilters>(() => parseSearchFilters(params).filters, [params]);
 
   return {
     filters,

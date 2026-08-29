@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getCategoryBySlug, searchProductsPage } from '../../../../lib/firestore-products';
 import { ProductCard } from '../../../../components/product/ProductCard';
 import { CategoryFilters } from './CategoryFilters';
-import type { SearchFilters } from '@bro-pics/shared';
+import { parseSearchFilters } from '@bro-pics/shared';
 
 export const revalidate = 60;
 
@@ -31,21 +31,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   if (!category) notFound();
 
   const urlParams = toSearchParams(rawSearchParams);
-  const page = Number(urlParams.get('page') ?? '1');
-
-  const filters: SearchFilters = { categoryId: category.id };
-  const sizes = urlParams.getAll('size');
-  const colours = urlParams.getAll('colour');
-  const materials = urlParams.getAll('material');
-  if (sizes.length > 0) filters.sizes = sizes;
-  if (colours.length > 0) filters.colours = colours;
-  if (materials.length > 0) filters.materials = materials;
-  const minPrice = urlParams.get('minPrice');
-  const maxPrice = urlParams.get('maxPrice');
-  if (minPrice) filters.minPrice = Number(minPrice);
-  if (maxPrice) filters.maxPrice = Number(maxPrice);
-  const sort = urlParams.get('sort') as SearchFilters['sort'] | null;
-  if (sort) filters.sort = sort;
+  const { filters: parsedFilters, page } = parseSearchFilters(urlParams);
+  const filters = { ...parsedFilters, categoryId: category.id };
 
   const { products, totalCount } = await searchProductsPage('', filters, page);
   const availableSizes = [...new Set(products.flatMap((p) => p.availableSizes))];
