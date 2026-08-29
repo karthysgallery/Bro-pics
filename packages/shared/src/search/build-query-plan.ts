@@ -105,15 +105,34 @@ export function buildProductQueryPlan(
   const hasTitleLowerInequality = constraints.some(
     (c) => c.field === 'titleLower' && (c.op === '>=' || c.op === '<=')
   );
-  const hasPriceInequality = constraints.some(
-    (c) => (c.field === 'minPrice' || c.field === 'maxPrice') && (c.op === '>=' || c.op === '<=')
+  const hasMaxPriceInequality = constraints.some(
+    (c) => c.field === 'maxPrice' && (c.op === '>=' || c.op === '<=')
+  );
+  const hasMinPriceInequality = constraints.some(
+    (c) => c.field === 'minPrice' && (c.op === '>=' || c.op === '<=')
   );
 
   if (hasTitleLowerInequality) {
     orderByField = 'titleLower';
     orderByDirection = 'asc';
-  } else if (hasPriceInequality) {
-    orderByField = 'minPrice';
+  } else if (hasMaxPriceInequality || hasMinPriceInequality) {
+    // Firestore requires the first orderBy to match one of the fields that
+    // actually carries an inequality constraint. Because minPrice/maxPrice
+    // filters are applied as an overlap check (see above), filters.minPrice
+    // constrains the product's maxPrice field and filters.maxPrice
+    // constrains the product's minPrice field — so the orderBy field must
+    // be picked based on which constraint(s) are actually present, not
+    // which user-facing filter was set.
+    if (hasMinPriceInequality) {
+      // Covers both "only maxPrice filter set" and "both filters set" —
+      // 'minPrice' matches the composite index order (isActive, categoryId,
+      // minPrice, maxPrice) in firestore.indexes.json.
+      orderByField = 'minPrice';
+    } else {
+      // Only filters.minPrice was set, so only the maxPrice field carries
+      // an inequality constraint.
+      orderByField = 'maxPrice';
+    }
     orderByDirection =
       filters.sort === 'price_asc' || filters.sort === 'price_desc' ? orderByDirection : 'asc';
   }

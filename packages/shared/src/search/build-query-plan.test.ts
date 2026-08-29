@@ -118,8 +118,20 @@ describe('buildProductQueryPlan', () => {
     expect(plan.orderByDirection).toBe('asc');
   });
 
-  it('keeps price sort direction when a price-range filter is combined with a price sort', () => {
+  it('uses maxPrice as orderByField for a minPrice-only filter, since that is the field with the actual inequality constraint', () => {
     const plan = buildProductQueryPlan('', { minPrice: 50000, sort: 'price_desc' }, 1);
+    expect(plan.orderByField).toBe('maxPrice');
+    expect(plan.orderByDirection).toBe('desc');
+  });
+
+  it('uses minPrice as orderByField for a maxPrice-only filter', () => {
+    const plan = buildProductQueryPlan('', { maxPrice: 100000, sort: 'price_desc' }, 1);
+    expect(plan.orderByField).toBe('minPrice');
+    expect(plan.orderByDirection).toBe('desc');
+  });
+
+  it('uses minPrice as orderByField when both minPrice and maxPrice filters are set, matching the composite index order', () => {
+    const plan = buildProductQueryPlan('', { minPrice: 50000, maxPrice: 100000, sort: 'price_desc' }, 1);
     expect(plan.orderByField).toBe('minPrice');
     expect(plan.orderByDirection).toBe('desc');
   });

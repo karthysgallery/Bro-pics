@@ -48,6 +48,13 @@ describe('parseSearchFilters', () => {
     expect(filters.maxPrice).toBeUndefined();
   });
 
+  it('omits minPrice/maxPrice/minRating when the param is present but empty', () => {
+    const { filters } = parseSearchFilters(new URLSearchParams('minPrice=&maxPrice=&minRating='));
+    expect(filters.minPrice).toBeUndefined();
+    expect(filters.maxPrice).toBeUndefined();
+    expect(filters.minRating).toBeUndefined();
+  });
+
   it('produces empty filters and page 1 for empty URLSearchParams', () => {
     const { filters, page } = parseSearchFilters(new URLSearchParams());
     expect(filters).toEqual({});

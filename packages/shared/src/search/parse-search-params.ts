@@ -10,7 +10,7 @@ const VALID_SORTS = new Set<NonNullable<SearchFilters['sort']>>([
 ]);
 
 function parseNonNegativeNumber(raw: string | null): number | undefined {
-  if (raw === null) return undefined;
+  if (raw === null || raw.trim() === '') return undefined;
   const value = Number(raw);
   if (Number.isNaN(value) || value < 0) return undefined;
   return value;
