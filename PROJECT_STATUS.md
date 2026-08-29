@@ -1,6 +1,6 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-08-29 (Storefront Shell & Catalog implementation plan written, ready to execute)
+**Last updated:** 2026-08-29 (Storefront Shell & Catalog — Plan A — merged to master)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 ---
@@ -56,6 +56,8 @@ Full detail: [docs/superpowers/specs/2026-08-28-foundation-design.md](docs/super
 
 Full detail: [docs/superpowers/specs/2026-08-29-storefront-design.md](docs/superpowers/specs/2026-08-29-storefront-design.md)
 
+**Lesson learned during Plan A's final review, worth carrying into Plan B and beyond:** Firestore requires the first `orderBy` clause to match whichever field carries a range/inequality filter (`>=`/`<=`) in the same query — get this wrong and the query either throws `FAILED_PRECONDITION` or silently ignores the requested sort. `packages/shared/src/search/build-query-plan.ts` now encodes this rule explicitly (and its test suite locks in all the distinct cases), but any new Firestore query written elsewhere in the app needs the same care, plus a matching composite index in `firestore.indexes.json` — none of this was ever caught by unit tests, only by the final review's manual trace, since nothing in this environment executes against a live Firestore. A design-token addendum: a fifth token, `surface` (`#FFFFFF`), was added to the palette above for card/section backgrounds — the original four didn't cover it.
+
 ---
 
 ## 3. Phase roadmap
@@ -65,7 +67,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | # | Phase | Status | Spec | Plan |
 |---|---|---|---|---|
 | 1 | **Foundation** — architecture, data model, security rules, repo scaffold | ✅ **Complete**, merged to `master` | [design](docs/superpowers/specs/2026-08-28-foundation-design.md) | [plan](docs/superpowers/plans/2026-08-28-foundation-implementation.md) |
-| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Plan A written (shell/catalog), ready to execute. Plan B (PDP) not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md) |
+| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Plan A **complete**, merged to `master`. Plan B (PDP) not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md) |
 | 3 | Personalization engine — upload/crop/zoom/rotate/reposition/DPI/preview | Not started | — | — |
 | 4 | Cart, checkout, Razorpay, accounts, order tracking | Not started | — | — |
 | 5 | Admin panel & production queue | Not started | — | — |
@@ -73,26 +75,36 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 
 ---
 
-## 4. What exists in the repo right now (Phase 1 output)
+## 4. What exists in the repo right now
 
 ```
 bro-pics/
-├── apps/web/            Next.js App Router shell — (shop)/(account)/(admin) route
-│                         groups, Firebase client+admin SDK init. Pages are placeholders.
+├── apps/web/            Next.js App Router shell — global layout (Header, Footer,
+│                         AnnouncementBar, CartDrawer, WhatsAppButton), a data-driven
+│                         homepage (10 section types rendered from Firestore), category
+│                         listing with URL-driven filters, search + type-ahead. Product
+│                         detail page NOT yet built (Plan B). Cart/wishlist are local-
+│                         only mock state (Phase 4 replaces with real persistence).
 ├── functions/            Cloud Functions: order-number generator (transactional,
-│                         BP-2026-00001 format), Razorpay webhook idempotency guard.
+│                         BP-2026-00001 format), Razorpay webhook idempotency guard,
+│                         product filter/rating denormalization on variant writes.
 ├── services/print-render/  Cloud Run skeleton (health check only — sharp-based
 │                         rendering itself is Phase 3 work).
 ├── packages/shared/      zod schemas for every core entity (products, variants,
-│                         orders, coupons, customizations, settings), integer-paise
-│                         money math, coupon discount logic, effective-DPI calc.
-├── scripts/seed/         One schema-valid placeholder product/variant for local dev.
+│                         categories, reviews, homepage sections, orders, coupons,
+│                         customizations, settings), integer-paise money math, coupon
+│                         discount logic, effective-DPI calc, and a Firestore-backed
+│                         product search behind a swappable interface (Algolia drops
+│                         in later without touching call sites).
+├── scripts/seed/         Placeholder catalogue: 4 categories, 8 products with variants,
+│                         reviews, 10 homepage sections, plus placeholder SVG images and
+│                         one placeholder MP4 video, all under apps/web/public/placeholders/.
 ├── firestore-rules-tests/  Security rules test suite (runs against the emulator).
 ├── firestore.rules, storage.rules, firestore.indexes.json, firebase.json
 └── docs/superpowers/     specs/ and plans/ for every phase (this file's companions).
 ```
 
-**Test status:** 34 unit/integration tests + 8 Firestore rules tests = 42, all passing. `pnpm test` (root) runs everything except the emulator-gated rules suite; `pnpm test:rules` runs those separately (needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/web build` and `pnpm --filter @bro-pics/functions build` both succeed.
+**Test status:** 122 tests passing across `packages/shared` (65), `functions` (12), `services/print-render` (1), `apps/web` (30), `scripts/seed` (14), plus 8 Firestore rules tests run separately. `pnpm test` (root) runs everything except the emulator-gated rules suite; `pnpm test:rules` runs those separately (needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/functions build` succeeds; `pnpm --filter @bro-pics/web build` compiles TypeScript cleanly but fails prerendering without a live `FIREBASE_SERVICE_ACCOUNT_JSON` — expected in this environment, not a code defect (every page now reads real Firestore data at build/request time).
 
 **Setup:** see [README.md](README.md) for install/run steps.
 
@@ -100,13 +112,16 @@ bro-pics/
 
 ## 5. Known gaps / deferred items (tracked, not lost)
 
-These were raised during Foundation-phase review and intentionally deferred — each has an owner phase where it needs to be resolved, not "someday":
+Each has an owner phase where it needs to be resolved, not "someday":
 
-- **Firestore rules:** `products` and `settings` are world-readable regardless of status/content. Fine while catalogue data is placeholder-only — **must be revisited before real GSTIN or draft-product data goes live** (Phase 2/5).
+- **Firestore rules:** `products`, `categories`, and `settings` are world-readable regardless of status/content. Fine while catalogue data is placeholder-only — **must be revisited before real GSTIN or draft-product data goes live** (Phase 5).
 - **`CustomizationSchema`/`uploads` ownership model** doesn't yet cleanly support guest checkout (upload-before-login). **Phase 3's problem to solve.**
-- **No lint/typecheck/CI workflow yet.** Should land before Phase 2 code volume grows.
+- **No lint/typecheck/CI workflow yet.** Getting more overdue as code volume grows — worth doing before Plan B (PDP).
 - **`OrderSchema` doesn't self-validate its own money invariants** (subtotal − discount + shipping = total, amountPaidOnline + amountDueOnDelivery = total). Cheap to add now, expensive to retrofit once real orders exist — worth doing early in Phase 4.
-- **`scripts/seed` has no category data**, and its one seed product's `categoryId` points at a category that doesn't exist yet. **Resolved by the Storefront phase plan** — `CategorySchema` is being added and seed data expanded to ~3-4 categories / 8-10 products.
+- **`ProductSchema`/`VariantSchema` have no image-data field.** `ProductCard` derives placeholder image paths from `product.slug` by convention (`/placeholders/products/{slug}-1.svg`), which only works because seed slugs happen to match committed filenames. Real client photography can't be attached without a schema change — **needs to be decided explicitly before or during Plan B** (the PDP is where real product images actually matter).
+- **`recently_viewed` homepage section is seeded and active but renders nothing.** The section registry intentionally defers it (client-side, reads localStorage) but no client component exists yet to mount it. Low priority — cosmetic gap, not a broken feature.
+- **`CartDrawer`'s quantity input has no lower-bound guard** (clearing the field yields `qty: 0`/`NaN`). Harmless against today's mock local state; **must be fixed before Phase 4** wires up real persistence/pricing.
+- **No keyboard navigation on the search type-ahead** (has ARIA roles now, but no arrow-key/enter-to-select). Minor accessibility follow-up.
 
 ## 6. Open items still waiting on the client (from the original spec, §21)
 
@@ -120,4 +135,4 @@ These were raised during Foundation-phase review and intentionally deferred — 
 
 ## 7. Next action
 
-Execute **Storefront Shell & Catalog** (Plan A, 10 tasks) via subagent-driven development: new Category/Review/HomepageSection schemas, denormalized product filtering, interim Firestore search, an expanded placeholder catalogue, the layout shell, the data-driven homepage, and category listing/search. Plan B (product detail page) gets written once Plan A is built and merged.
+Brainstorm and spec **Plan B (Product Detail Page)** — the remaining piece of the Storefront phase. This is the densest single page in the whole build (Ritwikas-depth: gallery with mixed image/video, variant selectors, buy box, tabbed info, reviews, related products) and was deliberately scoped as its own plan rather than folded into Plan A.
