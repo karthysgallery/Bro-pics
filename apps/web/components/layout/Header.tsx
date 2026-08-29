@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { Category } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
+import { SearchTypeahead } from '../search/SearchTypeahead';
 
 interface HeaderProps {
   categories: Category[];
@@ -32,11 +33,7 @@ export function Header({ categories, onCartClick }: HeaderProps) {
         </nav>
 
         <div className="flex-1 max-w-md hidden sm:block">
-          <input
-            type="search"
-            placeholder="Search products..."
-            className="w-full rounded-full border border-charcoal/20 px-4 py-2 text-sm"
-          />
+          <SearchTypeahead />
         </div>
 
         <div className="flex items-center gap-4">

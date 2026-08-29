@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { CartProvider } from '../lib/cart-context';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 
 describe('LayoutChrome', () => {
   it('renders its children between the header and footer', () => {
