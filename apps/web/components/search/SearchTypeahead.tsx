@@ -72,11 +72,16 @@ export function SearchTypeahead() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setIsFocused(true)}
-        onBlur={() => setTimeout(() => setIsFocused(false), 150)}
+        onBlur={() =>
+          setTimeout(() => {
+            setIsFocused(false);
+            setSuggestions([]);
+          }, 150)
+        }
         className="w-full rounded-full border border-charcoal/20 px-4 py-2 text-sm"
       />
       {(isFocused || suggestions.length > 0) && (
-        <div className="absolute top-full left-0 right-0 bg-white rounded-lg shadow-lg mt-1 p-3 z-50">
+        <div className="absolute top-full left-0 right-0 bg-surface rounded-lg shadow-lg mt-1 p-3 z-50">
           {isFocused && query.trim().length === 0 && recentSearches.length > 0 && (
             <div>
               <p className="text-xs text-charcoal/50 mb-1">Recent searches</p>
