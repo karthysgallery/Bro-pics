@@ -66,6 +66,10 @@ export const onVariantWritten = onDocumentWritten(
     const variants = variantsSnapshot.docs.map((doc) => doc.data() as VariantForDenormalization);
 
     const denormalized = calculateDenormalizedFields(variants);
-    await db.collection('products').doc(productId).update(denormalized);
+    // set(..., { merge: true }) rather than update(): update() rejects if
+    // the parent product document doesn't exist yet (e.g. a variant
+    // written before its parent in an import/restore scenario), while
+    // set-with-merge creates it if needed and merges fields otherwise.
+    await db.collection('products').doc(productId).set(denormalized, { merge: true });
   }
 );
