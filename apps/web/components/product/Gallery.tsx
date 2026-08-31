@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ProductMedia } from '@bro-pics/shared';
 
 interface GalleryProps {
@@ -11,6 +11,12 @@ interface GalleryProps {
 export function Gallery({ media, productTitle }: GalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setIsZoomed(false);
+  }, [media]);
+
   const active = media[Math.min(activeIndex, media.length - 1)];
 
   if (!active) {
@@ -39,7 +45,7 @@ export function Gallery({ media, productTitle }: GalleryProps) {
               key={item.id}
               onClick={() => setActiveIndex(index)}
               aria-label={`Show media ${index + 1}`}
-              className={`w-16 h-16 flex-shrink-0 rounded overflow-hidden border-2 ${
+              className={`w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 ${
                 index === activeIndex ? 'border-terracotta' : 'border-transparent'
               }`}
             >

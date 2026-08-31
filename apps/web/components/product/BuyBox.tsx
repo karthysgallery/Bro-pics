@@ -76,7 +76,7 @@ export function BuyBox({
           min={1}
           value={quantity}
           onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-          className="w-16 rounded border border-charcoal/20 px-2 py-1"
+          className="w-16 rounded-lg border border-charcoal/20 px-2 py-1"
         />
       </div>
 
