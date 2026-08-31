@@ -13,8 +13,8 @@ const product = {
 } satisfies Product;
 
 const reviews: Review[] = [
-  { id: 'r1', productId: 'p1', userId: 'u1', rating: 5, title: 'Great', body: 'Loved it', media: [], isVerified: true, status: 'approved', createdAt: new Date('2026-02-01') },
   { id: 'r2', productId: 'p1', userId: 'u2', rating: 4, title: 'Good', body: 'Nice quality', media: [], isVerified: false, status: 'approved', createdAt: new Date('2026-01-01') },
+  { id: 'r1', productId: 'p1', userId: 'u1', rating: 5, title: 'Great', body: 'Loved it', media: [], isVerified: true, status: 'approved', createdAt: new Date('2026-02-01') },
 ];
 
 describe('ReviewsSection', () => {
