@@ -1,7 +1,7 @@
 // scripts/seed/src/data.test.ts
 import { describe, it, expect } from 'vitest';
-import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema } from '@bro-pics/shared';
-import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections } from './data';
+import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema, ProductMediaSchema } from '@bro-pics/shared';
+import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections, seedProductMedia } from './data';
 
 describe('seed categories', () => {
   it('every seed category passes CategorySchema validation', () => {
@@ -94,6 +94,69 @@ describe('seed reviews', () => {
     const productIds = new Set(seedProducts.map((p) => p.id));
     for (const review of seedReviews) {
       expect(productIds.has(review.productId)).toBe(true);
+    }
+  });
+});
+
+describe('seed product media', () => {
+  it('every seed media doc passes ProductMediaSchema validation', () => {
+    for (const media of seedProductMedia) {
+      expect(() => ProductMediaSchema.parse(media)).not.toThrow();
+    }
+  });
+
+  it('every media doc references a product that exists in seedProducts', () => {
+    const productIds = new Set(seedProducts.map((p) => p.id));
+    for (const media of seedProductMedia) {
+      expect(productIds.has(media.productId)).toBe(true);
+    }
+  });
+
+  it('every media doc with a non-null variantId references a variant that exists in seedVariants', () => {
+    const variantIds = new Set(seedVariants.map((v) => v.id));
+    for (const media of seedProductMedia) {
+      if (media.variantId !== null) {
+        expect(variantIds.has(media.variantId)).toBe(true);
+      }
+    }
+  });
+
+  it("every product's primaryImageUrl/hoverImageUrl match its own variant-agnostic image media, sorted by sortOrder", () => {
+    for (const product of seedProducts) {
+      const cardImages = seedProductMedia
+        .filter((m) => m.productId === product.id && m.variantId === null && m.type === 'image')
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      expect(product.primaryImageUrl).toBe(cardImages[0]?.url ?? '');
+      expect(product.hoverImageUrl).toBe(cardImages[1]?.url ?? null);
+    }
+  });
+
+  it('at least one product has variant-specific media for some but not all of its active variants (exercises the gallery fallback rule)', () => {
+    const hasPartialVariantMedia = seedProducts.some((product) => {
+      const productVariantIds = seedVariants.filter((v) => v.productId === product.id && v.isActive).map((v) => v.id);
+      const variantIdsWithMedia = new Set(
+        seedProductMedia.filter((m) => m.productId === product.id && m.variantId !== null).map((m) => m.variantId)
+      );
+      return variantIdsWithMedia.size > 0 && variantIdsWithMedia.size < productVariantIds.length;
+    });
+    expect(hasPartialVariantMedia).toBe(true);
+  });
+
+  it('at least one product has video media', () => {
+    expect(seedProductMedia.some((m) => m.type === 'video')).toBe(true);
+  });
+});
+
+describe('seed products faq and reviews', () => {
+  it('every product has at least one FAQ entry', () => {
+    for (const product of seedProducts) {
+      expect(product.faq.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every review has a createdAt date', () => {
+    for (const review of seedReviews) {
+      expect(review.createdAt).toBeInstanceOf(Date);
     }
   });
 });

@@ -1,4 +1,4 @@
-import type { Category, Product, Variant, Review, HomepageSection } from '@bro-pics/shared';
+import type { Category, Product, Variant, Review, HomepageSection, ProductMedia } from '@bro-pics/shared';
 
 export const seedCategories: Category[] = [
   {
@@ -68,6 +68,7 @@ interface SeedProductInput {
     stockStatus: 'in_stock' | 'out_of_stock' | 'backorder';
   }>;
   reviews: Array<{ rating: number; title: string; body: string; isVerified: boolean }>;
+  faq: Array<{ question: string; answer: string }>;
 }
 
 const productInputs: SeedProductInput[] = [
@@ -93,6 +94,10 @@ const productInputs: SeedProductInput[] = [
       { rating: 5, title: 'Beautiful finish', body: 'The wood grain looks premium and the print came out sharp.', isVerified: true },
       { rating: 4, title: 'Good but slow shipping', body: 'Frame quality is great, took a bit longer than expected to arrive.', isVerified: true },
     ],
+    faq: [
+      { question: 'What photo formats can I upload?', answer: 'JPG and PNG are both supported.' },
+      { question: 'Can I change my photo after ordering?', answer: 'Once production has started we can no longer swap the photo — please double-check your preview before confirming.' },
+    ],
   },
   {
     id: 'prod_modern_acrylic_frame',
@@ -111,6 +116,10 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: '12x12_clear', sku: 'MAF-12X12-CLR', sizeLabel: '12x12 in', widthIn: 12, heightIn: 12, frameColour: 'Clear', material: 'Acrylic', price: 139900, stockStatus: 'in_stock' },
     ],
     reviews: [{ rating: 5, title: 'Looks premium', body: 'The floating effect makes the photo really stand out.', isVerified: true }],
+    faq: [
+      { question: 'Does the acrylic really give a floating-photo look?', answer: 'Yes — the photo is printed beneath a layer of clear acrylic so it appears to float, with no visible border.' },
+      { question: 'Will the acrylic scratch easily?', answer: 'The surface has a scratch-resistant coating, but we still recommend cleaning it only with a soft microfibre cloth.' },
+    ],
   },
   {
     id: 'prod_vintage_collage_frame',
@@ -131,6 +140,10 @@ const productInputs: SeedProductInput[] = [
       { rating: 5, title: 'Perfect for our hallway', body: 'Six photos fit beautifully, the vintage tone matches our decor.', isVerified: true },
       { rating: 5, title: 'Great gift', body: 'Gave this to my parents for their anniversary, they loved it.', isVerified: false },
     ],
+    faq: [
+      { question: 'Can I mix portrait and landscape photos in the six openings?', answer: 'Yes, each of the six openings can hold its own photo in any orientation — the layout preview will show you how it fits.' },
+      { question: 'Is the frame a single piece or six separate frames?', answer: 'It ships as one single-piece hanging frame with six openings, so there is only one item to hang on your wall.' },
+    ],
   },
   {
     id: 'prod_couples_eye_frame',
@@ -148,6 +161,10 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: '6x8_black', sku: 'CEF-6X8-BLK', sizeLabel: '6x8 in', widthIn: 6, heightIn: 8, frameColour: 'Black', material: 'Wood', price: 59900, stockStatus: 'in_stock' },
     ],
     reviews: [{ rating: 4, title: 'Sweet design', body: 'A really thoughtful gift idea, print quality is solid.', isVerified: true }],
+    faq: [
+      { question: 'What part of the photo should I use for the eye close-up?', answer: 'Upload your original couple photo and use the in-page editor to zoom into the eyes — we recommend a clear, well-lit shot for the best crop.' },
+      { question: 'Is this frame a good size for a nightstand?', answer: 'Yes, at 6x8 in it is designed to fit comfortably on a nightstand or small shelf.' },
+    ],
   },
   {
     id: 'prod_photo_canvas_print',
@@ -166,6 +183,10 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: '20x30_natural', sku: 'GWC-20X30-NAT', sizeLabel: '20x30 in', widthIn: 20, heightIn: 30, frameColour: 'Natural Wood Edge', material: 'Canvas', price: 259900, stockStatus: 'in_stock' },
     ],
     reviews: [{ rating: 5, title: 'Stunning colours', body: 'Print quality on the canvas is excellent, very vivid.', isVerified: true }],
+    faq: [
+      { question: 'Does the canvas need a separate frame?', answer: 'No — it is a frameless, gallery-wrapped canvas stretched over a solid wooden frame, so it arrives ready to hang.' },
+      { question: 'Will the colours fade over time?', answer: 'We print with fade-resistant pigment ink, which holds its colour well under normal indoor lighting.' },
+    ],
   },
   {
     id: 'prod_desk_photo_frame',
@@ -184,6 +205,9 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: '4x6_white', sku: 'MDF-4X6-WHT', sizeLabel: '4x6 in', widthIn: 4, heightIn: 6, frameColour: 'White', material: 'Wood', price: 34900, stockStatus: 'out_of_stock' },
     ],
     reviews: [{ rating: 4, title: 'Great value', body: 'Small but well made for the price.', isVerified: true }],
+    faq: [
+      { question: 'Will this frame fit on a standard office desk?', answer: 'Yes, its compact 4x6 in size and sturdy stand-up base are designed to fit neatly on a desk or bedside table.' },
+    ],
   },
   {
     id: 'prod_photo_collage_set',
@@ -201,6 +225,10 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: 'set_black', sku: 'PCS-SET-BLK', sizeLabel: '3 x 8x10 in', widthIn: 8, heightIn: 10, frameColour: 'Black', material: 'Wood', price: 189900, compareAtPrice: 229900, stockStatus: 'in_stock' },
     ],
     reviews: [{ rating: 5, title: 'Looks amazing together', body: 'The set on our staircase wall gets so many compliments.', isVerified: true }],
+    faq: [
+      { question: 'Can I use three different photos across the set?', answer: 'Yes, you can upload a separate photo for each of the three frames to tell one story across the set.' },
+      { question: 'Do all three frames need to hang together?', answer: 'They look best arranged side by side in a matching finish, but each frame can also be hung or placed on its own.' },
+    ],
   },
   {
     id: 'prod_personalized_photo_mug',
@@ -218,6 +246,10 @@ const productInputs: SeedProductInput[] = [
       { idSuffix: 'standard_white', sku: 'PPM-STD-WHT', sizeLabel: 'Standard 325ml', widthIn: 3.5, heightIn: 4, frameColour: 'White', material: 'Ceramic', price: 39900, stockStatus: 'in_stock' },
     ],
     reviews: [{ rating: 4, title: 'Nice everyday gift', body: 'Print held up well after a few washes.', isVerified: true }],
+    faq: [
+      { question: 'Is the mug dishwasher-safe?', answer: 'The print is dishwasher-safe, though we recommend hand washing to preserve print quality over the long run.' },
+      { question: 'Is the mug food-grade and safe for hot drinks?', answer: 'Yes, it is made from food-grade ceramic and is safe for everyday hot or cold drinks.' },
+    ],
   },
 ];
 
@@ -274,6 +306,9 @@ export const seedProducts: Product[] = productInputs.map((input) => {
           .filter((token) => token.length > 2)
       ),
     ],
+    faq: input.faq,
+    primaryImageUrl: `/placeholders/products/${input.id.replace('prod_', '').replace(/_/g, '-')}-1.svg`,
+    hoverImageUrl: `/placeholders/products/${input.id.replace('prod_', '').replace(/_/g, '-')}-2.svg`,
   };
 });
 
@@ -309,8 +344,58 @@ export const seedReviews: Review[] = productInputs.flatMap((input, productIndex)
     media: [],
     isVerified: r.isVerified,
     status: 'approved' as const,
+    createdAt: new Date(2026, 1, 1 + productIndex * 7 + reviewIndex),
   }))
 );
+
+export const seedProductMedia: ProductMedia[] = [
+  ...productInputs.flatMap((input) => {
+    const slug = input.id.replace('prod_', '').replace(/_/g, '-');
+    return [
+      {
+        id: `media_${input.id}_1`,
+        productId: input.id,
+        variantId: null,
+        type: 'image' as const,
+        url: `/placeholders/products/${slug}-1.svg`,
+        alt: `${input.title}, primary view`,
+        sortOrder: 0,
+      },
+      {
+        id: `media_${input.id}_2`,
+        productId: input.id,
+        variantId: null,
+        type: 'image' as const,
+        url: `/placeholders/products/${slug}-2.svg`,
+        alt: `${input.title}, alternate view`,
+        sortOrder: 1,
+      },
+    ];
+  }),
+  // Variant-specific media for a subset of prod_classic_wooden_frame's
+  // variants — exercises the gallery fallback rule (§2.3 of the PDP
+  // design spec): the black variant has its own photo, the white variant
+  // does not and must fall back to the variant-agnostic media above.
+  {
+    id: 'media_prod_classic_wooden_frame_black_variant',
+    productId: 'prod_classic_wooden_frame',
+    variantId: 'var_classic_wooden_frame_8x12_black',
+    type: 'image',
+    url: '/placeholders/products/classic-wooden-frame-1.svg',
+    alt: 'Classic Wooden Photo Frame in black, 8x12 in',
+    sortOrder: 0,
+  },
+  // Product video — exercises the video rail (Task 7).
+  {
+    id: 'media_prod_classic_wooden_frame_video',
+    productId: 'prod_classic_wooden_frame',
+    variantId: null,
+    type: 'video',
+    url: '/placeholders/videos/product-demo.mp4',
+    alt: 'Classic Wooden Photo Frame, in motion',
+    sortOrder: 2,
+  },
+];
 
 export const seedHomepageSections: HomepageSection[] = [
   {
