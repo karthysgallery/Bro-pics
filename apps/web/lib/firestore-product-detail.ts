@@ -15,21 +15,11 @@ function toDate(value: unknown): Date {
   return new Date(0);
 }
 
-/**
- * Gallery fallback rule (PDP design spec §2.3): show media belonging to the
- * selected variant if any exists; otherwise show variant-agnostic media,
- * sorted by sortOrder. Pure and unit-tested in isolation from the Admin SDK
- * reads below.
- */
-export function selectGalleryMedia(media: ProductMedia[], selectedVariantId: string | null): ProductMedia[] {
-  if (selectedVariantId !== null) {
-    const variantMedia = media.filter((m) => m.variantId === selectedVariantId);
-    if (variantMedia.length > 0) {
-      return [...variantMedia].sort((a, b) => a.sortOrder - b.sortOrder);
-    }
-  }
-  return media.filter((m) => m.variantId === null).sort((a, b) => a.sortOrder - b.sortOrder);
-}
+// Re-exported for backwards compatibility — the pure implementation lives in
+// ./gallery-media.ts (no Admin SDK / `server-only` imports) so client
+// components can import it directly without pulling firebase-admin into the
+// client bundle. Prefer importing from ./gallery-media in new code.
+export { selectGalleryMedia } from './gallery-media';
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {
   const db = getFirestore(getAdminApp());
