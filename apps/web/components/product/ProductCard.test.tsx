@@ -35,6 +35,8 @@ const product: Product = {
   ratingCount: 12,
   titleLower: 'classic wooden photo frame',
   searchTokens: [],
+  primaryImageUrl: '/placeholders/products/classic-wooden-photo-frame-1.svg',
+  hoverImageUrl: '/placeholders/products/classic-wooden-photo-frame-2.svg',
 };
 
 describe('ProductCard', () => {
@@ -63,5 +65,17 @@ describe('ProductCard', () => {
   it('shows an out-of-stock label when inStock is false', () => {
     render(<ProductCard product={{ ...product, inStock: false }} />);
     expect(screen.getByText('Out of stock')).toBeInTheDocument();
+  });
+
+  it('renders the primary and hover images from the product\'s denormalized fields', () => {
+    render(<ProductCard product={product} />);
+    const primaryImg = screen.getByAltText('Classic Wooden Photo Frame') as HTMLImageElement;
+    expect(primaryImg.src).toContain('/placeholders/products/classic-wooden-photo-frame-1.svg');
+  });
+
+  it('renders no hover image element when hoverImageUrl is null', () => {
+    render(<ProductCard product={{ ...product, hoverImageUrl: null }} />);
+    const images = screen.getAllByRole('img');
+    expect(images).toHaveLength(1);
   });
 });

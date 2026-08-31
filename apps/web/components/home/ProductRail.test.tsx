@@ -36,6 +36,8 @@ function makeProduct(id: string, title: string): Product {
     ratingCount: 0,
     titleLower: title.toLowerCase(),
     searchTokens: [],
+    primaryImageUrl: `/placeholders/products/${id}-1.svg`,
+    hoverImageUrl: null,
   };
 }
 

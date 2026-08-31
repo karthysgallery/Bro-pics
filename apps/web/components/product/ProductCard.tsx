@@ -14,15 +14,17 @@ export function ProductCard({ product }: ProductCardProps) {
     <Link href={`/product/${product.slug}`} className="block rounded-lg overflow-hidden bg-surface group">
       <div className="relative aspect-square bg-cream">
         <img
-          src={`/placeholders/products/${product.slug}-1.svg`}
+          src={product.primaryImageUrl}
           alt={product.title}
-          className="w-full h-full object-cover group-hover:opacity-0 transition-opacity"
+          className={`w-full h-full object-cover transition-opacity ${product.hoverImageUrl ? 'group-hover:opacity-0' : ''}`}
         />
-        <img
-          src={`/placeholders/products/${product.slug}-2.svg`}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity"
-        />
+        {product.hoverImageUrl && (
+          <img
+            src={product.hoverImageUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+        )}
         {product.badges.length > 0 && (
           <span className="absolute top-2 left-2 bg-terracotta text-cream text-xs px-2 py-1 rounded-full">
             {product.badges[0]}
