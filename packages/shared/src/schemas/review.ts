@@ -13,6 +13,7 @@ export const ReviewSchema = z.object({
   media: z.array(z.string()),
   isVerified: z.boolean(),
   status: ReviewStatusSchema,
+  createdAt: z.date(),
 });
 
 export type Review = z.infer<typeof ReviewSchema>;

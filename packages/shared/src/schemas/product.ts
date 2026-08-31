@@ -42,6 +42,15 @@ export const ProductSchema = z.object({
   // Interim Firestore-only search fields (see packages/shared/src/search).
   titleLower: z.string(),
   searchTokens: z.array(z.string()),
+
+  // Product FAQ, admin-managed the same way as highlights/howItWorks.
+  faq: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })).default([]),
+
+  // Denormalized card images — kept in sync by a Cloud Function trigger on
+  // media writes (see functions/src/products/denormalize-media.ts). Both
+  // sourced from variant-agnostic (variantId === null) image media only.
+  primaryImageUrl: z.string().min(1),
+  hoverImageUrl: z.string().nullable(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;

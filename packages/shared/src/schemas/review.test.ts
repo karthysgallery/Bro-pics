@@ -12,6 +12,7 @@ const validReview = {
   media: [],
   isVerified: true,
   status: 'approved',
+  createdAt: new Date('2026-06-15'),
 };
 
 describe('ReviewSchema', () => {
@@ -37,5 +38,10 @@ describe('ReviewSchema', () => {
   it('rejects an invalid status', () => {
     const invalid = { ...validReview, status: 'published' };
     expect(() => ReviewSchema.parse(invalid)).toThrow();
+  });
+
+  it('rejects a review missing createdAt', () => {
+    const { createdAt, ...withoutCreatedAt } = validReview;
+    expect(() => ReviewSchema.parse(withoutCreatedAt)).toThrow();
   });
 });

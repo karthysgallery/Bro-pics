@@ -33,6 +33,9 @@ const validProduct = {
   ratingCount: 12,
   titleLower: 'classic wooden frame',
   searchTokens: ['classic', 'wooden', 'frame'],
+  faq: [{ question: 'Does this frame come pre-assembled?', answer: 'Yes, it arrives ready to hang or stand.' }],
+  primaryImageUrl: '/placeholders/products/classic-wooden-frame-1.svg',
+  hoverImageUrl: '/placeholders/products/classic-wooden-frame-2.svg',
 };
 
 describe('ProductSchema', () => {
@@ -64,5 +67,20 @@ describe('ProductSchema', () => {
     const { occasionTags, ...withoutOccasionTags } = validProduct;
     const parsed = ProductSchema.parse(withoutOccasionTags);
     expect(parsed.occasionTags).toEqual([]);
+  });
+
+  it('accepts a product with an empty faq array and null hoverImageUrl', () => {
+    const noFaq = { ...validProduct, faq: [], hoverImageUrl: null };
+    expect(ProductSchema.parse(noFaq)).toEqual(noFaq);
+  });
+
+  it('rejects a faq entry missing an answer', () => {
+    const invalid = { ...validProduct, faq: [{ question: 'Only a question?' }] };
+    expect(() => ProductSchema.parse(invalid)).toThrow();
+  });
+
+  it('rejects an empty primaryImageUrl', () => {
+    const invalid = { ...validProduct, primaryImageUrl: '' };
+    expect(() => ProductSchema.parse(invalid)).toThrow();
   });
 });
