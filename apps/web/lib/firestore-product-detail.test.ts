@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectGalleryMedia } from './firestore-product-detail';
+import { selectGalleryMedia } from './gallery-media';
 import type { ProductMedia } from '@bro-pics/shared';
 
 const genericImage: ProductMedia = {

@@ -35,6 +35,7 @@ const product: Product = {
   ratingCount: 12,
   titleLower: 'classic wooden photo frame',
   searchTokens: [],
+  faq: [],
   primaryImageUrl: '/placeholders/products/classic-wooden-photo-frame-1.svg',
   hoverImageUrl: '/placeholders/products/classic-wooden-photo-frame-2.svg',
 };
@@ -77,5 +78,11 @@ describe('ProductCard', () => {
     render(<ProductCard product={{ ...product, hoverImageUrl: null }} />);
     const images = screen.getAllByRole('img');
     expect(images).toHaveLength(1);
+  });
+
+  it('renders a placeholder box instead of an <img> when primaryImageUrl is empty', () => {
+    render(<ProductCard product={{ ...product, primaryImageUrl: '', hoverImageUrl: null }} />);
+    expect(screen.queryAllByRole('img')).toHaveLength(0);
+    expect(screen.queryByAltText('Classic Wooden Photo Frame')).not.toBeInTheDocument();
   });
 });

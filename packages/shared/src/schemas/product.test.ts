@@ -79,8 +79,8 @@ describe('ProductSchema', () => {
     expect(() => ProductSchema.parse(invalid)).toThrow();
   });
 
-  it('rejects an empty primaryImageUrl', () => {
-    const invalid = { ...validProduct, primaryImageUrl: '' };
-    expect(() => ProductSchema.parse(invalid)).toThrow();
+  it('accepts an empty primaryImageUrl (no card image yet)', () => {
+    const noImage = { ...validProduct, primaryImageUrl: '' };
+    expect(ProductSchema.parse(noImage)).toEqual(noImage);
   });
 });

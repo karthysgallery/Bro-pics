@@ -33,8 +33,12 @@ export function BuyBox({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { addItem } = useCart();
 
-  const sizes = [...new Set(variants.map((v) => v.sizeLabel))];
-  const colours = [...new Set(variants.map((v) => v.frameColour))];
+  // Options are scoped to the other dimension's current selection so the
+  // user can never click into a size+colour combination that has no
+  // matching variant (see ProductDetailClient's onSelectSize/onSelectColour
+  // for how a now-invalid pairing gets resolved to a real variant).
+  const sizes = [...new Set(variants.filter((v) => v.frameColour === selectedColour).map((v) => v.sizeLabel))];
+  const colours = [...new Set(variants.filter((v) => v.sizeLabel === selectedSize).map((v) => v.frameColour))];
   const price = selectedVariant?.price ?? product.minPrice;
   const compareAtPrice = selectedVariant?.compareAtPrice;
   const inStock = selectedVariant ? selectedVariant.stockStatus === 'in_stock' : product.inStock;
@@ -89,7 +93,7 @@ export function BuyBox({
       </button>
 
       <a
-        href="https://wa.me/910000000000"
+        href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}`}
         target="_blank"
         rel="noopener noreferrer"
         className="block text-center mt-3 text-sm text-sage underline"

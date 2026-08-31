@@ -13,11 +13,15 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <Link href={`/product/${product.slug}`} className="block rounded-lg overflow-hidden bg-surface group">
       <div className="relative aspect-square bg-cream">
-        <img
-          src={product.primaryImageUrl}
-          alt={product.title}
-          className={`w-full h-full object-cover transition-opacity ${product.hoverImageUrl ? 'group-hover:opacity-0' : ''}`}
-        />
+        {product.primaryImageUrl ? (
+          <img
+            src={product.primaryImageUrl}
+            alt={product.title}
+            className={`w-full h-full object-cover transition-opacity ${product.hoverImageUrl ? 'group-hover:opacity-0' : ''}`}
+          />
+        ) : (
+          <div className="w-full h-full bg-cream" />
+        )}
         {product.hoverImageUrl && (
           <img
             src={product.hoverImageUrl}

@@ -49,7 +49,7 @@ export const ProductSchema = z.object({
   // Denormalized card images — kept in sync by a Cloud Function trigger on
   // media writes (see functions/src/products/denormalize-media.ts). Both
   // sourced from variant-agnostic (variantId === null) image media only.
-  primaryImageUrl: z.string().min(1),
+  primaryImageUrl: z.string(),
   hoverImageUrl: z.string().nullable(),
 });
 
