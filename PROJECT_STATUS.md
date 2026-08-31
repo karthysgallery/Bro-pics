@@ -1,6 +1,6 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-08-29 (Storefront Shell & Catalog — Plan A — merged to master)
+**Last updated:** 2026-08-31 (Storefront Product Detail Page — Plan B — merged to master; Storefront phase now complete)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 ---
@@ -56,7 +56,23 @@ Full detail: [docs/superpowers/specs/2026-08-28-foundation-design.md](docs/super
 
 Full detail: [docs/superpowers/specs/2026-08-29-storefront-design.md](docs/superpowers/specs/2026-08-29-storefront-design.md)
 
+### Storefront Plan B (PDP) decisions (2026-08-31)
+
+| Area | Decision | Why |
+|---|---|---|
+| Product media | New `ProductMedia` schema (`products/{id}/media/{id}`), replacing `ProductCard`'s slug-guessed image paths | Real client photography needs a real data model; Foundation had specified this collection but never built it |
+| Card images | `primaryImageUrl`/`hoverImageUrl` denormalized onto `ProductSchema`, synced by a new `onMediaWritten` Cloud Function trigger | Same reasoning as the variant-filter denormalization — `ProductCard` renders on every rail/grid and must never issue a per-card subcollection read |
+| Gallery/variant coupling | Variant-specific media shown when it exists, falls back to variant-agnostic media otherwise; size/colour options are mutually scoped so an impossible combination can't be selected | Seed data now includes one product with partial variant-specific media specifically to exercise the fallback path |
+| Variant selection | Client-side React state, not a URL param | Keeps `/product/[slug]` statically generatable (`generateStaticParams` + `revalidate: 60`) — putting it in the URL would force dynamic rendering, the same trap Plan A's category page hit |
+| Personalize CTA | Opens a "coming soon" placeholder modal (new component) | Same pattern as Plan A's homepage CTAs — editor itself is Phase 3 |
+| Related products | Same-category only, reuses Plan A's `ProductRail` | Frequently-bought-together needs real order history, not available until Phase 4 |
+| Reviews | `ReviewSchema` gained `createdAt`, sorted most-recent-first; rating breakdown shows all 5 star levels even at zero count | Recency sort was previously impossible — the field didn't exist despite the composite index already expecting it |
+
+Full detail: [docs/superpowers/specs/2026-08-31-storefront-pdp-design.md](docs/superpowers/specs/2026-08-31-storefront-pdp-design.md)
+
 **Lesson learned during Plan A's final review, worth carrying into Plan B and beyond:** Firestore requires the first `orderBy` clause to match whichever field carries a range/inequality filter (`>=`/`<=`) in the same query — get this wrong and the query either throws `FAILED_PRECONDITION` or silently ignores the requested sort. `packages/shared/src/search/build-query-plan.ts` now encodes this rule explicitly (and its test suite locks in all the distinct cases), but any new Firestore query written elsewhere in the app needs the same care, plus a matching composite index in `firestore.indexes.json` — none of this was ever caught by unit tests, only by the final review's manual trace, since nothing in this environment executes against a live Firestore. A design-token addendum: a fifth token, `surface` (`#FFFFFF`), was added to the palette above for card/section backgrounds — the original four didn't cover it.
+
+**Lesson learned during Plan B's final review:** a cross-task/whole-branch review catches things no single task's reviewer can — in this case, a client component (`ProductDetailClient`) letting the user select a size×colour combination with no matching variant, where the UI kept showing the "selected" pills while the price/gallery/cart silently used an unrelated fallback variant. No per-task review could catch this since Task 6 built both halves of the interaction together; it only surfaced when the whole page was read end-to-end. Fixed by scoping each variant dimension's options to what's actually available given the other's current selection. Separately, the final review's own **fix wave** introduced a new regression (`metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? fallback)` — `??` doesn't catch an empty string, and `.env.example` documents that exact empty value, so `new URL('')` would have crashed every page render in a real deployment). Caught by the scoped re-review of the fix itself, not the original review — a reminder that a fix diff needs the same scrutiny as the code it's fixing.
 
 ---
 
@@ -67,7 +83,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | # | Phase | Status | Spec | Plan |
 |---|---|---|---|---|
 | 1 | **Foundation** — architecture, data model, security rules, repo scaffold | ✅ **Complete**, merged to `master` | [design](docs/superpowers/specs/2026-08-28-foundation-design.md) | [plan](docs/superpowers/plans/2026-08-28-foundation-implementation.md) |
-| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | 🟡 Plan A **complete**, merged to `master`. Plan B (PDP) not yet written | [design](docs/superpowers/specs/2026-08-29-storefront-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md) |
+| 2 | Storefront — homepage, category/listing/search, product detail page, navigation | ✅ **Complete** (Plans A + B), merged to `master` | [design A](docs/superpowers/specs/2026-08-29-storefront-design.md), [design B](docs/superpowers/specs/2026-08-31-storefront-pdp-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md), [plan B](docs/superpowers/plans/2026-08-31-storefront-pdp-implementation.md) |
 | 3 | Personalization engine — upload/crop/zoom/rotate/reposition/DPI/preview | Not started | — | — |
 | 4 | Cart, checkout, Razorpay, accounts, order tracking | Not started | — | — |
 | 5 | Admin panel & production queue | Not started | — | — |
@@ -82,29 +98,37 @@ bro-pics/
 ├── apps/web/            Next.js App Router shell — global layout (Header, Footer,
 │                         AnnouncementBar, CartDrawer, WhatsAppButton), a data-driven
 │                         homepage (10 section types rendered from Firestore), category
-│                         listing with URL-driven filters, search + type-ahead. Product
-│                         detail page NOT yet built (Plan B). Cart/wishlist are local-
-│                         only mock state (Phase 4 replaces with real persistence).
+│                         listing with URL-driven filters, search + type-ahead, and a
+│                         full product detail page (/product/[slug]): gallery with
+│                         variant-aware image/video media, buy box with client-side
+│                         variant selection, tabbed info, video rail, reviews with
+│                         rating breakdown, related products, SEO metadata + JSON-LD.
+│                         Cart/wishlist are local-only mock state (Phase 4 replaces
+│                         with real persistence).
 ├── functions/            Cloud Functions: order-number generator (transactional,
 │                         BP-2026-00001 format), Razorpay webhook idempotency guard,
-│                         product filter/rating denormalization on variant writes.
+│                         product filter/rating denormalization on variant writes,
+│                         product card-image denormalization on media writes.
 ├── services/print-render/  Cloud Run skeleton (health check only — sharp-based
 │                         rendering itself is Phase 3 work).
-├── packages/shared/      zod schemas for every core entity (products, variants,
-│                         categories, reviews, homepage sections, orders, coupons,
+├── packages/shared/      zod schemas for every core entity (products incl. faq/
+│                         card-image fields, product media, variants, categories,
+│                         reviews incl. createdAt, homepage sections, orders, coupons,
 │                         customizations, settings), integer-paise money math, coupon
 │                         discount logic, effective-DPI calc, and a Firestore-backed
 │                         product search behind a swappable interface (Algolia drops
 │                         in later without touching call sites).
 ├── scripts/seed/         Placeholder catalogue: 4 categories, 8 products with variants,
-│                         reviews, 10 homepage sections, plus placeholder SVG images and
-│                         one placeholder MP4 video, all under apps/web/public/placeholders/.
+│                         reviews (with timestamps), FAQ entries, product media (incl.
+│                         one variant-specific-media + one video case), 10 homepage
+│                         sections, plus placeholder SVG images and one placeholder MP4
+│                         video, all under apps/web/public/placeholders/.
 ├── firestore-rules-tests/  Security rules test suite (runs against the emulator).
 ├── firestore.rules, storage.rules, firestore.indexes.json, firebase.json
 └── docs/superpowers/     specs/ and plans/ for every phase (this file's companions).
 ```
 
-**Test status:** 122 tests passing across `packages/shared` (65), `functions` (12), `services/print-render` (1), `apps/web` (30), `scripts/seed` (14), plus 8 Firestore rules tests run separately. `pnpm test` (root) runs everything except the emulator-gated rules suite; `pnpm test:rules` runs those separately (needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/functions build` succeeds; `pnpm --filter @bro-pics/web build` compiles TypeScript cleanly but fails prerendering without a live `FIREBASE_SERVICE_ACCOUNT_JSON` — expected in this environment, not a code defect (every page now reads real Firestore data at build/request time).
+**Test status:** 178 tests passing across `packages/shared` (75), `functions` (17), `services/print-render` (1), `apps/web` (55), `scripts/seed` (22), plus 8 Firestore rules tests run separately. `pnpm test` (root) runs everything except the emulator-gated rules suite; `pnpm test:rules` runs those separately (needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/functions build` succeeds; `pnpm --filter @bro-pics/web build` compiles TypeScript cleanly but fails prerendering without a live `FIREBASE_SERVICE_ACCOUNT_JSON` — expected in this environment, not a code defect (every page now reads real Firestore data at build/request time).
 
 **Setup:** see [README.md](README.md) for install/run steps.
 
@@ -116,12 +140,14 @@ Each has an owner phase where it needs to be resolved, not "someday":
 
 - **Firestore rules:** `products`, `categories`, and `settings` are world-readable regardless of status/content. Fine while catalogue data is placeholder-only — **must be revisited before real GSTIN or draft-product data goes live** (Phase 5).
 - **`CustomizationSchema`/`uploads` ownership model** doesn't yet cleanly support guest checkout (upload-before-login). **Phase 3's problem to solve.**
-- **No lint/typecheck/CI workflow yet.** Getting more overdue as code volume grows — worth doing before Plan B (PDP).
+- **No lint/typecheck/CI workflow yet.** Getting more overdue as code volume grows — Plan B's final review is the first time this actually bit: `apps/web` silently failed `tsc --noEmit` (two test fixtures missing a required field) while every test suite stayed green, since Vitest strips types via esbuild. Caught only by an ad hoc typecheck run during review, not by anything routine. Worth doing before Phase 3.
 - **`OrderSchema` doesn't self-validate its own money invariants** (subtotal − discount + shipping = total, amountPaidOnline + amountDueOnDelivery = total). Cheap to add now, expensive to retrofit once real orders exist — worth doing early in Phase 4.
-- **`ProductSchema`/`VariantSchema` have no image-data field.** `ProductCard` derives placeholder image paths from `product.slug` by convention (`/placeholders/products/{slug}-1.svg`), which only works because seed slugs happen to match committed filenames. Real client photography can't be attached without a schema change — **needs to be decided explicitly before or during Plan B** (the PDP is where real product images actually matter).
 - **`recently_viewed` homepage section is seeded and active but renders nothing.** The section registry intentionally defers it (client-side, reads localStorage) but no client component exists yet to mount it. Low priority — cosmetic gap, not a broken feature.
 - **`CartDrawer`'s quantity input has no lower-bound guard** (clearing the field yields `qty: 0`/`NaN`). Harmless against today's mock local state; **must be fixed before Phase 4** wires up real persistence/pricing.
 - **No keyboard navigation on the search type-ahead** (has ARIA roles now, but no arrow-key/enter-to-select). Minor accessibility follow-up.
+- **Four PDP design-spec elements were scoped out of Plan B's implementation plan, not just deferred by accident:** buy box isn't sticky on desktop scroll, no wishlist toggle on the PDP, no material selector UI (inert with current seed data since every product has exactly one material, but the selector component would need it once that's no longer true), and `ReviewsSection` doesn't render `review.media` thumbnails. None block anything; worth a small follow-up pass, not urgent.
+- **`getRelatedProducts`/`getAllActiveProductSlugs` in `firestore-product-detail.ts` don't `toDate()`-convert `createdAt`/`updatedAt`** the way `getProductBySlug` in the same file does. Inert today (no current caller renders those dates) but the exact Timestamp-vs-Date bug class this project has hit before — a trap for whoever first renders a "New" badge off a related-product card.
+- **No zod parsing at Firestore read boundaries anywhere in `apps/web`** (`doc.data() as Product` throughout, not just in Plan B's new code) — an established pattern since Plan A, not a new violation, but worth a project-wide look at some point given "every schema/API boundary validates input with zod" is a standing ground rule.
 
 ## 6. Open items still waiting on the client (from the original spec, §21)
 
@@ -135,4 +161,4 @@ Each has an owner phase where it needs to be resolved, not "someday":
 
 ## 7. Next action
 
-Brainstorm and spec **Plan B (Product Detail Page)** — the remaining piece of the Storefront phase. This is the densest single page in the whole build (Ritwikas-depth: gallery with mixed image/video, variant selectors, buy box, tabbed info, reviews, related products) and was deliberately scoped as its own plan rather than folded into Plan A.
+**Storefront (Phase 2) is complete** — both plans merged to `master`. Next up is **Phase 3: Personalization Engine** (upload/crop/zoom/rotate/reposition/DPI-check/preview) — the client hasn't yet supplied frame mockup/mask images or the text-personalization rules it depends on (see §6), so that phase's brainstorm should surface those as open questions early rather than assume them.
