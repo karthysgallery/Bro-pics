@@ -32,3 +32,22 @@ export function calculateEffectiveDpi(
 
   return { effectiveDpi, tier: dpiTier(effectiveDpi) };
 }
+
+/**
+ * DPI from an editor crop rectangle rather than a single zoom factor.
+ * cropRect is in the upload's own original pixel space. The tighter
+ * (larger) of the width/height zoom ratios wins, since that's the
+ * dimension actually constraining print quality when the crop isn't
+ * proportional to the upload's aspect ratio. Delegates to the existing,
+ * already-tested calculateEffectiveDpi rather than duplicating its math.
+ */
+export function effectiveDpiFromCropRect(
+  uploadWidthPx: number,
+  uploadHeightPx: number,
+  cropRect: { width: number; height: number },
+  printWidthIn: number,
+  printHeightIn: number
+): DpiResult {
+  const cropScale = Math.max(uploadWidthPx / cropRect.width, uploadHeightPx / cropRect.height);
+  return calculateEffectiveDpi(uploadWidthPx, uploadHeightPx, cropScale, printWidthIn, printHeightIn);
+}
