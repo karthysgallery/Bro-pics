@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect } from 'react-konva';
 import useImage from 'use-image';
 import type Konva from 'konva';
@@ -17,6 +17,19 @@ interface EditorCanvasProps {
   offsetY: number;
   rotationDeg: 0 | 90 | 180 | 270;
   onTransformChange: (transform: { scale: number; offsetX: number; offsetY: number }) => void;
+  // Fires with a fresh stage.toDataURL() PNG data URL whenever the visible
+  // canvas actually changes (image loads, or scale/offset/rotation moves),
+  // and with null if a capture isn't currently possible (no photo loaded
+  // yet, or toDataURL() threw — e.g. a cross-origin canvas-taint
+  // SecurityError). The parent stores the latest value per slot and uses
+  // it as that slot's preview export on Done — next/dynamic's loadable
+  // wrapper (used to keep react-konva, which touches `window` at import
+  // time, off the server bundle) does not forward refs to the wrapped
+  // component, so exposing the Stage via forwardRef/useImperativeHandle
+  // and reading it later from the parent would silently resolve to null.
+  // A callback invoked from inside this already-dynamically-loaded
+  // component sidesteps that entirely. See Finding 3 in review.
+  onCanvasUpdate?: (dataUrl: string | null) => void;
 }
 
 export function EditorCanvas({
@@ -28,15 +41,44 @@ export function EditorCanvas({
   offsetY,
   rotationDeg,
   onTransformChange,
+  onCanvasUpdate,
 }: EditorCanvasProps) {
   const [mockupImage] = useImage(mockupUrl);
-  const [photoImage] = useImage(photoUrl ?? '');
+  // 'anonymous' is required for photos loaded from a cross-origin signed
+  // GCS URL: without it, drawing the image into the canvas taints the
+  // canvas and stage.toDataURL() (used for the Task 7 preview-export flow)
+  // throws a SecurityError. See Finding 3 in review — this also requires
+  // the Storage bucket to actually send CORS headers permitting the app's
+  // origin, which cannot be verified from this environment; see the fix
+  // report for that known limitation.
+  const [photoImage] = useImage(photoUrl ?? '', 'anonymous');
   const photoNodeRef = useRef<Konva.Image>(null);
+  const stageRef = useRef<Konva.Stage>(null);
 
   const canvasSlotRect = fractionRectToCanvasRect(slotRect, CANVAS_SIZE, CANVAS_SIZE);
 
+  useEffect(() => {
+    if (!onCanvasUpdate) return;
+    if (!photoImage || !stageRef.current) {
+      onCanvasUpdate(null);
+      return;
+    }
+    try {
+      onCanvasUpdate(stageRef.current.toDataURL());
+    } catch {
+      // Canvas-taint SecurityError (missing/misconfigured Storage CORS) or
+      // any other export failure — treated as "no preview available",
+      // never thrown up into the render path.
+      onCanvasUpdate(null);
+    }
+    // Re-capture whenever anything that changes the rendered pixels
+    // changes; deliberately NOT depending on `onCanvasUpdate` itself,
+    // which is a fresh closure every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoImage, scale, offsetX, offsetY, rotationDeg]);
+
   return (
-    <Stage width={CANVAS_SIZE} height={CANVAS_SIZE} className="rounded-lg overflow-hidden bg-cream">
+    <Stage ref={stageRef} width={CANVAS_SIZE} height={CANVAS_SIZE} className="rounded-lg overflow-hidden bg-cream">
       <Layer clipX={canvasSlotRect.x} clipY={canvasSlotRect.y} clipWidth={canvasSlotRect.width} clipHeight={canvasSlotRect.height}>
         {photoImage && (
           <KonvaImage

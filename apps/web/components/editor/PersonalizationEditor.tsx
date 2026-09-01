@@ -9,9 +9,13 @@ import { validateSlotsComplete } from '../../lib/editor-validation';
 import {
   fractionRectToCanvasRect,
   coverScale,
+  coverScaleForRotation,
   centeredOffset,
+  centeredOffsetForRotation,
+  offsetAfterScaleChange,
   slotCropRectInOriginalPx,
   EDITOR_CANVAS_SIZE,
+  type RotationDeg,
 } from '../../lib/editor-geometry';
 import { SlotPicker } from './SlotPicker';
 import { DpiBadge } from './DpiBadge';
@@ -37,14 +41,33 @@ interface SlotState {
   scale: number;
   offsetX: number;
   offsetY: number;
-  rotationDeg: 0 | 90 | 180 | 270;
+  rotationDeg: RotationDeg;
   effectiveDpi: number;
   confirmedLowDpi: boolean;
+  // Captured from the live Konva stage whenever this slot's canvas is
+  // rendered/transformed (see EditorCanvas's onCanvasUpdate) — Done just
+  // uploads whatever was last captured, rather than trying to re-render
+  // every slot's stage at submit time (only the ACTIVE slot's stage
+  // actually exists in the DOM). null if never captured (e.g. a
+  // cross-origin canvas-taint SecurityError) or not yet rendered.
+  previewDataUrl: string | null;
 }
 
+// Zoom-in/out buttons are capped relative to the slot's own cover-fit
+// scale (never let the customer zoom below what keeps the slot fully
+// covered) up to a fixed multiple of it, so "zoom in" always has visible
+// headroom without ever letting the photo become absurdly pixelated.
+const MAX_ZOOM_MULTIPLE = 4;
+const ZOOM_STEP_FACTOR = 1.25;
+
+type TemplateState =
+  | { status: 'loading' }
+  | { status: 'loaded'; template: FrameTemplate }
+  | { status: 'empty' }
+  | { status: 'error' };
+
 export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose }: PersonalizationEditorProps) {
-  const [template, setTemplate] = useState<FrameTemplate | null>(null);
-  const [templateError, setTemplateError] = useState(false);
+  const [templateState, setTemplateState] = useState<TemplateState>({ status: 'loading' });
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
   const [slots, setSlots] = useState<Map<number, SlotState>>(new Map());
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
@@ -53,10 +76,39 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     fetch(`/api/frame-templates/${variant.id}`)
-      .then((res) => res.json())
-      .then((templates: FrameTemplate[]) => setTemplate(templates[0] ?? null))
-      .catch(() => setTemplateError(true));
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Frame template fetch failed with status ${res.status}`);
+        }
+        const data: unknown = await res.json();
+        if (cancelled) return;
+
+        // An empty array (no template seeded for this variant) and a
+        // malformed shape are both real, expected states in a fresh
+        // environment — not the same as "still loading" — so each gets
+        // its own explicit terminal state rather than falling through to
+        // an indefinite spinner. See Finding 5 in review.
+        if (!Array.isArray(data) || data.length === 0) {
+          setTemplateState({ status: 'empty' });
+          return;
+        }
+        const template = data[0] as FrameTemplate | undefined;
+        if (!template || !Array.isArray(template.printableRects) || template.printableRects.length === 0) {
+          setTemplateState({ status: 'empty' });
+          return;
+        }
+        setTemplateState({ status: 'loaded', template });
+      })
+      .catch(() => {
+        if (!cancelled) setTemplateState({ status: 'error' });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [variant.id]);
 
   useEffect(() => {
@@ -67,6 +119,7 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  const template = templateState.status === 'loaded' ? templateState.template : null;
   const activeSlot = slots.get(activeSlotIndex);
   const activeRect = template?.printableRects.find((r) => r.slotIndex === activeSlotIndex);
 
@@ -91,7 +144,10 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
       const sessionId = getOrCreateSessionId();
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('minUploadPx', String(variant.minUploadPx));
+      // The server looks up minUploadPx from this variantId itself — a
+      // client-supplied minUploadPx would be trivially bypassable. See
+      // Finding 7 in review.
+      formData.append('variantId', variant.id);
 
       const res = await fetch('/api/uploads', {
         method: 'POST',
@@ -130,7 +186,8 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
         canvasRect.height,
         scale,
         offsetX,
-        offsetY
+        offsetY,
+        0
       );
 
       const { effectiveDpi } = effectiveDpiFromCropRect(
@@ -156,6 +213,7 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
           // A fresh photo always needs a fresh confirmation if it's still
           // red-tier — never inherit a previous photo's confirmation.
           confirmedLowDpi: false,
+          previewDataUrl: null,
         });
         return next;
       });
@@ -164,6 +222,66 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     } finally {
       setUploadingSlot(null);
     }
+  };
+
+  const handleZoom = (factor: number) => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current || !activeRect) return prev;
+      const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const minScale = coverScaleForRotation(
+        canvasRect.width,
+        canvasRect.height,
+        current.widthPx,
+        current.heightPx,
+        current.rotationDeg
+      );
+      const maxScale = minScale * MAX_ZOOM_MULTIPLE;
+      const newScale = Math.min(maxScale, Math.max(minScale, current.scale * factor));
+      if (newScale === current.scale) return prev;
+      const { offsetX, offsetY } = offsetAfterScaleChange(
+        current.offsetX,
+        current.offsetY,
+        current.scale,
+        newScale,
+        canvasRect.width,
+        canvasRect.height
+      );
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, scale: newScale, offsetX, offsetY });
+      return next;
+    });
+  };
+
+  const handleRotate = () => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current || !activeRect) return prev;
+      const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const newRotation = (((current.rotationDeg + 90) % 360) as RotationDeg);
+      const minScale = coverScaleForRotation(
+        canvasRect.width,
+        canvasRect.height,
+        current.widthPx,
+        current.heightPx,
+        newRotation
+      );
+      // Re-center on every rotation (rather than trying to preserve the
+      // previous pan position through a rotation about a corner anchor) —
+      // simple, predictable, and guarantees the slot stays fully covered.
+      const newScale = Math.max(current.scale, minScale);
+      const { offsetX, offsetY } = centeredOffsetForRotation(
+        canvasRect.width,
+        canvasRect.height,
+        current.widthPx,
+        current.heightPx,
+        newScale,
+        newRotation
+      );
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, rotationDeg: newRotation, scale: newScale, offsetX, offsetY });
+      return next;
+    });
   };
 
   const handleDone = async () => {
@@ -178,14 +296,47 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
       for (const [slotIndex, slot] of slots.entries()) {
         const slotRect = template?.printableRects.find((r) => r.slotIndex === slotIndex);
         // cropRect must reflect where the customer actually positioned the
-        // photo (scale + drag offset), not just the initial fit — see
-        // Finding 7 in review.
+        // photo (scale + drag offset + rotation), not just the initial fit
+        // — see Finding 7 and Finding 8 in review.
         const cropRect = slotRect
           ? (() => {
               const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
-              return slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, slot.scale, slot.offsetX, slot.offsetY);
+              return slotCropRectInOriginalPx(
+                canvasRect.width,
+                canvasRect.height,
+                slot.scale,
+                slot.offsetX,
+                slot.offsetY,
+                slot.rotationDeg
+              );
             })()
           : { x: 0, y: 0, width: slot.widthPx / slot.scale, height: slot.heightPx / slot.scale };
+
+        // Export each slot's canvas to a PNG and upload it as the
+        // customer-facing preview (spec §5 / Task 7) — see Finding 3 in
+        // review. previewUrl is optional on Customization, and a failure
+        // here (no captured frame yet, a network error, or a canvas-taint
+        // SecurityError from an uncooperative Storage CORS config) must
+        // never block the customer from completing checkout, so it's
+        // caught and simply omitted rather than re-thrown.
+        let previewUrl: string | undefined;
+        if (slot.previewDataUrl) {
+          try {
+            const previewRes = await fetch('/api/uploads/preview', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+              body: JSON.stringify({ personalizationId, slotIndex, dataUrl: slot.previewDataUrl }),
+            });
+            if (previewRes.ok) {
+              const previewBody = await previewRes.json();
+              if (typeof previewBody.previewUrl === 'string') {
+                previewUrl = previewBody.previewUrl;
+              }
+            }
+          } catch {
+            // See comment above — non-fatal.
+          }
+        }
 
         const customization: Omit<Customization, 'id'> = {
           sessionId,
@@ -201,11 +352,12 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
             cropRect,
           },
           effectiveDpi: slot.effectiveDpi,
+          previewUrl,
           renderStatus: 'pending',
         };
         const res = await fetch('/api/customizations', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
           body: JSON.stringify(customization),
         });
         if (!res.ok) {
@@ -221,11 +373,17 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     }
   };
 
-  if (!template) {
+  if (templateState.status !== 'loaded') {
+    const message =
+      templateState.status === 'error'
+        ? "We couldn't load the editor. Please try again."
+        : templateState.status === 'empty'
+          ? "This product isn't available for personalization yet."
+          : 'Loading editor…';
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40" onClick={onClose}>
         <div className="bg-surface rounded-lg p-6 flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
-          <span>{templateError ? "We couldn't load the editor. Please try again." : 'Loading editor…'}</span>
+          <span>{message}</span>
           <button aria-label="Close" onClick={onClose} className="text-charcoal">✕</button>
         </div>
       </div>
@@ -249,7 +407,7 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
 
         {activeRect && (
           <EditorCanvas
-            mockupUrl={template.mockupUrl}
+            mockupUrl={templateState.template.mockupUrl}
             photoUrl={activeSlot?.originalUrl ?? null}
             slotRect={activeRect}
             scale={activeSlot?.scale ?? 1}
@@ -265,7 +423,45 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
                 return next;
               });
             }}
+            onCanvasUpdate={(dataUrl: string | null) => {
+              setSlots((prev) => {
+                const current = prev.get(activeSlotIndex);
+                if (!current || current.previewDataUrl === dataUrl) return prev;
+                const next = new Map(prev);
+                next.set(activeSlotIndex, { ...current, previewDataUrl: dataUrl });
+                return next;
+              });
+            }}
           />
+        )}
+
+        {activeSlot && (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              onClick={() => handleZoom(1 / ZOOM_STEP_FACTOR)}
+              className="w-8 h-8 rounded-full border border-charcoal/20 text-charcoal"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              onClick={() => handleZoom(ZOOM_STEP_FACTOR)}
+              className="w-8 h-8 rounded-full border border-charcoal/20 text-charcoal"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              aria-label="Rotate 90 degrees"
+              onClick={handleRotate}
+              className="px-3 h-8 rounded-full border border-charcoal/20 text-charcoal text-sm"
+            >
+              Rotate ⟳
+            </button>
+          </div>
         )}
 
         <div className="mt-3">

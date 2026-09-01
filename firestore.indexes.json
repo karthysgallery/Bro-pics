@@ -102,14 +102,24 @@
         { "fieldPath": "isActive", "order": "ASCENDING" },
         { "fieldPath": "ratingCount", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "frameTemplates",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "variantId", "order": "ASCENDING" }
-      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "frameTemplates",
+      "fieldPath": "variantId",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "variants",
+      "fieldPath": "id",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    }
+  ]
 }

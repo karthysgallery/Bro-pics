@@ -3,6 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { probeAndStripImage } from '../../../lib/image-probe';
+import { findVariantById } from '../../../lib/variant-lookup';
 import { UploadSchema, type Upload } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -13,11 +14,23 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const formData = await request.formData();
   const file = formData.get('file');
-  const minUploadPxRaw = formData.get('minUploadPx');
-  if (!(file instanceof Blob) || typeof minUploadPxRaw !== 'string') {
-    return NextResponse.json({ error: 'Missing file or minUploadPx' }, { status: 400 });
+  const variantIdRaw = formData.get('variantId');
+  if (!(file instanceof Blob) || typeof variantIdRaw !== 'string') {
+    return NextResponse.json({ error: 'Missing file or variantId' }, { status: 400 });
   }
-  const minUploadPx = Number(minUploadPxRaw);
+
+  const app = getAdminApp();
+  const db = getFirestore(app);
+
+  // minUploadPx must come from the server-fetched variant, never the
+  // client — a client can otherwise send an arbitrarily low value (or a
+  // non-numeric one, silently passing via `x < NaN` being false) to bypass
+  // the resolution-quality gate entirely. See Finding 7 in review.
+  const variant = await findVariantById(db, variantIdRaw);
+  if (!variant) {
+    return NextResponse.json({ error: `Unknown variantId: ${variantIdRaw}` }, { status: 400 });
+  }
+  const minUploadPx = variant.minUploadPx;
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
   let probed;
@@ -30,8 +43,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const app = getAdminApp();
-  const db = getFirestore(app);
   const uploadRef = db.collection('uploads').doc();
   const uploadId = uploadRef.id;
 

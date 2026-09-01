@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Variant } from '@bro-pics/shared';
 
+let lastEditorCanvasProps: Record<string, unknown> | undefined;
 vi.mock('./EditorCanvas', () => ({
-  EditorCanvas: () => <div data-testid="editor-canvas" />,
+  EditorCanvas: (props: Record<string, unknown>) => {
+    lastEditorCanvasProps = props;
+    return <div data-testid="editor-canvas" />;
+  },
 }));
 
 global.fetch = vi.fn();
@@ -32,6 +36,7 @@ describe('PersonalizationEditor', () => {
   beforeEach(() => {
     vi.mocked(fetch).mockReset();
     localStorage.clear();
+    lastEditorCanvasProps = undefined;
   });
 
   it('disables the Done button until every slot has a photo', async () => {
@@ -103,7 +108,7 @@ describe('PersonalizationEditor', () => {
     expect(uploadUrl).toBe('/api/uploads');
     expect((uploadInit?.headers as Record<string, string>)['X-Session-Id']).toBeTruthy();
     const formData = uploadInit?.body as FormData;
-    expect(formData.get('minUploadPx')).toBe('1200');
+    expect(formData.get('variantId')).toBe('var_1');
     expect(formData.get('file')).toBe(file);
 
     const doneButton = await screen.findByRole('button', { name: /done/i });
@@ -261,5 +266,112 @@ describe('PersonalizationEditor', () => {
     const checkbox2 = await screen.findByRole('checkbox', { name: /use this photo anyway/i });
     expect(checkbox2).not.toBeChecked();
     expect(screen.getByRole('button', { name: /done/i })).toBeDisabled();
+  });
+
+  describe('zoom and rotate controls (Finding 8)', () => {
+    async function renderWithOnePhoto() {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            id: 'ft_1',
+            variantId: 'var_1',
+            mockupUrl: '/mockup.png',
+            maskUrl: null,
+            overlayUrl: null,
+            printableRects: [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.4, height: 0.4 }],
+            bleedMm: 2,
+            matInset: 0,
+          },
+        ],
+      } as Response);
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'up_1',
+          sessionId: 's_1',
+          originalUrl: '/uploaded.jpg',
+          widthPx: 2400,
+          heightPx: 3000,
+          mime: 'image/jpeg',
+          bytes: 12345,
+          exifStripped: true,
+          status: 'ready',
+        }),
+      } as Response);
+
+      render(<PersonalizationEditor variant={variant} photoSlots={1} onComplete={() => {}} onClose={() => {}} />);
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBeDefined());
+    }
+
+    it('renders zoom in/out and rotate controls once a slot has a photo', async () => {
+      await renderWithOnePhoto();
+      expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /zoom out/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /rotate/i })).toBeInTheDocument();
+    });
+
+    it('does not render zoom/rotate controls before any photo is uploaded', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            id: 'ft_1',
+            variantId: 'var_1',
+            mockupUrl: '/mockup.png',
+            maskUrl: null,
+            overlayUrl: null,
+            printableRects: [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.4, height: 0.4 }],
+            bleedMm: 2,
+            matInset: 0,
+          },
+        ],
+      } as Response);
+      render(<PersonalizationEditor variant={variant} photoSlots={1} onComplete={() => {}} onClose={() => {}} />);
+      await screen.findByLabelText(/upload a photo/i);
+      expect(screen.queryByRole('button', { name: /zoom in/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /rotate/i })).not.toBeInTheDocument();
+    });
+
+    it('clicking rotate cycles rotationDeg 0 -> 90 -> 180 -> 270 -> 0 on the active slot', async () => {
+      await renderWithOnePhoto();
+      const rotateButton = screen.getByRole('button', { name: /rotate/i });
+
+      fireEvent.click(rotateButton);
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBe(90));
+
+      fireEvent.click(rotateButton);
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBe(180));
+
+      fireEvent.click(rotateButton);
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBe(270));
+
+      fireEvent.click(rotateButton);
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBe(0));
+    });
+
+    it('clicking zoom in increases scale, and zoom out decreases it back down but never below the cover-fit minimum', async () => {
+      await renderWithOnePhoto();
+      const initialScale = lastEditorCanvasProps?.scale as number;
+
+      const zoomIn = screen.getByRole('button', { name: /zoom in/i });
+      fireEvent.click(zoomIn);
+      await waitFor(() => expect(lastEditorCanvasProps?.scale as number).toBeGreaterThan(initialScale));
+
+      const zoomOut = screen.getByRole('button', { name: /zoom out/i });
+      // Click zoom-out more times than the single zoom-in, to prove the
+      // scale clamps at the cover-fit minimum rather than continuing to
+      // shrink below it (which would leave gaps in the slot).
+      fireEvent.click(zoomOut);
+      fireEvent.click(zoomOut);
+      fireEvent.click(zoomOut);
+      await waitFor(() => {
+        const finalScale = lastEditorCanvasProps?.scale as number;
+        expect(finalScale).toBeCloseTo(initialScale, 5);
+      });
+    });
   });
 });
