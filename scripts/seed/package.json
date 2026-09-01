@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "write-to-firestore": "tsx src/write-to-firestore.ts"
   },
   "dependencies": {
-    "@bro-pics/shared": "workspace:*"
+    "@bro-pics/shared": "workspace:*",
+    "firebase-admin": "^12.6.0"
   },
   "devDependencies": {
+    "tsx": "^4.19.0",
     "vitest": "^2.1.0",
     "typescript": "^5.6.0"
   }
