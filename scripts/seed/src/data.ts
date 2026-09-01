@@ -1,4 +1,4 @@
-import type { Category, Product, Variant, Review, HomepageSection, ProductMedia } from '@bro-pics/shared';
+import type { Category, Product, Variant, Review, HomepageSection, ProductMedia, FrameTemplate } from '@bro-pics/shared';
 
 export const seedCategories: Category[] = [
   {
@@ -396,6 +396,44 @@ export const seedProductMedia: ProductMedia[] = [
     sortOrder: 2,
   },
 ];
+
+export const seedFrameTemplates: FrameTemplate[] = seedVariants
+  .filter((v) => v.isActive)
+  .map((variant) => {
+    const product = seedProducts.find((p) => p.id === variant.productId)!;
+    const slotCount = product.photoSlots;
+
+    // Evenly-spaced grid layout for multi-slot products; a single centered
+    // rect for single-slot products. Simple, deterministic, and always
+    // produces non-overlapping rects regardless of slotCount.
+    const columns = Math.ceil(Math.sqrt(slotCount));
+    const rows = Math.ceil(slotCount / columns);
+    const cellWidth = 0.8 / columns;
+    const cellHeight = 0.8 / rows;
+
+    const printableRects = Array.from({ length: slotCount }, (_, slotIndex) => {
+      const col = slotIndex % columns;
+      const row = Math.floor(slotIndex / columns);
+      return {
+        slotIndex,
+        x: 0.1 + col * cellWidth,
+        y: 0.1 + row * cellHeight,
+        width: cellWidth * 0.9,
+        height: cellHeight * 0.9,
+      };
+    });
+
+    return {
+      id: `ft_${variant.id}`,
+      variantId: variant.id,
+      mockupUrl: `/placeholders/mockups/${product.slug}.png`,
+      maskUrl: null,
+      overlayUrl: null,
+      printableRects,
+      bleedMm: 2,
+      matInset: 0,
+    };
+  });
 
 export const seedHomepageSections: HomepageSection[] = [
   {

@@ -102,6 +102,13 @@
         { "fieldPath": "isActive", "order": "ASCENDING" },
         { "fieldPath": "ratingCount", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "frameTemplates",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "variantId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

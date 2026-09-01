@@ -1,7 +1,7 @@
 // scripts/seed/src/data.test.ts
 import { describe, it, expect } from 'vitest';
-import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema, ProductMediaSchema } from '@bro-pics/shared';
-import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections, seedProductMedia } from './data';
+import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema, ProductMediaSchema, FrameTemplateSchema } from '@bro-pics/shared';
+import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections, seedProductMedia, seedFrameTemplates } from './data';
 
 describe('seed categories', () => {
   it('every seed category passes CategorySchema validation', () => {
@@ -157,6 +157,39 @@ describe('seed products faq and reviews', () => {
   it('every review has a createdAt date', () => {
     for (const review of seedReviews) {
       expect(review.createdAt).toBeInstanceOf(Date);
+    }
+  });
+});
+
+describe('seed frame templates', () => {
+  it('every seed frame template passes FrameTemplateSchema validation', () => {
+    for (const template of seedFrameTemplates) {
+      expect(() => FrameTemplateSchema.parse(template)).not.toThrow();
+    }
+  });
+
+  it('every active variant has exactly one frame template', () => {
+    const activeVariantIds = seedVariants.filter((v) => v.isActive).map((v) => v.id);
+    const templatedVariantIds = seedFrameTemplates.map((t) => t.variantId);
+    for (const variantId of activeVariantIds) {
+      expect(templatedVariantIds).toContain(variantId);
+    }
+  });
+
+  it("every frame template's printableRects count matches its product's photoSlots", () => {
+    const variantToProduct = new Map(seedVariants.map((v) => [v.id, v.productId]));
+    const productBySlug = new Map(seedProducts.map((p) => [p.id, p]));
+    for (const template of seedFrameTemplates) {
+      const productId = variantToProduct.get(template.variantId);
+      const product = productId ? productBySlug.get(productId) : undefined;
+      expect(product).toBeDefined();
+      expect(template.printableRects).toHaveLength(product!.photoSlots);
+    }
+  });
+
+  it('every frame template mockupUrl points at a generated placeholder PNG path', () => {
+    for (const template of seedFrameTemplates) {
+      expect(template.mockupUrl).toMatch(/^\/placeholders\/mockups\/[a-z0-9-]+\.png$/);
     }
   });
 });
