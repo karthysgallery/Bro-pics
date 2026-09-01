@@ -7,7 +7,13 @@ import { useEffect } from 'react';
 function SeedCart() {
   const cart = useCart();
   useEffect(() => {
-    cart.addItem({ variantId: 'var_1', title: 'Classic Wooden Frame — 8x12 in', unitPriceSnapshot: 79900, qty: 2 });
+    cart.addItem({
+      variantId: 'var_1',
+      personalizationId: 'pers_1',
+      title: 'Classic Wooden Frame — 8x12 in',
+      unitPriceSnapshot: 79900,
+      qty: 2,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;

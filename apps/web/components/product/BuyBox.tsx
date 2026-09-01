@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { VariantSelector } from './VariantSelector';
-import { PersonalizeComingSoonModal } from './PersonalizeComingSoonModal';
+import { PersonalizationEditor } from '../editor/PersonalizationEditor';
 
 function formatPaise(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -30,7 +30,7 @@ export function BuyBox({
   onSelectColour,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const { addItem } = useCart();
 
   // Options are scoped to the other dimension's current selection so the
@@ -43,10 +43,21 @@ export function BuyBox({
   const compareAtPrice = selectedVariant?.compareAtPrice;
   const inStock = selectedVariant ? selectedVariant.stockStatus === 'in_stock' : product.inStock;
 
-  const handleAddToCart = () => {
+  const handlePersonalizeClick = () => {
     if (!selectedVariant) return;
-    addItem({ variantId: selectedVariant.id, title: `${product.title} — ${selectedVariant.sizeLabel}`, unitPriceSnapshot: selectedVariant.price, qty: quantity });
-    setIsModalOpen(true);
+    setIsEditorOpen(true);
+  };
+
+  const handleEditorComplete = (personalizationId: string) => {
+    if (!selectedVariant) return;
+    addItem({
+      variantId: selectedVariant.id,
+      personalizationId,
+      title: `${product.title} — ${selectedVariant.sizeLabel}`,
+      unitPriceSnapshot: selectedVariant.price,
+      qty: quantity,
+    });
+    setIsEditorOpen(false);
   };
 
   return (
@@ -85,7 +96,7 @@ export function BuyBox({
       </div>
 
       <button
-        onClick={handleAddToCart}
+        onClick={handlePersonalizeClick}
         disabled={!inStock || !selectedVariant}
         className="w-full bg-terracotta text-cream rounded-lg py-3 font-medium disabled:opacity-50"
       >
@@ -101,7 +112,14 @@ export function BuyBox({
         Need help? Chat with us on WhatsApp
       </a>
 
-      <PersonalizeComingSoonModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {isEditorOpen && selectedVariant && (
+        <PersonalizationEditor
+          variant={selectedVariant}
+          photoSlots={product.photoSlots}
+          onComplete={handleEditorComplete}
+          onClose={() => setIsEditorOpen(false)}
+        />
+      )}
     </div>
   );
 }

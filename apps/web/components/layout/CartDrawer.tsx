@@ -32,18 +32,18 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         ) : (
           <ul className="flex flex-col gap-3">
             {items.map((item) => (
-              <li key={item.variantId} className="flex items-center justify-between gap-2 text-sm">
+              <li key={`${item.variantId}-${item.personalizationId}`} className="flex items-center justify-between gap-2 text-sm">
                 <span>{item.title}</span>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     min={1}
                     value={item.qty}
-                    onChange={(e) => updateQuantity(item.variantId, Number(e.target.value))}
+                    onChange={(e) => updateQuantity(item.variantId, item.personalizationId, Number(e.target.value))}
                     className="w-14 rounded border border-charcoal/20 px-2 py-1"
                     aria-label={`Quantity for ${item.title}`}
                   />
-                  <button onClick={() => removeItem(item.variantId)} aria-label={`Remove ${item.title}`}>
+                  <button onClick={() => removeItem(item.variantId, item.personalizationId)} aria-label={`Remove ${item.title}`}>
                     🗑
                   </button>
                 </div>

@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 
 export interface CartItem {
   variantId: string;
+  personalizationId: string;
   title: string;
   unitPriceSnapshot: number;
   qty: number;
@@ -12,8 +13,8 @@ export interface CartItem {
 export interface CartContextValue {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (variantId: string) => void;
-  updateQuantity: (variantId: string, qty: number) => void;
+  removeItem: (variantId: string, personalizationId: string) => void;
+  updateQuantity: (variantId: string, personalizationId: string, qty: number) => void;
   totalCount: number;
   totalPaise: number;
 }
@@ -31,22 +32,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     const addItem = (item: CartItem) => {
       setItems((prev) => {
-        const existing = prev.find((i) => i.variantId === item.variantId);
+        const existing = prev.find(
+          (i) => i.variantId === item.variantId && i.personalizationId === item.personalizationId
+        );
         if (existing) {
           return prev.map((i) =>
-            i.variantId === item.variantId ? { ...i, qty: i.qty + item.qty } : i
+            i.variantId === item.variantId && i.personalizationId === item.personalizationId
+              ? { ...i, qty: i.qty + item.qty }
+              : i
           );
         }
         return [...prev, item];
       });
     };
 
-    const removeItem = (variantId: string) => {
-      setItems((prev) => prev.filter((i) => i.variantId !== variantId));
+    const removeItem = (variantId: string, personalizationId: string) => {
+      setItems((prev) => prev.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId)));
     };
 
-    const updateQuantity = (variantId: string, qty: number) => {
-      setItems((prev) => prev.map((i) => (i.variantId === variantId ? { ...i, qty } : i)));
+    const updateQuantity = (variantId: string, personalizationId: string, qty: number) => {
+      setItems((prev) =>
+        prev.map((i) =>
+          i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
+        )
+      );
     };
 
     const totalCount = items.reduce((sum, i) => sum + i.qty, 0);
