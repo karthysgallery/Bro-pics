@@ -20,7 +20,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const minUploadPx = Number(minUploadPxRaw);
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
-  const probed = await probeAndStripImage(inputBuffer);
+  let probed;
+  try {
+    probed = await probeAndStripImage(inputBuffer);
+  } catch {
+    return NextResponse.json(
+      { error: 'Unable to process image — file may be corrupt or in an unsupported format' },
+      { status: 400 }
+    );
+  }
 
   const app = getAdminApp();
   const db = getFirestore(app);

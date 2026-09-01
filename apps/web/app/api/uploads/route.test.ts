@@ -64,6 +64,17 @@ describe('POST /api/uploads', () => {
     expect(body.status).toBe('rejected');
   });
 
+  it('returns 400 for a malformed/undecodable image without writing to Firestore', async () => {
+    mockSet.mockClear();
+    const buffer = Buffer.from('this is not a valid image, just plain text bytes');
+    const response = await POST(makeRequest(buffer, 'sess_test', 2400));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBeTruthy();
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
   it('requires a session ID header', async () => {
     const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
     const request = new Request('http://localhost/api/uploads', {
