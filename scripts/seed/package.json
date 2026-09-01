@@ -5,16 +5,13 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "write-to-firestore": "tsx src/write-to-firestore.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bro-pics/shared": "workspace:*",
-    "firebase-admin": "^12.6.0",
     "sharp": "^0.33.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
     "vitest": "^2.1.0",
     "typescript": "^5.6.0"
   }
