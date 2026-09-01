@@ -192,6 +192,30 @@ describe('seed frame templates', () => {
       expect(template.mockupUrl).toMatch(/^\/placeholders\/mockups\/[a-z0-9-]+\.png$/);
     }
   });
+
+  it("a single-slot product's printableRect aspect ratio matches its variant's physical aspect ratio", () => {
+    const variantById = new Map(seedVariants.map((v) => [v.id, v]));
+    const productBySlug = new Map(seedProducts.map((p) => [p.id, p]));
+
+    // Covers both a portrait (8x12, 2:3) and a square (10x10, 1:1) variant,
+    // to prove the fix generalizes rather than hardcoding one ratio.
+    const singleSlotVariantIds = ['var_classic_wooden_frame_8x12_black', 'var_modern_acrylic_frame_10x10_clear'];
+
+    for (const variantId of singleSlotVariantIds) {
+      const variant = variantById.get(variantId)!;
+      expect(variant).toBeDefined();
+      const product = productBySlug.get(variant.productId)!;
+      expect(product.photoSlots).toBe(1);
+
+      const template = seedFrameTemplates.find((t) => t.variantId === variantId)!;
+      expect(template).toBeDefined();
+      const rect = template.printableRects[0];
+
+      const rectRatio = rect.width / rect.height;
+      const variantRatio = variant.widthIn / variant.heightIn;
+      expect(rectRatio).toBeCloseTo(variantRatio, 2);
+    }
+  });
 });
 
 describe('seed homepage sections', () => {
