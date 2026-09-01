@@ -4,9 +4,9 @@ import { useRef } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect } from 'react-konva';
 import useImage from 'use-image';
 import type Konva from 'konva';
-import { fractionRectToCanvasRect, type Rect as GeometryRect } from '../../lib/editor-geometry';
+import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE, type Rect as GeometryRect } from '../../lib/editor-geometry';
 
-const CANVAS_SIZE = 400;
+const CANVAS_SIZE = EDITOR_CANVAS_SIZE;
 
 interface EditorCanvasProps {
   mockupUrl: string;
