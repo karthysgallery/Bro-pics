@@ -1,3 +1,7 @@
+import { initializeApp } from 'firebase-admin/app';
+
+initializeApp();
+
 export { generateOrderNo } from './orders/orderNumber';
 export type { CounterTransaction, CounterDocRef } from './orders/orderNumber';
 export { isDuplicateWebhookEvent, markWebhookProcessed } from './webhooks/idempotency';

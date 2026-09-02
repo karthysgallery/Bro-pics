@@ -12,5 +12,6 @@ export function getAdminApp(): App {
 
   return initializeApp({
     credential: cert(JSON.parse(serviceAccountJson)),
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }
