@@ -121,4 +121,68 @@ describe('POST /api/customizations', () => {
     const response = await POST(makeRequest(validBody, 'sess_1'));
     expect(response.status).toBe(400);
   });
+
+  it('rejects when the referenced upload was rejected (too-small) rather than ready — Finding 3', async () => {
+    mockUploadGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...uploadDoc, status: 'rejected' }) });
+    const response = await POST(makeRequest(validBody, 'sess_1'));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toMatch(/not ready/i);
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the referenced upload is still pending (not yet ready) — Finding 3', async () => {
+    mockUploadGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...uploadDoc, status: 'pending' }) });
+    const response = await POST(makeRequest(validBody, 'sess_1'));
+    expect(response.status).toBe(400);
+  });
+
+  it('swaps variant width/height axes for a 90-degree rotation before computing DPI — Finding 4', async () => {
+    // Non-square upload (4000w x 2000h) against a non-square 8x20in variant,
+    // with a non-square crop rect (2000x4000) — as slotCropRectInOriginalPx
+    // would produce for a 90-degree-rotated photo, where the crop rect's
+    // width/height fields stay labeled in the ORIGINAL image's own u/v axes
+    // (not the print's physical axes), so pairing cropRect.width with
+    // variant.widthIn unswapped is wrong once the photo is rotated 90°.
+    //
+    // cropScale = max(4000/2000, 2000/4000) = 2 -> usedWidthPx=2000,
+    // usedHeightPx=1000.
+    // Unswapped (wrong):  min(2000/widthIn=8, 1000/heightIn=20) = min(250, 50)  = 50
+    // Swapped   (correct): min(2000/heightIn=20, 1000/widthIn=8) = min(100, 125) = 100
+    mockUploadGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ ...uploadDoc, widthPx: 4000, heightPx: 2000 }),
+    });
+    mockCollectionGroupGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ id: 'var_1', widthIn: 8, heightIn: 20 }) }],
+    });
+
+    const rotatedBody = {
+      ...validBody,
+      transformJson: {
+        ...validBody.transformJson,
+        rotationDeg: 90,
+        // Crop rect in the upload's own pixel space: 2000 wide, 4000 tall
+        // (the full upload, axes as they'd appear after a 90-degree crop
+        // computation).
+        cropRect: { x: 0, y: 0, width: 2000, height: 4000 },
+      },
+    };
+
+    const response = await POST(makeRequest(rotatedBody, 'sess_1'));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+
+    // Swapped: printWidthIn = variant.heightIn (20), printHeightIn = variant.widthIn (8).
+    // dpiFromWidth  = (4000 / (4000/2000)) / 20 = 2000 / 20 = 100
+    // dpiFromHeight = (2000 / (4000/2000)) / 8  = 1000 / 8  = 125
+    // effectiveDpi = min(100, 125) = 100
+    expect(body.effectiveDpi).toBeCloseTo(100);
+
+    // Sanity check against the WRONG (unswapped) value this test would
+    // otherwise silently accept: unswapped would give
+    // dpiFromWidth = 2000/8 = 250, dpiFromHeight = 1000/20 = 50 -> min = 50.
+    expect(body.effectiveDpi).not.toBeCloseTo(50);
+  });
 });

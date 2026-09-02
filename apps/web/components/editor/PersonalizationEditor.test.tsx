@@ -373,5 +373,43 @@ describe('PersonalizationEditor', () => {
         expect(finalScale).toBeCloseTo(initialScale, 5);
       });
     });
+
+    it('recomputes the DPI badge/tier and red-tier confirmation gate as the customer zooms — Finding 2', async () => {
+      await renderWithOnePhoto();
+
+      // Upload is 2400x3000 against an 8x10in variant with the slot rect
+      // {x:0.1,y:0.1,w:0.4,h:0.4} on a 400x400 canvas: at the initial
+      // cover-fit scale this is amber-tier (~240 DPI), so no red-tier
+      // confirmation checkbox is shown yet.
+      expect(screen.queryByRole('checkbox', { name: /use this photo anyway/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
+
+      // Zoom in repeatedly (clamped at MAX_ZOOM_MULTIPLE x cover-fit scale)
+      // to push effectiveDpi down into red tier (~60 DPI at max zoom).
+      const zoomIn = screen.getByRole('button', { name: /zoom in/i });
+      for (let i = 0; i < 8; i++) {
+        fireEvent.click(zoomIn);
+      }
+
+      // The badge and gate only update if effectiveDpi was actually
+      // recomputed from the NEW scale — before this fix, effectiveDpi stayed
+      // frozen at its upload-time value and neither of these would change.
+      await waitFor(() => {
+        expect(screen.getByText(/too low resolution/i)).toBeInTheDocument();
+      });
+      expect(screen.getByRole('checkbox', { name: /use this photo anyway/i })).toBeInTheDocument();
+      expect(screen.queryByText(/lower quality print/i)).not.toBeInTheDocument();
+
+      // Zooming back out to the cover-fit minimum should bring it back out
+      // of red tier and hide the checkbox again.
+      const zoomOut = screen.getByRole('button', { name: /zoom out/i });
+      for (let i = 0; i < 8; i++) {
+        fireEvent.click(zoomOut);
+      }
+      await waitFor(() => {
+        expect(screen.queryByRole('checkbox', { name: /use this photo anyway/i })).not.toBeInTheDocument();
+      });
+      expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
+    });
   });
 });

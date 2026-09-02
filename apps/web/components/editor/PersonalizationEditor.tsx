@@ -60,6 +60,30 @@ interface SlotState {
 const MAX_ZOOM_MULTIPLE = 4;
 const ZOOM_STEP_FACTOR = 1.25;
 
+/**
+ * Recomputes effectiveDpi for a slot from its current transform (scale,
+ * offset, rotation) against the slot's own printable rect — the same
+ * crop-rect-from-transform math used at upload time. Called after every
+ * transform change (zoom, rotate, drag) so the DPI badge and the red-tier
+ * confirmation gate always reflect where the photo is CURRENTLY positioned,
+ * not just where it started. See Finding 2 in the second-round review.
+ */
+function computeEffectiveDpi(
+  slotRect: { x: number; y: number; width: number; height: number },
+  widthPx: number,
+  heightPx: number,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+  rotationDeg: RotationDeg,
+  variant: Variant
+): number {
+  const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+  const cropRect = slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, scale, offsetX, offsetY, rotationDeg);
+  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, variant.widthIn, variant.heightIn);
+  return effectiveDpi;
+}
+
 type TemplateState =
   | { status: 'loading' }
   | { status: 'loaded'; template: FrameTemplate }
@@ -181,22 +205,11 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
       const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
       const scale = coverScale(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx);
       const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx, scale);
-      const { width: cropWidthPx, height: cropHeightPx } = slotCropRectInOriginalPx(
-        canvasRect.width,
-        canvasRect.height,
-        scale,
-        offsetX,
-        offsetY,
-        0
-      );
-
-      const { effectiveDpi } = effectiveDpiFromCropRect(
-        upload.widthPx,
-        upload.heightPx,
-        { width: cropWidthPx, height: cropHeightPx },
-        variant.widthIn,
-        variant.heightIn
-      );
+      // Same crop-rect-from-transform + DPI math used after every
+      // subsequent zoom/rotate/drag (see computeEffectiveDpi) — one code
+      // path for "effectiveDpi from a slot's current transform", not a
+      // duplicated inline computation that could drift from it.
+      const effectiveDpi = computeEffectiveDpi(slotRect, upload.widthPx, upload.heightPx, scale, offsetX, offsetY, 0, variant);
 
       setSlots((prev) => {
         const next = new Map(prev);
@@ -247,8 +260,18 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
         canvasRect.width,
         canvasRect.height
       );
+      const effectiveDpi = computeEffectiveDpi(
+        activeRect,
+        current.widthPx,
+        current.heightPx,
+        newScale,
+        offsetX,
+        offsetY,
+        current.rotationDeg,
+        variant
+      );
       const next = new Map(prev);
-      next.set(activeSlotIndex, { ...current, scale: newScale, offsetX, offsetY });
+      next.set(activeSlotIndex, { ...current, scale: newScale, offsetX, offsetY, effectiveDpi });
       return next;
     });
   };
@@ -278,8 +301,18 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
         newScale,
         newRotation
       );
+      const effectiveDpi = computeEffectiveDpi(
+        activeRect,
+        current.widthPx,
+        current.heightPx,
+        newScale,
+        offsetX,
+        offsetY,
+        newRotation,
+        variant
+      );
       const next = new Map(prev);
-      next.set(activeSlotIndex, { ...current, rotationDeg: newRotation, scale: newScale, offsetX, offsetY });
+      next.set(activeSlotIndex, { ...current, rotationDeg: newRotation, scale: newScale, offsetX, offsetY, effectiveDpi });
       return next;
     });
   };
@@ -417,9 +450,19 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
             onTransformChange={(transform) => {
               setSlots((prev) => {
                 const current = prev.get(activeSlotIndex);
-                if (!current) return prev;
+                if (!current || !activeRect) return prev;
+                const effectiveDpi = computeEffectiveDpi(
+                  activeRect,
+                  current.widthPx,
+                  current.heightPx,
+                  transform.scale,
+                  transform.offsetX,
+                  transform.offsetY,
+                  current.rotationDeg,
+                  variant
+                );
                 const next = new Map(prev);
-                next.set(activeSlotIndex, { ...current, ...transform });
+                next.set(activeSlotIndex, { ...current, ...transform, effectiveDpi });
                 return next;
               });
             }}

@@ -43,6 +43,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (upload.sessionId !== sessionId) {
     return NextResponse.json({ error: 'Upload does not belong to this session' }, { status: 403 });
   }
+  // /api/uploads persists rejected (too-small, 422) uploads to Firestore
+  // with a real id and returns that id in the response body — a client
+  // could otherwise reference a rejected upload's id here, bypassing the
+  // resolution-quality gate entirely. See Finding 3 in the second-round
+  // review.
+  if (upload.status !== 'ready') {
+    return NextResponse.json({ error: `Upload ${uploadId} is not ready (status: ${upload.status})` }, { status: 400 });
+  }
 
   const variant = await findVariantById(db, variantId);
   if (!variant) {
@@ -62,12 +70,23 @@ export async function POST(request: Request): Promise<NextResponse> {
   // scale/offset/rotation state (which IS already stored in transformJson)
   // rather than trusting the client-computed cropRect — a good follow-up,
   // out of scope for this fix wave.
+  // At 90°/270° the crop rect's width/height axes (in the ORIGINAL image's
+  // own pixel space) are swapped relative to the print's physical
+  // width/height axes — a 90°-rotated photo's "width" in image-space maps
+  // to the print's HEIGHT axis. Not swapping variant.widthIn/heightIn to
+  // match produces up to a 50% DPI over-report at those rotations. See
+  // Finding 4 in the second-round review.
+  const rotationDeg = (transformJson as Record<string, unknown>).rotationDeg;
+  const rotationSwapsAxes = rotationDeg === 90 || rotationDeg === 270;
+  const printWidthIn = rotationSwapsAxes ? variant.heightIn : variant.widthIn;
+  const printHeightIn = rotationSwapsAxes ? variant.widthIn : variant.heightIn;
+
   const { effectiveDpi } = effectiveDpiFromCropRect(
     upload.widthPx,
     upload.heightPx,
     cropRect,
-    variant.widthIn,
-    variant.heightIn
+    printWidthIn,
+    printHeightIn
   );
 
   const docRef = db.collection('customizations').doc();

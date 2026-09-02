@@ -47,11 +47,18 @@ export function EditorCanvas({
   // 'anonymous' is required for photos loaded from a cross-origin signed
   // GCS URL: without it, drawing the image into the canvas taints the
   // canvas and stage.toDataURL() (used for the Task 7 preview-export flow)
-  // throws a SecurityError. See Finding 3 in review — this also requires
-  // the Storage bucket to actually send CORS headers permitting the app's
-  // origin, which cannot be verified from this environment; see the fix
-  // report for that known limitation.
-  const [photoImage] = useImage(photoUrl ?? '', 'anonymous');
+  // throws a SecurityError. This requires the Storage bucket to actually
+  // send CORS headers permitting the app's origin (see cors.json at the
+  // repo root) — but if that isn't configured (or hasn't been applied via
+  // `gsutil cors set` yet), the browser doesn't just taint the canvas, it
+  // FAILS the image load outright, and the customer would see an empty
+  // slot instead of their photo. That's worse than a tainted canvas, so we
+  // fall back to a same-URL, non-anonymous load (which taints the canvas
+  // but still displays) whenever the anonymous load reports 'failed'. See
+  // Finding 1 in the second-round review.
+  const [anonymousPhotoImage, anonymousPhotoStatus] = useImage(photoUrl ?? '', 'anonymous');
+  const [fallbackPhotoImage] = useImage(anonymousPhotoStatus === 'failed' ? (photoUrl ?? '') : '');
+  const photoImage = anonymousPhotoStatus === 'failed' ? fallbackPhotoImage : anonymousPhotoImage;
   const photoNodeRef = useRef<Konva.Image>(null);
   const stageRef = useRef<Konva.Stage>(null);
 
