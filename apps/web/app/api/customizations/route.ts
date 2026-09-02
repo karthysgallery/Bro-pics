@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { findVariantById } from '../../../lib/variant-lookup';
 import { CustomizationSchema } from '@bro-pics/shared';
-import { effectiveDpiFromCropRect } from '@bro-pics/shared';
+import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
 import type { Upload } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -77,9 +77,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   // match produces up to a 50% DPI over-report at those rotations. See
   // Finding 4 in the second-round review.
   const rotationDeg = (transformJson as Record<string, unknown>).rotationDeg;
-  const rotationSwapsAxes = rotationDeg === 90 || rotationDeg === 270;
-  const printWidthIn = rotationSwapsAxes ? variant.heightIn : variant.widthIn;
-  const printHeightIn = rotationSwapsAxes ? variant.widthIn : variant.heightIn;
+  const { printWidthIn, printHeightIn } = printDimensionsForRotation(
+    variant,
+    typeof rotationDeg === 'number' ? rotationDeg : 0
+  );
 
   const { effectiveDpi } = effectiveDpiFromCropRect(
     upload.widthPx,

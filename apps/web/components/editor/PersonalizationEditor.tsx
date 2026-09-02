@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { FrameTemplate, Customization, Upload, Variant } from '@bro-pics/shared';
-import { effectiveDpiFromCropRect, dpiTier } from '@bro-pics/shared';
+import { effectiveDpiFromCropRect, dpiTier, printDimensionsForRotation } from '@bro-pics/shared';
 import { getOrCreateSessionId } from '../../lib/session-id';
 import { validateSlotsComplete } from '../../lib/editor-validation';
 import {
@@ -67,6 +67,14 @@ const ZOOM_STEP_FACTOR = 1.25;
  * transform change (zoom, rotate, drag) so the DPI badge and the red-tier
  * confirmation gate always reflect where the photo is CURRENTLY positioned,
  * not just where it started. See Finding 2 in the second-round review.
+ *
+ * At 90°/270° rotation, variant.widthIn/heightIn must be axis-swapped
+ * before being passed to effectiveDpiFromCropRect — see
+ * printDimensionsForRotation's doc comment. This mirrors the identical
+ * swap /api/customizations applies server-side when persisting effectiveDpi,
+ * via the shared helper, so the badge the customer sees can never diverge
+ * from what the server computes and stores. See Finding 4 (client-side gap)
+ * in the second-round review.
  */
 function computeEffectiveDpi(
   slotRect: { x: number; y: number; width: number; height: number },
@@ -80,7 +88,8 @@ function computeEffectiveDpi(
 ): number {
   const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
   const cropRect = slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, scale, offsetX, offsetY, rotationDeg);
-  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, variant.widthIn, variant.heightIn);
+  const { printWidthIn, printHeightIn } = printDimensionsForRotation(variant, rotationDeg);
+  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, printWidthIn, printHeightIn);
   return effectiveDpi;
 }
 

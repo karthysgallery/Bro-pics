@@ -411,5 +411,93 @@ describe('PersonalizationEditor', () => {
       });
       expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
     });
+
+    it('recomputes the DPI badge/tier with the rotation-aware axis swap after a 90-degree rotate — client counterpart of Finding 4', async () => {
+      // A landscape 3000x2000 upload against a 10x8in variant, in the same
+      // square 160x160 canvas slot the other zoom/rotate tests use.
+      //
+      // At cover-fit scale the crop is always a centered 2000x2000 square
+      // (the shorter, height axis) — REGARDLESS of rotation, since the
+      // canvas slot itself is square. That makes this scenario isolate
+      // exactly one variable: whether variant.widthIn/heightIn get
+      // axis-swapped for the print-size arguments passed to
+      // effectiveDpiFromCropRect. cropScale = max(3000/2000, 2000/2000) =
+      // 1.5 -> usedWidthPx = 2000, usedHeightPx = 1333.33 in both cases.
+      //
+      // Unswapped (rotation 0, and what a buggy client would WRONGLY keep
+      // using at rotation 90 too):
+      //   dpiFromWidth = 2000/widthIn(10)  = 200
+      //   dpiFromHeight = 1333.33/heightIn(8) = 166.67
+      //   effectiveDpi = 166.67 -> amber ("Lower quality print").
+      //
+      // Correctly swapped at rotation 90 (printWidthIn=heightIn=8,
+      // printHeightIn=widthIn=10):
+      //   dpiFromWidth = 2000/8    = 250
+      //   dpiFromHeight = 1333.33/10 = 133.33
+      //   effectiveDpi = 133.33 -> red ("Too low resolution"), crossing the
+      //   150 DPI tier boundary that the unswapped (buggy) value does not.
+      //
+      // This mirrors the server-side test in
+      // apps/web/app/api/customizations/route.test.ts ("swaps variant
+      // width/height axes for a 90-degree rotation before computing DPI —
+      // Finding 4"): both must land on the SAME rotation-aware tier for the
+      // same customization, or the customer sees a badge/gate that
+      // disagrees with what the server persists.
+      const dpiVariant: Variant = { ...variant, widthIn: 10, heightIn: 8 };
+
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            id: 'ft_1',
+            variantId: 'var_1',
+            mockupUrl: '/mockup.png',
+            maskUrl: null,
+            overlayUrl: null,
+            printableRects: [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.4, height: 0.4 }],
+            bleedMm: 2,
+            matInset: 0,
+          },
+        ],
+      } as Response);
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'up_1',
+          sessionId: 's_1',
+          originalUrl: '/uploaded.jpg',
+          widthPx: 3000,
+          heightPx: 2000,
+          mime: 'image/jpeg',
+          bytes: 12345,
+          exifStripped: true,
+          status: 'ready',
+        }),
+      } as Response);
+
+      render(<PersonalizationEditor variant={dpiVariant} photoSlots={1} onComplete={() => {}} onClose={() => {}} />);
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBeDefined());
+
+      // Before rotating: amber tier, no red-tier confirmation gate.
+      expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /use this photo anyway/i })).not.toBeInTheDocument();
+
+      // Rotate 90 degrees.
+      fireEvent.click(screen.getByRole('button', { name: /rotate/i }));
+      await waitFor(() => expect(lastEditorCanvasProps?.rotationDeg).toBe(90));
+
+      // If the client applied the same rotation-aware axis swap the server
+      // does, this now crosses into red tier and the confirmation gate
+      // appears. Before this fix, effectiveDpi stayed at the unswapped
+      // ~166.67 (amber) value and neither of these would change.
+      await waitFor(() => {
+        expect(screen.getByText(/too low resolution/i)).toBeInTheDocument();
+      });
+      expect(screen.getByRole('checkbox', { name: /use this photo anyway/i })).toBeInTheDocument();
+      expect(screen.queryByText(/lower quality print/i)).not.toBeInTheDocument();
+    });
   });
 });
