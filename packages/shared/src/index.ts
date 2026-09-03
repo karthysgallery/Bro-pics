@@ -19,3 +19,4 @@ export * from './search/parse-search-params';
 export * from './pricing/money';
 export * from './pricing/coupon';
 export * from './dpi/calculate';
+export * from './cart/merge-cart-items';
