@@ -15,3 +15,16 @@ export function getOrCreateSessionId(): string {
   localStorage.setItem(STORAGE_KEY, id);
   return id;
 }
+
+/**
+ * Clears the stored session id after a successful reconcileSessionOnLogin
+ * call. Without this, the same anonymous session id persists in
+ * localStorage indefinitely — since reconciliation reassigns every
+ * upload/customization matching that session id to whoever just signed in,
+ * a second person signing in later on the same shared browser would
+ * otherwise inherit the first user's session-owned records. Calling this
+ * lets the next getOrCreateSessionId() start a fresh, unclaimed session.
+ */
+export function resetSessionId(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}

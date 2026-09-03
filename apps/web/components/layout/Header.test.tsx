@@ -9,6 +9,17 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+// Header calls useAuth() directly (for the sign-in trigger), which requires
+// a real AuthProvider ancestor — mock firebase/auth here (not globally) so
+// only this file's auth-dependent render pays that cost.
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn((_auth, callback) => {
+    callback(null);
+    return () => {};
+  }),
+}));
+
 const categories: Category[] = [
   {
     id: 'cat_frames',

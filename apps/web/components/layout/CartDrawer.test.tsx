@@ -2,16 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CartDrawer } from './CartDrawer';
 import { CartProvider, useCart } from '../../lib/cart-context';
-import { AuthProvider } from '../../lib/auth-context';
 import { useEffect } from 'react';
 
-function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <CartProvider>{children}</CartProvider>
-    </AuthProvider>
-  );
-}
+// CartProvider no longer hard-requires an AuthProvider ancestor — it reads
+// auth state via AuthContext directly with a null-safe fallback, treating
+// "no AuthProvider" the same as "signed out". No auth mocking needed here.
+const Providers = CartProvider;
 
 function SeedCart() {
   const cart = useCart();

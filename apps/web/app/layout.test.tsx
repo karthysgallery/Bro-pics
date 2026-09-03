@@ -8,6 +8,17 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+// LayoutChrome renders Header, which calls useAuth() directly and so
+// requires a real AuthProvider ancestor — mock firebase/auth here (not
+// globally) so only this file's auth-dependent render pays that cost.
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn((_auth, callback) => {
+    callback(null);
+    return () => {};
+  }),
+}));
+
 describe('LayoutChrome', () => {
   it('renders its children between the header and footer', () => {
     render(

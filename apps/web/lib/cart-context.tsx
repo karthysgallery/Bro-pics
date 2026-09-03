@@ -1,13 +1,13 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, runTransaction, type Firestore } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import type { CartLine } from '@bro-pics/shared';
+import { mergeCartItems, type CartLine } from '@bro-pics/shared';
 import { getFirebaseApp } from './firebase-client';
 import { getFirebaseFunctions } from './firebase-functions-client';
-import { getOrCreateSessionId } from './session-id';
-import { useAuth } from './auth-context';
+import { getOrCreateSessionId, resetSessionId } from './session-id';
+import { AuthContext } from './auth-context';
 
 export interface CartItem extends CartLine {}
 
@@ -41,23 +41,57 @@ function mergeOne(prev: CartItem[], item: CartItem): CartItem[] {
 }
 
 /**
+ * Applies a mutation to the signed-in user's carts/{userId} document inside
+ * a Firestore transaction: reads the current server-side items, applies
+ * `mutate`, and writes the result back atomically. This is deliberately NOT
+ * a read-from-in-memory-state-then-setDoc pattern — two concurrent
+ * addItem/removeItem/updateQuantity calls (two tabs, two devices, or an
+ * offline queue flushing) that both read a stale in-memory `items` snapshot
+ * would otherwise race, and the second `setDoc({items: next})` would
+ * silently overwrite the first's write. Reading inside the transaction
+ * means each mutation is applied against whatever is actually on the
+ * server at commit time, never a stale local snapshot.
+ */
+async function applyFirestoreCartOp(
+  db: Firestore,
+  userId: string,
+  mutate: (current: CartItem[]) => CartItem[]
+): Promise<void> {
+  const cartRef = doc(db, 'carts', userId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(cartRef);
+    const current = snapshot.exists() ? ((snapshot.data() as { items: CartItem[] }).items ?? []) : [];
+    const next = mutate(current);
+    transaction.set(cartRef, { items: next });
+  });
+}
+
+/**
  * Local-only React state when signed out (unchanged from the Storefront
  * phase's mock provider). Once a user signs in, this reconciles the local
  * cart into Firestore via reconcileSessionOnLogin (a one-time merge, not
  * a routine write), then switches to a live carts/{userId} subscription —
  * every add/remove/update after that point writes straight to Firestore
  * through the owner-only rule from Task 3, no server route needed.
+ *
+ * Auth state is read directly off AuthContext (not the throwing useAuth()
+ * hook) with a null-safe fallback, so CartProvider works standalone without
+ * an AuthProvider ancestor — "no AuthProvider" is treated the same as
+ * "signed out" (local-only mode) rather than throwing.
  */
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user ?? null;
   const [localItems, setLocalItems] = useState<CartItem[]>([]);
   const [firestoreItems, setFirestoreItems] = useState<CartItem[] | null>(null);
+  const [reconcileSucceeded, setReconcileSucceeded] = useState(false);
   const hasReconciledRef = useRef(false);
 
   useEffect(() => {
     if (!user) {
       hasReconciledRef.current = false;
       setFirestoreItems(null);
+      setReconcileSucceeded(false);
       return;
     }
 
@@ -69,12 +103,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const sessionId = getOrCreateSessionId();
       const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
       reconcile({ sessionId, cartItems: localItems })
-        .then(() => setLocalItems([]))
+        .then(() => {
+          setLocalItems([]);
+          setReconcileSucceeded(true);
+          // Rotate the session id now that everything owned by it has been
+          // reassigned to this user — otherwise the next person to use this
+          // browser would inherit this user's session-owned uploads/cart.
+          resetSessionId();
+        })
         .catch((error) => {
-          // Reconciliation failed — local cart is left untouched per the
-          // spec's all-or-nothing requirement, so nothing is lost; the
-          // live Firestore subscription below still starts, showing
-          // whatever was already in carts/{userId} from a prior session.
+          // Reconciliation failed — reset hasReconciledRef so signing out
+          // and back in (or a remount) can retry, and leave
+          // reconcileSucceeded false so `items` below keeps blending in the
+          // local cart instead of trusting Firestore's state alone. Nothing
+          // the user added before signing in is lost: it stays in
+          // localItems and stays visible until a reconcile actually
+          // succeeds.
+          hasReconciledRef.current = false;
           console.error('reconcileSessionOnLogin failed:', error);
         });
     }
@@ -87,42 +132,56 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const items = user ? firestoreItems ?? [] : localItems;
-
-  const writeFirestoreItems = (next: CartItem[]) => {
-    if (!user) return;
-    const db = getFirestore(getFirebaseApp());
-    setDoc(doc(db, 'carts', user.uid), { items: next }).catch((error) => {
-      console.error('Failed to write cart to Firestore:', error);
-    });
-  };
+  // Until reconciliation has actually succeeded, treat localItems as a
+  // floor and blend it with whatever Firestore currently has, rather than
+  // trusting either side alone: onSnapshot can fire (with an empty/partial
+  // cart) before the reconcile call resolves, and a rejected reconcile
+  // must never make an add-to-cart afterwards vanish just because it went
+  // to Firestore while the display was still pinned to the stale local
+  // snapshot. Once reconcileSucceeded is true, localItems is empty anyway
+  // (cleared in the .then() above), so this degrades to firestoreItems.
+  const items = user
+    ? reconcileSucceeded
+      ? (firestoreItems ?? [])
+      : mergeCartItems(firestoreItems ?? [], localItems)
+    : localItems;
 
   const value = useMemo<CartContextValue>(() => {
+    const runFirestoreOp = (mutate: (current: CartItem[]) => CartItem[]) => {
+      if (!user) return;
+      const db = getFirestore(getFirebaseApp());
+      applyFirestoreCartOp(db, user.uid, mutate).catch((error) => {
+        console.error('Failed to write cart to Firestore:', error);
+      });
+    };
+
     const addItem = (item: CartItem) => {
       if (user) {
-        writeFirestoreItems(mergeOne(items, item));
+        runFirestoreOp((current) => mergeOne(current, item));
       } else {
         setLocalItems((prev) => mergeOne(prev, item));
       }
     };
 
     const removeItem = (variantId: string, personalizationId: string) => {
-      const next = items.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId));
+      const filterOut = (current: CartItem[]) =>
+        current.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId));
       if (user) {
-        writeFirestoreItems(next);
+        runFirestoreOp(filterOut);
       } else {
-        setLocalItems(next);
+        setLocalItems(filterOut);
       }
     };
 
     const updateQuantity = (variantId: string, personalizationId: string, qty: number) => {
-      const next = items.map((i) =>
-        i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
-      );
+      const applyQty = (current: CartItem[]) =>
+        current.map((i) =>
+          i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
+        );
       if (user) {
-        writeFirestoreItems(next);
+        runFirestoreOp(applyQty);
       } else {
-        setLocalItems(next);
+        setLocalItems(applyQty);
       }
     };
 

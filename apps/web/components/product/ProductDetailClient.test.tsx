@@ -2,16 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
-import { AuthProvider } from '../../lib/auth-context';
 import type { Product, Variant, ProductMedia } from '@bro-pics/shared';
 
-function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <CartProvider>{children}</CartProvider>
-    </AuthProvider>
-  );
-}
+// CartProvider no longer hard-requires an AuthProvider ancestor — it reads
+// auth state via AuthContext directly with a null-safe fallback, treating
+// "no AuthProvider" the same as "signed out". No auth mocking needed here.
+const Providers = CartProvider;
 
 const product = {
   id: 'prod_1', title: 'Classic Wooden Photo Frame', slug: 'classic-wooden-frame', categoryId: 'cat_frames',
