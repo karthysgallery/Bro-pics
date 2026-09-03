@@ -108,6 +108,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /reconciliations/{reconciliationId} {
+      allow read, write: if false;
+    }
+
     match /counters/{id} {
       allow read, write: if false;
     }

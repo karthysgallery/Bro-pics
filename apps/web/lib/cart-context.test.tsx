@@ -260,7 +260,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     const { result } = renderHook(() => useSignedInCart(), { wrapper: Wrapper });
 
-    expect(reconcileMock).toHaveBeenCalledWith({ sessionId: expect.any(String), cartItems: [] });
+    expect(reconcileMock).toHaveBeenCalledWith({ sessionId: expect.any(String), cartItems: [], reconciliationId: expect.any(String) });
 
     // Simulate the server already having an item from a prior session, and
     // the live subscription picking it up.
@@ -412,6 +412,98 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
       });
     });
     expect(screen.getByTestId('items-length').textContent).toBe('3');
+
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+
+  it('retries reconciliation with the same reconciliationId after a failure, so a retry that actually succeeded server-side does not double the merged cart (Critical 1 idempotency regression)', async () => {
+    // Reviewer-identified gap: an ordinary network drop AFTER the server
+    // commits the reconcile transaction but BEFORE the callable's response
+    // reaches the client looks exactly like a failed reconcile here — the
+    // promise rejects even though the server-side merge already happened.
+    // Retrying that "failed" attempt must send the SAME reconciliationId
+    // (not a fresh one), which is what lets the server's idempotency guard
+    // (functions/src/accounts/reconcile-session.ts) recognize the retry
+    // and skip re-merging. This client reuses sessionId itself as the
+    // reconciliationId, and sessionId only rotates on a SUCCESSFUL
+    // reconcile (resetSessionId) — so as long as the failed attempt didn't
+    // resolve, the next attempt's sessionId, and therefore
+    // reconciliationId, is unchanged.
+    vi.resetModules();
+    const firestoreMock = makeFirestoreMock();
+    vi.doMock('firebase/firestore', () => firestoreMock);
+
+    const reconcileMock = vi.fn().mockRejectedValueOnce(new Error('network error')).mockResolvedValueOnce(undefined);
+    vi.doMock('firebase/functions', () => ({
+      getFunctions: vi.fn(() => ({})),
+      httpsCallable: vi.fn(() => reconcileMock),
+    }));
+
+    const { CartProvider: SignedInCartProvider, useCart: useSignedInCart } = await import('./cart-context');
+    const { AuthContext: SignedInAuthContext } = await import('./auth-context');
+
+    function SignedInTestConsumer() {
+      const cart = useSignedInCart();
+      return (
+        <div>
+          <span data-testid="items-length">{cart.items.length}</span>
+          <span data-testid="item-0-qty">{cart.items[0]?.qty ?? ''}</span>
+          <button
+            onClick={() => cart.addItem({ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 })}
+          >
+            Add
+          </button>
+        </div>
+      );
+    }
+
+    function Harness({ signedIn }: { signedIn: boolean }) {
+      return (
+        <SignedInAuthContext.Provider value={{ user: signedIn ? ({ uid: 'user_1' } as never) : null, loading: false }}>
+          <SignedInCartProvider>
+            <SignedInTestConsumer />
+          </SignedInCartProvider>
+        </SignedInAuthContext.Provider>
+      );
+    }
+
+    const { rerender } = render(<Harness signedIn={false} />);
+    fireEvent.click(screen.getByText('Add'));
+    expect(screen.getByTestId('items-length').textContent).toBe('1');
+
+    // Sign in — first reconcile attempt, which fails.
+    rerender(<Harness signedIn={true} />);
+    await waitFor(() => expect(reconcileMock).toHaveBeenCalledTimes(1));
+
+    // Sign out and back in — this is the retry path this client actually
+    // has today (hasReconciledRef/reconcileSucceeded only reset in the
+    // !user branch); sessionId is untouched because resetSessionId only
+    // runs on success, so it's still the same value from before the
+    // failure.
+    rerender(<Harness signedIn={false} />);
+    rerender(<Harness signedIn={true} />);
+    await waitFor(() => expect(reconcileMock).toHaveBeenCalledTimes(2));
+
+    const firstReconciliationId = (reconcileMock.mock.calls[0][0] as { reconciliationId: string }).reconciliationId;
+    const secondReconciliationId = (reconcileMock.mock.calls[1][0] as { reconciliationId: string }).reconciliationId;
+    expect(secondReconciliationId).toBe(firstReconciliationId);
+
+    // The second attempt "succeeds" (from the client's perspective). Push
+    // the live subscription with what the server's idempotency guard
+    // actually produces for a retried reconciliationId: the item merged
+    // exactly once (qty 1), never doubled, regardless of how many times
+    // the client retried.
+    await act(async () => {
+      firestoreMock._server.items = [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 }];
+      firestoreMock.onSnapshot.mock.calls[0][1]({
+        exists: () => true,
+        data: () => ({ items: firestoreMock._server.items }),
+      });
+    });
+
+    expect(screen.getByTestId('items-length').textContent).toBe('1');
+    expect(screen.getByTestId('item-0-qty').textContent).toBe('1');
 
     vi.doUnmock('firebase/firestore');
     vi.doUnmock('firebase/functions');

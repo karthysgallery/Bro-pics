@@ -101,8 +101,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!hasReconciledRef.current) {
       hasReconciledRef.current = true;
       const sessionId = getOrCreateSessionId();
+      // reconciliationId is the server-side idempotency key for this
+      // reconciliation attempt (see functions/src/accounts/reconcile-session.ts).
+      // It's deliberately the sessionId itself rather than a fresh id per
+      // call: sessionId is already stable across retries of the same
+      // underlying local-cart state — it only rotates (resetSessionId,
+      // below) after a reconcile actually succeeds — so reusing it here
+      // means any retry of this same attempt (a remount, or a future sign
+      // out/in) presents the SAME id the server already has a record of,
+      // making the retry safe even if a prior call already committed
+      // server-side but its response never reached this client (an
+      // ordinary network failure mode, not a rare one).
       const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
-      reconcile({ sessionId, cartItems: localItems })
+      reconcile({ sessionId, cartItems: localItems, reconciliationId: sessionId })
         .then(() => {
           setLocalItems([]);
           setReconcileSucceeded(true);
