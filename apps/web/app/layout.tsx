@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import './globals.css';
 import type { Category } from '@bro-pics/shared';
+import { AuthProvider } from '../lib/auth-context';
 import { CartProvider } from '../lib/cart-context';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
@@ -30,11 +31,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-cream text-charcoal font-sans">
-        <CartProvider>
-          <LayoutChrome categories={categories} announcementBar={announcementBar}>
-            {children}
-          </LayoutChrome>
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            <LayoutChrome categories={categories} announcementBar={announcementBar}>
+              {children}
+            </LayoutChrome>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
