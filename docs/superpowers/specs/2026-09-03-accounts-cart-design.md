@@ -97,13 +97,15 @@ This is the first phase with a real, verifiable `request.auth.uid` (Phase 3's `s
 
 Routine cart operations (change qty, remove line) become direct client writes through these rules — no server round-trip needed, unlike Phase 3's uploads/customizations which stay server-only because reassigning their ownership is a privileged, one-time operation (§4), not a routine write.
 
-`uploads` and `customizations` rules are untouched by this plan — they remain server-only (Admin SDK), as Phase 3 left them.
+`uploads`/`customizations` writes stay server-only (Admin SDK), as Phase 3 left them. Their *read* rules change to reflect the new `userId` field from §4: `uploads/{uploadId}` already checks `isOwner(resource.data.userId) || isStaffOrAdmin()` (unreachable until now, since no doc had `userId`) and needs no rule change, only the schema field. `customizations/{id}` gains the equivalent owner-read clause, replacing its current staff-only read.
 
 ## 4. Login-time reconciliation
 
+`UploadSchema` and `CustomizationSchema` both gain a new optional field, `userId: z.string().optional()`, left unset until reconciliation. `firestore.rules:78-81` already expects `uploads/{uploadId}`'s owner-read check to key off `resource.data.userId` — a field neither schema had until now, meaning that read rule has been unreachable since Phase 3. `customizations/{id}` gets the matching owner-read clause added (`isOwner(resource.data.userId) || isStaffOrAdmin()`, replacing the current staff-only read). `sessionId` is left untouched on both — it stays as the original-session audit trail, and `userId` becomes the ownership field used for access control from this point on.
+
 One HTTPS callable, `reconcileSessionOnLogin(sessionId, cartItems)`, invoked once by the client immediately after a successful phone-OTP sign-in. Runs under the Admin SDK as a single Firestore transaction — all three writes commit together or none do:
 
-1. Query `uploads` and `customizations` where `sessionId == <the local sessionId>` → rewrite each matched doc's `sessionId` field to the now-known `userId`.
+1. Query `uploads` and `customizations` where `sessionId == <the local sessionId>` → set each matched doc's `userId` field to the now-known `userId` (`sessionId` is left as-is).
 2. Write `cartItems` (the client's local, pre-login cart state) into `carts/{userId}`, merging with anything already stored there (a returning user logging in on a second device) by summing `qty` for matching `(variantId, personalizationId)` pairs.
 3. Upsert `users/{userId}`: create the profile doc on first login (`phone` from the verified Auth token, `createdAt` set), or touch `updatedAt` if it already exists.
 
