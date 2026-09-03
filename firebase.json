@@ -12,8 +12,8 @@
       "codebase": "default",
       "runtime": "nodejs20",
       "predeploy": [
-        "pnpm --filter @bro-pics/functions typecheck",
-        "pnpm --filter @bro-pics/functions bundle"
+        "pnpm --dir functions typecheck",
+        "pnpm --dir functions bundle"
       ]
     }
   ],

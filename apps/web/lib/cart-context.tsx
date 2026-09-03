@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { mergeCartItems, type CartLine } from '@bro-pics/shared';
 import { getFirebaseApp } from './firebase-client';
 import { getFirebaseFunctions } from './firebase-functions-client';
-import { getOrCreateSessionId, resetSessionId } from './session-id';
+import { resetSessionId, SESSION_ID_STORAGE_KEY } from './session-id';
 import { AuthContext } from './auth-context';
 
 export interface CartItem extends CartLine {}
@@ -100,39 +100,73 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     if (!hasReconciledRef.current) {
       hasReconciledRef.current = true;
-      const sessionId = getOrCreateSessionId();
-      // reconciliationId is the server-side idempotency key for this
-      // reconciliation attempt (see functions/src/accounts/reconcile-session.ts).
-      // It's deliberately the sessionId itself rather than a fresh id per
-      // call: sessionId is already stable across retries of the same
-      // underlying local-cart state — it only rotates (resetSessionId,
-      // below) after a reconcile actually succeeds — so reusing it here
-      // means any retry of this same attempt (a remount, or a future sign
-      // out/in) presents the SAME id the server already has a record of,
-      // making the retry safe even if a prior call already committed
-      // server-side but its response never reached this client (an
-      // ordinary network failure mode, not a rare one).
-      const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
-      reconcile({ sessionId, cartItems: localItems, reconciliationId: sessionId })
-        .then(() => {
-          setLocalItems([]);
-          setReconcileSucceeded(true);
-          // Rotate the session id now that everything owned by it has been
-          // reassigned to this user — otherwise the next person to use this
-          // browser would inherit this user's session-owned uploads/cart.
-          resetSessionId();
-        })
-        .catch((error) => {
-          // Reconciliation failed — reset hasReconciledRef so signing out
-          // and back in (or a remount) can retry, and leave
-          // reconcileSucceeded false so `items` below keeps blending in the
-          // local cart instead of trusting Firestore's state alone. Nothing
-          // the user added before signing in is lost: it stays in
-          // localItems and stays visible until a reconcile actually
-          // succeeds.
-          hasReconciledRef.current = false;
-          console.error('reconcileSessionOnLogin failed:', error);
-        });
+      // Read the stored session id directly rather than
+      // getOrCreateSessionId(), which MINTS a fresh id on a miss. This
+      // effect must only call reconcileSessionOnLogin on a real sign-in
+      // transition with actual prior anonymous activity to reconcile —
+      // not on every page load a signed-in user happens to render. Using
+      // getOrCreateSessionId() here would (a) mint a brand-new session id
+      // on every page load for a signed-in user with nothing stored, and
+      // (b) since reconciliationId derives from that id, permanently grow
+      // the reconciliations/{id} marker collection by one doc per page
+      // load forever, with the idempotency guard never actually matching
+      // across separate page loads.
+      const sessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY);
+      if (!sessionId && localItems.length === 0) {
+        // Nothing stored and nothing to merge — there is no prior
+        // anonymous activity to reconcile, so skip the call entirely
+        // (falling through below to still subscribe to the live cart).
+        // Nothing local to blend in, so this is equivalent to a
+        // successful no-op reconcile as far as `items` below is concerned.
+        setReconcileSucceeded(true);
+      } else {
+        // reconciliationId is the server-side idempotency key for this
+        // reconciliation attempt (see functions/src/accounts/reconcile-session.ts).
+        // It's deliberately the sessionId itself rather than a fresh id per
+        // call: sessionId is already stable across retries of the same
+        // underlying local-cart state — it only rotates (resetSessionId,
+        // below) after a reconcile actually succeeds — so reusing it here
+        // means any retry of this same attempt (a remount, or a future sign
+        // out/in) presents the SAME id the server already has a record of,
+        // making the retry safe even if a prior call already committed
+        // server-side but its response never reached this client (an
+        // ordinary network failure mode, not a rare one).
+        //
+        // If there's no stored session id but there IS a local cart (e.g.
+        // added to cart, then the session id was somehow cleared before
+        // sign-in), mint one and PERSIST it (not just a local variable) —
+        // this is a rare edge case, not the common path, but a retry of
+        // this same attempt (failed reconcile, remount, sign out/in) must
+        // see the same id again, which only holds if it's actually
+        // written to storage rather than re-minted fresh on every call.
+        const reconciliationKey = sessionId ?? (() => {
+          const fresh = crypto.randomUUID();
+          localStorage.setItem(SESSION_ID_STORAGE_KEY, fresh);
+          return fresh;
+        })();
+        const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
+        reconcile({ sessionId: reconciliationKey, cartItems: localItems, reconciliationId: reconciliationKey })
+          .then(() => {
+            setLocalItems([]);
+            setReconcileSucceeded(true);
+            // Rotate the session id now that everything owned by it has
+            // been reassigned to this user — otherwise the next person to
+            // use this browser would inherit this user's session-owned
+            // uploads/cart.
+            resetSessionId();
+          })
+          .catch((error) => {
+            // Reconciliation failed — reset hasReconciledRef so signing
+            // out and back in (or a remount) can retry, and leave
+            // reconcileSucceeded false so `items` below keeps blending in
+            // the local cart instead of trusting Firestore's state alone.
+            // Nothing the user added before signing in is lost: it stays
+            // in localItems and stays visible until a reconcile actually
+            // succeeds.
+            hasReconciledRef.current = false;
+            console.error('reconcileSessionOnLogin failed:', error);
+          });
+      }
     }
 
     const unsubscribe = onSnapshot(cartRef, (snapshot) => {

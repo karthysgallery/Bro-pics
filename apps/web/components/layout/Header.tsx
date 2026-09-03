@@ -46,7 +46,7 @@ export function Header({ categories, onCartClick }: HeaderProps) {
             ♡
           </button>
           {user ? (
-            <Link href="/account" aria-label="Account" className="text-charcoal">
+            <Link href="/orders" aria-label="Account" className="text-charcoal">
               ◐
             </Link>
           ) : (

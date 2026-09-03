@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { FrameTemplate, Customization, Upload, Variant } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, dpiTier, printDimensionsForRotation } from '@bro-pics/shared';
@@ -108,6 +108,20 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Captured ONCE for the lifetime of this editor mount and reused for
+  // every request in the flow (the initial upload call and everything in
+  // handleDone), rather than re-reading getOrCreateSessionId() at each
+  // call site. Without this, signing in mid-flow (which rotates the
+  // stored session id via resetSessionId in cart-context.tsx) would mint
+  // a brand-new session id for handleDone's calls, mismatching the
+  // session id already attached to this flow's upload(s) and getting
+  // rejected by /api/customizations' ownership check — silently losing
+  // the customer's whole edit.
+  const sessionIdRef = useRef<string | null>(null);
+  if (sessionIdRef.current === null) {
+    sessionIdRef.current = getOrCreateSessionId();
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -174,7 +188,7 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     setUploadingSlot(slotIndex);
 
     try {
-      const sessionId = getOrCreateSessionId();
+      const sessionId = sessionIdRef.current!;
       const formData = new FormData();
       formData.append('file', file);
       // The server looks up minUploadPx from this variantId itself — a
@@ -332,7 +346,7 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     setSubmitError(null);
 
     const personalizationId = crypto.randomUUID();
-    const sessionId = getOrCreateSessionId();
+    const sessionId = sessionIdRef.current!;
 
     // Captures the first slot that successfully produced a preview URL, so
     // it can be passed to onComplete for use as the cart line's thumbnail

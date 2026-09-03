@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getAuth,
   RecaptchaVerifier,
@@ -20,12 +20,29 @@ export function PhoneSignIn({ onSignedIn }: PhoneSignInProps) {
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
+  // Holds the current RecaptchaVerifier instance so a second "Send OTP"
+  // click in the same mount (e.g. after mistyping the phone number) can
+  // .clear() the prior instance before constructing a new one against the
+  // same container div. Without this, a second construction against an
+  // already-rendered widget throws, and that throw was being swallowed
+  // into the same generic error string as every other failure — leaving
+  // no way to recover except closing and reopening the sign-in modal.
+  const verifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    return () => {
+      verifierRef.current?.clear();
+      verifierRef.current = null;
+    };
+  }, []);
 
   const handleSendOtp = async () => {
     setError(null);
     try {
+      verifierRef.current?.clear();
       const auth = getAuth(getFirebaseApp());
       const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current!, { size: 'invisible' });
+      verifierRef.current = verifier;
       const result = await signInWithPhoneNumber(auth, phone, verifier);
       setConfirmationResult(result);
     } catch {

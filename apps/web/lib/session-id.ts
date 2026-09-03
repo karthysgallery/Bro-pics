@@ -1,6 +1,11 @@
 'use client';
 
-const STORAGE_KEY = 'bropics_session_id';
+// Exported so callers that need to check for an existing session id WITHOUT
+// minting a new one (e.g. cart-context.tsx's reconcile effect) can read
+// localStorage directly rather than going through getOrCreateSessionId,
+// which always mints on a miss.
+export const SESSION_ID_STORAGE_KEY = 'bropics_session_id';
+const STORAGE_KEY = SESSION_ID_STORAGE_KEY;
 
 /**
  * Anonymous per-browser session id, persisted in localStorage. Scopes

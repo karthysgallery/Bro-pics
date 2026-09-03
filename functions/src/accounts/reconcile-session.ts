@@ -130,7 +130,18 @@ function buildAdminTransaction(
     upsertUser(userId, phone, isNewUser) {
       const now = new Date().toISOString();
       const payload: Record<string, unknown> = { phone, updatedAt: now };
-      if (isNewUser) payload.createdAt = now;
+      // id/email/displayName are set ONLY on first creation, never in the
+      // always-applied fields above — UserSchema requires all three
+      // present (email/displayName nullable) on every doc, but setting
+      // them here unconditionally would clobber a later profile edit
+      // (e.g. the user setting their own displayName) back to null on
+      // every subsequent login.
+      if (isNewUser) {
+        payload.createdAt = now;
+        payload.id = userId;
+        payload.email = null;
+        payload.displayName = null;
+      }
       transaction.set(db.collection('users').doc(userId), payload, { merge: true });
     },
     async isReconciliationProcessed(reconciliationId) {

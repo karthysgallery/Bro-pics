@@ -247,6 +247,12 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
       httpsCallable: vi.fn(() => reconcileMock),
     }));
 
+    // Simulate real prior anonymous activity — a stored session id — so
+    // this reconcile fires. (Fix 2: with nothing stored AND an empty local
+    // cart, the effect now skips the call entirely; see the dedicated
+    // "skips reconcile" test below for that path.)
+    localStorage.setItem('bropics_session_id', 'sess_existing');
+
     const { CartProvider: SignedInCartProvider, useCart: useSignedInCart } = await import('./cart-context');
     const { AuthContext: SignedInAuthContext } = await import('./auth-context');
 
@@ -260,7 +266,8 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     const { result } = renderHook(() => useSignedInCart(), { wrapper: Wrapper });
 
-    expect(reconcileMock).toHaveBeenCalledWith({ sessionId: expect.any(String), cartItems: [], reconciliationId: expect.any(String) });
+    expect(reconcileMock).toHaveBeenCalledWith({ sessionId: 'sess_existing', cartItems: [], reconciliationId: 'sess_existing' });
+    localStorage.removeItem('bropics_session_id');
 
     // Simulate the server already having an item from a prior session, and
     // the live subscription picking it up.
@@ -504,6 +511,43 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     expect(screen.getByTestId('items-length').textContent).toBe('1');
     expect(screen.getByTestId('item-0-qty').textContent).toBe('1');
+
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+
+  it('skips reconcileSessionOnLogin when there is no stored session id and no local cart (Fix 2 regression)', async () => {
+    // A signed-in user with nothing stored in localStorage and an empty
+    // local cart has no prior anonymous activity to reconcile. Calling
+    // reconcile anyway (the pre-fix behavior) minted a fresh session id
+    // every page load, permanently growing the reconciliations/{id}
+    // marker collection with one doc per load and never actually
+    // deduplicating across loads. This must not fire at all.
+    vi.resetModules();
+    localStorage.removeItem('bropics_session_id');
+    const firestoreMock = makeFirestoreMock();
+    vi.doMock('firebase/firestore', () => firestoreMock);
+
+    const reconcileMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock('firebase/functions', () => ({
+      getFunctions: vi.fn(() => ({})),
+      httpsCallable: vi.fn(() => reconcileMock),
+    }));
+
+    const { CartProvider: SignedInCartProvider, useCart: useSignedInCart } = await import('./cart-context');
+    const { AuthContext: SignedInAuthContext } = await import('./auth-context');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false }}>
+          <SignedInCartProvider>{children}</SignedInCartProvider>
+        </SignedInAuthContext.Provider>
+      );
+    }
+
+    renderHook(() => useSignedInCart(), { wrapper: Wrapper });
+
+    expect(reconcileMock).not.toHaveBeenCalled();
 
     vi.doUnmock('firebase/firestore');
     vi.doUnmock('firebase/functions');
