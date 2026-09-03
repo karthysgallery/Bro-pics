@@ -1,9 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { Category } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
+import { useAuth } from '../../lib/auth-context';
 import { SearchTypeahead } from '../search/SearchTypeahead';
+import { AccountModal } from './AccountModal';
 
 interface HeaderProps {
   categories: Category[];
@@ -12,6 +15,8 @@ interface HeaderProps {
 
 export function Header({ categories, onCartClick }: HeaderProps) {
   const { totalCount } = useCart();
+  const { user } = useAuth();
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-cream border-b border-charcoal/10">
@@ -40,9 +45,19 @@ export function Header({ categories, onCartClick }: HeaderProps) {
           <button aria-label="Wishlist" className="text-charcoal">
             ♡
           </button>
-          <Link href="/account" aria-label="Account" className="text-charcoal">
-            ◐
-          </Link>
+          {user ? (
+            <Link href="/account" aria-label="Account" className="text-charcoal">
+              ◐
+            </Link>
+          ) : (
+            <button
+              aria-label="Sign in"
+              onClick={() => setIsAccountModalOpen(true)}
+              className="text-charcoal"
+            >
+              ◐
+            </button>
+          )}
           <button aria-label="Cart" onClick={onCartClick} className="relative text-charcoal">
             🛒
             <span
@@ -54,6 +69,7 @@ export function Header({ categories, onCartClick }: HeaderProps) {
           </button>
         </div>
       </div>
+      <AccountModal isOpen={isAccountModalOpen} onClose={() => setIsAccountModalOpen(false)} />
     </header>
   );
 }

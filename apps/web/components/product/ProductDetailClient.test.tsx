@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
+import { AuthProvider } from '../../lib/auth-context';
 import type { Product, Variant, ProductMedia } from '@bro-pics/shared';
+
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <CartProvider>{children}</CartProvider>
+    </AuthProvider>
+  );
+}
 
 const product = {
   id: 'prod_1', title: 'Classic Wooden Photo Frame', slug: 'classic-wooden-frame', categoryId: 'cat_frames',
@@ -30,20 +39,20 @@ const media: ProductMedia[] = [
 
 describe('ProductDetailClient', () => {
   it('shows the default variant (first in stock, 8x12/Black) with its dedicated media and price', () => {
-    render(<CartProvider><ProductDetailClient product={product} variants={variants} media={media} /></CartProvider>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
     expect(screen.getByText('₹799.00')).toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', '/black.svg');
   });
 
   it('falls back to variant-agnostic media when transitioning into a colour with no dedicated photos', () => {
-    render(<CartProvider><ProductDetailClient product={product} variants={variants} media={media} /></CartProvider>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
     expect(screen.getByText('₹849.00')).toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', '/generic.svg');
   });
 
   it('never offers a size×colour combination with no matching variant, and every reachable click resolves to a real variant', () => {
-    render(<CartProvider><ProductDetailClient product={product} variants={variants} media={media} /></CartProvider>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
 
     // Default: 8x12 / Black. Both sizes are selectable here (Black pairs with both).
     expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();

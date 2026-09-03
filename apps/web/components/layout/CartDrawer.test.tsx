@@ -2,7 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CartDrawer } from './CartDrawer';
 import { CartProvider, useCart } from '../../lib/cart-context';
+import { AuthProvider } from '../../lib/auth-context';
 import { useEffect } from 'react';
+
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <CartProvider>{children}</CartProvider>
+    </AuthProvider>
+  );
+}
 
 function SeedCart() {
   const cart = useCart();
@@ -38,19 +47,19 @@ function SeedCartWithPreview() {
 describe('CartDrawer', () => {
   it('is hidden when isOpen is false', () => {
     render(
-      <CartProvider>
+      <Providers>
         <CartDrawer isOpen={false} onClose={() => {}} />
-      </CartProvider>
+      </Providers>
     );
     expect(screen.queryByTestId('cart-drawer')).not.toBeInTheDocument();
   });
 
   it('shows line items and the running subtotal when open', () => {
     render(
-      <CartProvider>
+      <Providers>
         <SeedCart />
         <CartDrawer isOpen={true} onClose={() => {}} />
-      </CartProvider>
+      </Providers>
     );
     expect(screen.getByText('Classic Wooden Frame — 8x12 in')).toBeInTheDocument();
     expect(screen.getByTestId('cart-subtotal').textContent).toContain('1,598.00');
@@ -59,9 +68,9 @@ describe('CartDrawer', () => {
   it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn();
     render(
-      <CartProvider>
+      <Providers>
         <CartDrawer isOpen={true} onClose={onClose} />
-      </CartProvider>
+      </Providers>
     );
     fireEvent.click(screen.getByLabelText('Close cart'));
     expect(onClose).toHaveBeenCalledOnce();
@@ -69,20 +78,20 @@ describe('CartDrawer', () => {
 
   it('renders a thumbnail image when the item has a previewUrl', () => {
     render(
-      <CartProvider>
+      <Providers>
         <SeedCartWithPreview />
         <CartDrawer isOpen={true} onClose={() => {}} />
-      </CartProvider>
+      </Providers>
     );
     expect(screen.getByRole('img', { name: 'Classic Wooden Frame — 8x12 in' })).toBeInTheDocument();
   });
 
   it('does not let the quantity drop below 1 when the input is cleared', () => {
     render(
-      <CartProvider>
+      <Providers>
         <SeedCartWithPreview />
         <CartDrawer isOpen={true} onClose={() => {}} />
-      </CartProvider>
+      </Providers>
     );
     const qtyInput = screen.getByLabelText('Quantity for Classic Wooden Frame — 8x12 in');
     fireEvent.change(qtyInput, { target: { value: '' } });
