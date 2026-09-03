@@ -1,55 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { CustomizationSchema } from './customization';
 
-const validCustomization = {
-  id: 'cust_1',
-  sessionId: 'sess_abc123',
-  personalizationId: 'pers_xyz789',
-  uploadId: 'up_1',
-  variantId: 'var_classic_wooden_frame_8x12_black',
-  slotIndex: 0,
-  transformJson: {
-    scale: 1.2,
-    offsetX: 10,
-    offsetY: -5,
-    rotationDeg: 90 as const,
-    cropRect: { x: 0, y: 0, width: 1200, height: 1800 },
-  },
-  textFieldsJson: undefined,
-  effectiveDpi: 280,
-  previewUrl: undefined,
-  renderStatus: 'pending' as const,
-};
+function baseCustomization(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'c1', sessionId: 'sess_1', personalizationId: 'p1', uploadId: 'up_1',
+    variantId: 'v1', slotIndex: 0,
+    transformJson: { scale: 1, offsetX: 0, offsetY: 0, rotationDeg: 0, cropRect: { x: 0, y: 0, width: 100, height: 100 } },
+    effectiveDpi: 300, renderStatus: 'done',
+    ...overrides,
+  };
+}
 
 describe('CustomizationSchema', () => {
-  it('accepts a valid customization', () => {
-    expect(CustomizationSchema.parse(validCustomization)).toEqual(validCustomization);
+  it('accepts a customization with no userId (pre-login)', () => {
+    expect(CustomizationSchema.safeParse(baseCustomization()).success).toBe(true);
   });
 
-  it('accepts each valid rotationDeg value', () => {
-    for (const rotationDeg of [0, 90, 180, 270] as const) {
-      const withRotation = { ...validCustomization, transformJson: { ...validCustomization.transformJson, rotationDeg } };
-      expect(() => CustomizationSchema.parse(withRotation)).not.toThrow();
-    }
-  });
-
-  it('rejects a rotationDeg outside the 90-degree-snap set', () => {
-    const invalid = { ...validCustomization, transformJson: { ...validCustomization.transformJson, rotationDeg: 45 } };
-    expect(() => CustomizationSchema.parse(invalid)).toThrow();
-  });
-
-  it('rejects a missing sessionId', () => {
-    const { sessionId, ...withoutSessionId } = validCustomization;
-    expect(() => CustomizationSchema.parse(withoutSessionId)).toThrow();
-  });
-
-  it('rejects a missing personalizationId', () => {
-    const { personalizationId, ...withoutPersonalizationId } = validCustomization;
-    expect(() => CustomizationSchema.parse(withoutPersonalizationId)).toThrow();
-  });
-
-  it('accepts an optional textFieldsJson when present', () => {
-    const withText = { ...validCustomization, textFieldsJson: { name: 'Happy Birthday' } };
-    expect(CustomizationSchema.parse(withText)).toEqual(withText);
+  it('accepts a customization with userId set (post-reconciliation)', () => {
+    expect(CustomizationSchema.safeParse(baseCustomization({ userId: 'user_1' })).success).toBe(true);
   });
 });

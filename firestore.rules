@@ -81,17 +81,17 @@ service cloud.firestore {
     }
 
     match /customizations/{id} {
-      allow read: if isStaffOrAdmin();
+      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
       allow write: if false;
     }
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaffOrAdmin();
-      allow write: if false;
+      allow write: if isOwner(userId);
 
       match /addresses/{addressId} {
         allow read: if isOwner(userId) || isStaffOrAdmin();
-        allow write: if false;
+        allow write: if isOwner(userId);
       }
     }
 
@@ -100,9 +100,8 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /carts/{sessionId} {
-      allow read: if false;
-      allow write: if false;
+    match /carts/{userId} {
+      allow read, write: if isOwner(userId);
     }
 
     match /webhookEvents/{eventId} {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const UploadSchema = z.object({
   id: z.string(),
   sessionId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   originalUrl: z.string().min(1),
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),

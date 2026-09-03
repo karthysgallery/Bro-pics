@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const CustomizationSchema = z.object({
   id: z.string(),
   sessionId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   personalizationId: z.string().min(1),
   uploadId: z.string(),
   variantId: z.string(),
