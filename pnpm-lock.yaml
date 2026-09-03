@@ -93,9 +93,6 @@ importers:
 
   functions:
     dependencies:
-      '@bro-pics/shared':
-        specifier: workspace:*
-        version: link:../packages/shared
       firebase-admin:
         specifier: ^12.6.0
         version: 12.7.0
@@ -103,6 +100,9 @@ importers:
         specifier: ^6.0.0
         version: 6.6.0(firebase-admin@12.7.0)
     devDependencies:
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

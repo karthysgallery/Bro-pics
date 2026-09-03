@@ -10,7 +10,11 @@
     {
       "source": "functions",
       "codebase": "default",
-      "runtime": "nodejs20"
+      "runtime": "nodejs20",
+      "predeploy": [
+        "pnpm --filter @bro-pics/functions typecheck",
+        "pnpm --filter @bro-pics/functions bundle"
+      ]
     }
   ],
   "emulators": {
