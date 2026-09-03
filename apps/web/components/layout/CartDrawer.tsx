@@ -33,13 +33,23 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
           <ul className="flex flex-col gap-3">
             {items.map((item) => (
               <li key={`${item.variantId}-${item.personalizationId}`} className="flex items-center justify-between gap-2 text-sm">
-                <span>{item.title}</span>
+                <div className="flex items-center gap-2">
+                  {item.previewUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.previewUrl} alt={item.title} className="w-10 h-10 object-cover rounded" />
+                  )}
+                  <span>{item.title}</span>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     min={1}
                     value={item.qty}
-                    onChange={(e) => updateQuantity(item.variantId, item.personalizationId, Number(e.target.value))}
+                    onChange={(e) => {
+                      const parsed = Number(e.target.value);
+                      const qty = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+                      updateQuantity(item.variantId, item.personalizationId, qty);
+                    }}
                     className="w-14 rounded border border-charcoal/20 px-2 py-1"
                     aria-label={`Quantity for ${item.title}`}
                   />

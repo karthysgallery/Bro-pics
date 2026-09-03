@@ -48,7 +48,7 @@ export function BuyBox({
     setIsEditorOpen(true);
   };
 
-  const handleEditorComplete = (personalizationId: string) => {
+  const handleEditorComplete = (personalizationId: string, previewUrl?: string) => {
     if (!selectedVariant) return;
     addItem({
       variantId: selectedVariant.id,
@@ -56,6 +56,7 @@ export function BuyBox({
       title: `${product.title} — ${selectedVariant.sizeLabel}`,
       unitPriceSnapshot: selectedVariant.price,
       qty: quantity,
+      previewUrl,
     });
     setIsEditorOpen(false);
   };

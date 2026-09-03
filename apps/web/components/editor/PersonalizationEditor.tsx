@@ -29,7 +29,7 @@ const EditorCanvas = dynamic(() => import('./EditorCanvas').then((mod) => mod.Ed
 interface PersonalizationEditorProps {
   variant: Variant;
   photoSlots: number;
-  onComplete: (personalizationId: string) => void;
+  onComplete: (personalizationId: string, previewUrl?: string) => void;
   onClose: () => void;
 }
 
@@ -334,6 +334,12 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
     const personalizationId = crypto.randomUUID();
     const sessionId = getOrCreateSessionId();
 
+    // Captures the first slot that successfully produced a preview URL, so
+    // it can be passed to onComplete for use as the cart line's thumbnail
+    // (spec §5 / Task 6) — previewUrl below is scoped per-iteration, so it
+    // can't be read after the loop without hoisting it here.
+    let capturedPreviewUrl: string | undefined;
+
     try {
       for (const [slotIndex, slot] of slots.entries()) {
         const slotRect = template?.printableRects.find((r) => r.slotIndex === slotIndex);
@@ -405,9 +411,13 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
         if (!res.ok) {
           throw new Error(`Failed to save slot ${slotIndex + 1}`);
         }
+
+        if (capturedPreviewUrl === undefined) {
+          capturedPreviewUrl = previewUrl;
+        }
       }
 
-      onComplete(personalizationId);
+      onComplete(personalizationId, capturedPreviewUrl);
     } catch {
       setSubmitError("We couldn't save your personalization — please try again.");
     } finally {

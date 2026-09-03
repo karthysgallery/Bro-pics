@@ -19,6 +19,22 @@ function SeedCart() {
   return null;
 }
 
+function SeedCartWithPreview() {
+  const cart = useCart();
+  useEffect(() => {
+    cart.addItem({
+      variantId: 'var_1',
+      personalizationId: 'pers_1',
+      title: 'Classic Wooden Frame — 8x12 in',
+      unitPriceSnapshot: 79900,
+      qty: 3,
+      previewUrl: 'https://example.com/preview.png',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 describe('CartDrawer', () => {
   it('is hidden when isOpen is false', () => {
     render(
@@ -49,5 +65,27 @@ describe('CartDrawer', () => {
     );
     fireEvent.click(screen.getByLabelText('Close cart'));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('renders a thumbnail image when the item has a previewUrl', () => {
+    render(
+      <CartProvider>
+        <SeedCartWithPreview />
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </CartProvider>
+    );
+    expect(screen.getByRole('img', { name: 'Classic Wooden Frame — 8x12 in' })).toBeInTheDocument();
+  });
+
+  it('does not let the quantity drop below 1 when the input is cleared', () => {
+    render(
+      <CartProvider>
+        <SeedCartWithPreview />
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </CartProvider>
+    );
+    const qtyInput = screen.getByLabelText('Quantity for Classic Wooden Frame — 8x12 in');
+    fireEvent.change(qtyInput, { target: { value: '' } });
+    expect((qtyInput as HTMLInputElement).value).toBe('1');
   });
 });

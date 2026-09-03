@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { CartProvider, useCart } from './cart-context';
 
 function TestConsumer() {
@@ -103,6 +103,18 @@ describe('CartProvider / useCart', () => {
     fireEvent.click(screen.getByText('Add pers_a'));
     expect(screen.getByTestId('items-length').textContent).toBe('1');
     expect(screen.getByTestId('item-0-qty').textContent).toBe('2');
+  });
+
+  it('stores previewUrl on an added item and preserves it through updateQuantity', () => {
+    const { result } = renderHook(() => useCart(), { wrapper: CartProvider });
+    act(() => {
+      result.current.addItem({
+        variantId: 'v1', personalizationId: 'p1', title: 'Frame', unitPriceSnapshot: 1000, qty: 1, previewUrl: 'preview.png',
+      });
+    });
+    expect(result.current.items[0].previewUrl).toBe('preview.png');
+    act(() => result.current.updateQuantity('v1', 'p1', 2));
+    expect(result.current.items[0].previewUrl).toBe('preview.png');
   });
 
   it('throws when useCart is called outside a CartProvider', () => {

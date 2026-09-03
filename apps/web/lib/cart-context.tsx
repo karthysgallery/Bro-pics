@@ -8,6 +8,7 @@ export interface CartItem {
   title: string;
   unitPriceSnapshot: number;
   qty: number;
+  previewUrl?: string;
 }
 
 export interface CartContextValue {
