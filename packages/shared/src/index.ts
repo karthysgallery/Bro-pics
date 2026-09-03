@@ -10,6 +10,8 @@ export * from './schemas/product-media';
 export * from './schemas/homepage-section';
 export * from './schemas/upload';
 export * from './schemas/frame-template';
+export * from './schemas/user';
+export * from './schemas/address';
 export * from './search/types';
 export * from './search/build-query-plan';
 export * from './search/search-products';
