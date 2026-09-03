@@ -93,6 +93,9 @@ importers:
 
   functions:
     dependencies:
+      '@bro-pics/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       firebase-admin:
         specifier: ^12.6.0
         version: 12.7.0
