@@ -99,7 +99,10 @@ describe('POST /api/checkout/create-order', () => {
       exists: true,
       data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1 }] }),
     });
-    mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ line1: '12 MG Road', city: 'Chennai' }) });
+    mockAddressDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+    });
     mockFindVariantById.mockResolvedValueOnce({
       id: 'v1',
       productId: 'p1',
@@ -111,6 +114,59 @@ describe('POST /api/checkout/create-order', () => {
     expect(response.status).toBe(409);
     const body = await response.json();
     expect(body.unavailable).toEqual([{ variantId: 'v1', reason: 'out_of_stock' }]);
+  });
+
+  it('returns 400 for a malformed cart line (qty <= 0) without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 0 }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed cart line (blank title) without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: '', qty: 1 }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed cart line (non-integer qty) without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1.5 }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed address (missing required fields) without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1 }] }),
+    });
+    mockAddressDoc.get.mockResolvedValueOnce({
+      // missing state, pincode, phone, etc. — the exact live bug the fix closes
+      exists: true,
+      data: () => ({ line1: '12 MG Road', city: 'Chennai' }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
   });
 
   it('creates a Razorpay order and an orders/{id} doc on a fully available cart', async () => {

@@ -7,7 +7,21 @@ import { getShippingSettings } from '../../../../lib/firestore-settings';
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
-import { generateOrderNo, OrderSchema, OrderItemSchema, type CounterTransaction, type Address } from '@bro-pics/shared';
+import { generateOrderNo, OrderSchema, OrderItemSchema, AddressSchema, type CounterTransaction } from '@bro-pics/shared';
+
+function isMalformedCartLine(item: CartLineInput): boolean {
+  return (
+    typeof item.variantId !== 'string' ||
+    item.variantId.length === 0 ||
+    typeof item.personalizationId !== 'string' ||
+    item.personalizationId.length === 0 ||
+    typeof item.title !== 'string' ||
+    item.title.length === 0 ||
+    typeof item.qty !== 'number' ||
+    !Number.isInteger(item.qty) ||
+    item.qty <= 0
+  );
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   const userId = await getUserIdFromAuthHeader(request);
@@ -29,11 +43,28 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
   }
 
+  // Validate the cart line shape BEFORE any transaction or Razorpay call —
+  // the cart doc has no server-side shape validation (firestore.rules only
+  // checks ownership), so a malformed line (blank title, qty <= 0, qty not
+  // an integer, etc.) must be rejected here, not after an order number has
+  // been burned and a Razorpay order created.
+  if (cartItems.some(isMalformedCartLine)) {
+    return NextResponse.json({ error: 'Malformed cart line' }, { status: 400 });
+  }
+
   const addressDoc = await db.collection('users').doc(userId).collection('addresses').doc(addressId).get();
   if (!addressDoc.exists) {
     return NextResponse.json({ error: `Unknown addressId: ${addressId}` }, { status: 400 });
   }
-  const address = addressDoc.data() as Address;
+
+  // Validate the address shape BEFORE any transaction or Razorpay call, for
+  // the same reason as the cart lines above — an order must never be paid
+  // for with an address missing pincode/phone/state.
+  const addressParseResult = AddressSchema.safeParse(addressDoc.data());
+  if (!addressParseResult.success) {
+    return NextResponse.json({ error: 'Malformed address' }, { status: 400 });
+  }
+  const address = addressParseResult.data;
 
   // One lookup per distinct variant — cart sizes are small (single digits),
   // so this stays a handful of requests, same pattern /api/customizations
