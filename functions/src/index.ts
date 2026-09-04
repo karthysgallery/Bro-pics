@@ -9,3 +9,4 @@ export type { WebhookTransaction, WebhookDocRef } from './webhooks/idempotency';
 export { onVariantWritten } from './products/denormalize';
 export { onMediaWritten } from './products/denormalize-media';
 export { reconcileSessionOnLogin } from './accounts/reconcile-session';
+export { razorpayWebhook } from './webhooks/razorpay';
