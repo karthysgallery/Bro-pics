@@ -1,11 +1,11 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-09-04 (`checkout-and-accounts` branch — Phase 4 Plan A complete and kept local per explicit instruction; Phase 4 Plan B starting)
+**Last updated:** 2026-09-04 (`checkout-and-accounts` branch — Phase 4 Plan B complete and kept local per explicit instruction; Phase 4 Plan C next)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 **Branch topology (read this before touching git):**
 - `master` — Foundation + Storefront (Phases 1-2) only. Nothing from Phase 3 or 4 has been merged here.
-- `checkout-and-accounts` — the active branch, in the main checkout at `D:\Bro Pics` (not a worktree). Contains Storefront + the full Personalization Engine (Phase 3) + Phase 4 Plan A (Accounts & Cart Persistence). This is where Plan B work continues.
+- `checkout-and-accounts` — the active branch, in the main checkout at `D:\Bro Pics` (not a worktree). Contains Storefront + the full Personalization Engine (Phase 3) + Phase 4 Plan A (Accounts & Cart Persistence) + Phase 4 Plan B (Checkout + Razorpay). This is where Plan C work continues.
 - `feature/personalization-engine` — Phase 3 alone, ends at `6d682f0`, one commit before Plan A's work began. Kept as a standalone reference/checkpoint; `checkout-and-accounts` is a strict superset of it (15 commits ahead).
 - A remote (`origin` → `github.com/karthysgallery/Bro-pics.git`) exists and mirrors all local branches, including `checkout-and-accounts` — this was not something I pushed in this session; noting it here since the standing instruction has been "keep this local, don't merge to master," which is still honored (no merge has happened), but the remote's existence is worth knowing about if that instruction's intent was "don't put this anywhere else" rather than specifically "don't merge."
 - Firebase project **`bropics-app`** (owner `karthysgallery@gmail.com`, Blaze plan) is live and connected — Firestore, Storage, Auth (phone provider not yet enabled in-console), and three Cloud Functions (`onVariantWritten`, `onMediaWritten`, `reconcileSessionOnLogin`) are deployed. `apps/web/.env.local` (gitignored) holds working credentials.
@@ -116,6 +116,26 @@ Full detail: [design](docs/superpowers/specs/2026-09-03-accounts-cart-design.md)
 
 **Lesson learned during Phase 4 Plan A's whole-branch review, worth internalizing for every future phase:** a *cross-task* interaction bug survived seven individually-clean task reviews and one Critical/two-fix-round-deep task review of the exact function involved — because a session-id-rotation fix in Task 7 (closing a real shared-browser data leak) violated an invariant that a completely different file (`/api/customizations`'s session-ownership check, written back in Phase 3) depended on. Neither task's own reviewer could have caught it: Task 7's reviewer never had reason to re-read Phase 3's route code, and Phase 3's route was untouched by this diff. Only a review that traces the *whole* end-to-end flow — anonymous upload → mid-flow sign-in → checkout attempt — found it. The fix (pin the session id once per personalization-editor session instead of re-reading `localStorage` at multiple points) also happened to close two Important findings at once (the reconcile-on-every-page-load spec drift, and the unbounded growth of the idempotency marker collection), because all three traced back to the same root cause: treating `localStorage`'s mutable, rotatable value as if it were a stable identity within one user flow.
 
+### Phase 4 Plan B (Checkout + Razorpay) decisions (2026-09-04)
+
+| Area | Decision | Why |
+|---|---|---|
+| Order creation | A Next.js API route (`POST /api/checkout/create-order`, Admin SDK), not a Cloud Function `onCall` | Keeps checkout logic in the same place as every other Admin-SDK route in this project; `functions/` stays reserved for triggers/webhooks/scheduled work |
+| Price trust boundary | Every price/total in an order is re-derived server-side from `products/{id}/variants` — the cart's `unitPriceSnapshot` is read only for optimistic client display, never for money | Whole-branch review of Plan A flagged `carts/{userId}` as fully client-writable by design; this is the actual enforcement point |
+| Transaction/HTTP ordering | `generateOrderNo` runs in its own short transaction that commits BEFORE the Razorpay HTTP call, which runs OUTSIDE any transaction, followed by a plain batch write of the order + order-items | An external HTTP call inside a Firestore transaction is unsafe against retries — found and fixed during the spec's own self-review, before any code was written |
+| Cart-line/address validation timing | Both are validated BEFORE the order-number transaction and the Razorpay call, not just before the final Firestore write | Task 6's task review proved live, with probes, that validating only at the end let a malformed cart line or an unvalidated address burn a real order number and create a real orphaned Razorpay order before failing |
+| `generateOrderNo` location | Moved from `functions/src/orders/orderNumber.ts` into `packages/shared`, with `functions/`'s original file becoming a thin re-export | `apps/web` can't import from `functions/src` (separate deployable) but needed the same order-number generator; verified via matching git blob hash that the move introduced zero logic drift |
+| Shipping settings storage | `settings/shipping` (one doc per key), not a single combined `settings/global` document | Matches this codebase's actual precedent (`getAnnouncementBarSettings` already reads `settings/announcementBar` the same way) — `SettingsSchema`'s single-document shape was never how settings actually got stored, a spec bug caught while writing the implementation plan |
+| Payment confirmation | `orders/{orderId}` is the sole source of truth, flipped only by the Razorpay webhook (never the client's Checkout.js success callback) — the checkout page watches it via `onSnapshot` | Foundation's original "webhook is source of truth" decision, now actually wired end to end |
+| Webhook idempotency | `payment.captured` is guarded by a `webhookEvents/{eventId}` marker (reusing Foundation's existing `isDuplicateWebhookEvent`/`markWebhookProcessed`, keyed on the Razorpay payment id); `payment.failed` and a stale/out-of-order `payment.captured` are both guarded by a check on the order's current `status` | Two distinct failure modes needed two distinct guards — a redelivered identical event vs. a different event arriving in the wrong order for an already-settled order — found via task review (`payment.failed`, required an explicit human "fix now" decision) and the whole-branch review (`payment.captured`'s missing symmetric guard) |
+| Coupons, GST, partial-COD, order tracking | All explicitly out of scope this plan — `discount` always `0`, `taxLines` always `[]`, `paymentMode` always `'prepaid'`, no `orders/{orderId}/events` writes | Matches Foundation's launch-scope decisions; schemas already carry the fields for later, nothing here blocks adding the logic |
+
+Full detail: [design](docs/superpowers/specs/2026-09-04-checkout-razorpay-design.md), [plan](docs/superpowers/plans/2026-09-04-checkout-razorpay.md).
+
+**Lesson learned during Phase 4 Plan B's Task 6 review, worth repeating from Plan A's own lesson:** "validate before you write" isn't enough on its own — it matters exactly WHERE in a multi-step server operation the validation runs. `create-order`'s original code validated cart lines and the address correctly, just too late: after a real order number had already been consumed and a real external Razorpay order already created. A reviewer proved this live with deliberately malformed input (`qty: 0`, a `title: ''`, an address missing `pincode`) rather than just reading the code — each one burned a real order number and created a real orphaned Razorpay order before finally failing. The fix moved validation earlier without touching the transaction/HTTP/batch structure itself, which is worth remembering as a general pattern: sequencing bugs in multi-step operations are rarely about the steps being in the wrong ORDER, more often about a validation gate sitting on the wrong side of an expensive, hard-to-undo step.
+
+**Lesson learned during Phase 4 Plan B's whole-branch review:** a design-spec requirement can be silently dropped by an individual task's implementation and survive its own task review, because that review only compares the task's diff against the PLAN text (which itself omitted the requirement), not against the original design spec. The checkout page was supposed to subscribe to the order doc via `onSnapshot` to show a real payment confirmation (design spec §4) — the plan's own Task 9 code never asked for it, so the implementer built exactly what was specified and the task reviewer correctly approved exactly what was specified. Only the whole-branch review, re-reading the design spec itself rather than just the plan, caught the gap — and found it was worse than "no confirmation": the cart's own separate live listener meant a paying customer briefly saw what looked like their order vanishing, right next to a Place Order button they could still click. This is the second time in two plans that a whole-branch review has caught something no per-task review structurally could (the first was Plan A's session-id-rotation bug) — worth treating as expected behavior of this process, not a surprise each time it happens.
+
 ---
 
 ## 3. Phase roadmap
@@ -128,8 +148,8 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | 2 | Storefront — homepage, category/listing/search, product detail page, navigation | ✅ **Complete** (Plans A + B), merged to `master` | [design A](docs/superpowers/specs/2026-08-29-storefront-design.md), [design B](docs/superpowers/specs/2026-08-31-storefront-pdp-design.md) | [plan A](docs/superpowers/plans/2026-08-29-storefront-shell-catalog-implementation.md), [plan B](docs/superpowers/plans/2026-08-31-storefront-pdp-implementation.md) |
 | 3 | Personalization engine — upload/crop/zoom/rotate/reposition/DPI/preview | ✅ **Complete**, kept local on `checkout-and-accounts` (and standalone on `feature/personalization-engine`) — **not merged to `master`**, per explicit instruction | [design](docs/superpowers/specs/2026-08-31-personalization-engine-design.md) | [plan](docs/superpowers/plans/2026-08-31-personalization-engine-implementation.md) |
 | 4a | Phase 4 Plan A — accounts (phone-OTP), cart persistence, session→user reconciliation | ✅ **Complete**, kept local on `checkout-and-accounts` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-03-accounts-cart-design.md) | [plan](docs/superpowers/plans/2026-09-03-accounts-cart-persistence.md) |
-| 4b | Phase 4 Plan B — checkout, address collection, Razorpay Orders API + webhooks | 🔜 **Starting now** | — | — |
-| 4c | Phase 4 Plan C — order tracking (manual AWB/status timeline) | Not started | — | — |
+| 4b | Phase 4 Plan B — checkout, address collection, Razorpay Orders API + webhooks | ✅ **Complete**, kept local on `checkout-and-accounts` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-04-checkout-razorpay-design.md) | [plan](docs/superpowers/plans/2026-09-04-checkout-razorpay.md) |
+| 4c | Phase 4 Plan C — order tracking (manual AWB/status timeline) | 🔜 **Next** | — | — |
 | 5 | Admin panel & production queue | Not started | — | — |
 | 6 | Reviews, videos, offers, SEO, analytics, performance pass | Not started | — | — |
 
@@ -138,29 +158,35 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 ## 4. What exists in the repo right now
 
 ```
-bro-pics/ (checkout-and-accounts branch — Storefront + Personalization Engine + Plan A)
+bro-pics/ (checkout-and-accounts branch — Storefront + Personalization Engine + Plan A + Plan B)
 ├── apps/web/            Next.js App Router shell — global layout (Header w/ sign-in
 │                         entry point + account modal, Footer, AnnouncementBar,
-│                         CartDrawer w/ thumbnails, WhatsAppButton), a data-driven
-│                         homepage, category listing with URL-driven filters, search +
-│                         type-ahead, a full product detail page (/product/[slug]) with
-│                         a real Konva-based personalization editor (upload/crop/zoom/
-│                         rotate/DPI-check/preview) wired into the buy box, phone-OTP
-│                         sign-in (useAuth() hook + PhoneSignIn component), and a
-│                         Firestore-backed cart (local-only when signed out, carts/
-│                         {userId} when signed in, reconciled at login).
+│                         CartDrawer w/ thumbnails + Proceed to Checkout, WhatsAppButton),
+│                         a data-driven homepage, category listing with URL-driven
+│                         filters, search + type-ahead, a full product detail page
+│                         (/product/[slug]) with a real Konva-based personalization
+│                         editor (upload/crop/zoom/rotate/DPI-check/preview) wired into
+│                         the buy box, phone-OTP sign-in (useAuth() hook + PhoneSignIn
+│                         component), a Firestore-backed cart (local-only when signed
+│                         out, carts/{userId} when signed in, reconciled at login), and
+│                         a /checkout page (address picker/form, server-side order
+│                         creation, Razorpay Checkout.js, live order-status confirmation
+│                         via onSnapshot).
 ├── functions/            Cloud Functions (esbuild-bundled for deploy): order-number
 │                         generator, Razorpay webhook idempotency guard, product
-│                         filter/rating + card-image denormalization on writes, and
-│                         reconcileSessionOnLogin (idempotent, transactional: reassigns
-│                         session-owned uploads/customizations to the signed-in user,
-│                         merges the local cart into Firestore, upserts the user
-│                         profile) — deployed live to the bropics-app project.
+│                         filter/rating + card-image denormalization on writes,
+│                         reconcileSessionOnLogin (idempotent, transactional session→user
+│                         reconciliation), and razorpayWebhook (signature-verified,
+│                         idempotent payment.captured/payment.failed handler, the sole
+│                         writer of an order's paid/failed status) — deployed live to
+│                         the bropics-app project.
 ├── services/print-render/  Cloud Run skeleton (health check only — real server-side
 │                         300 DPI print rendering has no consumer yet, still deferred).
-├── packages/shared/      zod schemas for every core entity, now including User/
-│                         Address (Plan A), Upload/FrameTemplate (Phase 3), a userId
-│                         ownership field on Upload/Customization (Plan A), a pure
+├── packages/shared/      zod schemas for every core entity, now including User/Address
+│                         (Plan A), Upload/FrameTemplate (Phase 3), OrderItem (Plan B),
+│                         a userId ownership field on Upload/Customization, OrderSchema
+│                         self-validating its own money invariants, generateOrderNo (moved
+│                         here from functions/ so apps/web can reuse it), a pure
 │                         mergeCartItems cart-merge function, integer-paise money math,
 │                         coupon discount logic, effective-DPI + rotation-aware print-
 │                         dimension calc (shared between client and server so the two
@@ -171,14 +197,14 @@ bro-pics/ (checkout-and-accounts branch — Storefront + Personalization Engine 
 │                         bropics-app Firestore project, and placeholder frame-template
 │                         mockup PNGs with real geometry/transparency.
 ├── firestore-rules-tests/  Security rules test suite (runs against the emulator) —
-│                         now covers users/addresses/carts/customizations owner rules.
+│                         covers users/addresses/carts/customizations/orders owner rules.
 ├── firestore.rules, storage.rules, firestore.indexes.json, firebase.json, cors.json
 └── docs/superpowers/     specs/ and plans/ for every phase (this file's companions).
 ```
 
-**Live Firebase project:** `bropics-app` (Blaze plan, `karthysgallery@gmail.com`) — Firestore (`asia-south1`), Storage (`bropics-app.firebasestorage.app`), Auth (Phone provider **not yet enabled in-console** — blocks live phone-OTP testing until done), and three deployed Cloud Functions. Seeded with the placeholder catalogue.
+**Live Firebase project:** `bropics-app` (Blaze plan, `karthysgallery@gmail.com`) — Firestore (`asia-south1`), Storage (`bropics-app.firebasestorage.app`), Auth (Phone provider **not yet enabled in-console** — blocks live phone-OTP testing until done), and four deployed Cloud Functions (adds `razorpayWebhook`). Seeded with the placeholder catalogue. **No Razorpay account exists yet** — Plan B's checkout code is fully built and unit-tested, but has never run against a real Razorpay test-mode account (needs signup + test-mode API keys + webhook config, no KYC required — see §5).
 
-**Test status:** 304 tests passing across `packages/shared` (110), `functions` (26), `services/print-render` (1), `apps/web` (140), `scripts/seed` (27), plus the Firestore rules suite (run separately: `pnpm test:rules`, needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/functions bundle` (esbuild) succeeds and deploys live; `pnpm --filter @bro-pics/web build` compiles TypeScript cleanly but fails prerendering without a live `FIREBASE_SERVICE_ACCOUNT_JSON` — expected in this environment, not a code defect.
+**Test status:** 372 tests passing across `packages/shared` (122), `functions` (33), `services/print-render` (1), `apps/web` (189), `scripts/seed` (27), plus the Firestore rules suite (run separately: `pnpm test:rules`, needs JDK 21+ and the Firebase CLI). `pnpm --filter @bro-pics/functions bundle` (esbuild) succeeds and deploys live; `pnpm --filter @bro-pics/web build` compiles TypeScript cleanly but fails prerendering without a live `FIREBASE_SERVICE_ACCOUNT_JSON` — expected in this environment, not a code defect.
 
 **Setup:** see [README.md](README.md) for install/run steps.
 
@@ -188,18 +214,23 @@ bro-pics/ (checkout-and-accounts branch — Storefront + Personalization Engine 
 
 Each has an owner phase where it needs to be resolved, not "someday":
 
-- **Uploads/customizations created by an already-signed-in user never get a `userId` set.** Attribution to `userId` happens exclusively inside `reconcileSessionOnLogin` (a one-time, login-moment operation); `/api/uploads` and `/api/customizations` only ever read the `X-Session-Id` header, never an auth token. So any personalization made *after* signing in (not just the reconciled pre-login ones) carries only `sessionId`, and `firestore.rules`' owner-gated read (`isOwner(resource.data.userId)`) means the customer can't read their own doc client-side (server/Admin SDK reads still work, bypass rules). **Plan B's problem** — order fulfillment needs to read these client-side or via a route that can attribute them correctly.
+- **Razorpay checkout has never run against a live account.** Plan B's Task 10 (live verification) was deliberately deferred — needs a Razorpay test-mode signup (free, no KYC), API keys in `apps/web/.env.local` and `functions/`'s environment, and a webhook pointed at the deployed `razorpayWebhook` function. **Do this before trusting the checkout flow in front of a real customer** — everything is unit-tested and reviewed, but nothing has proven the actual Razorpay Checkout.js modal / webhook round-trip live.
+- **No sign-out path exists anywhere in the app.** This was flagged as a dormant risk back in Plan A (a shared-browser session-id leak) and is now also relevant to checkout: nothing currently lets a customer sign out mid-session, so the checkout page's `useAuth()` gate can only ever show the signed-in path once a user has signed in once, on that browser. **Needed before Phase 5** at the latest.
+- **Nothing reconciles a `create-order` batch-commit failure that happens AFTER the Razorpay order already succeeded** (a network drop between the two calls). Accepted gap, matches the plan's own accepted order-number-sequence-gap reasoning — needs a reconciliation story (a scheduled check against Razorpay's own order list, or a manual admin tool) whenever Phase 5's admin panel is built, not a quick patch.
+- **No page anywhere shows a customer their placed orders.** `orders/{orderId}` is readable by its owner per `firestore.rules`, and the checkout page itself now shows a live confirmation once an order is paid (Plan B), but there's no order-history/tracking page yet — that's explicitly **Plan C's job** (order tracking).
+- **`orders/{orderId}/items/{itemId}`'s `personalizationId` is never verified to actually belong to the ordering customer** — `create-order` copies it straight from the cart line without checking the referenced `Customization` doc's `userId`/`sessionId` matches the caller. Not exploitable for money (price is always re-derived from the variant, never from the personalization), but relevant whenever a fulfillment/admin flow starts reading `personalizationId` to find the actual photo to print — **Plan C or Phase 5's problem**.
 - **Firestore rules:** `products`, `categories`, and `settings` are world-readable regardless of status/content. Fine while catalogue data is placeholder-only — **must be revisited before real GSTIN or draft-product data goes live** (Phase 5).
 - **No lint/typecheck/CI workflow yet.** Getting more overdue as code volume grows — this has bitten review at least twice now (Storefront Plan B, and again implicitly relied-upon manual typecheck runs during Phase 4's fix waves) since Vitest strips types via esbuild and a test suite staying green says nothing about `tsc --noEmit`. Worth doing before Phase 5.
-- **`OrderSchema` doesn't self-validate its own money invariants** (subtotal − discount + shipping = total, amountPaidOnline + amountDueOnDelivery = total). Cheap to add now, expensive to retrofit once real orders exist — **Plan B's job**, and the final whole-branch review flagged `unitPriceSnapshot` in the cart as strictly a display value: Plan B must re-derive every price/total server-side from `products/{id}/variants`, never trust the cart doc's own numbers.
 - **`recently_viewed` homepage section is seeded and active but renders nothing.** No client component exists yet to mount it (client-side, reads localStorage). Low priority — cosmetic gap, not a broken feature.
 - **No keyboard navigation on the search type-ahead.** Minor accessibility follow-up.
-- **`users/{uid}` write access is owner-unrestricted** (`allow write: if isOwner(userId)`, no shape/field-level validation) — a signed-in client can overwrite their own server-set `phone`/`createdAt` fields. Matches the design spec's own §3 exactly, so not a defect, but worth Plan B knowing before it reads `phone` for order contact details.
+- **`users/{uid}` write access is owner-unrestricted** (`allow write: if isOwner(userId)`, no shape/field-level validation) — a signed-in client can overwrite their own server-set `phone`/`createdAt` fields. Matches the design spec's own §3 exactly, so not a defect, but worth Plan C knowing before it reads `phone` for order-tracking contact details.
 - **`sessionId` is an unverifiable client-supplied claim that now grants real ownership**, not just read-scoping. Phase 3 accepted `sessionId` as a scoping key when nothing sensitive depended on it; Phase 4 Plan A's reconciliation means anyone who learns another browser's session id can claim its uploads/customizations by signing in and passing that id to `reconcileSessionOnLogin`. Session ids are `crypto.randomUUID()` (not guessable), and this was an accepted tradeoff in the design, not missed — recorded here so it isn't rediscovered as a surprise.
-- **Firebase phone-OTP sign-in has never been tested against the live project.** The Phone provider hasn't been enabled in the `bropics-app` Firebase Console yet, and no test phone number is registered — Plan A's Task 8 (live end-to-end verification) was deliberately deferred for this reason. Needs doing before shipping, or at least before Plan B builds checkout on top of an unverified sign-in flow.
+- **Firebase phone-OTP sign-in has never been tested against the live project.** The Phone provider hasn't been enabled in the `bropics-app` Firebase Console yet, and no test phone number is registered — Plan A's Task 8 (live end-to-end verification) was deliberately deferred for this reason, and Plan B's checkout now depends on this working. **Needs doing before Razorpay live-testing** (Plan B's own Task 10) since checkout requires a signed-in user.
+- **Checkout page's failed-payment message ("refresh to try again") misdirects while the Razorpay modal is still open and retryable** — Razorpay allows multiple payment attempts against one `order_id`, but the current copy pushes the customer toward abandoning a live, still-usable modal instead of just retrying in place. Cosmetic, not a correctness bug (a fresh attempt still works, just creates a redundant new order). Worth a copy pass whenever Plan C or a follow-up next touches this page.
+- **The checkout page's `onSnapshot` listener on the order doc has no `onError` handler** — dies silently on a listener error (e.g. a permission error from an auth drop mid-checkout), leaving the customer stuck without a confirmation. Matches `cart-context.tsx`'s existing listener shape exactly (same gap there too), so this is a project-wide pattern to fix once, not a one-off.
 - **Four PDP design-spec elements were scoped out of Storefront Plan B's implementation plan, not just deferred by accident:** buy box isn't sticky on desktop scroll, no wishlist toggle on the PDP, no material selector UI, and `ReviewsSection` doesn't render `review.media` thumbnails. None block anything; worth a small follow-up pass, not urgent.
 - **`getRelatedProducts`/`getAllActiveProductSlugs` in `firestore-product-detail.ts` don't `toDate()`-convert `createdAt`/`updatedAt`** the way `getProductBySlug` does. Inert today, but the exact Timestamp-vs-Date bug class this project has hit before.
-- **No zod parsing at Firestore read boundaries anywhere in `apps/web`** (`doc.data() as Product` throughout) — an established pattern since Plan A of Storefront, worth a project-wide look at some point.
+- **No zod parsing at Firestore read boundaries anywhere in `apps/web`** (`doc.data() as Product` throughout) — an established pattern since Plan A of Storefront, worth a project-wide look at some point. (The checkout page's new `onSnapshot` listener on `orders/{orderId}` follows this same established pattern deliberately — reading raw fields off the snapshot, not `OrderSchema.parse`, since Firestore returns `placedAt` as a `Timestamp` not a `Date` and this is a read-only UI concern, not a write boundary.)
 - **`packages/shared`'s `main`/`types` point directly at raw TypeScript source** (`src/index.ts`), not a built `dist/`. This works today because every current consumer (Next.js, `tsx`, esbuild-bundled Cloud Functions) can process raw TS directly — but it's a real constraint any *new* consumer of `@bro-pics/shared` needs to know about upfront: a plain-Node consumer (like an unbundled Cloud Function) cannot `require()` it without either bundling or a real build step. This has already caused two real regressions in Phase 4 (see the lessons above) — don't attempt to "fix" it again without re-reading those.
 
 ## 6. Open items still waiting on the client (from the original spec, §21)
@@ -208,10 +239,10 @@ Each has an owner phase where it needs to be resolved, not "someday":
 - Frame mockup/mask images per variant (required before Phase 3 can finish the live preview)
 - Text personalization: which products allow it, character limits, font list
 - Exact shipping rules: free-shipping threshold, flat charge, zone variance
-- Domain, Razorpay KYC, and Firebase/GCP billing account — must be created in the client's name
+- Domain, Razorpay KYC, and Firebase/GCP billing account — must be created in the client's name. (Firebase/GCP billing is done — `bropics-app` is live on Blaze. Razorpay KYC specifically blocks only *live-mode* payments; Plan B's checkout is built and can be fully verified against a free Razorpay *test-mode* account with no KYC, so this doesn't block finishing Phase 4 — only going live with real payments.)
 
 ---
 
 ## 7. Next action
 
-**Phase 4 Plan A (Accounts & Cart Persistence) is complete**, on `checkout-and-accounts` (not merged to `master`, kept local per explicit instruction). **Phase 4 Plan B (Checkout + Razorpay) is starting now** — scope per the original Plan A brainstorm's decomposition: address collection UI (schema already exists from Plan A, UI was deliberately left to this plan), `OrderSchema` money-invariant self-validation, Razorpay Orders API + webhook integration (reusing the already-built `generateOrderNo`/webhook-idempotency helpers from Foundation), and server-side re-derivation of every price/total from `products/{id}/variants` (never trusting the cart doc's `unitPriceSnapshot`). The shipping-rules open item (§6) is still unresolved by the client and should be surfaced early in this plan's brainstorm since it may block parts of the checkout flow.
+**Phase 4 Plan B (Checkout + Razorpay) is complete**, on `checkout-and-accounts` (not merged to `master`, kept local per explicit instruction). **Phase 4 Plan C (Order Tracking) is next** — scope per the original Phase 4 brainstorm's decomposition: manual AWB/tracking entry, a customer-facing order-history/tracking page (currently missing entirely — see §5), and the `orders/{orderId}/events/{eventId}` status-timeline subcollection Foundation's `firestore.rules` already reserves but nothing writes to yet. Before or alongside Plan C, two loose ends from Plan B are worth closing: Task 10's live Razorpay test-mode verification (deferred, needs a free account signup), and Firebase phone-OTP's own live verification (deferred since Plan A, and now a real blocker for testing checkout at all against the live project, since checkout requires a signed-in user).
