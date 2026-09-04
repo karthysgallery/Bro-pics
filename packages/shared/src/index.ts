@@ -23,3 +23,4 @@ export * from './pricing/coupon';
 export * from './dpi/calculate';
 export * from './cart/merge-cart-items';
 export * from './orders/order-number';
+export * from './orders/status-transitions';
