@@ -68,6 +68,11 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             ₹{formatPaise(totalPaise)}
           </span>
         </div>
+        {items.length > 0 && (
+          <a href="/checkout" className="rounded bg-charcoal text-cream px-4 py-2 text-center">
+            Proceed to Checkout
+          </a>
+        )}
       </div>
     </div>
   );

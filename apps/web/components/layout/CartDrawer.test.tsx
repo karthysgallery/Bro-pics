@@ -93,4 +93,23 @@ describe('CartDrawer', () => {
     fireEvent.change(qtyInput, { target: { value: '' } });
     expect((qtyInput as HTMLInputElement).value).toBe('1');
   });
+
+  it('shows a "Proceed to Checkout" link to /checkout when the cart has items, and hides it when empty', () => {
+    const { rerender } = render(
+      <Providers>
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </Providers>
+    );
+    expect(screen.queryByText('Proceed to Checkout')).not.toBeInTheDocument();
+
+    rerender(
+      <Providers>
+        <SeedCart />
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </Providers>
+    );
+    const link = screen.getByText('Proceed to Checkout');
+    expect(link).toBeInTheDocument();
+    expect(link.closest('a')).toHaveAttribute('href', '/checkout');
+  });
 });
