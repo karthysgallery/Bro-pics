@@ -28,6 +28,8 @@ export const OrderSchema = z
     razorpayOrderId: z.string().optional(),
     razorpayPaymentId: z.string().optional(),
     notes: z.string().optional(),
+    courier: z.string().optional(),
+    awbNumber: z.string().optional(),
     placedAt: z.date(),
     paymentMode: z.enum(['prepaid', 'partial_cod']),
     amountPaidOnline: z.number().int().nonnegative(),

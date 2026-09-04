@@ -44,3 +44,14 @@ describe('OrderSchema money invariants', () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe('OrderSchema courier/awbNumber', () => {
+  it('accepts an order with courier and awbNumber set', () => {
+    const result = OrderSchema.safeParse(baseOrder({ courier: 'BlueDart', awbNumber: 'BD123456789' }));
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an order with neither field set (pre-shipping)', () => {
+    expect(OrderSchema.safeParse(baseOrder()).success).toBe(true);
+  });
+});
