@@ -4,7 +4,9 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface PaymentEventTransaction {
-  findOrderByRazorpayOrderId(razorpayOrderId: string): Promise<{ id: string; userId: string } | null>;
+  findOrderByRazorpayOrderId(
+    razorpayOrderId: string
+  ): Promise<{ id: string; userId: string; status: string } | null>;
   markPaymentCaptured(orderId: string, razorpayPaymentId: string): void;
   markPaymentFailed(orderId: string): void;
   clearCart(userId: string): void;
@@ -33,12 +35,24 @@ export async function handlePaymentCaptured(
   markWebhookProcessed(webhookTx, params.eventId, order.id);
 }
 
+/**
+ * Guards against regressing an order that has already settled to paid.
+ * payment.captured and payment.failed deliveries for the same order are
+ * not guaranteed to arrive in order — a failed-then-retried-successfully
+ * payment can have its payment.failed webhook redelivered (or delivered
+ * late) after payment.captured already flipped the order to paid. Unlike
+ * payment.captured's replay guard (isDuplicateWebhookEvent, which protects
+ * against reprocessing the *same* event twice), this is a current-state
+ * check: it protects against a *different*, stale event undoing a
+ * settled, correct outcome.
+ */
 export async function handlePaymentFailed(
   paymentTx: PaymentEventTransaction,
   params: { razorpayOrderId: string }
 ): Promise<void> {
   const order = await paymentTx.findOrderByRazorpayOrderId(params.razorpayOrderId);
   if (!order) return;
+  if (order.status === 'paid') return;
   paymentTx.markPaymentFailed(order.id);
 }
 
@@ -70,7 +84,8 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       );
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
-      return { id: doc.id, userId: (doc.data() as { userId: string }).userId };
+      const data = doc.data() as { userId: string; status: string };
+      return { id: doc.id, userId: data.userId, status: data.status };
     },
     markPaymentCaptured(orderId, razorpayPaymentId) {
       transaction.update(db.collection('orders').doc(orderId), {

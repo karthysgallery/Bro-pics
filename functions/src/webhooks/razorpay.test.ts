@@ -10,7 +10,9 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
   };
 }
 
-function makePaymentTx(order: { id: string; userId: string } | null): PaymentEventTransaction {
+function makePaymentTx(
+  order: { id: string; userId: string; status: string } | null
+): PaymentEventTransaction {
   return {
     findOrderByRazorpayOrderId: vi.fn().mockResolvedValue(order),
     markPaymentCaptured: vi.fn(),
@@ -22,7 +24,7 @@ function makePaymentTx(order: { id: string; userId: string } | null): PaymentEve
 describe('handlePaymentCaptured', () => {
   it('marks the order paid, clears the cart, and records the event as processed', async () => {
     const webhookTx = makeWebhookTx(false);
-    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1' });
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
 
     await handlePaymentCaptured(webhookTx, paymentTx, {
       eventId: 'pay_abc',
@@ -37,7 +39,7 @@ describe('handlePaymentCaptured', () => {
 
   it('does nothing when the event was already processed (idempotent retry)', async () => {
     const webhookTx = makeWebhookTx(true);
-    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1' });
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
 
     await handlePaymentCaptured(webhookTx, paymentTx, {
       eventId: 'pay_abc',
@@ -65,7 +67,7 @@ describe('handlePaymentCaptured', () => {
 
 describe('handlePaymentFailed', () => {
   it('marks the matching order as failed', async () => {
-    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1' });
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
     await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_1' });
     expect(paymentTx.markPaymentFailed).toHaveBeenCalledWith('order_1');
     expect(paymentTx.clearCart).not.toHaveBeenCalled();
@@ -74,6 +76,12 @@ describe('handlePaymentFailed', () => {
   it('does nothing when no matching order is found', async () => {
     const paymentTx = makePaymentTx(null);
     await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_unknown' });
+    expect(paymentTx.markPaymentFailed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the order is already paid (out-of-order/redelivered webhook)', async () => {
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'paid' });
+    await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_1' });
     expect(paymentTx.markPaymentFailed).not.toHaveBeenCalled();
   });
 });
