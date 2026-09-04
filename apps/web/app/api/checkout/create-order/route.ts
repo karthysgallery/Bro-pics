@@ -19,7 +19,14 @@ function isMalformedCartLine(item: CartLineInput): boolean {
     item.title.length === 0 ||
     typeof item.qty !== 'number' ||
     !Number.isInteger(item.qty) ||
-    item.qty <= 0
+    item.qty <= 0 ||
+    // previewUrl is optional (CartLineInput: `previewUrl?: string`) but if
+    // present must actually be a string — this also rejects `null`
+    // deliberately: the app itself never writes previewUrl as null onto a
+    // cart line (it's either a real string or the field is simply absent),
+    // so a null here can only come from a hand-crafted write to this
+    // owner-writable doc, same threat model as a stray number/object.
+    (item.previewUrl !== undefined && typeof item.previewUrl !== 'string')
   );
 }
 

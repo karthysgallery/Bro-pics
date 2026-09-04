@@ -152,6 +152,35 @@ describe('POST /api/checkout/create-order', () => {
     expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for a malformed cart line (non-string previewUrl) without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1, previewUrl: 123 }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed cart line (null previewUrl) without ever calling Razorpay or the order-number transaction', async () => {
+    // The app itself never writes previewUrl as null onto a cart line
+    // (CartLineInput has it as `previewUrl?: string`, never nullable) — a
+    // null here can only come from a hand-crafted write to the
+    // owner-writable carts/{uid} doc, and is rejected the same as any other
+    // non-string value, pinning that intentional decision against drift.
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1, previewUrl: null }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for a malformed address (missing required fields) without ever calling Razorpay or the order-number transaction', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockCartDoc.get.mockResolvedValueOnce({

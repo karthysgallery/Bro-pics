@@ -19,12 +19,24 @@ vi.mock('../../components/checkout/AddressPicker', () => ({
 }));
 vi.mock('../../lib/razorpay-checkout-script', () => ({ loadRazorpayCheckoutScript: vi.fn().mockResolvedValue(undefined) }));
 
+const mockOnSnapshot = vi.fn();
+const mockUnsubscribe = vi.fn();
+vi.mock('firebase/firestore', () => ({
+  getFirestore: vi.fn(() => ({})),
+  doc: vi.fn((_db, ...segments: string[]) => ({ path: segments.join('/') })),
+  onSnapshot: (...args: unknown[]) => mockOnSnapshot(...args),
+}));
+vi.mock('../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
+
 const mockFetch = vi.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
 describe('CheckoutPage', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    mockOnSnapshot.mockReset();
+    mockUnsubscribe.mockReset();
+    mockOnSnapshot.mockImplementation(() => mockUnsubscribe);
     (global as unknown as { Razorpay?: unknown }).Razorpay = vi.fn().mockImplementation(() => ({ open: vi.fn() }));
   });
 
@@ -65,5 +77,70 @@ describe('CheckoutPage', () => {
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place Order'));
     expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+  });
+
+  it('hides the Place Order button once an order has been created, closing the double-submit window', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    expect(screen.queryByText('Place Order')).not.toBeInTheDocument();
+  });
+
+  it('subscribes to orders/{orderId} and replaces the cart summary with a confirmation once status flips to paid', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    const [, onNext] = mockOnSnapshot.mock.calls[0];
+    onNext({
+      exists: () => true,
+      data: () => ({ status: 'paid', paymentStatus: 'paid', orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(await screen.findByText(/payment confirmed/i)).toBeInTheDocument();
+    expect(screen.getByText(/BP-2026-00001/)).toBeInTheDocument();
+    // The cart summary (with its now-empty item list from the webhook
+    // clearing the cart) must not render alongside the confirmation.
+    expect(screen.queryByText('Subtotal')).not.toBeInTheDocument();
+  });
+
+  it('shows a payment-failed message (not the empty-cart summary as confirmation) when paymentStatus is failed', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    const [, onNext] = mockOnSnapshot.mock.calls[0];
+    onNext({
+      exists: () => true,
+      data: () => ({ status: 'pending_payment', paymentStatus: 'failed', orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(await screen.findByText(/payment failed.*refresh/i)).toBeInTheDocument();
+  });
+
+  it('unsubscribes the order listener on unmount', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    const { unmount } = render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    unmount();
+    expect(mockUnsubscribe).toHaveBeenCalled();
   });
 });

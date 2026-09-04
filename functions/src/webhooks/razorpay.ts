@@ -30,6 +30,15 @@ export async function handlePaymentCaptured(
   const order = await paymentTx.findOrderByRazorpayOrderId(params.razorpayOrderId);
   if (!order) return;
 
+  // Guards against a genuinely DIFFERENT payment.captured event (a
+  // different Razorpay payment id) arriving for an order that has already
+  // settled to paid. isDuplicateWebhookEvent above only protects against a
+  // REDELIVERY of the same event id — this protects against a second,
+  // distinct capture event for an already-paid order, which would
+  // otherwise clearCart() again and silently wipe items the customer
+  // added after their previous order already settled.
+  if (order.status === 'paid') return;
+
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
   paymentTx.clearCart(order.userId);
   markWebhookProcessed(webhookTx, params.eventId, order.id);
@@ -40,11 +49,13 @@ export async function handlePaymentCaptured(
  * payment.captured and payment.failed deliveries for the same order are
  * not guaranteed to arrive in order — a failed-then-retried-successfully
  * payment can have its payment.failed webhook redelivered (or delivered
- * late) after payment.captured already flipped the order to paid. Unlike
- * payment.captured's replay guard (isDuplicateWebhookEvent, which protects
- * against reprocessing the *same* event twice), this is a current-state
- * check: it protects against a *different*, stale event undoing a
- * settled, correct outcome.
+ * late) after payment.captured already flipped the order to paid. Both
+ * handlers now carry two independent guards: isDuplicateWebhookEvent /
+ * event-id tracking protects against reprocessing the *same* event twice,
+ * while this order.status === 'paid' check (mirrored in
+ * handlePaymentCaptured above) is a current-state check that protects
+ * against a *different*, stale or out-of-order event undoing — or
+ * redundantly repeating side effects on — a settled, correct outcome.
  */
 export async function handlePaymentFailed(
   paymentTx: PaymentEventTransaction,

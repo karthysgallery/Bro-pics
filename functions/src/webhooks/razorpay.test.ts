@@ -63,6 +63,21 @@ describe('handlePaymentCaptured', () => {
 
     expect(paymentTx.markPaymentCaptured).not.toHaveBeenCalled();
   });
+
+  it('does nothing when the order is already paid (a different, distinct capture event for an already-settled order)', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'paid' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_new_distinct_event',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_new_distinct_event',
+    });
+
+    expect(paymentTx.markPaymentCaptured).not.toHaveBeenCalled();
+    expect(paymentTx.clearCart).not.toHaveBeenCalled();
+    expect(webhookTx.set).not.toHaveBeenCalled();
+  });
 });
 
 describe('handlePaymentFailed', () => {
