@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "write-to-firestore": "tsx src/write-to-firestore.ts"
+    "write-to-firestore": "tsx src/write-to-firestore.ts",
+    "set-user-role": "tsx src/set-user-role.ts"
   },
   "dependencies": {
     "@bro-pics/shared": "workspace:*",

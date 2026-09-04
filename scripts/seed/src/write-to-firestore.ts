@@ -1,6 +1,3 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
@@ -11,25 +8,7 @@ import {
   seedProductMedia,
   seedHomepageSections,
 } from './data';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadEnvLocal(): void {
-  const envPath = join(__dirname, '..', '..', '..', 'apps', 'web', '.env.local');
-  if (!existsSync(envPath)) {
-    throw new Error(`Expected env file not found at ${envPath}`);
-  }
-  const content = readFileSync(envPath, 'utf8');
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    const key = trimmed.slice(0, eq);
-    let value = trimmed.slice(eq + 1);
-    if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-    process.env[key] = value;
-  }
-}
+import { loadEnvLocal } from './load-env';
 
 async function main(): Promise<void> {
   loadEnvLocal();
