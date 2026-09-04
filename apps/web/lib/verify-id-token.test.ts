@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getUserIdFromAuthHeader } from './verify-id-token';
+import { getUserIdFromAuthHeader, getStaffUserIdFromAuthHeader } from './verify-id-token';
 
 const mockVerifyIdToken = vi.fn();
 vi.mock('server-only', () => ({}));
@@ -29,5 +29,36 @@ describe('getUserIdFromAuthHeader', () => {
     mockVerifyIdToken.mockRejectedValueOnce(new Error('invalid token'));
     const request = new Request('https://example.com', { headers: { Authorization: 'Bearer bad-token' } });
     expect(await getUserIdFromAuthHeader(request)).toBeNull();
+  });
+});
+
+describe('getStaffUserIdFromAuthHeader', () => {
+  it('returns null when there is no Authorization header', async () => {
+    const request = new Request('https://example.com', { headers: {} });
+    expect(await getStaffUserIdFromAuthHeader(request)).toBeNull();
+  });
+
+  it('returns the uid when the token verifies and role is admin', async () => {
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'staff_1', role: 'admin' });
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
+    expect(await getStaffUserIdFromAuthHeader(request)).toBe('staff_1');
+  });
+
+  it('returns the uid when the token verifies and role is staff', async () => {
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'staff_2', role: 'staff' });
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
+    expect(await getStaffUserIdFromAuthHeader(request)).toBe('staff_2');
+  });
+
+  it('returns null when the token verifies but role is neither admin nor staff', async () => {
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'customer_1' });
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
+    expect(await getStaffUserIdFromAuthHeader(request)).toBeNull();
+  });
+
+  it('returns null when verifyIdToken rejects', async () => {
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('invalid token'));
+    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer bad-token' } });
+    expect(await getStaffUserIdFromAuthHeader(request)).toBeNull();
   });
 });
