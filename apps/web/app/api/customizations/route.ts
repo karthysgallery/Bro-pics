@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { findVariantById } from '../../../lib/variant-lookup';
+import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { CustomizationSchema } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
 import type { Upload } from '@bro-pics/shared';
@@ -14,6 +15,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing X-Session-Id header' }, { status: 400 });
   }
+  const userId = await getUserIdFromAuthHeader(request);
 
   const body = await request.json();
   if (!body || typeof body !== 'object') {
@@ -97,6 +99,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     id: docRef.id,
     sessionId,
     effectiveDpi,
+    ...(userId && { userId }),
   });
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid customization payload', issues: parsed.error.issues }, { status: 400 });

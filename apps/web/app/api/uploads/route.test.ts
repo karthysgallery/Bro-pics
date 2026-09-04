@@ -16,6 +16,10 @@ vi.mock('../../../lib/firebase-admin', () => ({
   getAdminApp: vi.fn(),
 }));
 
+vi.mock('../../../lib/verify-id-token', () => ({
+  getUserIdFromAuthHeader: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('firebase-admin/firestore', () => ({
   getFirestore: () => ({
     collection: () => ({
@@ -40,16 +44,25 @@ vi.mock('firebase-admin/storage', () => ({
 }));
 
 import { POST } from './route';
+import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 
 const fixturesDir = join(__dirname, '..', '..', '..', '__fixtures__');
 
-function makeRequest(fileBuffer: Buffer, sessionId: string, variantId = 'var_1'): Request {
+function makeRequest(
+  fileBuffer: Buffer,
+  sessionId: string,
+  variantId = 'var_1',
+  authHeader?: string
+): Request {
   const formData = new FormData();
   formData.append('file', new Blob([new Uint8Array(fileBuffer)], { type: 'image/jpeg' }), 'photo.jpg');
   formData.append('variantId', variantId);
   return new Request('http://localhost/api/uploads', {
     method: 'POST',
-    headers: { 'X-Session-Id': sessionId },
+    headers: {
+      'X-Session-Id': sessionId,
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    },
     body: formData,
   });
 }
@@ -58,6 +71,8 @@ describe('POST /api/uploads', () => {
   beforeEach(() => {
     mockCollectionGroupGet.mockClear();
     mockCollectionGroupGet.mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
+    vi.mocked(getUserIdFromAuthHeader).mockClear();
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValue(null);
   });
 
   it('accepts a print-quality photo and returns a ready upload', async () => {
@@ -112,6 +127,28 @@ describe('POST /api/uploads', () => {
     const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
     const response = await POST(makeRequest(buffer, 'sess_test', 'var_does_not_exist'));
     expect(response.status).toBe(400);
+  });
+
+  it('sets userId on the created upload when a valid Authorization header is present', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce('user_1');
+    const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
+    const response = await POST(makeRequest(buffer, 'sess_test', 'var_1', 'Bearer good-token'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.userId).toBe('user_1');
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user_1' }));
+  });
+
+  it('omits userId when no Authorization header is present (unchanged pre-login behavior)', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce(null);
+    const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
+    const response = await POST(makeRequest(buffer, 'sess_test'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.userId).toBeUndefined();
+    expect(mockSet).toHaveBeenCalledWith(expect.not.objectContaining({ userId: expect.anything() }));
   });
 
   it('ignores a client-supplied minUploadPx and uses the server-fetched variant\'s value instead', async () => {

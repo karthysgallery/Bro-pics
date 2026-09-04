@@ -23,6 +23,10 @@ vi.mock('../../../lib/firebase-admin', () => ({
   getAdminApp: vi.fn(),
 }));
 
+vi.mock('../../../lib/verify-id-token', () => ({
+  getUserIdFromAuthHeader: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('firebase-admin/firestore', () => ({
   getFirestore: () => ({
     collection: (name: string) => {
@@ -40,6 +44,7 @@ vi.mock('firebase-admin/firestore', () => ({
 }));
 
 import { POST } from './route';
+import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 
 // scale 1 against a 3000x3000 upload and 10x10in variant -> 300 DPI exactly,
 // so the server-recomputed effectiveDpi can be asserted precisely.
@@ -59,12 +64,13 @@ const validBody = {
   renderStatus: 'pending',
 };
 
-function makeRequest(body: unknown, sessionId: string | null): Request {
+function makeRequest(body: unknown, sessionId: string | null, authHeader?: string): Request {
   return new Request('http://localhost/api/customizations', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(sessionId ? { 'X-Session-Id': sessionId } : {}),
+      ...(authHeader ? { Authorization: authHeader } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -77,6 +83,8 @@ describe('POST /api/customizations', () => {
     mockUploadGet.mockResolvedValue({ exists: true, data: () => uploadDoc });
     mockCollectionGroupGet.mockClear();
     mockCollectionGroupGet.mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
+    vi.mocked(getUserIdFromAuthHeader).mockClear();
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValue(null);
   });
 
   it('requires an X-Session-Id header', async () => {
@@ -184,5 +192,25 @@ describe('POST /api/customizations', () => {
     // otherwise silently accept: unswapped would give
     // dpiFromWidth = 2000/8 = 250, dpiFromHeight = 1000/20 = 50 -> min = 50.
     expect(body.effectiveDpi).not.toBeCloseTo(50);
+  });
+
+  it('sets userId on the created customization when a valid Authorization header is present', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce('user_1');
+    const response = await POST(makeRequest(validBody, 'sess_1', 'Bearer good-token'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.userId).toBe('user_1');
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user_1' }));
+  });
+
+  it('omits userId when no Authorization header is present (unchanged pre-login behavior)', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce(null);
+    const response = await POST(makeRequest(validBody, 'sess_1'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.userId).toBeUndefined();
+    expect(mockSet).toHaveBeenCalledWith(expect.not.objectContaining({ userId: expect.anything() }));
   });
 });

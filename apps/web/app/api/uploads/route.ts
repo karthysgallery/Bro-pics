@@ -4,6 +4,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { probeAndStripImage } from '../../../lib/image-probe';
 import { findVariantById } from '../../../lib/variant-lookup';
+import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { UploadSchema, type Upload } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -11,6 +12,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing X-Session-Id header' }, { status: 400 });
   }
+  const userId = await getUserIdFromAuthHeader(request);
 
   const formData = await request.formData();
   const file = formData.get('file');
@@ -50,6 +52,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const rejected: Upload = {
       id: uploadId,
       sessionId,
+      ...(userId && { userId }),
       // UploadSchema requires a non-empty originalUrl even for rejected
       // uploads (no dedicated "no file" representation) — the file was
       // never written to storage, so this is a sentinel, not a real URL.
@@ -74,6 +77,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const ready: Upload = {
     id: uploadId,
     sessionId,
+    ...(userId && { userId }),
     originalUrl: signedUrl,
     widthPx: probed.widthPx,
     heightPx: probed.heightPx,
