@@ -44,25 +44,48 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const orderRef = db.collection('orders').doc(found.id);
   const eventRef = orderRef.collection('events').doc();
 
-  await db.runTransaction(async (transaction) => {
-    const event = OrderEventSchema.parse({
-      id: eventRef.id,
-      status,
-      note,
-      courier: status === 'shipped' ? courier : null,
-      awbNumber: status === 'shipped' ? awbNumber : null,
-      createdAt: new Date().toISOString(),
-      createdBy: staffUserId,
+  const orderUpdate: Record<string, unknown> = { status };
+  if (status === 'shipped') {
+    orderUpdate.courier = courier;
+    orderUpdate.awbNumber = awbNumber;
+  }
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      // The authoritative read: this is what Firestore actually uses for
+      // optimistic-concurrency conflict detection, so the transition check
+      // MUST be based on this in-transaction read, not the earlier read
+      // done outside the transaction (that one is stale the moment a
+      // concurrent request commits). Reads must finish before any writes
+      // in a Firestore transaction, so this stays the first statement.
+      const orderSnap = await transaction.get(orderRef);
+      const currentStatus = orderSnap.data()?.status as OrderStatus | undefined;
+      if (!currentStatus || !isValidStatusTransition(currentStatus, status)) {
+        throw new StatusConflictError(
+          `Cannot transition from ${currentStatus ?? 'unknown'} to ${status}`
+        );
+      }
+
+      const event = OrderEventSchema.parse({
+        id: eventRef.id,
+        status,
+        note,
+        courier: status === 'shipped' ? courier : null,
+        awbNumber: status === 'shipped' ? awbNumber : null,
+        createdAt: new Date().toISOString(),
+        createdBy: staffUserId,
+      });
+      transaction.set(eventRef, event);
+      transaction.update(orderRef, orderUpdate);
     });
-    transaction.set(eventRef, event);
-
-    const orderUpdate: Record<string, unknown> = { status };
-    if (status === 'shipped') {
-      orderUpdate.courier = courier;
-      orderUpdate.awbNumber = awbNumber;
+  } catch (error) {
+    if (error instanceof StatusConflictError) {
+      return NextResponse.json({ error: 'order status changed, please retry' }, { status: 409 });
     }
-    transaction.update(orderRef, orderUpdate);
-  });
+    throw error;
+  }
 
-  return NextResponse.json({ order: { ...found.data, status } }, { status: 200 });
+  return NextResponse.json({ order: { ...found.data, ...orderUpdate } }, { status: 200 });
 }
+
+class StatusConflictError extends Error {}

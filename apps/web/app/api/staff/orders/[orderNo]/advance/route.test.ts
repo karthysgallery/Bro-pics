@@ -41,6 +41,10 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     );
   });
 
+  function mockOrderSnap(status: string): void {
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status }) });
+  }
+
   it('returns 403 when the caller is not staff', async () => {
     mockGetStaffUserId.mockResolvedValueOnce(null);
     const response = await POST(makeRequest({ status: 'paid' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
@@ -78,6 +82,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
     });
+    mockOrderSnap('in_production');
 
     const response = await POST(
       makeRequest({ status: 'printed_packed', note: 'Ready for pickup' }),
@@ -101,6 +106,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
     });
+    mockOrderSnap('printed_packed');
 
     const response = await POST(
       makeRequest({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' }),
@@ -112,5 +118,54 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
       expect.anything(),
       expect.objectContaining({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' })
     );
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' })
+    );
+
+    const body = await response.json();
+    expect(body.order.courier).toBe('BlueDart');
+    expect(body.order.awbNumber).toBe('BD123456789');
+  });
+
+  it('nulls courier/awbNumber on the written event for a non-shipped transition even if the body includes them', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('in_production');
+
+    const response = await POST(
+      makeRequest({ status: 'printed_packed', courier: 'BlueDart', awbNumber: 'BD123456789' }),
+      { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'printed_packed', courier: null, awbNumber: null })
+    );
+  });
+
+  it('returns 409 when the in-transaction read shows the order status changed concurrently', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    // A concurrent request already moved the order to 'refunded' by the
+    // time this transaction's read executes, even though the pre-transaction
+    // read (via findOrderByOrderNo above) still saw 'printed_packed'.
+    mockOrderSnap('refunded');
+
+    const response = await POST(
+      makeRequest({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' }),
+      { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) }
+    );
+
+    expect(response.status).toBe(409);
+    expect(mockTransactionSet).not.toHaveBeenCalled();
+    expect(mockTransactionUpdate).not.toHaveBeenCalled();
   });
 });
