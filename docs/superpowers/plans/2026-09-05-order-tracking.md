@@ -1526,7 +1526,7 @@ Look up the order by its order number. Advance it through at least: `paid → in
 
 - [ ] **Step 5: Verify the customer-facing page reflects every change**
 
-As the customer account (or in a second browser/incognito session), visit `/account/orders`, confirm the order appears with its current status, click into it, and confirm the full event timeline shows every transition in order, with the courier/AWB visible on the `shipped` event.
+As the customer account (or in a second browser/incognito session), visit `/orders` (corrected during the final review's fix wave — the order list previously linked to a non-existent `/account/orders` path), confirm the order appears with its current status, click into it, and confirm the full event timeline shows every transition in order, with the courier/AWB visible on the `shipped` event.
 
 - [ ] **Step 6: Verify an invalid transition is rejected**
 
