@@ -38,7 +38,7 @@ export default function OrdersPage() {
         <ul className="flex flex-col gap-2">
           {orders.map(({ id, data }) => (
             <li key={id}>
-              <Link href={`/account/orders/${id}`} className="flex justify-between gap-4">
+              <Link href={`/orders/${id}`} className="flex justify-between gap-4">
                 <span>{data.orderNo}</span>
                 <span>{data.status}</span>
                 <span>₹{formatPaise(data.total)}</span>

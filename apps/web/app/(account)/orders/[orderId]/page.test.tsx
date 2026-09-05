@@ -43,4 +43,23 @@ describe('OrderDetailPage', () => {
     expect(await screen.findByText('BlueDart')).toBeInTheDocument();
     expect(await screen.findByText('BD123')).toBeInTheDocument();
   });
+
+  it('shows a synthetic "Order placed" row even when there are no staff events yet', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        orderNo: 'BP-2026-00002',
+        status: 'paid',
+        total: 50000,
+        placedAt: { toDate: () => new Date('2026-09-05T10:00:00.000Z') },
+      }),
+    });
+    mockGetDocs
+      .mockResolvedValueOnce({ docs: [] })
+      .mockResolvedValueOnce({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_2' })} />);
+
+    expect(await screen.findByText('Order placed')).toBeInTheDocument();
+  });
 });

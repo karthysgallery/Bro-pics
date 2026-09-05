@@ -29,11 +29,17 @@ export default function StaffOrdersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-    user.getIdTokenResult().then((result) => {
-      const role = result.claims.role;
-      setAuthorized(role === 'admin' || role === 'staff');
-    });
+    if (!user) {
+      setAuthorized(false);
+      return;
+    }
+    user
+      .getIdTokenResult()
+      .then((result) => {
+        const role = result.claims.role;
+        setAuthorized(role === 'admin' || role === 'staff');
+      })
+      .catch(() => setAuthorized(false));
     // Keyed on uid (not the user object itself) because the object reference
     // is not guaranteed stable across renders, and we only need to redo this
     // check when the signed-in identity actually changes.

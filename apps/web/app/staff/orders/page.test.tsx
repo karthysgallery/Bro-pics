@@ -1,14 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StaffOrdersPage from './page';
+import { useAuth } from '../../../lib/auth-context';
 
 const mockGetIdTokenResult = vi.fn();
 const mockGetIdToken = vi.fn().mockResolvedValue('id-token');
+const mockDefaultAuthImpl = () => ({
+  user: { uid: 'staff_1', getIdToken: mockGetIdToken, getIdTokenResult: mockGetIdTokenResult },
+  loading: false,
+});
 vi.mock('../../../lib/auth-context', () => ({
-  useAuth: vi.fn(() => ({
-    user: { uid: 'staff_1', getIdToken: mockGetIdToken, getIdTokenResult: mockGetIdTokenResult },
-    loading: false,
-  })),
+  useAuth: vi.fn(() => mockDefaultAuthImpl()),
 }));
 
 const mockFetch = vi.fn();
@@ -19,8 +21,18 @@ describe('StaffOrdersPage', () => {
     mockFetch.mockReset();
   });
 
+  afterEach(() => {
+    vi.mocked(useAuth).mockImplementation(() => mockDefaultAuthImpl() as unknown as ReturnType<typeof useAuth>);
+  });
+
   it('shows "Not authorized" when the signed-in user has no staff/admin role claim', async () => {
     mockGetIdTokenResult.mockResolvedValueOnce({ claims: {} });
+    render(<StaffOrdersPage />);
+    expect(await screen.findByText(/not authorized/i)).toBeInTheDocument();
+  });
+
+  it('shows "Not authorized" (not a blank page) for a signed-out visitor', async () => {
+    vi.mocked(useAuth).mockImplementation(() => ({ user: null, loading: false }) as unknown as ReturnType<typeof useAuth>);
     render(<StaffOrdersPage />);
     expect(await screen.findByText(/not authorized/i)).toBeInTheDocument();
   });

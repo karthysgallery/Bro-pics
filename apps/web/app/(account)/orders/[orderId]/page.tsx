@@ -10,6 +10,21 @@ interface OrderDetailPageProps {
   params: Promise<{ orderId: string }>;
 }
 
+// order.placedAt comes back from the client Firestore SDK as a Timestamp
+// object (with a toDate() method), not a plain Date or ISO string, so this
+// duck-types rather than assuming a specific shape.
+function formatPlacedAt(value: unknown): string {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().toLocaleString('en-IN');
+  }
+  if (value instanceof Date) return value.toLocaleString('en-IN');
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString('en-IN');
+  }
+  return '';
+}
+
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { user } = useAuth();
   const uid = user?.uid;
@@ -54,6 +69,10 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
       <div className="flex flex-col gap-2 pt-4 border-t border-charcoal/10">
         <h2 className="font-medium">Status timeline</h2>
+        <div className="text-sm">
+          <span>Order placed</span>
+          {order.placedAt !== undefined && <span> — <span>{formatPlacedAt(order.placedAt)}</span></span>}
+        </div>
         {events.map((event) => (
           <div key={event.id} className="text-sm">
             <span>{event.status}</span>

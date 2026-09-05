@@ -34,6 +34,6 @@ describe('OrdersPage (customer order list)', () => {
     );
     render(<OrdersPage />);
     const link = await screen.findByText('BP-2026-00001');
-    expect(link.closest('a')).toHaveAttribute('href', '/account/orders/order_1');
+    expect(link.closest('a')).toHaveAttribute('href', '/orders/order_1');
   });
 });
