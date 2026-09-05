@@ -1,10 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { VariantSelector } from './VariantSelector';
-import { PersonalizationEditor } from '../editor/PersonalizationEditor';
+
+// react-konva (used inside PersonalizationEditor) pulls in the optional
+// `canvas` native binding when server-bundled — `'use client'` alone does
+// NOT prevent server-side pre-rendering in the App Router, only
+// next/dynamic with ssr:false actually keeps a window-touching library
+// like this off the server. Without this, every product page 500s.
+const PersonalizationEditor = dynamic(
+  () => import('../editor/PersonalizationEditor').then((mod) => mod.PersonalizationEditor),
+  { ssr: false }
+);
 
 function formatPaise(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

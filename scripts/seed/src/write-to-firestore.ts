@@ -7,6 +7,7 @@ import {
   seedReviews,
   seedProductMedia,
   seedHomepageSections,
+  seedFrameTemplates,
 } from './data';
 import { loadEnvLocal } from './load-env';
 
@@ -45,6 +46,13 @@ async function main(): Promise<void> {
   for (const media of seedProductMedia) {
     stage(db.collection('products').doc(media.productId).collection('media').doc(media.id), media);
   }
+  for (const template of seedFrameTemplates) {
+    const variant = seedVariants.find((v) => v.id === template.variantId)!;
+    stage(
+      db.collection('products').doc(variant.productId).collection('frameTemplates').doc(template.id),
+      template
+    );
+  }
   for (const review of seedReviews) {
     stage(db.collection('reviews').doc(review.id), review);
   }
@@ -56,7 +64,7 @@ async function main(): Promise<void> {
   await Promise.all(commits);
 
   console.log(
-    `Seeded ${seedCategories.length} categories, ${seedProducts.length} products, ${seedVariants.length} variants, ${seedProductMedia.length} media docs, ${seedReviews.length} reviews, ${seedHomepageSections.length} homepage sections.`
+    `Seeded ${seedCategories.length} categories, ${seedProducts.length} products, ${seedVariants.length} variants, ${seedProductMedia.length} media docs, ${seedFrameTemplates.length} frame templates, ${seedReviews.length} reviews, ${seedHomepageSections.length} homepage sections.`
   );
 }
 
