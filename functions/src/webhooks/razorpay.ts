@@ -2,6 +2,7 @@ import { isDuplicateWebhookEvent, markWebhookProcessed, type WebhookTransaction 
 import { onRequest } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { OrderEventSchema, type OrderEvent } from '@bro-pics/shared';
 
 export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
@@ -10,6 +11,7 @@ export interface PaymentEventTransaction {
   markPaymentCaptured(orderId: string, razorpayPaymentId: string): void;
   markPaymentFailed(orderId: string): void;
   clearCart(userId: string): void;
+  recordEvent(orderId: string, event: Omit<OrderEvent, 'id'>): void;
 }
 
 /**
@@ -40,6 +42,14 @@ export async function handlePaymentCaptured(
   if (order.status === 'paid') return;
 
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
+  paymentTx.recordEvent(order.id, {
+    status: 'paid',
+    note: null,
+    courier: null,
+    awbNumber: null,
+    createdAt: new Date().toISOString(),
+    createdBy: 'system',
+  });
   paymentTx.clearCart(order.userId);
   markWebhookProcessed(webhookTx, params.eventId, order.id);
 }
@@ -110,6 +120,10 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     },
     clearCart(userId) {
       transaction.set(db.collection('carts').doc(userId), { items: [] });
+    },
+    recordEvent(orderId, event) {
+      const eventRef = db.collection('orders').doc(orderId).collection('events').doc();
+      transaction.set(eventRef, OrderEventSchema.parse({ ...event, id: eventRef.id }));
     },
   };
 }
