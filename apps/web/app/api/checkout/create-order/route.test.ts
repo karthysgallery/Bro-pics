@@ -236,5 +236,16 @@ describe('POST /api/checkout/create-order', () => {
       razorpayOrderId: 'order_rzp_1',
       orderNo: `BP-${new Date().getFullYear()}-00001`,
     });
+
+    const eventCall = mockBatchSet.mock.calls.find(([, data]) => data.createdBy === 'user_1');
+    expect(eventCall).toBeDefined();
+    const [, writtenEvent] = eventCall!;
+    expect(writtenEvent).toMatchObject({
+      status: 'pending_payment',
+      note: null,
+      courier: null,
+      awbNumber: null,
+      createdBy: 'user_1',
+    });
   });
 });

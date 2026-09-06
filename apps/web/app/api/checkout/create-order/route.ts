@@ -7,7 +7,7 @@ import { getShippingSettings } from '../../../../lib/firestore-settings';
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
-import { generateOrderNo, OrderSchema, OrderItemSchema, AddressSchema, type CounterTransaction } from '@bro-pics/shared';
+import { generateOrderNo, OrderSchema, OrderItemSchema, OrderEventSchema, AddressSchema, type CounterTransaction } from '@bro-pics/shared';
 
 function isMalformedCartLine(item: CartLineInput): boolean {
   return (
@@ -137,6 +137,21 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const batch = db.batch();
   batch.set(orderRef, order);
+
+  const eventRef = orderRef.collection('events').doc();
+  batch.set(
+    eventRef,
+    OrderEventSchema.parse({
+      id: eventRef.id,
+      status: 'pending_payment',
+      note: null,
+      courier: null,
+      awbNumber: null,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+    })
+  );
+
   for (const line of priced) {
     const itemRef = orderRef.collection('items').doc();
     batch.set(itemRef, OrderItemSchema.parse({ ...line, id: itemRef.id }));
