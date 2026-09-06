@@ -45,19 +45,13 @@ export function Header({ categories, onCartClick }: HeaderProps) {
           <button aria-label="Wishlist" className="text-charcoal">
             ♡
           </button>
-          {user ? (
-            <Link href="/orders" aria-label="Account" className="text-charcoal">
-              ◐
-            </Link>
-          ) : (
-            <button
-              aria-label="Sign in"
-              onClick={() => setIsAccountModalOpen(true)}
-              className="text-charcoal"
-            >
-              ◐
-            </button>
-          )}
+          <button
+            aria-label={user ? 'Account' : 'Sign in'}
+            onClick={() => setIsAccountModalOpen(true)}
+            className="text-charcoal"
+          >
+            ◐
+          </button>
           <button aria-label="Cart" onClick={onCartClick} className="relative text-charcoal">
             🛒
             <span

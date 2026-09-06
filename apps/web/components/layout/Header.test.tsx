@@ -83,21 +83,18 @@ describe('Header', () => {
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
   });
 
-  it('shows an Account link to /orders (not the 404ing /account) when signed in', async () => {
+  it('opens the account modal (not a direct link) when the Account icon is clicked while signed in', async () => {
     // Mocks the auth-context module itself so Header's useAuth() reports a
     // signed-in user, while CartProvider's separate useContext(AuthContext)
     // read resolves against a FRESH, un-provided context (default null) —
     // this keeps CartProvider in its signed-out/local-only path so this
     // test never touches the real firebase/firestore or firebase/functions
-    // SDKs (neither is mocked in this file). (account) is a Next.js route
-    // group — the parens are stripped from the URL — so the only real page
-    // at apps/web/app/(account)/orders/page.tsx is reachable at /orders,
-    // not /account.
+    // SDKs (neither is mocked in this file).
     vi.resetModules();
     const React = await import('react');
     vi.doMock('../../lib/auth-context', () => ({
       AuthContext: React.createContext(null),
-      useAuth: () => ({ user: { uid: 'user_1' }, loading: false }),
+      useAuth: () => ({ user: { uid: 'user_1', phoneNumber: '+911234567890' }, loading: false, signOut: vi.fn() }),
       AuthProvider: ({ children }: { children: React.ReactNode }) => children,
     }));
 
@@ -109,9 +106,13 @@ describe('Header', () => {
         <HeaderWithSignedInAuth categories={categories} onCartClick={() => {}} />
       </FreshCartProvider>
     );
-    const accountLink = screen.getByLabelText('Account');
-    expect(accountLink).toBeInTheDocument();
-    expect(accountLink).toHaveAttribute('href', '/orders');
+    const accountButton = screen.getByLabelText('Account');
+    expect(accountButton.tagName).toBe('BUTTON');
+    expect(screen.queryByTestId('account-modal')).not.toBeInTheDocument();
+
+    fireEvent.click(accountButton);
+    expect(screen.getByTestId('account-modal')).toBeInTheDocument();
+    expect(screen.getByText('+911234567890')).toBeInTheDocument();
     expect(screen.queryByLabelText('Sign in')).not.toBeInTheDocument();
 
     vi.doUnmock('../../lib/auth-context');
