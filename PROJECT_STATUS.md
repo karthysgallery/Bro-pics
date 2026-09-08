@@ -181,7 +181,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 ## 4. What exists in the repo right now
 
 ```
-bro-pics/ (checkout-and-accounts branch — Storefront + Personalization Engine + all of Phase 4)
+bro-pics/ (feature/admin-panel-and-production-queue branch, created off checkout-and-accounts — Storefront + Personalization Engine + all of Phase 4 + all of Phase 5)
 ├── apps/web/            Next.js App Router shell — global layout (Header w/ sign-in
 │                         entry point + account modal, Footer, AnnouncementBar,
 │                         CartDrawer w/ thumbnails + Proceed to Checkout, WhatsAppButton),
@@ -284,12 +284,12 @@ Each has an owner phase where it needs to be resolved, not "someday":
 
 ## 7. Next action
 
-**Phase 4 (Cart, Checkout, Razorpay, Accounts, Order Tracking) is fully complete** — all three plans (A: Accounts & Cart, B: Checkout + Razorpay, C: Order Tracking) landed on `checkout-and-accounts` (not merged to `master`, kept local per explicit instruction, consistently chosen every time this decision has come up across all three plans). **Phase 5 (Admin Panel & Production Queue) is next.**
+**Phase 4 (Cart, Checkout, Razorpay, Accounts, Order Tracking) and Phase 5 (Admin Panel & Production Queue) are both fully complete** — all three Phase 4 plans landed on `checkout-and-accounts`, and all three Phase 5 plans (A: Sign-out & Order Timeline Completeness, B: Admin Role Management, C: Production/Fulfillment Queue) landed on `feature/admin-panel-and-production-queue` (created off `checkout-and-accounts`; neither branch is merged to `master`, kept local per explicit instruction, consistently chosen every time this decision has come up). **Phase 6 (Reviews, videos, offers, SEO, analytics, performance pass) is next.**
 
-Before or alongside Phase 5's brainstorm, four loose ends are worth closing, none of which block starting Phase 5's design work:
-- Firebase phone-OTP's live verification (deferred since Plan A) — enable the Phone provider in the `bropics-app` Console and register a test number.
-- Razorpay's live test-mode verification (deferred since Plan B) — free signup, no KYC needed.
-- The role-claim script's live run (deferred since Plan C) — grant a real account `admin`/`staff` and confirm the staff order-tracking flow works end to end.
-- The dev-mode-only Personalization Editor crash found in the 2026-09-05 verification pass (see §5) — doesn't block Phase 5, but worth a fix before anyone next needs to develop against the editor locally.
+Before or alongside Phase 6's brainstorm, four loose ends are worth closing, none of which block starting Phase 6's design work:
+- Firebase phone-OTP's live verification (deferred since Phase 4 Plan A) — enable the Phone provider in the `bropics-app` Console and register a test number.
+- Razorpay's live test-mode verification (deferred since Phase 4 Plan B) — free signup, no KYC needed.
+- The role-claim script's live bootstrap run (deferred since Phase 4 Plan C, still relevant after Phase 5 Plan B) — grant a real account `admin` and confirm the staff order-tracking/production-queue flow works end to end against real data.
+- The dev-mode-only Personalization Editor crash found in the 2026-09-05 verification pass (see §5) — doesn't block Phase 6, but worth a fix before anyone next needs to develop against the editor locally.
 
 Phase 5 itself should expect to: build the real admin role-management UI (replacing the manual script) and the production queue Plan C's staff UI deliberately left out.
