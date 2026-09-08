@@ -16,9 +16,20 @@ const ALL_STATUSES: OrderStatus[] = [
   'replacement_issued',
 ];
 
+interface QueueRow {
+  id: string;
+  orderNo: string;
+  status: OrderStatus;
+  total: number;
+  placedAt: string;
+  addressJson: { city?: string } | null;
+}
+
 export default function StaffOrdersPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus>('paid');
+  const [queue, setQueue] = useState<QueueRow[]>([]);
   const [orderNoInput, setOrderNoInput] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -29,6 +40,7 @@ export default function StaffOrdersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
     if (!user) {
       setAuthorized(false);
       return;
@@ -40,20 +52,14 @@ export default function StaffOrdersPage() {
         setAuthorized(role === 'admin' || role === 'staff');
       })
       .catch(() => setAuthorized(false));
-    // Keyed on uid (not the user object itself) because the object reference
-    // is not guaranteed stable across renders, and we only need to redo this
-    // check when the signed-in identity actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+  }, [user?.uid, loading]);
 
-  if (authorized === null) return null;
-  if (!authorized) return <p>Not authorized.</p>;
-
-  const handleLookup = async () => {
+  const loadOrder = async (orderNo: string) => {
     setError(null);
     setOrder(null);
     const idToken = await user!.getIdToken();
-    const response = await fetch(`/api/staff/orders/${orderNoInput}`, {
+    const response = await fetch(`/api/staff/orders/${orderNo}`, {
       headers: { Authorization: `Bearer ${idToken}` },
     });
     if (!response.ok) {
@@ -66,6 +72,32 @@ export default function StaffOrdersPage() {
     setNextStatus('');
     setCourier('');
     setAwbNumber('');
+  };
+
+  useEffect(() => {
+    if (authorized !== true) return;
+    (async () => {
+      const idToken = await user!.getIdToken();
+      const response = await fetch(`/api/staff/orders?status=${statusFilter}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (!response.ok) return;
+      const body = await response.json();
+      setQueue(body.orders ?? []);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorized, statusFilter]);
+
+  if (authorized === null) return null;
+  if (!authorized) return <p>Not authorized.</p>;
+
+  const handleLookup = async () => {
+    await loadOrder(orderNoInput);
+  };
+
+  const handleQueueRowClick = async (orderNo: string) => {
+    setOrderNoInput(orderNo);
+    await loadOrder(orderNo);
   };
 
   const handleAdvance = async () => {
@@ -93,7 +125,35 @@ export default function StaffOrdersPage() {
 
   return (
     <main className="flex flex-col gap-4 p-6">
-      <h1 className="font-display text-2xl">Order Lookup</h1>
+      <h1 className="font-display text-2xl">Order Queue</h1>
+
+      <label htmlFor="status-filter">Status</label>
+      <select
+        id="status-filter"
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value as OrderStatus)}
+        className="rounded border border-charcoal/20 px-3 py-2 w-fit"
+      >
+        {ALL_STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+
+      <ul className="flex flex-col gap-1">
+        {queue.map((row) => (
+          <li key={row.id}>
+            <button onClick={() => handleQueueRowClick(row.orderNo)} className="text-left underline">
+              {row.orderNo}
+            </button>
+            {' — '}
+            {row.addressJson?.city ?? ''}
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="font-display text-xl pt-4 border-t border-charcoal/10">Order Lookup</h2>
 
       <label htmlFor="order-no-input">Order number</label>
       <input

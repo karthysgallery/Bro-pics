@@ -37,16 +37,50 @@ describe('StaffOrdersPage', () => {
     expect(await screen.findByText(/not authorized/i)).toBeInTheDocument();
   });
 
+  it('does not flash "Not authorized" while the auth check is still loading', () => {
+    vi.mocked(useAuth).mockImplementation(
+      () => ({ user: { uid: 'staff_1', getIdToken: mockGetIdToken, getIdTokenResult: mockGetIdTokenResult }, loading: true }) as unknown as ReturnType<typeof useAuth>
+    );
+    render(<StaffOrdersPage />);
+    expect(screen.queryByText(/not authorized/i)).not.toBeInTheDocument();
+  });
+
+  it('loads the queue for the default status filter and populates the advance form on a row click', async () => {
+    mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'staff' } });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            orders: [{ id: 'order_1', orderNo: 'BP-2026-00001', status: 'paid', total: 150000, placedAt: '2026-09-01T00:00:00.000Z', addressJson: { city: 'Chennai' } }],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ order: { orderNo: 'BP-2026-00001', status: 'paid' }, items: [{ title: 'Frame', qty: 1 }] }),
+      });
+
+    render(<StaffOrdersPage />);
+    expect(await screen.findByText('BP-2026-00001')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('BP-2026-00001'));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/staff/orders/BP-2026-00001', expect.anything()));
+    expect(await screen.findByText('Frame')).toBeInTheDocument();
+  });
+
   it('looks up an order and shows a status-advance form for a staff user', async () => {
     mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'staff' } });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          order: { orderNo: 'BP-2026-00001', status: 'printed_packed' },
-          items: [{ title: 'Frame', qty: 1 }],
-        }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ orders: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            order: { orderNo: 'BP-2026-00001', status: 'printed_packed' },
+            items: [{ title: 'Frame', qty: 1 }],
+          }),
+      });
 
     render(<StaffOrdersPage />);
     fireEvent.change(await screen.findByLabelText('Order number'), { target: { value: 'BP-2026-00001' } });
@@ -61,6 +95,7 @@ describe('StaffOrdersPage', () => {
   it('shows courier/AWB fields only when the selected next status is shipped, and submits the advance', async () => {
     mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'admin' } });
     mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ orders: [] }) })
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ order: { orderNo: 'BP-2026-00001', status: 'printed_packed' }, items: [] }),
