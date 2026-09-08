@@ -62,4 +62,37 @@ describe('OrderDetailPage', () => {
 
     expect(await screen.findByText('Order placed')).toBeInTheDocument();
   });
+
+  it('suppresses the synthetic "Order placed" row when a real pending_payment event exists', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        orderNo: 'BP-2026-00003',
+        status: 'paid',
+        total: 50000,
+        placedAt: { toDate: () => new Date('2026-09-06T10:00:00.000Z') },
+      }),
+    });
+    mockGetDocs
+      .mockResolvedValueOnce({ docs: [] })
+      .mockResolvedValueOnce({
+        docs: [
+          {
+            data: () => ({
+              id: 'evt_1',
+              status: 'pending_payment',
+              note: null,
+              courier: null,
+              awbNumber: null,
+              createdAt: '2026-09-06T10:00:00.000Z',
+            }),
+          },
+        ],
+      });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_3' })} />);
+
+    await screen.findByText('pending_payment');
+    expect(screen.queryByText('Order placed')).not.toBeInTheDocument();
+  });
 });

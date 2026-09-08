@@ -55,6 +55,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   if (!user) return <p>Please sign in to see this order.</p>;
   if (!order) return <p>Loading…</p>;
 
+  const hasPendingPaymentEvent = events.some((event) => event.status === 'pending_payment');
+
   return (
     <main className="flex flex-col gap-6 p-6">
       <h1 className="font-display text-2xl">Order {order.orderNo}</h1>
@@ -69,10 +71,12 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
       <div className="flex flex-col gap-2 pt-4 border-t border-charcoal/10">
         <h2 className="font-medium">Status timeline</h2>
-        <div className="text-sm">
-          <span>Order placed</span>
-          {order.placedAt !== undefined && <span> — <span>{formatPlacedAt(order.placedAt)}</span></span>}
-        </div>
+        {!hasPendingPaymentEvent && (
+          <div className="text-sm">
+            <span>Order placed</span>
+            {order.placedAt !== undefined && <span> — <span>{formatPlacedAt(order.placedAt)}</span></span>}
+          </div>
+        )}
         {events.map((event) => (
           <div key={event.id} className="text-sm">
             <span>{event.status}</span>
