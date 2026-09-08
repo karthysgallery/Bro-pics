@@ -33,7 +33,16 @@ export default function CheckoutPage() {
   // cleanup (returned below) unsubscribes both on unmount and whenever
   // orderId changes, so no separate ref/teardown bookkeeping is needed.
   useEffect(() => {
-    if (!orderId) return;
+    // Also re-run (and tear down) this effect when the signed-in user
+    // changes — e.g. the account-icon Sign Out button on this page's own
+    // Header can flip `user` to null mid-checkout while a listener is live.
+    // Without `user?.uid` in the deps, the effect wouldn't re-run on sign-out
+    // and its cleanup (unsubscribe) would never fire, leaking a listener
+    // that keeps running with now-invalid permissions.
+    if (!orderId || !user?.uid) {
+      setOrderStatus(null);
+      return;
+    }
     const db = getFirestore(getFirebaseApp());
     const orderRef = doc(db, 'orders', orderId);
     const unsubscribe = onSnapshot(orderRef, (snapshot) => {
@@ -47,7 +56,7 @@ export default function CheckoutPage() {
       setOrderStatus({ status: data.status, paymentStatus: data.paymentStatus, orderNo: data.orderNo });
     });
     return unsubscribe;
-  }, [orderId]);
+  }, [orderId, user?.uid]);
 
   if (!user) {
     return <p>Please sign in to check out.</p>;

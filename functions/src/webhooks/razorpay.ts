@@ -17,9 +17,9 @@ export interface PaymentEventTransaction {
 /**
  * Firestore transactions require every read to finish before any write —
  * this function calls isDuplicateWebhookEvent (read) and
- * findOrderByRazorpayOrderId (read) BEFORE any of the three writes below,
- * mirroring the same rule reconcileSessionOnLogin (Phase 4 Plan A) had to
- * get right for the same reason.
+ * findOrderByRazorpayOrderId (read) BEFORE any of the writes below (markPaymentCaptured,
+ * clearCart, markWebhookProcessed, and recordEvent), mirroring the same rule
+ * reconcileSessionOnLogin (Phase 4 Plan A) had to get right for the same reason.
  */
 export async function handlePaymentCaptured(
   webhookTx: WebhookTransaction,

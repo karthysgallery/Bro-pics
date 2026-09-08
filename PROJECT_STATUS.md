@@ -169,7 +169,7 @@ Each phase gets its own brainstorm → design spec → implementation plan → s
 | 4a | Phase 4 Plan A — accounts (phone-OTP), cart persistence, session→user reconciliation | ✅ **Complete**, kept local on `checkout-and-accounts` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-03-accounts-cart-design.md) | [plan](docs/superpowers/plans/2026-09-03-accounts-cart-persistence.md) |
 | 4b | Phase 4 Plan B — checkout, address collection, Razorpay Orders API + webhooks | ✅ **Complete**, kept local on `checkout-and-accounts` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-04-checkout-razorpay-design.md) | [plan](docs/superpowers/plans/2026-09-04-checkout-razorpay.md) |
 | 4c | Phase 4 Plan C — order tracking (manual AWB/status timeline) | ✅ **Complete**, kept local on `checkout-and-accounts` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-05-order-tracking-design.md) | [plan](docs/superpowers/plans/2026-09-05-order-tracking.md) |
-| 4d | Phase 5 Plan A — Sign-out & order timeline completeness | ✅ **Complete**, kept local on `feature/admin-panel-and-production-queue` — **not merged to `master`** | — | [plan](docs/superpowers/plans/2026-09-06-phase5-plan-a-foundations.md) |
+| 4d | Phase 5 Plan A — Sign-out & order timeline completeness | ✅ **Complete**, kept local on `feature/admin-panel-and-production-queue` — **not merged to `master`** | [design](docs/superpowers/specs/2026-09-06-phase5-plan-a-foundations-design.md) | [plan](docs/superpowers/plans/2026-09-06-phase5-plan-a-foundations.md) |
 | 5 | Admin panel & production queue | 🔜 **Next** | — | — |
 | 6 | Reviews, videos, offers, SEO, analytics, performance pass | Not started | — | — |
 

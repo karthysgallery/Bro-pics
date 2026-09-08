@@ -143,4 +143,24 @@ describe('CheckoutPage', () => {
     unmount();
     expect(mockUnsubscribe).toHaveBeenCalled();
   });
+
+  it('unsubscribes the order listener when the signed-in user becomes null (e.g. sign-out mid-checkout)', async () => {
+    const { useAuth } = await import('../../lib/auth-context');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    const { rerender } = render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+    // Simulate the account-icon Sign Out button flipping auth state to
+    // signed-out while this page still has a live orders/{orderId} listener.
+    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false, signOut: vi.fn() });
+    rerender(<CheckoutPage />);
+
+    expect(mockUnsubscribe).toHaveBeenCalled();
+  });
 });

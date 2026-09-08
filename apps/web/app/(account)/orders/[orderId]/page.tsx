@@ -80,6 +80,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         {events.map((event) => (
           <div key={event.id} className="text-sm">
             <span>{event.status}</span>
+            {event.createdAt !== undefined && (
+              <span> — <span>{formatPlacedAt(event.createdAt)}</span></span>
+            )}
             {event.note && (
               <span> — <span>{event.note}</span></span>
             )}

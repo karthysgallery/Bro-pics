@@ -42,6 +42,11 @@ describe('OrderDetailPage', () => {
     expect(statusEls[0].textContent).toContain('paid');
     expect(await screen.findByText('BlueDart')).toBeInTheDocument();
     expect(await screen.findByText('BD123')).toBeInTheDocument();
+
+    // Each event row should also render its own formatted date (not just the
+    // now-dead synthetic "Order placed" block), derived from event.createdAt.
+    const expectedDate = new Date('2026-09-01T00:00:00.000Z').toLocaleString('en-IN');
+    expect(await screen.findByText(expectedDate)).toBeInTheDocument();
   });
 
   it('shows a synthetic "Order placed" row even when there are no staff events yet', async () => {

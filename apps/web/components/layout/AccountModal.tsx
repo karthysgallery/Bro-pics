@@ -35,7 +35,7 @@ export function AccountModal({ isOpen, onClose }: AccountModalProps) {
         {user ? (
           <div className="flex flex-col gap-3">
             <p>{user.phoneNumber}</p>
-            <Link href="/orders" className="text-sage underline">
+            <Link href="/orders" className="text-sage underline" onClick={onClose}>
               My Orders
             </Link>
             <button onClick={handleSignOut} className="rounded bg-charcoal text-cream px-4 py-2 w-fit">

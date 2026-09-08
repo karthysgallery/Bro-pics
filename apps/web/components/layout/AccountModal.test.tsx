@@ -34,6 +34,18 @@ describe('AccountModal', () => {
     expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
   });
 
+  it('calls onClose when the My Orders link is clicked', () => {
+    const onClose = vi.fn();
+    vi.mocked(useAuth).mockReturnValue({
+      user: { phoneNumber: '+911234567890' } as never,
+      loading: false,
+      signOut: vi.fn(),
+    });
+    render(<AccountModal isOpen={true} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('link', { name: 'My Orders' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it('calls signOut and onClose when Sign Out is clicked', () => {
     const signOut = vi.fn();
     const onClose = vi.fn();
