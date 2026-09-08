@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { Order } from '@bro-pics/shared';
+import type { Order, OrderStatus } from '@bro-pics/shared';
 
 /**
  * orderNo is a display identifier (BP-2026-00001), not the Firestore
@@ -16,4 +16,18 @@ export async function findOrderByOrderNo(
   if (snapshot.empty) return null;
   const doc = snapshot.docs[0];
   return { id: doc.id, data: doc.data() as Order };
+}
+
+/**
+ * Every order currently sitting in a given status, oldest-placed first —
+ * a fulfillment queue processes FIFO, the opposite of the customer-facing
+ * order-history list's newest-first ordering. Requires a composite index
+ * on (status ASC, placedAt ASC) — see firestore.indexes.json.
+ */
+export async function findOrdersByStatus(
+  db: Firestore,
+  status: OrderStatus
+): Promise<Array<{ id: string; data: Order }>> {
+  const snapshot = await db.collection('orders').where('status', '==', status).orderBy('placedAt', 'asc').get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() as Order }));
 }
