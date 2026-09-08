@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import AdminRolesPage from './page';
 import { useAuth } from '../../../lib/auth-context';
 
@@ -49,7 +49,7 @@ describe('AdminRolesPage', () => {
     fireEvent.click(screen.getByText('Look up'));
 
     expect(await screen.findByText('+911234567890')).toBeInTheDocument();
-    expect(await screen.findByText(/staff/i)).toBeInTheDocument();
+    expect(await screen.findByText('Current role: staff')).toBeInTheDocument();
   });
 
   it('shows "No account with that phone number" on a 404', async () => {
@@ -77,7 +77,10 @@ describe('AdminRolesPage', () => {
     fireEvent.click(screen.getByText('Look up'));
     await waitFor(() => screen.getByLabelText('Role'));
 
-    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
+    const roleSelect = screen.getByLabelText('Role');
+    expect(within(roleSelect).getByRole('option', { name: 'Staff' })).toHaveValue('staff');
+
+    fireEvent.change(roleSelect, { target: { value: 'admin' } });
     fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() =>

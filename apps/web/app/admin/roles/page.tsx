@@ -97,7 +97,7 @@ export default function AdminRolesPage() {
             className="rounded border border-charcoal/20 px-3 py-2 w-fit"
           >
             <option value="">None</option>
-            <option value="staff">Support</option>
+            <option value="staff">Staff</option>
             <option value="admin">Admin</option>
           </select>
 
