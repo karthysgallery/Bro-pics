@@ -13,7 +13,7 @@ export async function getUserIdFromAuthHeader(request: Request): Promise<string 
   if (!authHeader?.startsWith('Bearer ')) return null;
   const idToken = authHeader.slice('Bearer '.length);
   try {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
+    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken);
     return decoded.uid;
   } catch {
     return null;

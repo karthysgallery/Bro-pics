@@ -63,6 +63,13 @@ export default function AdminRolesPage() {
       return;
     }
     const body = await response.json();
+    if (body.uid === user!.uid) {
+      // The admin just changed their own role, which revokes their cached
+      // ID token's refresh tokens server-side. Force a fresh token now so
+      // their next action in this session doesn't fail with a confusing
+      // error before their SDK naturally refreshes.
+      await user!.getIdToken(true);
+    }
     setResult({ ...result, role: body.role });
   };
 

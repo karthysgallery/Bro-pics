@@ -117,4 +117,49 @@ describe('AdminRolesPage', () => {
       )
     );
   });
+
+  it('forces a fresh ID token after the signed-in admin changes their own role', async () => {
+    mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'admin' } });
+    mockGetIdToken.mockClear();
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ uid: 'admin_1', phoneNumber: '+911234567890', role: 'staff' }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ uid: 'admin_1', role: 'admin' }) });
+
+    render(<AdminRolesPage />);
+    fireEvent.change(await screen.findByLabelText('Phone number'), { target: { value: '+911234567890' } });
+    fireEvent.click(screen.getByText('Look up'));
+    await waitFor(() => screen.getByLabelText('Role'));
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => expect(mockGetIdToken).toHaveBeenCalledWith(true));
+  });
+
+  it('does not force a fresh ID token when changing a different account\'s role', async () => {
+    mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'admin' } });
+    mockGetIdToken.mockClear();
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ uid: 'user_9', phoneNumber: '+911234567890', role: null }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ uid: 'user_9', role: 'admin' }) });
+
+    render(<AdminRolesPage />);
+    fireEvent.change(await screen.findByLabelText('Phone number'), { target: { value: '+911234567890' } });
+    fireEvent.click(screen.getByText('Look up'));
+    await waitFor(() => screen.getByLabelText('Role'));
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenLastCalledWith('/api/admin/users/user_9/role', expect.objectContaining({ method: 'POST' }))
+    );
+    expect(mockGetIdToken).not.toHaveBeenCalledWith(true);
+  });
 });
