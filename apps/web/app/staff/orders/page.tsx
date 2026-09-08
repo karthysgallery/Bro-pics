@@ -21,8 +21,33 @@ interface QueueRow {
   orderNo: string;
   status: OrderStatus;
   total: number;
-  placedAt: string;
+  placedAt: unknown;
   addressJson: { city?: string } | null;
+}
+
+// row.placedAt comes back through the API route as a Firestore Timestamp
+// once JSON-serialized ({_seconds, _nanoseconds}), not a plain string — this
+// duck-types the same way apps/web/app/(account)/orders/[orderId]/page.tsx's
+// formatPlacedAt does, since the source shape can vary (toDate(), Date,
+// string/number, or the serialized {_seconds} form).
+function formatPlacedAt(value: unknown): string {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().toLocaleString('en-IN');
+  }
+  if (value instanceof Date) return value.toLocaleString('en-IN');
+  if (value && typeof value === 'object' && '_seconds' in value) {
+    const seconds = (value as { _seconds: number })._seconds;
+    return new Date(seconds * 1000).toLocaleString('en-IN');
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString('en-IN');
+  }
+  return '';
+}
+
+function formatMoney(paise: number): string {
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function StaffOrdersPage() {
@@ -38,6 +63,7 @@ export default function StaffOrdersPage() {
   const [courier, setCourier] = useState('');
   const [awbNumber, setAwbNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -70,6 +96,7 @@ export default function StaffOrdersPage() {
     setOrder(body.order);
     setItems(body.items ?? []);
     setNextStatus('');
+    setNote('');
     setCourier('');
     setAwbNumber('');
   };
@@ -77,11 +104,16 @@ export default function StaffOrdersPage() {
   useEffect(() => {
     if (authorized !== true) return;
     (async () => {
+      setQueueError(null);
       const idToken = await user!.getIdToken();
       const response = await fetch(`/api/staff/orders?status=${statusFilter}`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setQueue([]);
+        setQueueError('Could not load the queue.');
+        return;
+      }
       const body = await response.json();
       setQueue(body.orders ?? []);
     })();
@@ -104,7 +136,7 @@ export default function StaffOrdersPage() {
     if (!order || !nextStatus) return;
     setError(null);
     const idToken = await user!.getIdToken();
-    const response = await fetch(`/api/staff/orders/${orderNoInput}/advance`, {
+    const response = await fetch(`/api/staff/orders/${order.orderNo}/advance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({ status: nextStatus, note, courier, awbNumber }),
@@ -141,6 +173,8 @@ export default function StaffOrdersPage() {
         ))}
       </select>
 
+      {queueError && <p className="text-sm text-red-600">{queueError}</p>}
+
       <ul className="flex flex-col gap-1">
         {queue.map((row) => (
           <li key={row.id}>
@@ -148,7 +182,11 @@ export default function StaffOrdersPage() {
               {row.orderNo}
             </button>
             {' — '}
-            {row.addressJson?.city ?? ''}
+            {row.status}
+            {' — '}
+            {formatMoney(row.total)}
+            {' — '}
+            {formatPlacedAt(row.placedAt)}
           </li>
         ))}
       </ul>
