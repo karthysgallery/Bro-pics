@@ -10,7 +10,7 @@ interface LookupResult {
 }
 
 export default function AdminRolesPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [phoneInput, setPhoneInput] = useState('');
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -18,6 +18,7 @@ export default function AdminRolesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
     if (!user) {
       setAuthorized(false);
       return;
@@ -27,7 +28,7 @@ export default function AdminRolesPage() {
       .then((result) => setAuthorized(result.claims.role === 'admin'))
       .catch(() => setAuthorized(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+  }, [user?.uid, loading]);
 
   if (authorized === null) return null;
   if (!authorized) return <p>Not authorized.</p>;

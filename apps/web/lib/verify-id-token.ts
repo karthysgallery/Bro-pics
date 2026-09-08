@@ -13,7 +13,7 @@ export async function getUserIdFromAuthHeader(request: Request): Promise<string 
   if (!authHeader?.startsWith('Bearer ')) return null;
   const idToken = authHeader.slice('Bearer '.length);
   try {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken);
+    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     return decoded.uid;
   } catch {
     return null;
@@ -31,7 +31,7 @@ export async function getStaffUserIdFromAuthHeader(request: Request): Promise<st
   if (!authHeader?.startsWith('Bearer ')) return null;
   const idToken = authHeader.slice('Bearer '.length);
   try {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken);
+    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     const role = (decoded as { role?: string }).role;
     if (role !== 'admin' && role !== 'staff') return null;
     return decoded.uid;
@@ -50,7 +50,7 @@ export async function getAdminUserIdFromAuthHeader(request: Request): Promise<st
   if (!authHeader?.startsWith('Bearer ')) return null;
   const idToken = authHeader.slice('Bearer '.length);
   try {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken);
+    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     const role = (decoded as { role?: string }).role;
     if (role !== 'admin') return null;
     return decoded.uid;

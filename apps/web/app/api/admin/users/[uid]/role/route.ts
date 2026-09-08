@@ -22,7 +22,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: 'role must be "admin", "staff", or null' }, { status: 400 });
   }
 
-  await getAuth(getAdminApp()).setCustomUserClaims(uid, role ? { role } : {});
+  if (uid === adminUserId && role !== 'admin') {
+    return NextResponse.json(
+      { error: 'You cannot demote or clear your own admin role' },
+      { status: 400 }
+    );
+  }
+
+  const auth = getAuth(getAdminApp());
+  await auth.setCustomUserClaims(uid, role ? { role } : {});
+  await auth.revokeRefreshTokens(uid);
 
   return NextResponse.json({ uid, role }, { status: 200 });
 }

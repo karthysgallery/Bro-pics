@@ -37,6 +37,29 @@ describe('AdminRolesPage', () => {
     expect(await screen.findByText(/not authorized/i)).toBeInTheDocument();
   });
 
+  it('does not flash "Not authorized" while auth is still loading for a signed-in admin', async () => {
+    mockGetIdTokenResult.mockClear();
+    mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'admin' } });
+    vi.mocked(useAuth).mockImplementation(
+      () =>
+        ({
+          user: { uid: 'admin_1', getIdToken: mockGetIdToken, getIdTokenResult: mockGetIdTokenResult },
+          loading: true,
+        }) as unknown as ReturnType<typeof useAuth>
+    );
+
+    const { rerender } = render(<AdminRolesPage />);
+    expect(screen.queryByText(/not authorized/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
+    expect(mockGetIdTokenResult).not.toHaveBeenCalled();
+
+    vi.mocked(useAuth).mockImplementation(() => mockDefaultAuthImpl() as unknown as ReturnType<typeof useAuth>);
+    rerender(<AdminRolesPage />);
+
+    expect(await screen.findByLabelText('Phone number')).toBeInTheDocument();
+    expect(screen.queryByText(/not authorized/i)).not.toBeInTheDocument();
+  });
+
   it('looks up an account by phone and shows its current role', async () => {
     mockGetIdTokenResult.mockResolvedValueOnce({ claims: { role: 'admin' } });
     mockFetch.mockResolvedValueOnce({
