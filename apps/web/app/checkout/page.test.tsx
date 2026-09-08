@@ -42,7 +42,7 @@ describe('CheckoutPage', () => {
 
   it('shows a sign-in prompt when signed out', async () => {
     const { useAuth } = await import('../../lib/auth-context');
-    vi.mocked(useAuth).mockReturnValueOnce({ user: null, loading: false });
+    vi.mocked(useAuth).mockReturnValueOnce({ user: null, loading: false, signOut: vi.fn() });
     render(<CheckoutPage />);
     expect(screen.getByText(/sign in/i)).toBeInTheDocument();
   });

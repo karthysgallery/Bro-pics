@@ -258,7 +258,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     function Wrapper({ children }: { children: React.ReactNode }) {
       return (
-        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false }}>
+        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false, signOut: vi.fn() }}>
           <SignedInCartProvider>{children}</SignedInCartProvider>
         </SignedInAuthContext.Provider>
       );
@@ -308,7 +308,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     function Wrapper({ children }: { children: React.ReactNode }) {
       return (
-        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false }}>
+        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false, signOut: vi.fn() }}>
           <SignedInCartProvider>{children}</SignedInCartProvider>
         </SignedInAuthContext.Provider>
       );
@@ -380,7 +380,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     function Harness({ signedIn }: { signedIn: boolean }) {
       return (
-        <SignedInAuthContext.Provider value={{ user: signedIn ? ({ uid: 'user_1' } as never) : null, loading: false }}>
+        <SignedInAuthContext.Provider value={{ user: signedIn ? ({ uid: 'user_1' } as never) : null, loading: false, signOut: vi.fn() }}>
           <SignedInCartProvider>
             <SignedInTestConsumer />
           </SignedInCartProvider>
@@ -467,7 +467,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     function Harness({ signedIn }: { signedIn: boolean }) {
       return (
-        <SignedInAuthContext.Provider value={{ user: signedIn ? ({ uid: 'user_1' } as never) : null, loading: false }}>
+        <SignedInAuthContext.Provider value={{ user: signedIn ? ({ uid: 'user_1' } as never) : null, loading: false, signOut: vi.fn() }}>
           <SignedInCartProvider>
             <SignedInTestConsumer />
           </SignedInCartProvider>
@@ -539,7 +539,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     function Wrapper({ children }: { children: React.ReactNode }) {
       return (
-        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false }}>
+        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false, signOut: vi.fn() }}>
           <SignedInCartProvider>{children}</SignedInCartProvider>
         </SignedInAuthContext.Provider>
       );
