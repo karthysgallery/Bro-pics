@@ -68,7 +68,15 @@ export function Gallery({ media, productTitle }: GalleryProps) {
           className="fixed inset-0 z-50 bg-charcoal/90 flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setIsZoomed(false)}
         >
-          <img src={active.url} alt={active.alt || productTitle} className="max-w-full max-h-full object-contain" />
+          <div className="relative w-full h-full">
+            <Image
+              src={active.url}
+              alt={active.alt || productTitle}
+              fill
+              sizes="100vw"
+              className="object-contain"
+            />
+          </div>
         </div>
       )}
     </div>
