@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ReviewsSection } from './ReviewsSection';
 import type { Product, Review } from '@bro-pics/shared';
+
+vi.mock('../../lib/auth-context', () => ({ useAuth: () => ({ user: null, loading: false }) }));
 
 const product = {
   id: 'p1', title: 'Frame', slug: 'frame', categoryId: 'cat_frames', shortDesc: '', descriptionHtml: '',
