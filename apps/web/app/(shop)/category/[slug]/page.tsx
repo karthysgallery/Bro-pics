@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getCategoryBySlug, searchProductsPage } from '../../../../lib/firestore-products';
 import { ProductCard } from '../../../../components/product/ProductCard';
@@ -21,6 +22,27 @@ function toSearchParams(raw: Record<string, string | string[] | undefined>): URL
     }
   }
   return params;
+}
+
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await getCategoryBySlug(slug);
+
+  if (!category) {
+    return { title: 'Category Not Found | BroPics' };
+  }
+
+  const fallbackDescription = `Shop ${category.name} at BroPics.`;
+  return {
+    title: category.seo.title ?? `${category.name} | BroPics`,
+    description: category.seo.description ?? fallbackDescription,
+    alternates: { canonical: `/category/${category.slug}` },
+    openGraph: {
+      title: category.seo.title ?? category.name,
+      description: category.seo.description ?? fallbackDescription,
+      images: [category.image],
+    },
+  };
 }
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
