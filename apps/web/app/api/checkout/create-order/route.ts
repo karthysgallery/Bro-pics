@@ -1,13 +1,22 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
 import { getShippingSettings } from '../../../../lib/firestore-settings';
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
+import { findCouponByCode } from '../../../../lib/coupon-lookup';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
-import { generateOrderNo, OrderSchema, OrderItemSchema, OrderEventSchema, AddressSchema, type CounterTransaction } from '@bro-pics/shared';
+import {
+  generateOrderNo,
+  OrderSchema,
+  OrderItemSchema,
+  OrderEventSchema,
+  AddressSchema,
+  calculateCouponDiscount,
+  type CounterTransaction,
+} from '@bro-pics/shared';
 
 function isMalformedCartLine(item: CartLineInput): boolean {
   return (
@@ -41,6 +50,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!addressId) {
     return NextResponse.json({ error: 'Missing addressId' }, { status: 400 });
   }
+  const couponCode =
+    typeof body?.couponCode === 'string' && body.couponCode.trim().length > 0 ? body.couponCode.trim() : null;
 
   const db = getFirestore(getAdminApp());
 
@@ -90,8 +101,41 @@ export async function POST(request: Request): Promise<NextResponse> {
   const subtotal = calculateSubtotal(priced);
   const shippingSettings = await getShippingSettings();
   const shipping = calculateShipping(subtotal, shippingSettings);
-  const discount = 0;
-  const total = subtotal - discount + shipping;
+
+  let discount = 0;
+  let appliedCouponId: string | undefined;
+  let effectiveShipping = shipping;
+
+  if (couponCode) {
+    const coupon = await findCouponByCode(db, couponCode);
+    if (coupon) {
+      let perUserOk = true;
+      if (coupon.perUserLimit) {
+        const usedSnapshot = await db
+          .collection('orders')
+          .where('userId', '==', userId)
+          .where('couponId', '==', couponCode)
+          .get();
+        perUserOk = usedSnapshot.size < coupon.perUserLimit;
+      }
+      if (perUserOk) {
+        const result = calculateCouponDiscount(subtotal, coupon);
+        if (result.valid) {
+          discount = result.discountPaise;
+          appliedCouponId = couponCode;
+          if (coupon.type === 'free_ship') {
+            effectiveShipping = 0;
+          }
+        }
+      }
+    }
+    // A coupon that's unknown, expired, or otherwise invalid at order time
+    // does NOT fail the order — it silently proceeds with discount: 0. See
+    // this plan's design doc §3 for why (never block checkout over a
+    // coupon race).
+  }
+
+  const total = subtotal - discount + effectiveShipping;
 
   // Step 1: generate the order number in its own short transaction — this
   // commits BEFORE the Razorpay HTTP call below. An external API call must
@@ -124,7 +168,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     paymentStatus: 'pending',
     subtotal,
     discount,
-    shipping,
+    shipping: effectiveShipping,
     total,
     addressJson: address,
     razorpayOrderId: razorpayOrder.id,
@@ -133,10 +177,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     amountPaidOnline: total,
     amountDueOnDelivery: 0,
     taxLines: [],
+    // Firestore's Admin SDK rejects `undefined` field values (this project
+    // never sets ignoreUndefinedProperties), so couponId must be omitted
+    // entirely — not set to a possibly-undefined value — when no coupon
+    // applied.
+    ...(appliedCouponId && { couponId: appliedCouponId }),
   });
 
   const batch = db.batch();
   batch.set(orderRef, order);
+  if (appliedCouponId) {
+    batch.update(db.collection('coupons').doc(appliedCouponId), { usedCount: FieldValue.increment(1) });
+  }
 
   const eventRef = orderRef.collection('events').doc();
   batch.set(

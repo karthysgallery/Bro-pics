@@ -19,12 +19,18 @@ vi.mock('../../../../lib/firestore-settings', () => ({
 const mockFindVariantById = vi.fn();
 vi.mock('../../../../lib/variant-lookup', () => ({ findVariantById: (...args: unknown[]) => mockFindVariantById(...args) }));
 
+const mockFindCouponByCode = vi.fn();
+vi.mock('../../../../lib/coupon-lookup', () => ({
+  findCouponByCode: (...args: unknown[]) => mockFindCouponByCode(...args),
+}));
+
 // Mock the Admin SDK Firestore surface this route needs: reading carts/{uid}
 // and users/{uid}/addresses/{addressId}, running one transaction (order
 // number counter), and one batch commit (order + order items).
 const mockCartDoc = { get: vi.fn() };
 const mockAddressDoc = { get: vi.fn() };
 const mockBatchSet = vi.fn();
+const mockBatchUpdate = vi.fn();
 const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
 const mockRunTransaction = vi.fn();
 const mockDb = {
@@ -46,14 +52,21 @@ const mockDb = {
           collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'item_id' })) })),
         };
       }
+      if (name === 'coupons') {
+        return { id: id ?? 'coupon_id' };
+      }
       return { id: id ?? 'generated_id', get: vi.fn(), collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'item_id' })) })) };
     }),
+    where: vi.fn(() => ({ where: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ size: 0 }) })) })),
   })),
   doc: vi.fn(() => ({})),
   runTransaction: (...args: unknown[]) => mockRunTransaction(...args),
-  batch: () => ({ set: mockBatchSet, commit: mockBatchCommit }),
+  batch: () => ({ set: mockBatchSet, update: mockBatchUpdate, commit: mockBatchCommit }),
 };
-vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: () => mockDb,
+  FieldValue: { increment: (n: number) => ({ __increment: n }) },
+}));
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
@@ -246,6 +259,105 @@ describe('POST /api/checkout/create-order', () => {
       courier: null,
       awbNumber: null,
       createdBy: 'user_1',
+    });
+  });
+
+  function setUpValidCartAndAddress() {
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 2, previewUrl: 'x.png' }] }),
+    });
+    mockAddressDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+    });
+    mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+    mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+    mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
+      fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
+    );
+    mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
+  }
+
+  describe('coupon application', () => {
+    it('applies a valid coupon: reduces total and writes couponId onto the order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'NEW10', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'NEW10' }));
+      expect(response.status).toBe(200);
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ couponId: 'NEW10', discount: expect.any(Number) })
+      );
+      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      // subtotal 2000, 10% off => discount 200
+      expect(writtenOrder.discount).toBe(200);
+      expect(writtenOrder.total).toBe(2000 - 200 + 5000);
+      expect(writtenOrder.amountPaidOnline).toBe(6800);
+      // Pin the Razorpay-charged amount to the discounted total — the
+      // actual money failure mode is the order doc saying one number while
+      // the gateway charges another.
+      expect(mockCreateRazorpayOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 6800 }));
+    });
+
+    it('zeroes shipping (not discount) for a valid free_ship coupon', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'FREESHIP', type: 'free_ship', value: 0, appliesTo: 'all', usedCount: 0,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'FREESHIP' }));
+      expect(response.status).toBe(200);
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ shipping: 0, discount: 0, couponId: 'FREESHIP' })
+      );
+    });
+
+    it('proceeds without a discount when the coupon fails re-validation, rather than blocking the order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce(null); // unknown/expired by order time
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'STALE' }));
+      expect(response.status).toBe(200);
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ discount: 0 })
+      );
+    });
+
+    it('increments the coupon usedCount in the same batch as a successful coupon order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'NEW10', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      await POST(makeRequest({ addressId: 'addr_1', couponCode: 'NEW10' }));
+      expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), { usedCount: expect.anything() });
+    });
+
+    it('still produces discount: 0, no couponId when no couponCode is sent (backward compatible)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ discount: 0 })
+      );
+      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      // Must be absent from the object entirely, not present with value
+      // `undefined` — Firestore's Admin SDK rejects `undefined` field
+      // values, so `'couponId' in orderArg` must be false, not merely
+      // `orderArg.couponId === undefined` (which a bare
+      // `couponId: appliedCouponId` key would also satisfy).
+      expect(orderArg && 'couponId' in orderArg).toBe(false);
     });
   });
 });
