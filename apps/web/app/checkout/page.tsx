@@ -16,6 +16,14 @@ declare global {
 
 type OrderStatus = { status?: string; paymentStatus?: string; orderNo?: string } | null;
 
+const COUPON_REASON_MESSAGES: Record<string, string> = {
+  below_min_order: 'Minimum order not met',
+  expired: "This coupon isn't active right now",
+  not_started: "This coupon isn't active right now",
+  usage_limit_reached: 'This coupon has reached its usage limit',
+  per_user_limit_reached: 'This coupon has reached its usage limit',
+};
+
 export default function CheckoutPage() {
   const { user } = useAuth();
   const { items, totalPaise } = useCart();
@@ -24,6 +32,9 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(null);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPaise: number; freeShipping: boolean } | null>(null);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
 
   // Subscribe to orders/{orderId} once an order has been created, so the
   // page can detect the webhook flipping status to 'paid' and show a real
@@ -62,6 +73,36 @@ export default function CheckoutPage() {
     return <p>Please sign in to check out.</p>;
   }
 
+  const handleApplyCoupon = async () => {
+    setCouponMessage(null);
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/checkout/coupon/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ code: couponCodeInput }),
+    });
+    if (response.status === 404) {
+      setCouponMessage('Invalid coupon code.');
+      return;
+    }
+    if (!response.ok) {
+      setCouponMessage('Could not apply this coupon.');
+      return;
+    }
+    const body = await response.json();
+    if (!body.valid) {
+      setCouponMessage(COUPON_REASON_MESSAGES[body.reason] ?? 'This coupon cannot be applied.');
+      return;
+    }
+    setAppliedCoupon({ code: couponCodeInput, discountPaise: body.discountPaise, freeShipping: body.freeShipping });
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponMessage(null);
+  };
+
   const handlePlaceOrder = async () => {
     if (!addressId) {
       setError('Please choose or add a delivery address.');
@@ -74,7 +115,7 @@ export default function CheckoutPage() {
       const response = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ addressId }),
+        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined }),
       });
 
       if (response.status === 409) {
@@ -140,6 +181,33 @@ export default function CheckoutPage() {
               <span>Subtotal</span>
               <span>₹{(totalPaise / 100).toFixed(2)}</span>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 pt-2 border-t border-charcoal/10">
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between text-sm">
+                <span>
+                  Coupon <strong>{appliedCoupon.code}</strong> applied
+                  {appliedCoupon.freeShipping ? ' — free shipping' : ` — ₹${(appliedCoupon.discountPaise / 100).toFixed(2)} off`}
+                </span>
+                <button onClick={handleRemoveCoupon} className="text-xs underline">Remove</button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <label htmlFor="coupon-code" className="sr-only">Coupon code</label>
+                <input
+                  id="coupon-code"
+                  value={couponCodeInput}
+                  onChange={(e) => setCouponCodeInput(e.target.value)}
+                  placeholder="Coupon code"
+                  className="rounded border border-charcoal/20 px-3 py-2 text-sm"
+                />
+                <button onClick={handleApplyCoupon} disabled={!couponCodeInput} className="rounded border border-charcoal/30 px-3 py-2 text-sm">
+                  Apply
+                </button>
+              </div>
+            )}
+            {couponMessage && <p className="text-xs text-red-600">{couponMessage}</p>}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

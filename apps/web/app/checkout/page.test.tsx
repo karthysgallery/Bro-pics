@@ -164,3 +164,57 @@ describe('CheckoutPage', () => {
     expect(mockUnsubscribe).toHaveBeenCalled();
   });
 });
+
+describe('CheckoutPage coupon UI', () => {
+  beforeEach(async () => {
+    mockFetch.mockReset();
+    mockOnSnapshot.mockReset();
+    mockUnsubscribe.mockReset();
+    mockOnSnapshot.mockImplementation(() => mockUnsubscribe);
+    (global as unknown as { Razorpay?: unknown }).Razorpay = vi.fn().mockImplementation(() => ({ open: vi.fn() }));
+    const { useAuth } = await import('../../lib/auth-context');
+    vi.mocked(useAuth).mockReturnValue({ user: { uid: 'user_1', getIdToken: () => Promise.resolve('id-token') }, loading: false });
+  });
+
+  // The applied-coupon message is split across a text node, a <strong>, and
+  // more text nodes (e.g. "Coupon " <strong>NEW10</strong> " applied — ...")
+  // so a plain regex TextMatch (which only checks a single node's own text)
+  // won't find it — match on the containing element's full textContent instead.
+  const findCouponAppliedMessage = (code: string) =>
+    screen.findByText((_content, element) => element?.tagName === 'SPAN' && new RegExp(`coupon.*${code}.*applied`, 'i').test(element.textContent ?? ''));
+
+  it('shows the discount on a valid coupon', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ valid: true, discountPaise: 10000, freeShipping: false }) });
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'NEW10' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(await findCouponAppliedMessage('NEW10')).toBeInTheDocument();
+  });
+
+  it('shows a human-readable message for an invalid coupon', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ valid: false, reason: 'below_min_order' }) });
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'BIGSPEND' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(await screen.findByText(/minimum order not met/i)).toBeInTheDocument();
+  });
+
+  it('includes couponCode in the place-order request once applied', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ valid: true, discountPaise: 10000, freeShipping: false }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'rzp_1', amount: 90000, keyId: 'key_1' }) });
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'NEW10' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await findCouponAppliedMessage('NEW10');
+
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/checkout/create-order',
+        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: 'NEW10' }) })
+      )
+    );
+  });
+});
