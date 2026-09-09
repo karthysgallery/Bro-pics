@@ -5,6 +5,31 @@ import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getStaffUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
 import { ReviewStatusSchema } from '@bro-pics/shared';
 
+interface ReviewRow {
+  id: string;
+  productId: string;
+  userId: string;
+  orderId?: string;
+  rating: number;
+  title: string;
+  body: string;
+  isVerified: boolean;
+  status: string;
+  createdAt: unknown;
+}
+
+interface RawReviewData {
+  productId: string;
+  userId: string;
+  orderId?: string;
+  rating: number;
+  title: string;
+  body: string;
+  isVerified: boolean;
+  status: string;
+  createdAt: unknown;
+}
+
 export async function GET(request: Request): Promise<NextResponse> {
   const staffUserId = await getStaffUserIdFromAuthHeader(request);
   if (!staffUserId) {
@@ -19,9 +44,23 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const db = getFirestore(getAdminApp());
   const snapshot = await db.collection('reviews').where('status', '==', parsed.data).get();
-  const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+  const rows: ReviewRow[] = snapshot.docs.map((doc) => {
+    const data = doc.data() as RawReviewData;
+    return {
+      id: doc.id,
+      productId: data.productId,
+      userId: data.userId,
+      orderId: data.orderId,
+      rating: data.rating,
+      title: data.title,
+      body: data.body,
+      isVerified: data.isVerified,
+      status: data.status,
+      createdAt: data.createdAt,
+    };
+  });
 
-  const distinctProductIds = [...new Set(rows.map((r) => r.productId as string))];
+  const distinctProductIds = [...new Set(rows.map((r) => r.productId))];
   const productEntries = await Promise.all(
     distinctProductIds.map(async (productId) => {
       const productDoc = await db.collection('products').doc(productId).get();
@@ -30,7 +69,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   );
   const titleByProductId = new Map(productEntries);
 
-  const reviews = rows.map((r) => ({ ...r, productTitle: titleByProductId.get(r.productId as string) }));
+  const reviews = rows.map((r) => ({ ...r, productTitle: titleByProductId.get(r.productId) }));
 
   return NextResponse.json({ reviews }, { status: 200 });
 }
