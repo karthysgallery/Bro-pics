@@ -75,4 +75,74 @@ describe('GET /api/staff/reviews', () => {
       expect.objectContaining({ id: 'review_1', productId: 'prod_1', productTitle: 'Classic Wooden Photo Frame' }),
     ]);
   });
+
+  it('deduplicates product lookups when multiple reviews share the same productId', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockReviewsGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'review_1',
+          data: () => ({
+            productId: 'prod_1',
+            userId: 'user_1',
+            rating: 5,
+            title: 'Great',
+            body: 'Loved it',
+            isVerified: true,
+            status: 'pending',
+            createdAt: '2026-09-09T00:00:00.000Z',
+          }),
+        },
+        {
+          id: 'review_2',
+          data: () => ({
+            productId: 'prod_1', // Same productId as review_1
+            userId: 'user_2',
+            rating: 4,
+            title: 'Good',
+            body: 'Very nice',
+            isVerified: true,
+            status: 'pending',
+            createdAt: '2026-09-10T00:00:00.000Z',
+          }),
+        },
+        {
+          id: 'review_3',
+          data: () => ({
+            productId: 'prod_2', // Different productId
+            userId: 'user_3',
+            rating: 3,
+            title: 'Okay',
+            body: 'It was fine',
+            isVerified: true,
+            status: 'pending',
+            createdAt: '2026-09-11T00:00:00.000Z',
+          }),
+        },
+      ],
+    });
+    mockProductGet
+      .mockResolvedValueOnce({ exists: true, data: () => ({ title: 'Frame A' }) })
+      .mockResolvedValueOnce({ exists: true, data: () => ({ title: 'Frame B' }) });
+
+    const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=pending'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+
+    // Verify all 3 reviews are returned with correct titles
+    expect(body.reviews).toHaveLength(3);
+    expect(body.reviews[0]).toEqual(
+      expect.objectContaining({ id: 'review_1', productId: 'prod_1', productTitle: 'Frame A' })
+    );
+    expect(body.reviews[1]).toEqual(
+      expect.objectContaining({ id: 'review_2', productId: 'prod_1', productTitle: 'Frame A' })
+    );
+    expect(body.reviews[2]).toEqual(
+      expect.objectContaining({ id: 'review_3', productId: 'prod_2', productTitle: 'Frame B' })
+    );
+
+    // Prove deduplication: mockProductGet should be called exactly 2 times
+    // (once for prod_1, once for prod_2), NOT 3 times
+    expect(mockProductGet).toHaveBeenCalledTimes(2);
+  });
 });
