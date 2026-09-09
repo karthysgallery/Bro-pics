@@ -31,3 +31,32 @@ export async function findOrdersByStatus(
   const snapshot = await db.collection('orders').where('status', '==', status).orderBy('placedAt', 'asc').get();
   return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() as Order }));
 }
+
+/**
+ * True if userId has placed any order containing productId — checked
+ * across every one of their orders (a customer with several orders for
+ * the same product only needs one match). Re-implements the same
+ * ownership shape firestore.rules already enforces for client reads
+ * (orders/{orderId} by userId, its items subcollection by the parent's
+ * userId), since the Admin SDK bypasses rules entirely.
+ */
+export async function findVerifiedPurchase(
+  db: Firestore,
+  userId: string,
+  productId: string
+): Promise<{ orderId: string } | null> {
+  const ordersSnapshot = await db.collection('orders').where('userId', '==', userId).get();
+  for (const orderDoc of ordersSnapshot.docs) {
+    const itemsSnapshot = await db
+      .collection('orders')
+      .doc(orderDoc.id)
+      .collection('items')
+      .where('productId', '==', productId)
+      .limit(1)
+      .get();
+    if (!itemsSnapshot.empty) {
+      return { orderId: orderDoc.id };
+    }
+  }
+  return null;
+}

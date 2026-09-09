@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { findOrderByOrderNo, findOrdersByStatus } from './order-lookup';
+import { findOrderByOrderNo, findOrdersByStatus, findVerifiedPurchase } from './order-lookup';
 
 function makeFakeDb(docs: Array<{ id: string; data: Record<string, unknown> }>) {
   return {
@@ -66,5 +66,83 @@ describe('findOrdersByStatus', () => {
     expect(result).toEqual([]);
     expect(where).toHaveBeenCalledWith('status', '==', 'delivered');
     expect(orderBy).toHaveBeenCalledWith('placedAt', 'asc');
+  });
+});
+
+function makeFakeVerifiedPurchaseDb(
+  orders: Array<{ id: string; data: Record<string, unknown> }>,
+  itemsByOrderId: Record<string, Array<{ id: string; data: Record<string, unknown> }>>
+) {
+  const ordersWhere = vi.fn(() => ({
+    get: vi.fn().mockResolvedValue({
+      docs: orders.map((o) => ({ id: o.id, data: () => o.data })),
+    }),
+  }));
+  const db = {
+    collection: vi.fn((name: string) => {
+      if (name === 'orders') {
+        return { where: ordersWhere };
+      }
+      throw new Error(`unexpected top-level collection: ${name}`);
+    }),
+    doc: vi.fn(),
+  };
+  // orders/{orderId}/items is reached via db.collection('orders').doc(id).collection('items')
+  const docFn = vi.fn((orderId: string) => ({
+    collection: vi.fn((name: string) => {
+      if (name !== 'items') throw new Error(`unexpected subcollection: ${name}`);
+      return {
+        where: vi.fn((_field: string, _op: string, productIdValue: string) => ({
+          limit: vi.fn(() => ({
+            get: vi.fn().mockResolvedValue({
+              get empty() {
+                const allItems = itemsByOrderId[orderId] ?? [];
+                const filtered = allItems.filter((item) => item.data.productId === productIdValue);
+                return filtered.length === 0;
+              },
+              get docs() {
+                const allItems = itemsByOrderId[orderId] ?? [];
+                const filtered = allItems.filter((item) => item.data.productId === productIdValue);
+                return filtered.map((d) => ({ id: d.id, data: () => d.data }));
+              },
+            }),
+          })),
+        })),
+      };
+    }),
+  }));
+  ordersWhere.mockImplementation(() => ({
+    get: vi.fn().mockResolvedValue({ docs: orders.map((o) => ({ id: o.id, data: () => o.data })) }),
+  }));
+  (db.collection as unknown as ReturnType<typeof vi.fn>).mockImplementation((name: string) => {
+    if (name === 'orders') return { where: ordersWhere, doc: docFn };
+    throw new Error(`unexpected top-level collection: ${name}`);
+  });
+  return db;
+}
+
+describe('findVerifiedPurchase', () => {
+  it('returns the orderId when an order for that user contains the product', async () => {
+    const db = makeFakeVerifiedPurchaseDb(
+      [{ id: 'order_1', data: { userId: 'user_1' } }],
+      { order_1: [{ id: 'item_1', data: { productId: 'prod_1' } }] }
+    );
+    const result = await findVerifiedPurchase(db as never, 'user_1', 'prod_1');
+    expect(result).toEqual({ orderId: 'order_1' });
+  });
+
+  it('returns null when the user has an order but not for that product', async () => {
+    const db = makeFakeVerifiedPurchaseDb(
+      [{ id: 'order_1', data: { userId: 'user_1' } }],
+      { order_1: [{ id: 'item_1', data: { productId: 'some_other_product' } }] }
+    );
+    const result = await findVerifiedPurchase(db as never, 'user_1', 'prod_1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the user has no orders at all', async () => {
+    const db = makeFakeVerifiedPurchaseDb([], {});
+    const result = await findVerifiedPurchase(db as never, 'user_1', 'prod_1');
+    expect(result).toBeNull();
   });
 });
