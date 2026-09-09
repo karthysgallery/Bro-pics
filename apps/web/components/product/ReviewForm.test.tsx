@@ -49,4 +49,45 @@ describe('ReviewForm', () => {
 
     await waitFor(() => expect(screen.getByText(/already reviewed/i)).toBeInTheDocument());
   });
+
+  it('does not fire a second request when submit is clicked twice rapidly', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { uid: 'user_1', getIdToken: mockGetIdToken },
+      loading: false,
+    } as unknown as ReturnType<typeof useAuth>);
+
+    let resolveFetch: (value: unknown) => void = () => {};
+    mockFetch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+
+    render(<ReviewForm productId="prod_1" />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Great frame' } });
+    fireEvent.change(screen.getByLabelText(/your review/i), { target: { value: 'Really happy with it' } });
+
+    const button = screen.getByRole('button', { name: /submit/i });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    fireEvent.click(button);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    resolveFetch({ ok: true, status: 200, json: () => Promise.resolve({ id: 'review_1', status: 'pending' }) });
+    await waitFor(() => expect(screen.getByText(/awaiting approval/i)).toBeInTheDocument());
+  });
+
+  it('keeps the submit button disabled when title/body are whitespace-only', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { uid: 'user_1', getIdToken: mockGetIdToken },
+      loading: false,
+    } as unknown as ReturnType<typeof useAuth>);
+
+    render(<ReviewForm productId="prod_1" />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: '   ' } });
+    fireEvent.change(screen.getByLabelText(/your review/i), { target: { value: '   ' } });
+
+    expect(screen.getByRole('button', { name: /submit/i })).toBeDisabled();
+  });
 });

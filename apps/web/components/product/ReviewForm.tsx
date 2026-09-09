@@ -10,6 +10,7 @@ export function ReviewForm({ productId }: { productId: string }) {
   const [body, setBody] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!user) {
     return <p className="text-sm text-charcoal/70">Sign in to write a review.</p>;
@@ -19,20 +20,29 @@ export function ReviewForm({ productId }: { productId: string }) {
     return <p className="text-sm text-sage">Thanks — your review is awaiting approval.</p>;
   }
 
+  const trimmedTitle = title.trim();
+  const trimmedBody = body.trim();
+
   const handleSubmit = async () => {
+    if (isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
     setError(null);
     const idToken = await user.getIdToken();
     const response = await fetch('/api/reviews', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ productId, rating, title, body }),
+      body: JSON.stringify({ productId, rating, title: trimmedTitle, body: trimmedBody }),
     });
     if (response.status === 409) {
       setError("You've already reviewed this product.");
+      setIsSubmitting(false);
       return;
     }
     if (!response.ok) {
       setError('Could not submit your review.');
+      setIsSubmitting(false);
       return;
     }
     setSubmitted(true);
@@ -62,7 +72,11 @@ export function ReviewForm({ productId }: { productId: string }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button onClick={handleSubmit} disabled={!title || !body} className="rounded bg-charcoal text-cream px-4 py-2 w-fit">
+      <button
+        onClick={handleSubmit}
+        disabled={!trimmedTitle || !trimmedBody || isSubmitting}
+        className="rounded bg-charcoal text-cream px-4 py-2 w-fit"
+      >
         Submit
       </button>
     </div>
