@@ -173,7 +173,7 @@ describe('CheckoutPage coupon UI', () => {
     mockOnSnapshot.mockImplementation(() => mockUnsubscribe);
     (global as unknown as { Razorpay?: unknown }).Razorpay = vi.fn().mockImplementation(() => ({ open: vi.fn() }));
     const { useAuth } = await import('../../lib/auth-context');
-    vi.mocked(useAuth).mockReturnValue({ user: { uid: 'user_1', getIdToken: () => Promise.resolve('id-token') }, loading: false });
+    vi.mocked(useAuth).mockReturnValue({ user: { uid: 'user_1', getIdToken: () => Promise.resolve('id-token') }, loading: false } as unknown as ReturnType<typeof useAuth>);
   });
 
   // The applied-coupon message is split across a text node, a <strong>, and
