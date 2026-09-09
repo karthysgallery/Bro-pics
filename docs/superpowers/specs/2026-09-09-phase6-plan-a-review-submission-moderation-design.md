@@ -64,7 +64,7 @@ Fetches pending reviews via a new `GET /api/staff/reviews?status=pending` route 
 
 New client component `apps/web/components/product/ReviewForm.tsx`, rendered inside `ReviewsSection` (which gains a new optional-but-always-passed prop, `productId: string`, since the form needs it and `ReviewsSection` is otherwise a pure server-rendered display component receiving `product`/`reviews` as-is — no change to its existing read path).
 
-Signed-out: shows "Sign in to write a review" (reuses the existing `AccountModal` open pattern from `Header.tsx`, not a redirect).
+Signed-out: shows plain text "Sign in to write a review" (using the header's account icon — no direct trigger into `AccountModal` exists today, since its open/close state is local to `Header.tsx` with no shared context; wiring a cross-component trigger is out of scope for this plan, not worth a new context provider for one entry point).
 Signed-in: rating (1-5 star `<select>` or click-stars — implementer's call, keep it simple), title, body, Submit. On `409` (already reviewed): show "You've already reviewed this product" and hide the form. On success: replace the form with "Thanks — your review is awaiting approval." (Doesn't optimistically render the new review in the list below, since unapproved reviews are correctly excluded from `getProductBySlug`'s `status == 'approved'` query — showing it locally-only would misrepresent what other visitors see.)
 
 ## 7. Testing
