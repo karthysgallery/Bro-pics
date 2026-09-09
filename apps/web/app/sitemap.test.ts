@@ -11,7 +11,7 @@ import { getAllActiveProductSlugs } from '../lib/firestore-product-detail';
 import { getActiveCategories } from '../lib/firestore-categories';
 import sitemap from './sitemap';
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://bropics.example.com';
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com';
 
 describe('sitemap', () => {
   it('includes static routes, every active product, and every active category', async () => {

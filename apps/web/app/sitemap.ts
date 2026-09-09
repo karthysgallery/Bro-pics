@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getAllActiveProductSlugs } from '../lib/firestore-product-detail';
 import { getActiveCategories } from '../lib/firestore-categories';
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://bropics.example.com';
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [productSlugs, categories] = await Promise.all([getAllActiveProductSlugs(), getActiveCategories()]);
