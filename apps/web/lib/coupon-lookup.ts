@@ -12,8 +12,13 @@ export async function findCouponByCode(db: Firestore, code: string): Promise<Cou
   const doc = await db.collection('coupons').doc(code).get();
   if (!doc.exists) return null;
   const data = doc.data() as Record<string, unknown>;
+
+  // Guard against missing or malformed Timestamp fields
+  if (!data.startsAt || !data.endsAt) return null;
+
   return CouponSchema.parse({
     ...data,
+    code: doc.id, // Override with doc.id, not data.code
     startsAt: (data.startsAt as Timestamp).toDate(),
     endsAt: (data.endsAt as Timestamp).toDate(),
   });
