@@ -1,4 +1,7 @@
 import type { NextConfig } from 'next';
+import withBundleAnalyzerInit from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = withBundleAnalyzerInit({ enabled: process.env.ANALYZE === 'true' });
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@bro-pics/shared'],
@@ -15,4 +18,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);
