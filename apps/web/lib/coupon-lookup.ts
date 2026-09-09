@@ -13,12 +13,16 @@ export async function findCouponByCode(db: Firestore, code: string): Promise<Cou
   if (!doc.exists) return null;
   const data = doc.data() as Record<string, unknown>;
 
+  // Cast to an object type with optional toDate method for type narrowing
+  const startsAtField = data.startsAt as { toDate?: unknown } | undefined;
+  const endsAtField = data.endsAt as { toDate?: unknown } | undefined;
+
   // Guard against missing or malformed Timestamp fields
   if (
-    !data.startsAt ||
-    !data.endsAt ||
-    typeof data.startsAt?.toDate !== 'function' ||
-    typeof data.endsAt?.toDate !== 'function'
+    !startsAtField ||
+    !endsAtField ||
+    typeof startsAtField.toDate !== 'function' ||
+    typeof endsAtField.toDate !== 'function'
   ) {
     return null;
   }
