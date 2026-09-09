@@ -1,7 +1,7 @@
 // scripts/seed/src/data.test.ts
 import { describe, it, expect } from 'vitest';
-import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema, ProductMediaSchema, FrameTemplateSchema } from '@bro-pics/shared';
-import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections, seedProductMedia, seedFrameTemplates } from './data';
+import { CategorySchema, ProductSchema, VariantSchema, ReviewSchema, HomepageSectionSchema, ProductMediaSchema, FrameTemplateSchema, CouponSchema } from '@bro-pics/shared';
+import { seedCategories, seedProducts, seedVariants, seedReviews, seedHomepageSections, seedProductMedia, seedFrameTemplates, seedCoupons } from './data';
 
 describe('seed categories', () => {
   it('every seed category passes CategorySchema validation', () => {
@@ -228,5 +228,21 @@ describe('seed homepage sections', () => {
   it('sortOrder values are unique', () => {
     const orders = seedHomepageSections.map((s) => s.sortOrder);
     expect(new Set(orders).size).toBe(orders.length);
+  });
+});
+
+describe('seed coupons', () => {
+  it('every seed coupon passes CouponSchema validation', () => {
+    for (const coupon of seedCoupons) {
+      expect(() => CouponSchema.parse(coupon)).not.toThrow();
+    }
+  });
+
+  it('seeds a working NEW10 coupon matching the homepage banner', () => {
+    const new10 = seedCoupons.find((c) => c.code === 'NEW10');
+    expect(new10).toBeDefined();
+    expect(new10?.type).toBe('percent');
+    expect(new10?.value).toBe(10);
+    expect(new10?.appliesTo).toBe('all');
   });
 });

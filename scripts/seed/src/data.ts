@@ -1,4 +1,4 @@
-import type { Category, Product, Variant, Review, HomepageSection, ProductMedia, FrameTemplate } from '@bro-pics/shared';
+import type { Category, Product, Variant, Review, HomepageSection, ProductMedia, FrameTemplate, Coupon } from '@bro-pics/shared';
 
 export const seedCategories: Category[] = [
   {
@@ -482,6 +482,18 @@ export const seedFrameTemplates: FrameTemplate[] = seedVariants
       matInset: 0,
     };
   });
+
+export const seedCoupons: Coupon[] = [
+  {
+    code: 'NEW10',
+    type: 'percent',
+    value: 10,
+    appliesTo: 'all',
+    startsAt: new Date('2024-01-01T00:00:00.000Z'),
+    endsAt: new Date('2030-01-01T00:00:00.000Z'),
+    usedCount: 0,
+  },
+];
 
 export const seedHomepageSections: HomepageSection[] = [
   {

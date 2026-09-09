@@ -8,6 +8,7 @@ import {
   seedProductMedia,
   seedHomepageSections,
   seedFrameTemplates,
+  seedCoupons,
 } from './data';
 import { loadEnvLocal } from './load-env';
 
@@ -59,12 +60,15 @@ async function main(): Promise<void> {
   for (const section of seedHomepageSections) {
     stage(db.collection('homepageSections').doc(section.id), section);
   }
+  for (const coupon of seedCoupons) {
+    stage(db.collection('coupons').doc(coupon.code), coupon);
+  }
 
   commits.push(batch.commit());
   await Promise.all(commits);
 
   console.log(
-    `Seeded ${seedCategories.length} categories, ${seedProducts.length} products, ${seedVariants.length} variants, ${seedProductMedia.length} media docs, ${seedFrameTemplates.length} frame templates, ${seedReviews.length} reviews, ${seedHomepageSections.length} homepage sections.`
+    `Seeded ${seedCategories.length} categories, ${seedProducts.length} products, ${seedVariants.length} variants, ${seedProductMedia.length} media docs, ${seedFrameTemplates.length} frame templates, ${seedReviews.length} reviews, ${seedHomepageSections.length} homepage sections, ${seedCoupons.length} coupons.`
   );
 }
 
