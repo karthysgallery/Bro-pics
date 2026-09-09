@@ -6,6 +6,19 @@ import { CartProvider } from '../lib/cart-context';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
 import { getAnnouncementBarSettings } from '../lib/firestore-settings';
+import { Playfair_Display, Inter } from 'next/font/google';
+
+const displayFont = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const sansFont = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com'),
@@ -29,7 +42,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={`${displayFont.variable} ${sansFont.variable}`}>
       <body className="bg-cream text-charcoal font-sans">
         <AuthProvider>
           <CartProvider>
