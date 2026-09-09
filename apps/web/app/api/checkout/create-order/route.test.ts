@@ -319,6 +319,20 @@ describe('POST /api/checkout/create-order', () => {
       );
     });
 
+    it('writes couponId from the looked-up coupon, not the raw client string', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'NEW10', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      await POST(makeRequest({ addressId: 'addr_1', couponCode: '  new10  ' }));
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ couponId: 'NEW10' })
+      );
+    });
+
     it('proceeds without a discount when the coupon fails re-validation, rather than blocking the order', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
       setUpValidCartAndAddress();
@@ -329,6 +343,9 @@ describe('POST /api/checkout/create-order', () => {
         expect.anything(),
         expect.objectContaining({ discount: 0 })
       );
+      // A stale/invalid coupon must never still get "used" — guards against
+      // the usedCount increment firing when no coupon actually applied.
+      expect(mockBatchUpdate).not.toHaveBeenCalled();
     });
 
     it('increments the coupon usedCount in the same batch as a successful coupon order', async () => {

@@ -9,7 +9,15 @@ import { CouponSchema, type Coupon } from '@bro-pics/shared';
  * must be an Admin SDK route.
  */
 export async function findCouponByCode(db: Firestore, code: string): Promise<Coupon | null> {
-  const doc = await db.collection('coupons').doc(code).get();
+  // Normalize before using the raw client-supplied string as a Firestore
+  // doc-id lookup key — trim whitespace and uppercase it, matching the
+  // seeded NEW10's casing convention. This is the single source of truth
+  // for coupon-code normalization: callers (create-order, coupon/validate)
+  // rely on this function's returned `coupon.code` (sourced from `doc.id`
+  // below) as the trustworthy, normalized value rather than re-normalizing
+  // the raw input themselves.
+  const normalizedCode = code.trim().toUpperCase();
+  const doc = await db.collection('coupons').doc(normalizedCode).get();
   if (!doc.exists) return null;
   const data = doc.data() as Record<string, unknown>;
 

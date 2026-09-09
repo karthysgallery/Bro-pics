@@ -36,6 +36,23 @@ describe('findCouponByCode', () => {
     expect(result?.endsAt).toBeInstanceOf(Date);
   });
 
+  it('normalizes a lowercase or whitespace-padded code to the same coupon doc', async () => {
+    const { db, collection, doc } = makeFakeDb(true, {
+      code: 'NEW10',
+      type: 'percent',
+      value: 10,
+      startsAt: Timestamp.fromDate(new Date('2026-01-01T00:00:00.000Z')),
+      endsAt: Timestamp.fromDate(new Date('2027-01-01T00:00:00.000Z')),
+      appliesTo: 'all',
+      usedCount: 0,
+    }, 'NEW10');
+    const result = await findCouponByCode(db as never, '  new10  ');
+    expect(collection).toHaveBeenCalledWith('coupons');
+    expect(doc).toHaveBeenCalledWith('NEW10');
+    expect(result).not.toBeNull();
+    expect(result?.code).toBe('NEW10');
+  });
+
   it('returns null when the doc does not exist', async () => {
     const { db, collection, doc } = makeFakeDb(false, undefined, 'UNKNOWN');
     const result = await findCouponByCode(db as never, 'UNKNOWN');

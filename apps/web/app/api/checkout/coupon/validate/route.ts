@@ -38,7 +38,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const subtotal = calculateSubtotal(priced);
 
   if (coupon.perUserLimit) {
-    const usedSnapshot = await db.collection('orders').where('userId', '==', userId).where('couponId', '==', code).get();
+    // Query by coupon.code (the normalized, trustworthy value sourced from
+    // doc.id inside findCouponByCode), not the raw client-supplied code —
+    // orders always write couponId as coupon.code, so matching against
+    // anything else could under/over-count a customer's prior usage.
+    const usedSnapshot = await db
+      .collection('orders')
+      .where('userId', '==', userId)
+      .where('couponId', '==', coupon.code)
+      .get();
     if (usedSnapshot.size >= coupon.perUserLimit) {
       return NextResponse.json({ valid: false, reason: 'per_user_limit_reached' }, { status: 200 });
     }

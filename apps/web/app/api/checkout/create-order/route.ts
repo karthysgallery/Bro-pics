@@ -111,10 +111,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (coupon) {
       let perUserOk = true;
       if (coupon.perUserLimit) {
+        // Query by coupon.code (the normalized, trustworthy value sourced
+        // from doc.id inside findCouponByCode), not the raw couponCode —
+        // orders always write couponId as coupon.code, so matching against
+        // anything else could under/over-count a customer's prior usage.
         const usedSnapshot = await db
           .collection('orders')
           .where('userId', '==', userId)
-          .where('couponId', '==', couponCode)
+          .where('couponId', '==', coupon.code)
           .get();
         perUserOk = usedSnapshot.size < coupon.perUserLimit;
       }
@@ -122,7 +126,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         const result = calculateCouponDiscount(subtotal, coupon);
         if (result.valid) {
           discount = result.discountPaise;
-          appliedCouponId = couponCode;
+          // Source from coupon.code (normalized, doc.id-backed), not the
+          // raw client-supplied couponCode — this value is both written as
+          // the order's couponId AND used below as the Firestore doc path
+          // for the usedCount increment inside the same batch as the order
+          // write, so it must always be the coupon doc's real identity.
+          appliedCouponId = coupon.code;
           if (coupon.type === 'free_ship') {
             effectiveShipping = 0;
           }
@@ -187,6 +196,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const batch = db.batch();
   batch.set(orderRef, order);
   if (appliedCouponId) {
+    // Counts this order regardless of eventual payment outcome — an order
+    // that stays `pending_payment` forever (customer abandons the Razorpay
+    // modal) still increments usedCount here, and nothing anywhere ever
+    // decrements it. This is a real, documented gap (see PROJECT_STATUS.md
+    // §5's coupon-application-flow bullet), not an oversight; a real fix
+    // means moving this increment into the webhook's payment-success
+    // handler, out of scope for this plan.
     batch.update(db.collection('coupons').doc(appliedCouponId), { usedCount: FieldValue.increment(1) });
   }
 
