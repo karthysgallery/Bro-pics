@@ -43,4 +43,32 @@ describe('findCouponByCode', () => {
     expect(doc).toHaveBeenCalledWith('UNKNOWN');
     expect(result).toBeNull();
   });
+
+  it('returns null when the doc exists but is missing startsAt field', async () => {
+    const { db, collection, doc } = makeFakeDb(true, {
+      code: 'INCOMPLETE1',
+      type: 'percent',
+      value: 10,
+      // startsAt is missing
+      endsAt: Timestamp.fromDate(new Date('2027-01-01T00:00:00.000Z')),
+      appliesTo: 'all',
+      usedCount: 0,
+    }, 'INCOMPLETE1');
+    const result = await findCouponByCode(db as never, 'INCOMPLETE1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when startsAt is a malformed value (not a Timestamp)', async () => {
+    const { db, collection, doc } = makeFakeDb(true, {
+      code: 'MALFORMED1',
+      type: 'percent',
+      value: 10,
+      startsAt: '2026-01-01T00:00:00.000Z', // String instead of Timestamp
+      endsAt: Timestamp.fromDate(new Date('2027-01-01T00:00:00.000Z')),
+      appliesTo: 'all',
+      usedCount: 0,
+    }, 'MALFORMED1');
+    const result = await findCouponByCode(db as never, 'MALFORMED1');
+    expect(result).toBeNull();
+  });
 });
