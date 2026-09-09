@@ -6,7 +6,19 @@ const withBundleAnalyzer = withBundleAnalyzerInit({ enabled: process.env.ANALYZE
 const nextConfig: NextConfig = {
   transpilePackages: ['@bro-pics/shared'],
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: 'storage.googleapis.com' }],
+    // Google's shared image-serving hostname for ALL public GCS buckets is
+    // storage.googleapis.com — an unscoped remotePattern would let any
+    // attacker-influenced src proxy arbitrary third-party buckets through
+    // this app's image optimizer. Scope to this project's actual Firebase
+    // Storage bucket (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET), which is always
+    // the first path segment for storage.googleapis.com/<bucket>/<object> URLs.
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/bropics-app.firebasestorage.app/**',
+      },
+    ],
   },
   webpack: (config) => {
     // konva resolves to its Node-specific entry (lib/index-node.js) during

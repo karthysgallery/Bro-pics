@@ -31,7 +31,7 @@ export function ProductCard({ product }: ProductCardProps) {
             alt=""
             fill
             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className="absolute inset-0 object-cover opacity-0 group-hover:opacity-100 transition-opacity"
+            className="object-cover opacity-0 group-hover:opacity-100 transition-opacity"
           />
         )}
         {product.badges.length > 0 && (

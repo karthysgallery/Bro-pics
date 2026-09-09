@@ -11,7 +11,7 @@ export function HeroSlider({ section }: { section: HomepageSection }) {
           alt={section.title}
           fill
           priority
-          sizes="100vw"
+          sizes="(max-width: 767px) 100vw, 1px"
           className="object-cover md:hidden"
         />
         <Image
@@ -19,7 +19,7 @@ export function HeroSlider({ section }: { section: HomepageSection }) {
           alt={section.title}
           fill
           priority
-          sizes="100vw"
+          sizes="(min-width: 768px) 100vw, 1px"
           className="object-cover hidden md:block"
         />
       </div>
