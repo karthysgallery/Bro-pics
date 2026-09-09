@@ -5,6 +5,9 @@ const withBundleAnalyzer = withBundleAnalyzerInit({ enabled: process.env.ANALYZE
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@bro-pics/shared'],
+  images: {
+    remotePatterns: [{ protocol: 'https', hostname: 'storage.googleapis.com' }],
+  },
   webpack: (config) => {
     // konva resolves to its Node-specific entry (lib/index-node.js) during
     // webpack's module-graph build, which does `require('canvas')` — an
