@@ -20,6 +20,13 @@ describe('ReviewForm', () => {
     expect(screen.getByText(/sign in to write a review/i)).toBeInTheDocument();
   });
 
+  it('renders nothing while auth is still loading, even for a signed-out visitor', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, loading: true } as unknown as ReturnType<typeof useAuth>);
+    const { container } = render(<ReviewForm productId="prod_1" />);
+    expect(screen.queryByText(/sign in to write a review/i)).not.toBeInTheDocument();
+    expect(container.textContent).toBe('');
+  });
+
   it('submits a review and shows the pending-confirmation message', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: { uid: 'user_1', getIdToken: mockGetIdToken },
@@ -76,6 +83,22 @@ describe('ReviewForm', () => {
 
     resolveFetch({ ok: true, status: 200, json: () => Promise.resolve({ id: 'review_1', status: 'pending' }) });
     await waitFor(() => expect(screen.getByText(/awaiting approval/i)).toBeInTheDocument());
+  });
+
+  it('recovers from a network failure by re-enabling the submit button and showing an error', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { uid: 'user_1', getIdToken: mockGetIdToken },
+      loading: false,
+    } as unknown as ReturnType<typeof useAuth>);
+    mockFetch.mockRejectedValueOnce(new Error('network error'));
+
+    render(<ReviewForm productId="prod_1" />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Great frame' } });
+    fireEvent.change(screen.getByLabelText(/your review/i), { target: { value: 'Really happy with it' } });
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+
+    await waitFor(() => expect(screen.getByText(/could not submit your review/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled();
   });
 
   it('keeps the submit button disabled when title/body are whitespace-only', () => {

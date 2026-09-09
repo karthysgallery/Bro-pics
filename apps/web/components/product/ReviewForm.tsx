@@ -4,13 +4,17 @@ import { useState } from 'react';
 import { useAuth } from '../../lib/auth-context';
 
 export function ReviewForm({ productId }: { productId: string }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (loading) {
+    return null;
+  }
 
   if (!user) {
     return <p className="text-sm text-charcoal/70">Sign in to write a review.</p>;
@@ -29,23 +33,27 @@ export function ReviewForm({ productId }: { productId: string }) {
     }
     setIsSubmitting(true);
     setError(null);
-    const idToken = await user.getIdToken();
-    const response = await fetch('/api/reviews', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ productId, rating, title: trimmedTitle, body: trimmedBody }),
-    });
-    if (response.status === 409) {
-      setError("You've already reviewed this product.");
-      setIsSubmitting(false);
-      return;
-    }
-    if (!response.ok) {
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ productId, rating, title: trimmedTitle, body: trimmedBody }),
+      });
+      if (response.status === 409) {
+        setError("You've already reviewed this product.");
+        return;
+      }
+      if (!response.ok) {
+        setError('Could not submit your review.');
+        return;
+      }
+      setSubmitted(true);
+    } catch {
       setError('Could not submit your review.');
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-    setSubmitted(true);
   };
 
   return (
