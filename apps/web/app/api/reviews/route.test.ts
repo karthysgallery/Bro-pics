@@ -14,17 +14,26 @@ vi.mock('../../../lib/order-lookup', () => ({
 
 const mockDuplicateGet = vi.fn();
 const mockSet = vi.fn();
+const mockProductGet = vi.fn();
 const mockDocId = 'review_generated_id';
 vi.mock('firebase-admin/firestore', () => ({
   getFirestore: () => ({
-    collection: vi.fn(() => ({
-      where: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => ({ get: mockDuplicateGet })),
-        })),
-      })),
-      doc: vi.fn(() => ({ id: mockDocId, set: mockSet })),
-    })),
+    collection: vi.fn((name: string) => {
+      if (name === 'products') {
+        return { doc: vi.fn(() => ({ get: mockProductGet })) };
+      }
+      if (name === 'reviews') {
+        return {
+          where: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(() => ({ get: mockDuplicateGet })),
+            })),
+          })),
+          doc: vi.fn(() => ({ id: mockDocId, set: mockSet })),
+        };
+      }
+      throw new Error(`unexpected collection: ${name}`);
+    }),
   }),
 }));
 vi.mock('../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
@@ -43,6 +52,7 @@ describe('POST /api/reviews', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDuplicateGet.mockResolvedValue({ empty: true });
+    mockProductGet.mockResolvedValue({ exists: true });
   });
 
   it('returns 401 when not signed in', async () => {
@@ -61,6 +71,13 @@ describe('POST /api/reviews', () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     const response = await POST(makeRequest({ productId: 'prod_1', rating: 6, title: 'Great', body: 'Loved it' }));
     expect(response.status).toBe(400);
+  });
+
+  it('returns 404 when productId does not correspond to an existing product', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockProductGet.mockResolvedValueOnce({ exists: false });
+    const response = await POST(makeRequest({ productId: 'fabricated_prod', rating: 5, title: 'Great', body: 'Loved it' }));
+    expect(response.status).toBe(404);
   });
 
   it('returns 409 when the user already reviewed this product', async () => {
@@ -87,6 +104,8 @@ describe('POST /api/reviews', () => {
     mockFindVerifiedPurchase.mockResolvedValueOnce(null);
     const response = await POST(makeRequest({ productId: 'prod_1', rating: 4, title: 'Nice', body: 'Pretty good' }));
     expect(response.status).toBe(200);
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ isVerified: false, orderId: undefined }));
+    const setArg = mockSet.mock.calls[0][0];
+    expect(setArg.isVerified).toBe(false);
+    expect('orderId' in setArg).toBe(false);
   });
 });

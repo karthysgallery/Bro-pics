@@ -27,6 +27,11 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const db = getFirestore(getAdminApp());
 
+  const productDoc = await db.collection('products').doc(productId).get();
+  if (!productDoc.exists) {
+    return NextResponse.json({ error: 'Unknown productId' }, { status: 404 });
+  }
+
   const existingSnapshot = await db
     .collection('reviews')
     .where('userId', '==', userId)
@@ -44,7 +49,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     id: reviewRef.id,
     productId,
     userId,
-    orderId: verifiedPurchase?.orderId,
+    ...(verifiedPurchase && { orderId: verifiedPurchase.orderId }),
     rating,
     title,
     body: reviewBody,
