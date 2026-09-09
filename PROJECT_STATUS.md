@@ -1,6 +1,6 @@
 # BroPics — Project Status
 
-**Last updated:** 2026-09-09 (`feature/admin-panel-and-production-queue` branch — Phase 6 Plan A (Review Submission & Moderation) complete: full test/typecheck suite green)
+**Last updated:** 2026-09-09 (`feature/admin-panel-and-production-queue` branch — Phase 6 Plan C (SEO Essentials) complete, following Plan A (Review Submission & Moderation) and Plan B (Coupon Application at Checkout): full test/typecheck suite green)
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 **Branch topology (read this before touching git):**
