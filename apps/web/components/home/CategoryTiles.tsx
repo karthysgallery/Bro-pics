@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import type { Category } from '@bro-pics/shared';
 
 export function CategoryTiles({ title, categories }: { title: string; categories: Category[] }) {
@@ -8,7 +9,9 @@ export function CategoryTiles({ title, categories }: { title: string; categories
       <div className="flex flex-wrap justify-center gap-6">
         {categories.map((category) => (
           <Link key={category.id} href={`/category/${category.slug}`} className="flex flex-col items-center gap-2">
-            <img src={category.image} alt={category.name} className="w-24 h-24 rounded-full object-cover" />
+            <div className="relative w-24 h-24">
+              <Image src={category.image} alt={category.name} fill sizes="96px" className="rounded-full object-cover" />
+            </div>
             <span className="text-sm">{category.name}</span>
           </Link>
         ))}

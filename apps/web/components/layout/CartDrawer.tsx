@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useCart } from '../../lib/cart-context';
 
 interface CartDrawerProps {
@@ -35,8 +36,9 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               <li key={`${item.variantId}-${item.personalizationId}`} className="flex items-center justify-between gap-2 text-sm">
                 <div className="flex items-center gap-2">
                   {item.previewUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.previewUrl} alt={item.title} className="w-10 h-10 object-cover rounded" />
+                    <div className="relative w-10 h-10 flex-shrink-0">
+                      <Image src={item.previewUrl} alt={item.title} fill sizes="40px" className="object-cover rounded" />
+                    </div>
                   )}
                   <span>{item.title}</span>
                 </div>
