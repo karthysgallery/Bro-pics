@@ -71,4 +71,20 @@ describe('findCouponByCode', () => {
     const result = await findCouponByCode(db as never, 'MALFORMED1');
     expect(result).toBeNull();
   });
+
+  it('returns null instead of throwing when the doc exists with valid Timestamps but an invalid type field', async () => {
+    const { db, collection, doc, get } = makeFakeDb(true, {
+      code: 'BADTYPE1',
+      type: 'not_a_real_type', // Not one of 'percent' | 'flat' | 'free_ship'
+      value: 10,
+      startsAt: Timestamp.fromDate(new Date('2026-01-01T00:00:00.000Z')),
+      endsAt: Timestamp.fromDate(new Date('2027-01-01T00:00:00.000Z')),
+      appliesTo: 'all',
+      usedCount: 0,
+    }, 'BADTYPE1');
+    await expect(findCouponByCode(db as never, 'BADTYPE1')).resolves.toBeNull();
+    expect(get).toHaveBeenCalled();
+    expect(collection).toHaveBeenCalledWith('coupons');
+    expect(doc).toHaveBeenCalledWith('BADTYPE1');
+  });
 });

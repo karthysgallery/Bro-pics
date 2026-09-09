@@ -27,10 +27,19 @@ export async function findCouponByCode(db: Firestore, code: string): Promise<Cou
     return null;
   }
 
-  return CouponSchema.parse({
-    ...data,
-    code: doc.id, // Override with doc.id, not data.code
-    startsAt: (data.startsAt as Timestamp).toDate(),
-    endsAt: (data.endsAt as Timestamp).toDate(),
-  });
+  // A coupon doc that exists but fails schema validation (data-entry error,
+  // partial write, migration remnant) is treated the same as "not found" —
+  // checkout must never 500 over a malformed coupon. Only this parse call is
+  // guarded, so a genuine infrastructure error (e.g. Firestore connectivity)
+  // still propagates instead of being silently swallowed.
+  try {
+    return CouponSchema.parse({
+      ...data,
+      code: doc.id, // Override with doc.id, not data.code
+      startsAt: (data.startsAt as Timestamp).toDate(),
+      endsAt: (data.endsAt as Timestamp).toDate(),
+    });
+  } catch {
+    return null;
+  }
 }
