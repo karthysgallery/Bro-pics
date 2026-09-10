@@ -67,16 +67,42 @@ describe('checkRateLimit', () => {
     expect(checkRateLimit(req, 'read').allowed).toBe(true);
   });
 
-  it('keys by the rightmost x-forwarded-for entry (the trusted, proxy-appended real IP), not a client-forged leftmost one', () => {
-    // Cloud Run appends the real client IP as the last hop, so a client
-    // forging a different leftmost value on every request must not get a
-    // fresh bucket each time — both requests below share the real IP
-    // '10.0.0.1' in the rightmost position and must share one bucket.
+  it('outside App Hosting (no FIREBASE_CONFIG), falls back to the rightmost x-forwarded-for entry, not a client-forged leftmost one', () => {
+    // No fixed x-forwarded-for position is reliable on App Hosting itself
+    // (see getClientIp's comment) — this fallback only applies when
+    // FIREBASE_CONFIG is unset, e.g. local `pnpm dev`, where there's no
+    // untrusted proxy chain in front of the server. Two requests forging
+    // different leftmost values but sharing the same rightmost '10.0.0.1'
+    // must share one bucket.
+    expect(process.env.FIREBASE_CONFIG).toBeUndefined();
     const reqA = makeRequest('203.0.113.99, 10.0.0.1');
     const reqB = makeRequest('198.51.100.7, 10.0.0.1');
     for (let i = 0; i < RATE_LIMITS.upload.max; i++) {
       checkRateLimit(reqA, 'upload');
     }
     expect(checkRateLimit(reqB, 'upload').allowed).toBe(false);
+  });
+
+  it('on App Hosting (FIREBASE_CONFIG set), trusts the platform-injected x-fah-client-ip header instead of x-forwarded-for', () => {
+    vi.stubEnv('FIREBASE_CONFIG', '{"projectId":"bropics-app"}');
+    try {
+      // Both requests carry a DIFFERENT client-forged x-forwarded-for
+      // (including different rightmost entries, which on this platform is
+      // a CDN/LB hop, not the client) but the SAME real x-fah-client-ip —
+      // they must share one bucket, proving x-fah-client-ip governs, not
+      // any position in x-forwarded-for.
+      const reqA = new Request('http://localhost/api/test', {
+        headers: { 'x-forwarded-for': '203.0.113.99, 34.1.2.3', 'x-fah-client-ip': '198.51.100.42' },
+      });
+      const reqB = new Request('http://localhost/api/test', {
+        headers: { 'x-forwarded-for': '10.0.0.1, 34.9.9.9', 'x-fah-client-ip': '198.51.100.42' },
+      });
+      for (let i = 0; i < RATE_LIMITS.upload.max; i++) {
+        checkRateLimit(reqA, 'upload');
+      }
+      expect(checkRateLimit(reqB, 'upload').allowed).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

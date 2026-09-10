@@ -67,15 +67,28 @@ function sweepExpiredBuckets(now: number): void {
   }
 }
 
-// Cloud Run / Firebase App Hosting — this app's hosting target — APPENDS the
-// real client IP to whatever `x-forwarded-for` value the client sent, it
-// does not replace it. A client can send its own `x-forwarded-for` header
-// with an arbitrary leftmost value, so only the RIGHTMOST entry (the hop
-// added last, by the proxy closest to the server) can be trusted. This app
-// has exactly one trusted proxy hop in front of it — Cloud Run's own load
-// balancer — and no other reverse proxy or CDN in the request path, so the
-// last entry is the real client IP.
+// Firebase App Hosting (this app's hosting target — Cloud Run behind a
+// Fastly CDN and Google's load balancer) does NOT make `x-forwarded-for`
+// trustworthy at any fixed position: the leftmost entry is whatever the
+// client wrote, but the rightmost entry is a Fastly/Google proxy hop, not
+// the browser — and the exact number of hops Firebase's own infrastructure
+// appends has been observed to change without notice, so no fixed index
+// into `x-forwarded-for` is reliable on this platform (confirmed via
+// Firebase support, see https://arcjet.com/learn/detect-client-ip-firebase).
+// Firebase App Hosting instead injects a dedicated `x-fah-client-ip` header
+// carrying the real client IP directly — a client cannot forge this header
+// to look platform-injected because it's only trusted here when
+// `FIREBASE_CONFIG` (an env var only Firebase's own runtime sets, never
+// attacker-controlled) confirms the request is actually running on App
+// Hosting. Outside App Hosting (local dev, `pnpm dev`) `FIREBASE_CONFIG`
+// isn't set, so this falls back to `x-forwarded-for`'s rightmost entry,
+// which is fine for local testing where there's no untrusted proxy chain
+// to worry about.
 function getClientIp(request: Request): string {
+  if (process.env.FIREBASE_CONFIG) {
+    const fahClientIp = request.headers.get('x-fah-client-ip');
+    if (fahClientIp) return fahClientIp.trim();
+  }
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (!forwardedFor) return 'unknown';
   const parts = forwardedFor.split(',');
