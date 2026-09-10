@@ -25,7 +25,13 @@ vi.mock('firebase-admin/firestore', () => ({
   }),
 }));
 
+vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
 import { GET } from './route';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 
 describe('GET /api/frame-templates/:variantId', () => {
   it('returns the frame templates for a variant', async () => {
@@ -35,5 +41,14 @@ describe('GET /api/frame-templates/:variantId', () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body).toEqual([templateDoc]);
+  });
+
+  it('returns 429 when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await GET(new Request('http://localhost/api/frame-templates/var_1'), {
+      params: Promise.resolve({ variantId: 'var_1' }),
+    });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
   });
 });

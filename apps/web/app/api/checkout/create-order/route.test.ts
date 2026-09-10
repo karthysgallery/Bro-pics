@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from './route';
 
 vi.mock('server-only', () => ({}));
+
+vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
 
 const mockGetUserId = vi.fn();
 vi.mock('../../../../lib/verify-id-token', () => ({ getUserIdFromAuthHeader: (...args: unknown[]) => mockGetUserId(...args) }));
@@ -69,6 +73,9 @@ vi.mock('firebase-admin/firestore', () => ({
 }));
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
+import { POST } from './route';
+import { checkRateLimit, resetRateLimitState } from '../../../../lib/rate-limit';
+
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/checkout/create-order', {
     method: 'POST',
@@ -80,6 +87,7 @@ function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
 describe('POST /api/checkout/create-order', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRateLimitState();
   });
 
   it('returns 401 when there is no valid Authorization header', async () => {
@@ -376,5 +384,14 @@ describe('POST /api/checkout/create-order', () => {
       // `couponId: appliedCouponId` key would also satisfy).
       expect(orderArg && 'couponId' in orderArg).toBe(false);
     });
+  });
+
+  it('returns 429 and does not touch Firestore or Razorpay when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockGetUserId).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
   });
 });

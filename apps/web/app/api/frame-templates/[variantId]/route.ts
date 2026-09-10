@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 import type { FrameTemplate } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ variantId: string }>;
 }
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'read');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const { variantId } = await params;
   const db = getFirestore(getAdminApp());
   // frameTemplates is a subcollection of products/{id}; querying across all

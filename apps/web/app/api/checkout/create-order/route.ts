@@ -8,6 +8,7 @@ import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInpu
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { findCouponByCode } from '../../../../lib/coupon-lookup';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 import {
   generateOrderNo,
   OrderSchema,
@@ -40,6 +41,14 @@ function isMalformedCartLine(item: CartLineInput): boolean {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'checkout');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const userId = await getUserIdFromAuthHeader(request);
   if (!userId) {
     return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
