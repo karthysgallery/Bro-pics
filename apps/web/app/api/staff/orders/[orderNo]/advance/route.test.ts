@@ -30,7 +30,7 @@ vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
 });
 
-import { checkRateLimit } from '../../../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/staff/orders/BP-2026-00001/advance', {
@@ -42,6 +42,7 @@ function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
 
 describe('POST /api/staff/orders/[orderNo]/advance', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
     mockRunTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({ get: mockTransactionGet, set: mockTransactionSet, update: mockTransactionUpdate })

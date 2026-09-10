@@ -21,14 +21,17 @@ vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
 });
 
-import { checkRateLimit } from '../../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../../lib/rate-limit';
 
 function makeRequest(authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/staff/orders/BP-2026-00001', { headers: { Authorization: authHeader } });
 }
 
 describe('GET /api/staff/orders/[orderNo]', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    resetRateLimitState();
+    vi.clearAllMocks();
+  });
 
   it('returns 403 when the caller is not staff', async () => {
     mockGetStaffUserId.mockResolvedValueOnce(null);

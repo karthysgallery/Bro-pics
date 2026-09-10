@@ -11,7 +11,7 @@ vi.mock('../../../lib/rate-limit', async (importOriginal) => {
 });
 
 import { GET } from './route';
-import { checkRateLimit } from '../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../lib/rate-limit';
 import { NextRequest } from 'next/server';
 
 function makeRequest(query: string): NextRequest {
@@ -20,6 +20,7 @@ function makeRequest(query: string): NextRequest {
 
 describe('GET /api/search-suggestions', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
   });
 

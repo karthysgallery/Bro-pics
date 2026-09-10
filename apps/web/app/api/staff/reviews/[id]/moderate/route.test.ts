@@ -24,7 +24,7 @@ vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
 });
 
 import { POST } from './route';
-import { checkRateLimit } from '../../../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/staff/reviews/review_1/moderate', {
@@ -40,6 +40,7 @@ function makeContext(id = 'review_1') {
 
 describe('POST /api/staff/reviews/[id]/moderate', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
   });
 

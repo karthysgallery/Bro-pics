@@ -21,7 +21,7 @@ vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
 });
 
-import { checkRateLimit } from '../../../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/admin/users/user_9/role', {
@@ -37,6 +37,7 @@ function makeParams(uid: string) {
 
 describe('POST /api/admin/users/[uid]/role', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
   });
 

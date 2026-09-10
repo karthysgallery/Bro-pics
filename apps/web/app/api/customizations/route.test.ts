@@ -50,7 +50,7 @@ vi.mock('../../../lib/rate-limit', async (importOriginal) => {
 
 import { POST } from './route';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
-import { checkRateLimit } from '../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../lib/rate-limit';
 
 // scale 1 against a 3000x3000 upload and 10x10in variant -> 300 DPI exactly,
 // so the server-recomputed effectiveDpi can be asserted precisely.
@@ -84,6 +84,7 @@ function makeRequest(body: unknown, sessionId: string | null, authHeader?: strin
 
 describe('POST /api/customizations', () => {
   beforeEach(() => {
+    resetRateLimitState();
     mockSet.mockClear();
     mockUploadGet.mockClear();
     mockUploadGet.mockResolvedValue({ exists: true, data: () => uploadDoc });

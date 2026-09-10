@@ -44,7 +44,7 @@ vi.mock('../../../lib/rate-limit', async (importOriginal) => {
 });
 
 import { POST } from './route';
-import { checkRateLimit } from '../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/reviews', {
@@ -56,6 +56,7 @@ function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
 
 describe('POST /api/reviews', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
     mockDuplicateGet.mockResolvedValue({ empty: true });
     mockProductGet.mockResolvedValue({ exists: true });

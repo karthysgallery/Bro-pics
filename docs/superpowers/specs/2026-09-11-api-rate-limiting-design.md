@@ -5,7 +5,7 @@
 
 ## 1. Purpose and scope
 
-No rate limiting exists anywhere in this project today (confirmed by grep — zero matches for `rate.?limit` across `apps/web`, `functions`, `packages`, and every spec/plan doc). Every one of the 14 Next.js API routes under `apps/web/app/api/**` is currently unprotected against request-volume abuse: no per-IP or per-user throttling on uploads, checkout, coupon validation, reviews, or any staff/admin endpoint.
+No rate limiting exists anywhere in this project today (confirmed by grep — zero matches for `rate.?limit` across `apps/web`, `functions`, `packages`, and every spec/plan doc). Every one of the 15 Next.js API routes under `apps/web/app/api/**` is currently unprotected against request-volume abuse: no per-IP or per-user throttling on uploads, checkout, coupon validation, reviews, or any staff/admin endpoint.
 
 This plan adds a single centralized rate-limiting module and wires it into every route that needs it, so all limiter configuration lives in and is auditable from one file.
 
@@ -16,7 +16,7 @@ Out of scope, deliberately:
 
 ## 2. The limiter itself — `apps/web/lib/rate-limit.ts`
 
-A single new file, in-memory sliding-window counter, zero new dependencies (no Redis/Upstash package — just a `Map` and `Date.now()`).
+A single new file, in-memory fixed-window (tumbling-window) counter, zero new dependencies (no Redis/Upstash package — just a `Map` and `Date.now()`) (accepted tradeoff: a fixed window permits up to a 2x burst right at a window boundary, which is fine given this project's 500–1,000 visitors/day traffic target — a true sliding window was judged not worth the added complexity at this scale).
 
 ```ts
 interface RateLimitConfig {
@@ -80,7 +80,7 @@ return NextResponse.json(
 
 matching every existing route's established `NextResponse.json({ error }, { status })` convention exactly — no new response shape introduced.
 
-## 3. Where it's applied — all 14 `apps/web/app/api/**` routes
+## 3. Where it's applied — all 15 `apps/web/app/api/**` routes
 
 | Route | Method | Tier | Why |
 |---|---|---|---|
@@ -100,13 +100,13 @@ matching every existing route's established `NextResponse.json({ error }, { stat
 | `admin/users/lookup` | GET | `staff` | Admin-gated |
 | `admin/users/[uid]/role` | POST | `staff` | Admin-gated, mutates a role claim — most sensitive route in the app, but the `staff` tier's 60/min is already tight for a route no legitimate admin calls more than a handful of times per session; a bespoke tighter tier isn't worth a 6th config entry for one route |
 
-All 14 existing routes get a rate-limit check. No route is left unprotected, and no new tier is invented beyond the 5 in §2 — every route maps onto one of them.
+All 15 existing routes get a rate-limit check. No route is left unprotected, and no new tier is invented beyond the 5 in §2 — every route maps onto one of them.
 
 ## 4. Testing
 
 `apps/web/lib/rate-limit.test.ts`: unit tests against `checkRateLimit` directly (not through a route) — under-limit requests allowed, over-limit requests blocked with a `retryAfterSeconds`, the window resetting after `windowMs` elapses (using a fake/mocked clock, not a real `setTimeout` wait), and two different IPs/tiers tracked independently (one client's `upload` usage doesn't affect their own `checkout` bucket, and two different IPs each get their own `upload` bucket).
 
-Each of the 14 route files' existing test suites gets one new test: a request that exceeds the tier's `max` within `windowMs` receives a 429 with a `Retry-After` header, and the route's real logic (Firestore/Storage calls) is never reached (assert the relevant mock was not called). Exact mocking approach (resetting the module-level `buckets` Map between test files, since it's shared in-process state) is the implementation plan's concern, not this design doc's.
+Each of the 15 route files' existing test suites gets one new test: a request that exceeds the tier's `max` within `windowMs` receives a 429 with a `Retry-After` header, and the route's real logic (Firestore/Storage calls) is never reached (assert the relevant mock was not called). Exact mocking approach (resetting the module-level `buckets` Map between test files, since it's shared in-process state) is the implementation plan's concern, not this design doc's.
 
 ## 5. Documented limitation
 

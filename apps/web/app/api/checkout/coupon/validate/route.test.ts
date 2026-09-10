@@ -47,7 +47,7 @@ vi.mock('firebase-admin/firestore', () => ({
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 import { POST } from './route';
-import { checkRateLimit } from '../../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/checkout/coupon/validate', {
@@ -69,6 +69,7 @@ const NOW_COUPON = {
 
 describe('POST /api/checkout/coupon/validate', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
     mockCartDocGet.mockResolvedValue({
       exists: true,

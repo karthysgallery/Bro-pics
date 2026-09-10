@@ -19,7 +19,7 @@ vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
 });
 
-import { checkRateLimit } from '../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../lib/rate-limit';
 
 function makeRequest(url: string, authHeader = 'Bearer good-token'): Request {
   return new Request(url, { headers: { Authorization: authHeader } });
@@ -27,6 +27,7 @@ function makeRequest(url: string, authHeader = 'Bearer good-token'): Request {
 
 describe('GET /api/staff/orders', () => {
   beforeEach(() => {
+    resetRateLimitState();
     vi.clearAllMocks();
   });
 

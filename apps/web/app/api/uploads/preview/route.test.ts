@@ -4,6 +4,7 @@ const mockSave = vi.fn().mockResolvedValue(undefined);
 const mockGetSignedUrl = vi.fn().mockResolvedValue(['https://signed.example.com/preview.png']);
 
 beforeEach(() => {
+  resetRateLimitState();
   mockSave.mockClear();
   mockGetSignedUrl.mockClear();
 });
@@ -26,7 +27,7 @@ vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
 });
 
 import { POST } from './route';
-import { checkRateLimit } from '../../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../../lib/rate-limit';
 
 describe('POST /api/uploads/preview', () => {
   it('decodes a data URL, stores it, and returns a signed preview URL', async () => {

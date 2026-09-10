@@ -50,7 +50,7 @@ vi.mock('../../../lib/rate-limit', async (importOriginal) => {
 
 import { POST } from './route';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
-import { checkRateLimit } from '../../../lib/rate-limit';
+import { checkRateLimit, resetRateLimitState } from '../../../lib/rate-limit';
 
 const fixturesDir = join(__dirname, '..', '..', '..', '__fixtures__');
 
@@ -75,6 +75,7 @@ function makeRequest(
 
 describe('POST /api/uploads', () => {
   beforeEach(() => {
+    resetRateLimitState();
     mockCollectionGroupGet.mockClear();
     mockCollectionGroupGet.mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
     vi.mocked(getUserIdFromAuthHeader).mockClear();
