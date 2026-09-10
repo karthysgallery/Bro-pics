@@ -14,6 +14,13 @@ vi.mock('../../../../lib/order-lookup', () => ({
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({}) }));
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
+vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
+import { checkRateLimit } from '../../../../lib/rate-limit';
+
 function makeRequest(url: string, authHeader = 'Bearer good-token'): Request {
   return new Request(url, { headers: { Authorization: authHeader } });
 }
@@ -62,5 +69,13 @@ describe('GET /api/staff/orders', () => {
       { id: 'order_1', orderNo: 'BP-2026-00001', status: 'paid', total: 150000, placedAt: '2026-09-01T00:00:00.000Z', addressJson: { city: 'Chennai' } },
     ]);
     expect(mockFindOrdersByStatus).toHaveBeenCalledWith(expect.anything(), 'paid');
+  });
+
+  it('returns 429 and does not touch Firestore when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await GET(makeRequest('https://example.com/api/staff/orders?status=paid'));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockFindOrdersByStatus).not.toHaveBeenCalled();
   });
 });

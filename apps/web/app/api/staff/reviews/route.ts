@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getStaffUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 import { ReviewStatusSchema } from '@bro-pics/shared';
 
 interface ReviewRow {
@@ -31,6 +32,14 @@ interface RawReviewData {
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const staffUserId = await getStaffUserIdFromAuthHeader(request);
   if (!staffUserId) {
     return NextResponse.json({ error: 'Staff access required' }, { status: 403 });

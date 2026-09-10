@@ -25,6 +25,13 @@ const mockDb = {
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
 vi.mock('../../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
+vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
+import { checkRateLimit } from '../../../../../../lib/rate-limit';
+
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/staff/orders/BP-2026-00001/advance', {
     method: 'POST',
@@ -167,5 +174,13 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     expect(response.status).toBe(409);
     expect(mockTransactionSet).not.toHaveBeenCalled();
     expect(mockTransactionUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 and does not touch Firestore when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await POST(makeRequest({ status: 'paid' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockFindOrder).not.toHaveBeenCalled();
   });
 });

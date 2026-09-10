@@ -3,6 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
 import { getStaffUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
 import { findOrderByOrderNo } from '../../../../../../lib/order-lookup';
+import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { OrderEventSchema, isValidStatusTransition, type OrderStatus } from '@bro-pics/shared';
 
 interface RouteParams {
@@ -10,6 +11,14 @@ interface RouteParams {
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const staffUserId = await getStaffUserIdFromAuthHeader(request);
   if (!staffUserId) {
     return NextResponse.json({ error: 'Staff access required' }, { status: 403 });

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
 import { getAdminUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../../../../lib/rate-limit';
 
 interface RouteParams {
   params: Promise<{ uid: string }>;
@@ -10,6 +11,14 @@ interface RouteParams {
 const VALID_ROLES = ['admin', 'staff'] as const;
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const adminUserId = await getAdminUserIdFromAuthHeader(request);
   if (!adminUserId) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });

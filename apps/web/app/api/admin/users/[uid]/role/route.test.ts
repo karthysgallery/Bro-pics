@@ -16,6 +16,13 @@ vi.mock('firebase-admin/auth', () => ({
 }));
 vi.mock('../../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
+vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
+import { checkRateLimit } from '../../../../../../lib/rate-limit';
+
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/admin/users/user_9/role', {
     method: 'POST',
@@ -99,5 +106,13 @@ describe('POST /api/admin/users/[uid]/role', () => {
     const response = await POST(makeRequest({ role: 'staff' }), makeParams('user_9'));
     expect(response.status).toBe(200);
     expect(mockSetCustomUserClaims).toHaveBeenCalledWith('user_9', { role: 'staff' });
+  });
+
+  it('returns 429 and does not touch Firebase Auth when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await POST(makeRequest({ role: 'staff' }), makeParams('user_9'));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
   });
 });
