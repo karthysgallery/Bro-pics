@@ -3,11 +3,20 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { findVariantById } from '../../../lib/variant-lookup';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../lib/rate-limit';
 import { CustomizationSchema } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
 import type { Upload } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'write');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   // Require X-Session-Id the same way /api/uploads and /api/uploads/preview
   // do — a client-supplied `sessionId` in the JSON body is never trusted;
   // the header is the sole source of truth. See Finding 6 in review.

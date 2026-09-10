@@ -2,8 +2,17 @@ import { NextResponse } from 'next/server';
 import { getStorage } from 'firebase-admin/storage';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { probeAndStripImage } from '../../../../lib/image-probe';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'upload');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const sessionId = request.headers.get('X-Session-Id');
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing X-Session-Id header' }, { status: 400 });

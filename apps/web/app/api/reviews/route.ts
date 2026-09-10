@@ -4,9 +4,18 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { findVerifiedPurchase } from '../../../lib/order-lookup';
+import { checkRateLimit } from '../../../lib/rate-limit';
 import { ReviewSchema } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'write');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const userId = await getUserIdFromAuthHeader(request);
   if (!userId) {
     return NextResponse.json({ error: 'Sign in required' }, { status: 401 });

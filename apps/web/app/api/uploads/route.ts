@@ -5,9 +5,18 @@ import { getAdminApp } from '../../../lib/firebase-admin';
 import { probeAndStripImage } from '../../../lib/image-probe';
 import { findVariantById } from '../../../lib/variant-lookup';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../lib/rate-limit';
 import { UploadSchema, type Upload } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'upload');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const sessionId = request.headers.get('X-Session-Id');
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing X-Session-Id header' }, { status: 400 });

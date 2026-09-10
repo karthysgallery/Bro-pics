@@ -20,7 +20,13 @@ vi.mock('firebase-admin/storage', () => ({
   }),
 }));
 
+vi.mock('../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
 import { POST } from './route';
+import { checkRateLimit } from '../../../../lib/rate-limit';
 
 describe('POST /api/uploads/preview', () => {
   it('decodes a data URL, stores it, and returns a signed preview URL', async () => {
@@ -74,6 +80,21 @@ describe('POST /api/uploads/preview', () => {
     });
     const response = await POST(request);
     expect(response.status).toBe(400);
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 and does not touch Storage when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const tinyPngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const request = new Request('http://localhost/api/uploads/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': 'sess_test' },
+      body: JSON.stringify({ personalizationId: 'pers_1', slotIndex: 0, dataUrl: tinyPngDataUrl }),
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockSave).not.toHaveBeenCalled();
   });
 });

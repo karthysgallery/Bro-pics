@@ -43,8 +43,14 @@ vi.mock('firebase-admin/firestore', () => ({
   }),
 }));
 
+vi.mock('../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
 import { POST } from './route';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../lib/rate-limit';
 
 // scale 1 against a 3000x3000 upload and 10x10in variant -> 300 DPI exactly,
 // so the server-recomputed effectiveDpi can be asserted precisely.
@@ -212,5 +218,14 @@ describe('POST /api/customizations', () => {
     expect(response.status).toBe(200);
     expect(body.userId).toBeUndefined();
     expect(mockSet).toHaveBeenCalledWith(expect.not.objectContaining({ userId: expect.anything() }));
+  });
+
+  it('returns 429 and does not touch Firestore when rate-limited', async () => {
+    mockSet.mockClear();
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await POST(makeRequest(validBody, 'sess_1'));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockSet).not.toHaveBeenCalled();
   });
 });

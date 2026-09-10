@@ -43,8 +43,14 @@ vi.mock('firebase-admin/storage', () => ({
   }),
 }));
 
+vi.mock('../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
 import { POST } from './route';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../lib/rate-limit';
 
 const fixturesDir = join(__dirname, '..', '..', '..', '__fixtures__');
 
@@ -167,5 +173,15 @@ describe('POST /api/uploads', () => {
     });
     const response = await POST(request);
     expect(response.status).toBe(422);
+  });
+
+  it('returns 429 and does not touch Firestore when rate-limited', async () => {
+    mockSet.mockClear();
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
+    const response = await POST(makeRequest(buffer, 'sess_test'));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockSet).not.toHaveBeenCalled();
   });
 });

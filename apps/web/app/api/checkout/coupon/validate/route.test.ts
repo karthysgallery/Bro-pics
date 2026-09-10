@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from './route';
 
 vi.mock('server-only', () => ({}));
+
+vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../lib/rate-limit')>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
 
 const mockGetUserId = vi.fn();
 vi.mock('../../../../../lib/verify-id-token', () => ({
@@ -41,6 +45,9 @@ vi.mock('firebase-admin/firestore', () => ({
   }),
 }));
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
+
+import { POST } from './route';
+import { checkRateLimit } from '../../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/checkout/coupon/validate', {
@@ -124,5 +131,13 @@ describe('POST /api/checkout/coupon/validate', () => {
     const response = await POST(makeRequest({ code: 'NEW10' }));
     const body = await response.json();
     expect(body).toEqual({ valid: true, discountPaise: 0, freeShipping: true });
+  });
+
+  it('returns 429 and does not look up the coupon when rate-limited', async () => {
+    vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
+    const response = await POST(makeRequest({ code: 'NEW10' }));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('42');
+    expect(mockFindCouponByCode).not.toHaveBeenCalled();
   });
 });
