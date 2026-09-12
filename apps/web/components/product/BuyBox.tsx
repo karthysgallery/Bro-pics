@@ -106,10 +106,18 @@ export function BuyBox({
         />
       </div>
 
+      {/* w-[calc(100%-5rem)] on mobile keeps this primary CTA clear of
+          LayoutChrome's fixed bottom-right WhatsApp button (bottom-6
+          right-6, w-14 h-14) at whatever scroll position it naturally
+          falls at -- this is the single most important button on the
+          page, so unlike the other instances of this recurring overlap
+          (see VariantSelector's comment), it gets a dedicated fix rather
+          than being left to the general "floating buttons can overlap
+          content" tradeoff documented in PROJECT_STATUS.md. */}
       <button
         onClick={handlePersonalizeClick}
         disabled={!inStock || !selectedVariant}
-        className="w-full bg-terracotta text-cream rounded-lg py-3 font-medium disabled:opacity-50"
+        className="w-[calc(100%-5rem)] sm:w-full bg-terracotta text-cream rounded-lg py-3 font-medium disabled:opacity-50"
       >
         Personalize &amp; Add to Cart
       </button>

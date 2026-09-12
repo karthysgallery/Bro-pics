@@ -23,7 +23,14 @@ export function Footer() {
           </p>
         </div>
 
-        <nav aria-label="Policy links" className="grid grid-cols-2 gap-2 text-sm">
+        {/* Single-column on mobile so every link stays at the left edge,
+            clear of LayoutChrome's fixed bottom-right WhatsApp button --
+            the footer sits at the true bottom of nearly every page, so a
+            2-column grid's right column would collide with that button on
+            essentially every page a user scrolls to the end of. See
+            VariantSelector's comment for the fuller explanation of this
+            recurring class of overlap. */}
+        <nav aria-label="Policy links" className="grid grid-cols-1 sm:grid-cols-2 justify-items-start gap-2 text-sm">
           {policyLinks.map((link) => (
             <Link key={link.href} href={link.href} className="hover:underline">
               {link.label}
