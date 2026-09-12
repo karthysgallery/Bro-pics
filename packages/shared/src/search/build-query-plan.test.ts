@@ -91,25 +91,49 @@ describe('buildProductQueryPlan', () => {
     expect(buildProductQueryPlan('', {}, 3)).toMatchObject({ limit: 20, offset: 40 });
   });
 
-  it('adds a titleLower prefix range when a text query is given', () => {
-    const plan = buildProductQueryPlan('Classic', {}, 1);
-    expect(plan.constraints).toContainEqual({ field: 'titleLower', op: '>=', value: 'classic' });
+  it('matches a text query against searchTokens via array-contains-any, tokenized and lowercased', () => {
+    const plan = buildProductQueryPlan('Classic Frame', {}, 1);
     expect(plan.constraints).toContainEqual({
-      field: 'titleLower',
-      op: '<=',
-      value: `classic`,
+      field: 'searchTokens',
+      op: 'array-contains-any',
+      value: ['classic', 'frame'],
     });
   });
 
-  it('omits the titleLower range when the query is empty', () => {
+  it('omits the searchTokens constraint when the query is empty', () => {
     const plan = buildProductQueryPlan('', {}, 1);
-    expect(plan.constraints.some((c) => c.field === 'titleLower')).toBe(false);
+    expect(plan.constraints.some((c) => c.field === 'searchTokens')).toBe(false);
   });
 
-  it('forces orderByField to titleLower for a text query even when a different sort is requested', () => {
+  it('omits the searchTokens constraint when every query word is 2 characters or shorter', () => {
+    const plan = buildProductQueryPlan('a in', {}, 1);
+    expect(plan.constraints.some((c) => c.field === 'searchTokens')).toBe(false);
+  });
+
+  it('deduplicates repeated query words in the searchTokens constraint', () => {
+    const plan = buildProductQueryPlan('frame frame', {}, 1);
+    expect(plan.constraints).toContainEqual({
+      field: 'searchTokens',
+      op: 'array-contains-any',
+      value: ['frame'],
+    });
+  });
+
+  it('a text query takes the native array-contains-any slot over a simultaneous size filter, pushing sizes to a postFilter', () => {
+    const plan = buildProductQueryPlan('frame', { sizes: ['8x12 in'] }, 1);
+    expect(plan.constraints).toContainEqual({
+      field: 'searchTokens',
+      op: 'array-contains-any',
+      value: ['frame'],
+    });
+    expect(plan.constraints.some((c) => c.field === 'availableSizes')).toBe(false);
+    expect(plan.postFilters).toContainEqual({ field: 'availableSizes', anyOf: ['8x12 in'] });
+  });
+
+  it('does not force orderByField for a text query -- array-contains-any does not require an orderBy match', () => {
     const plan = buildProductQueryPlan('Classic', { sort: 'newest' }, 1);
-    expect(plan.orderByField).toBe('titleLower');
-    expect(plan.orderByDirection).toBe('asc');
+    expect(plan.orderByField).toBe('createdAt');
+    expect(plan.orderByDirection).toBe('desc');
   });
 
   it('forces orderByField to minPrice for a price-range filter with no sort requested', () => {
@@ -136,8 +160,8 @@ describe('buildProductQueryPlan', () => {
     expect(plan.orderByDirection).toBe('desc');
   });
 
-  it('text query still wins orderByField over a simultaneous price-range filter', () => {
+  it('a text query no longer overrides orderByField for a simultaneous price-range filter (only the price inequality does)', () => {
     const plan = buildProductQueryPlan('Classic', { minPrice: 50000 }, 1);
-    expect(plan.orderByField).toBe('titleLower');
+    expect(plan.orderByField).toBe('maxPrice');
   });
 });
