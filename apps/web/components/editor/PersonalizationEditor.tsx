@@ -19,6 +19,7 @@ import {
 } from '../../lib/editor-geometry';
 import { SlotPicker } from './SlotPicker';
 import { DpiBadge } from './DpiBadge';
+import { EditorCanvasErrorBoundary } from './EditorCanvasErrorBoundary';
 
 // react-konva touches `window` at import time, so it can never be part of
 // the server-rendered bundle — 'use client' only defers hydration, it does
@@ -472,43 +473,45 @@ export function PersonalizationEditor({ variant, photoSlots, onComplete, onClose
         />
 
         {activeRect && (
-          <EditorCanvas
-            mockupUrl={templateState.template.mockupUrl}
-            photoUrl={activeSlot?.originalUrl ?? null}
-            slotRect={activeRect}
-            scale={activeSlot?.scale ?? 1}
-            offsetX={activeSlot?.offsetX ?? 0}
-            offsetY={activeSlot?.offsetY ?? 0}
-            rotationDeg={activeSlot?.rotationDeg ?? 0}
-            onTransformChange={(transform) => {
-              setSlots((prev) => {
-                const current = prev.get(activeSlotIndex);
-                if (!current || !activeRect) return prev;
-                const effectiveDpi = computeEffectiveDpi(
-                  activeRect,
-                  current.widthPx,
-                  current.heightPx,
-                  transform.scale,
-                  transform.offsetX,
-                  transform.offsetY,
-                  current.rotationDeg,
-                  variant
-                );
-                const next = new Map(prev);
-                next.set(activeSlotIndex, { ...current, ...transform, effectiveDpi });
-                return next;
-              });
-            }}
-            onCanvasUpdate={(dataUrl: string | null) => {
-              setSlots((prev) => {
-                const current = prev.get(activeSlotIndex);
-                if (!current || current.previewDataUrl === dataUrl) return prev;
-                const next = new Map(prev);
-                next.set(activeSlotIndex, { ...current, previewDataUrl: dataUrl });
-                return next;
-              });
-            }}
-          />
+          <EditorCanvasErrorBoundary>
+            <EditorCanvas
+              mockupUrl={templateState.template.mockupUrl}
+              photoUrl={activeSlot?.originalUrl ?? null}
+              slotRect={activeRect}
+              scale={activeSlot?.scale ?? 1}
+              offsetX={activeSlot?.offsetX ?? 0}
+              offsetY={activeSlot?.offsetY ?? 0}
+              rotationDeg={activeSlot?.rotationDeg ?? 0}
+              onTransformChange={(transform) => {
+                setSlots((prev) => {
+                  const current = prev.get(activeSlotIndex);
+                  if (!current || !activeRect) return prev;
+                  const effectiveDpi = computeEffectiveDpi(
+                    activeRect,
+                    current.widthPx,
+                    current.heightPx,
+                    transform.scale,
+                    transform.offsetX,
+                    transform.offsetY,
+                    current.rotationDeg,
+                    variant
+                  );
+                  const next = new Map(prev);
+                  next.set(activeSlotIndex, { ...current, ...transform, effectiveDpi });
+                  return next;
+                });
+              }}
+              onCanvasUpdate={(dataUrl: string | null) => {
+                setSlots((prev) => {
+                  const current = prev.get(activeSlotIndex);
+                  if (!current || current.previewDataUrl === dataUrl) return prev;
+                  const next = new Map(prev);
+                  next.set(activeSlotIndex, { ...current, previewDataUrl: dataUrl });
+                  return next;
+                });
+              }}
+            />
+          </EditorCanvasErrorBoundary>
         )}
 
         {activeSlot && (
