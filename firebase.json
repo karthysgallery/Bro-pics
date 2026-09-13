@@ -10,7 +10,11 @@
     {
       "source": "functions",
       "codebase": "default",
-      "runtime": "nodejs20"
+      "runtime": "nodejs20",
+      "predeploy": [
+        "pnpm --dir functions typecheck",
+        "pnpm --dir functions bundle"
+      ]
     }
   ],
   "emulators": {

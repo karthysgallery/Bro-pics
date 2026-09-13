@@ -1,4 +1,5 @@
 import type { Product, Review } from '@bro-pics/shared';
+import { ReviewForm } from './ReviewForm';
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -51,6 +52,8 @@ export function ReviewsSection({ product, reviews }: { product: Product; reviews
           </ul>
         </>
       )}
+
+      <ReviewForm productId={product.id} />
     </section>
   );
 }

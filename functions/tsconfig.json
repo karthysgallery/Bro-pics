@@ -1,8 +1,13 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "lib",
-    "rootDir": "src"
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bro-pics/shared": ["../packages/shared/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

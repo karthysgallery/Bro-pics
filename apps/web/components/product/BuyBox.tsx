@@ -1,10 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { VariantSelector } from './VariantSelector';
-import { PersonalizeComingSoonModal } from './PersonalizeComingSoonModal';
+
+// react-konva (used inside PersonalizationEditor) pulls in the optional
+// `canvas` native binding when server-bundled — `'use client'` alone does
+// NOT prevent server-side pre-rendering in the App Router, only
+// next/dynamic with ssr:false actually keeps a window-touching library
+// like this off the server. Without this, every product page 500s.
+const PersonalizationEditor = dynamic(
+  () => import('../editor/PersonalizationEditor').then((mod) => mod.PersonalizationEditor),
+  { ssr: false }
+);
 
 function formatPaise(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -30,7 +40,7 @@ export function BuyBox({
   onSelectColour,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const { addItem } = useCart();
 
   // Options are scoped to the other dimension's current selection so the
@@ -43,10 +53,22 @@ export function BuyBox({
   const compareAtPrice = selectedVariant?.compareAtPrice;
   const inStock = selectedVariant ? selectedVariant.stockStatus === 'in_stock' : product.inStock;
 
-  const handleAddToCart = () => {
+  const handlePersonalizeClick = () => {
     if (!selectedVariant) return;
-    addItem({ variantId: selectedVariant.id, title: `${product.title} — ${selectedVariant.sizeLabel}`, unitPriceSnapshot: selectedVariant.price, qty: quantity });
-    setIsModalOpen(true);
+    setIsEditorOpen(true);
+  };
+
+  const handleEditorComplete = (personalizationId: string, previewUrl?: string) => {
+    if (!selectedVariant) return;
+    addItem({
+      variantId: selectedVariant.id,
+      personalizationId,
+      title: `${product.title} — ${selectedVariant.sizeLabel}`,
+      unitPriceSnapshot: selectedVariant.price,
+      qty: quantity,
+      previewUrl,
+    });
+    setIsEditorOpen(false);
   };
 
   return (
@@ -84,10 +106,18 @@ export function BuyBox({
         />
       </div>
 
+      {/* w-[calc(100%-5rem)] on mobile keeps this primary CTA clear of
+          LayoutChrome's fixed bottom-right WhatsApp button (bottom-6
+          right-6, w-14 h-14) at whatever scroll position it naturally
+          falls at -- this is the single most important button on the
+          page, so unlike the other instances of this recurring overlap
+          (see VariantSelector's comment), it gets a dedicated fix rather
+          than being left to the general "floating buttons can overlap
+          content" tradeoff documented in PROJECT_STATUS.md. */}
       <button
-        onClick={handleAddToCart}
+        onClick={handlePersonalizeClick}
         disabled={!inStock || !selectedVariant}
-        className="w-full bg-terracotta text-cream rounded-lg py-3 font-medium disabled:opacity-50"
+        className="w-[calc(100%-5rem)] sm:w-full bg-terracotta text-cream rounded-lg py-3 font-medium disabled:opacity-50"
       >
         Personalize &amp; Add to Cart
       </button>
@@ -101,7 +131,14 @@ export function BuyBox({
         Need help? Chat with us on WhatsApp
       </a>
 
-      <PersonalizeComingSoonModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {isEditorOpen && selectedVariant && (
+        <PersonalizationEditor
+          variant={selectedVariant}
+          photoSlots={product.photoSlots}
+          onComplete={handleEditorComplete}
+          onClose={() => setIsEditorOpen(false)}
+        />
+      )}
     </div>
   );
 }

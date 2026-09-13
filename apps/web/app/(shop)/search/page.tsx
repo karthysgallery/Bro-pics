@@ -1,5 +1,10 @@
+import type { Metadata } from 'next';
 import { searchProductsPage } from '../../../lib/firestore-products';
 import { ProductCard } from '../../../components/product/ProductCard';
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: true },
+};
 
 interface SearchPageProps {
   searchParams: Promise<{ q?: string }>;

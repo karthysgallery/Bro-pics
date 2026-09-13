@@ -65,6 +65,27 @@ export function buildProductQueryPlan(
     constraints.push({ field: 'minPrice', op: '<=', value: filters.maxPrice });
   }
 
+  // A free-text query is tokenized into whole words and matched against
+  // Product.searchTokens (lowercased title+description words >2 chars,
+  // populated at write time -- see scripts/seed/src/data.ts) via
+  // array-contains-any, instead of a titleLower prefix range: prefix
+  // matching only ever matched titles that literally START with the query
+  // (e.g. "Classic" matches "Classic Wooden Photo Frame" but "frame" does
+  // not), which is a poor match for how real users actually search a
+  // photo-frame catalogue -- they type common nouns like "frame" or
+  // "canvas", not the first word of a specific product's title.
+  // searchTokens already exists in the schema and seed data for exactly
+  // this purpose and was never wired up until now. array-contains-any is
+  // also the ONE array-type constraint Firestore allows per query, so a
+  // text query takes priority over the facet filters below when both are
+  // present -- not that the current UI ever combines them (the search
+  // page carries no facet filters, and the category page carries no text
+  // query), but the ordering has to be decided somehow.
+  const queryTokens =
+    query.trim().length > 0
+      ? [...new Set(query.trim().toLowerCase().split(/\s+/).filter((token) => token.length > 2))].slice(0, 30)
+      : [];
+
   const arrayFilters: Array<{ field: string; values: string[] | undefined }> = [
     { field: 'availableSizes', values: filters.sizes },
     { field: 'availableColours', values: filters.colours },
@@ -72,6 +93,10 @@ export function buildProductQueryPlan(
     { field: 'occasionTags', values: filters.occasionTags },
   ];
   let nativeArrayFilterUsed = false;
+  if (queryTokens.length > 0) {
+    constraints.push({ field: 'searchTokens', op: 'array-contains-any', value: queryTokens });
+    nativeArrayFilterUsed = true;
+  }
   for (const { field, values } of arrayFilters) {
     if (!values || values.length === 0) continue;
     if (!nativeArrayFilterUsed) {
@@ -86,25 +111,14 @@ export function buildProductQueryPlan(
     postFilters.push({ field: 'ratingAverage', gte: filters.minRating });
   }
 
-  if (query.trim().length > 0) {
-    const normalized = query.trim().toLowerCase();
-    // The upper bound must be strictly greater than every string with this
-    // prefix. Appending U+F8FF (a private-use-area codepoint that sorts
-    // after virtually all normal text) turns the range into a prefix match
-    // instead of an exact match.
-    constraints.push({ field: 'titleLower', op: '>=', value: normalized });
-    constraints.push({ field: 'titleLower', op: '<=', value: `${normalized}` });
-  }
-
   let { orderByField, orderByDirection } = SORT_MAP[filters.sort ?? 'relevance'];
 
   // Firestore requires the first orderBy to be on the same field as any
-  // range/inequality filter in the query. When a text search or a price
-  // range is active, the corresponding inequality field must win over
-  // whatever the user's sort preference would otherwise pick.
-  const hasTitleLowerInequality = constraints.some(
-    (c) => c.field === 'titleLower' && (c.op === '>=' || c.op === '<=')
-  );
+  // range/inequality filter in the query. A price range's inequality
+  // field must win over whatever the user's sort preference would
+  // otherwise pick. (A text query no longer needs this special-casing --
+  // array-contains-any doesn't force an orderBy match the way a range
+  // constraint does.)
   const hasMaxPriceInequality = constraints.some(
     (c) => c.field === 'maxPrice' && (c.op === '>=' || c.op === '<=')
   );
@@ -112,10 +126,7 @@ export function buildProductQueryPlan(
     (c) => c.field === 'minPrice' && (c.op === '>=' || c.op === '<=')
   );
 
-  if (hasTitleLowerInequality) {
-    orderByField = 'titleLower';
-    orderByDirection = 'asc';
-  } else if (hasMaxPriceInequality || hasMinPriceInequality) {
+  if (hasMaxPriceInequality || hasMinPriceInequality) {
     // Firestore requires the first orderBy to match one of the fields that
     // actually carries an inequality constraint. Because minPrice/maxPrice
     // filters are applied as an overlap check (see above), filters.minPrice

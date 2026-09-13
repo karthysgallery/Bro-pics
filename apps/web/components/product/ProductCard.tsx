@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import type { Product } from '@bro-pics/shared';
 
 interface ProductCardProps {
@@ -14,19 +15,23 @@ export function ProductCard({ product }: ProductCardProps) {
     <Link href={`/product/${product.slug}`} className="block rounded-lg overflow-hidden bg-surface group">
       <div className="relative aspect-square bg-cream">
         {product.primaryImageUrl ? (
-          <img
+          <Image
             src={product.primaryImageUrl}
             alt={product.title}
-            className={`w-full h-full object-cover transition-opacity ${product.hoverImageUrl ? 'group-hover:opacity-0' : ''}`}
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className={`object-cover transition-opacity ${product.hoverImageUrl ? 'group-hover:opacity-0' : ''}`}
           />
         ) : (
           <div className="w-full h-full bg-cream" />
         )}
         {product.hoverImageUrl && (
-          <img
+          <Image
             src={product.hoverImageUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity"
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className="object-cover opacity-0 group-hover:opacity-100 transition-opacity"
           />
         )}
         {product.badges.length > 0 && (

@@ -13,3 +13,4 @@ ui-debug.log
 *.tsbuildinfo
 .gstack/
 .claude/
+.vscode/

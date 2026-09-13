@@ -1,4 +1,4 @@
-import type { Category, Product, Variant, Review, HomepageSection, ProductMedia } from '@bro-pics/shared';
+import type { Category, Product, Variant, Review, HomepageSection, ProductMedia, FrameTemplate, Coupon } from '@bro-pics/shared';
 
 export const seedCategories: Category[] = [
   {
@@ -394,6 +394,104 @@ export const seedProductMedia: ProductMedia[] = [
     url: '/placeholders/videos/product-demo.mp4',
     alt: 'Classic Wooden Photo Frame, in motion',
     sortOrder: 2,
+  },
+];
+
+/**
+ * Computes a FrameTemplate's printableRects (fractions of the mockup
+ * image's own width/height, 0-1) for a given slot count and — for
+ * single-slot products only — the variant's physical aspect ratio.
+ *
+ * This is the single source of truth for printable-rect geometry: both
+ * `seedFrameTemplates` below (which feeds Firestore/the editor) and
+ * `generate-mockups.ts` (which rasterizes the transparent "hole" in the
+ * mockup PNG) call this exact function, so the mockup art and the rect
+ * geometry the editor uses to place photos can never disagree.
+ */
+export function computePrintableRects(
+  slotCount: number,
+  variantAspectRatio: number
+): FrameTemplate['printableRects'] {
+  // Evenly-spaced grid layout for multi-slot products; a single centered
+  // rect — sized to the variant's real physical aspect ratio — for
+  // single-slot products. Simple, deterministic, and always produces
+  // non-overlapping rects regardless of slotCount.
+  if (slotCount === 1) {
+    // Fit the largest rect matching the variant's own aspectRatio
+    // (widthIn/heightIn) inside the same 0.8 x 0.8 margin area the
+    // grid layout below uses, then centre it. Using the variant's
+    // real aspect ratio (rather than a fixed square) keeps the
+    // computed crop DPI accurate for single-opening products.
+    const marginSize = 0.8;
+    let width: number;
+    let height: number;
+    if (variantAspectRatio >= 1) {
+      // Landscape or square: constrained by width.
+      width = marginSize;
+      height = marginSize / variantAspectRatio;
+    } else {
+      // Portrait: constrained by height.
+      height = marginSize;
+      width = marginSize * variantAspectRatio;
+    }
+
+    return [
+      {
+        slotIndex: 0,
+        x: 0.1 + (marginSize - width) / 2,
+        y: 0.1 + (marginSize - height) / 2,
+        width,
+        height,
+      },
+    ];
+  }
+
+  const columns = Math.ceil(Math.sqrt(slotCount));
+  const rows = Math.ceil(slotCount / columns);
+  const cellWidth = 0.8 / columns;
+  const cellHeight = 0.8 / rows;
+
+  return Array.from({ length: slotCount }, (_, slotIndex) => {
+    const col = slotIndex % columns;
+    const row = Math.floor(slotIndex / columns);
+    return {
+      slotIndex,
+      x: 0.1 + col * cellWidth,
+      y: 0.1 + row * cellHeight,
+      width: cellWidth * 0.9,
+      height: cellHeight * 0.9,
+    };
+  });
+}
+
+export const seedFrameTemplates: FrameTemplate[] = seedVariants
+  .filter((v) => v.isActive)
+  .map((variant) => {
+    const product = seedProducts.find((p) => p.id === variant.productId)!;
+    const slotCount = product.photoSlots;
+    const printableRects = computePrintableRects(slotCount, variant.aspectRatio);
+
+    return {
+      id: `ft_${variant.id}`,
+      variantId: variant.id,
+      mockupUrl: `/placeholders/mockups/${product.slug}.png`,
+      maskUrl: null,
+      overlayUrl: null,
+      printableRects,
+      bleedMm: 2,
+      matInset: 0,
+    };
+  });
+
+export const seedCoupons: Coupon[] = [
+  {
+    code: 'NEW10',
+    type: 'percent',
+    value: 10,
+    appliesTo: 'all',
+    startsAt: new Date('2024-01-01T00:00:00.000Z'),
+    endsAt: new Date('2030-01-01T00:00:00.000Z'),
+    usedCount: 0,
   },
 ];
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import type { ProductMedia } from '@bro-pics/shared';
 
 interface GalleryProps {
@@ -29,11 +30,14 @@ export function Gallery({ media, productTitle }: GalleryProps) {
         {active.type === 'video' ? (
           <video src={active.url} controls className="w-full h-full object-cover" />
         ) : (
-          <img
+          <Image
             src={active.url}
             alt={active.alt || productTitle}
             onClick={() => setIsZoomed(true)}
-            className="w-full h-full object-cover cursor-zoom-in"
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            priority
+            className="object-cover cursor-zoom-in"
           />
         )}
       </div>
@@ -45,14 +49,14 @@ export function Gallery({ media, productTitle }: GalleryProps) {
               key={item.id}
               onClick={() => setActiveIndex(index)}
               aria-label={`Show media ${index + 1}`}
-              className={`w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 ${
+              className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 ${
                 index === activeIndex ? 'border-terracotta' : 'border-transparent'
               }`}
             >
               {item.type === 'video' ? (
                 <div className="w-full h-full bg-charcoal/80 text-cream flex items-center justify-center text-xs">▶</div>
               ) : (
-                <img src={item.url} alt="" className="w-full h-full object-cover" />
+                <Image src={item.url} alt="" fill sizes="64px" className="object-cover" />
               )}
             </button>
           ))}
@@ -64,7 +68,15 @@ export function Gallery({ media, productTitle }: GalleryProps) {
           className="fixed inset-0 z-50 bg-charcoal/90 flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setIsZoomed(false)}
         >
-          <img src={active.url} alt={active.alt || productTitle} className="max-w-full max-h-full object-contain" />
+          <div className="relative w-full h-full">
+            <Image
+              src={active.url}
+              alt={active.alt || productTitle}
+              fill
+              sizes="100vw"
+              className="object-contain"
+            />
+          </div>
         </div>
       )}
     </div>

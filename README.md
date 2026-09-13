@@ -31,3 +31,20 @@ for the full architecture.
 - **local** — Firebase Emulator Suite, Razorpay test keys
 - **preview** — per-PR or shared dev Firebase project, Razorpay test keys
 - **production** — separate Firebase project, live Razorpay keys, custom domain
+
+## Storage bucket CORS
+
+`cors.json` at the repo root configures the Storage bucket to allow
+browser-side `GET`s (needed so the personalization editor's
+`crossOrigin: 'anonymous'` photo loads succeed and `stage.toDataURL()` can
+export a preview without a canvas-taint `SecurityError`). `firebase deploy`
+does **not** apply this file — Firebase's deploy tooling doesn't manage
+bucket CORS. Apply it manually against the target project's bucket after
+any change:
+
+```bash
+gsutil cors set cors.json gs://<bucket-name>
+```
+
+Update the `origin` list in `cors.json` if `NEXT_PUBLIC_SITE_URL` (or a new
+preview/production domain) changes.
