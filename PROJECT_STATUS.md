@@ -1,6 +1,7 @@
 # BroPics — Project Status
 
 **Last updated:** 2026-09-14 (`master` — `feature/admin-panel-and-production-queue` merged in locally per explicit instruction "Merge Everything in local"; full test/typecheck suite green on the merged tree; nothing pushed to `origin`)
+**Demo deployment:** a Vercel project (`bro-pics`, team `BroPics`) is linked to `karthysgallery/Bro-pics` (`rootDirectory: apps/web`) for a client-facing preview build off the `San's(FE)` branch — Firebase env vars configured directly in Vercel's project settings (not committed), matching `apps/web/.env.example`.
 **Maintained by:** Claude Code — this file is updated after every execution (every completed phase, task batch, or significant decision) so the current state is always readable from one place without digging through commit history.
 
 **Branch topology (read this before touching git):**
