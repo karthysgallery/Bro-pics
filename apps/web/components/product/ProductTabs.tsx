@@ -1,13 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import type { Product } from '@bro-pics/shared';
+import type { Product, Variant } from '@bro-pics/shared';
 import { PictureQualityGuide } from './PictureQualityGuide';
+import { SizeChart } from './SizeChart';
 
-const TAB_LABELS = ['Description', 'Highlights', 'How It Works', 'Picture Quality Guide', 'Care', 'FAQ'] as const;
+const TAB_LABELS = [
+  'Description',
+  'Highlights',
+  'Size Chart',
+  'How It Works',
+  'Picture Quality Guide',
+  'Care',
+  'FAQ',
+] as const;
 type Tab = (typeof TAB_LABELS)[number];
 
-export function ProductTabs({ product }: { product: Product }) {
+export function ProductTabs({ product, variants = [] }: { product: Product; variants?: Variant[] }) {
   const [activeTab, setActiveTab] = useState<Tab>('Description');
 
   return (
@@ -41,6 +50,8 @@ export function ProductTabs({ product }: { product: Product }) {
           {product.howItWorks.map((step) => <li key={step}>{step}</li>)}
         </ol>
       )}
+
+      {activeTab === 'Size Chart' && <SizeChart variants={variants} />}
 
       {activeTab === 'Picture Quality Guide' && <PictureQualityGuide />}
 

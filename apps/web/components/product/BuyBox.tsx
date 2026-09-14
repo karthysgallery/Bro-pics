@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { VariantSelector } from './VariantSelector';
+import { DeliveryTimeline } from './DeliveryTimeline';
 
 // react-konva (used inside PersonalizationEditor) pulls in the optional
 // `canvas` native binding when server-bundled — `'use client'` alone does
@@ -93,6 +94,10 @@ export function BuyBox({
       <p className={`text-sm mb-3 ${inStock ? 'text-sage' : 'text-charcoal/50'}`}>
         {inStock ? `Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} days` : 'Out of stock'}
       </p>
+
+      {inStock && (
+        <DeliveryTimeline dispatchDaysMin={product.dispatchDaysMin} dispatchDaysMax={product.dispatchDaysMax} />
+      )}
 
       <div className="flex items-center gap-3 mb-4">
         <label htmlFor="qty" className="text-sm">Qty</label>

@@ -98,7 +98,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
       <ProductDetailClient product={product} variants={variants} media={media} />
 
-      <ProductTabs product={product} />
+      <ProductTabs product={product} variants={variants} />
       <VideoRail media={media} />
       <ReviewsSection product={product} reviews={reviews} />
       <RelatedProducts products={relatedProducts} />

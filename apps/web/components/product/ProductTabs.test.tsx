@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProductTabs } from './ProductTabs';
-import type { Product } from '@bro-pics/shared';
+import type { Product, Variant } from '@bro-pics/shared';
 
 const product = {
   id: 'p1', title: 'Frame', slug: 'frame', categoryId: 'cat_frames', shortDesc: '',
@@ -31,5 +31,18 @@ describe('ProductTabs', () => {
     render(<ProductTabs product={product} />);
     fireEvent.click(screen.getByRole('button', { name: 'Picture Quality Guide' }));
     expect(screen.getByText(/resolution/i)).toBeInTheDocument();
+  });
+
+  it('switches to the Size Chart tab and shows variant dimensions', () => {
+    const variants = [
+      {
+        id: 'v1', productId: 'p1', sku: 'SKU-1', sizeLabel: '8x10 in', widthIn: 8, heightIn: 10,
+        frameColour: 'Black', material: 'Wood', price: 79900, stockStatus: 'in_stock',
+        printWidthPx: 2400, printHeightPx: 3000, minUploadPx: 2400, aspectRatio: 0.8, isActive: true,
+      } satisfies Variant,
+    ];
+    render(<ProductTabs product={product} variants={variants} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Size Chart' }));
+    expect(screen.getByText('8 × 10 in')).toBeInTheDocument();
   });
 });
