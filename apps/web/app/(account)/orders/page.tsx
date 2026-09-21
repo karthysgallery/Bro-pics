@@ -1,11 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SignedOutNotice } from '../../../components/account/SignedOutNotice';
 import Link from 'next/link';
 import { getFirestore, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../lib/auth-context';
 import { getFirebaseApp } from '../../../lib/firebase-client';
-import type { Order } from '@bro-pics/shared';
+import { STATUS_CHIP_STYLES, statusLabel } from '../../../components/orders/OrderStatusTimeline';
+import { PageSkeleton } from '../../../components/ui/Skeleton';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { Card } from '../../../components/ui/Card';
+import type { Order, OrderItem } from '@bro-pics/shared';
 
 function formatPaise(paise: number): string {
   return (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14,6 +19,7 @@ function formatPaise(paise: number): string {
 export default function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Array<{ id: string; data: Order }> | null>(null);
+  const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
 
   const uid = user?.uid;
 
@@ -21,29 +27,57 @@ export default function OrdersPage() {
     if (!uid) return;
     const db = getFirestore(getFirebaseApp());
     const q = query(collection(db, 'orders'), where('userId', '==', uid), orderBy('placedAt', 'desc'));
-    getDocs(q).then((snapshot) => {
-      setOrders(snapshot.docs.map((d) => ({ id: d.id, data: d.data() as Order })));
+    getDocs(q).then(async (snapshot) => {
+      const loaded = snapshot.docs.map((d) => ({ id: d.id, data: d.data() as Order }));
+      setOrders(loaded);
+
+      // One preview per order (its first line item's previewUrl) — a
+      // best-effort thumbnail, so any failure here just leaves that order
+      // without one rather than blocking the list itself from rendering.
+      const entries = await Promise.all(
+        loaded.map(async ({ id }) => {
+          try {
+            const itemsSnapshot = await getDocs(collection(db, 'orders', id, 'items'));
+            const firstItem = itemsSnapshot.docs[0]?.data() as OrderItem | undefined;
+            return [id, firstItem?.previewUrl ?? null] as const;
+          } catch {
+            return [id, null] as const;
+          }
+        })
+      );
+      setThumbnails(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
     });
   }, [uid]);
 
-  if (!user) return <p>Please sign in to see your orders.</p>;
-  if (orders === null) return <p>Loading…</p>;
+  if (!user) return <SignedOutNotice action="see your orders" />;
+  if (orders === null) return <PageSkeleton rows={3} />;
 
   return (
-    <main className="flex flex-col gap-4 p-6">
-      <h1 className="font-display text-2xl">Your Orders</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-4">
+      <Link href="/account" className="text-sm text-accent/60 hover:text-accent-dark w-fit">
+        ← Back to account
+      </Link>
+      <h1 className="text-2xl font-semibold text-ink">Your orders</h1>
       {orders.length === 0 ? (
-        <p>No orders yet.</p>
+        <EmptyState title="No orders yet" message="Your placed orders will show up here." />
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {orders.map(({ id, data }) => (
-            <li key={id}>
-              <Link href={`/orders/${id}`} className="flex justify-between gap-4">
-                <span>{data.orderNo}</span>
-                <span>{data.status}</span>
-                <span>₹{formatPaise(data.total)}</span>
+            <Card as="li" key={id}>
+              <Link href={`/orders/${id}`} className="flex items-center gap-4 text-accent-dark">
+                {thumbnails.get(id) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumbnails.get(id)} alt="" className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                ) : (
+                  <span className="w-12 h-12 rounded-md bg-tint flex-shrink-0" aria-hidden="true" />
+                )}
+                <span className="font-medium flex-1">{data.orderNo}</span>
+                <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_CHIP_STYLES[data.status]}`}>
+                  {statusLabel(data.status)}
+                </span>
+                <span className="whitespace-nowrap">₹{formatPaise(data.total)}</span>
               </Link>
-            </li>
+            </Card>
           ))}
         </ul>
       )}

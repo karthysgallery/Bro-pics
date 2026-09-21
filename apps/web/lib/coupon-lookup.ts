@@ -1,5 +1,30 @@
-import type { Firestore, Timestamp } from 'firebase-admin/firestore';
+import type { Firestore, Timestamp, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { CouponSchema, type Coupon } from '@bro-pics/shared';
+
+/**
+ * Shared doc-to-Coupon parsing: guards against missing/malformed Timestamp
+ * fields and schema-invalid docs (data-entry error, partial write,
+ * migration remnant) by returning null rather than throwing — a caller
+ * skips/treats-as-not-found rather than 500ing over one bad coupon doc.
+ */
+function parseCouponDoc(doc: QueryDocumentSnapshot): Coupon | null {
+  const data = doc.data() as Record<string, unknown>;
+  const startsAtField = data.startsAt as { toDate?: unknown } | undefined;
+  const endsAtField = data.endsAt as { toDate?: unknown } | undefined;
+  if (!startsAtField || !endsAtField || typeof startsAtField.toDate !== 'function' || typeof endsAtField.toDate !== 'function') {
+    return null;
+  }
+  try {
+    return CouponSchema.parse({
+      ...data,
+      code: doc.id, // Override with doc.id, not data.code
+      startsAt: (data.startsAt as Timestamp).toDate(),
+      endsAt: (data.endsAt as Timestamp).toDate(),
+    });
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Coupon codes are their own Firestore doc id (coupons/{code}), matching
@@ -19,35 +44,18 @@ export async function findCouponByCode(db: Firestore, code: string): Promise<Cou
   const normalizedCode = code.trim().toUpperCase();
   const doc = await db.collection('coupons').doc(normalizedCode).get();
   if (!doc.exists) return null;
-  const data = doc.data() as Record<string, unknown>;
+  return parseCouponDoc(doc as QueryDocumentSnapshot);
+}
 
-  // Cast to an object type with optional toDate method for type narrowing
-  const startsAtField = data.startsAt as { toDate?: unknown } | undefined;
-  const endsAtField = data.endsAt as { toDate?: unknown } | undefined;
-
-  // Guard against missing or malformed Timestamp fields
-  if (
-    !startsAtField ||
-    !endsAtField ||
-    typeof startsAtField.toDate !== 'function' ||
-    typeof endsAtField.toDate !== 'function'
-  ) {
-    return null;
-  }
-
-  // A coupon doc that exists but fails schema validation (data-entry error,
-  // partial write, migration remnant) is treated the same as "not found" —
-  // checkout must never 500 over a malformed coupon. Only this parse call is
-  // guarded, so a genuine infrastructure error (e.g. Firestore connectivity)
-  // still propagates instead of being silently swallowed.
-  try {
-    return CouponSchema.parse({
-      ...data,
-      code: doc.id, // Override with doc.id, not data.code
-      startsAt: (data.startsAt as Timestamp).toDate(),
-      endsAt: (data.endsAt as Timestamp).toDate(),
-    });
-  } catch {
-    return null;
-  }
+/**
+ * Every coupon doc, parsed the same way findCouponByCode parses one — used
+ * by the account-facing "available coupons" listing. There's no
+ * public/private visibility flag on Coupon today, so this returns every
+ * coupon regardless of whether it was meant to be broadly advertised or
+ * handed out through a targeted channel; the caller filters by date-window
+ * validity. Documented as a gap, not silently assumed.
+ */
+export async function listAllCoupons(db: Firestore): Promise<Coupon[]> {
+  const snapshot = await db.collection('coupons').get();
+  return snapshot.docs.map(parseCouponDoc).filter((c): c is Coupon => c !== null);
 }

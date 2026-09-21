@@ -1,34 +1,94 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import type { Product, Variant, ProductMedia } from '@bro-pics/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FrameTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
+import {
+  coverScale,
+  coverScaleForRotation,
+  centeredOffset,
+  centeredOffsetForRotation,
+  offsetAfterScaleChange,
+  fractionRectToCanvasRect,
+  slotCropRectInOriginalPx,
+  EDITOR_CANVAS_SIZE,
+  effectiveDpiFromCropRect,
+  dpiTier,
+  printDimensionsForRotation,
+  type RotationDeg,
+} from '@bro-pics/shared';
 import { selectGalleryMedia } from '../../lib/gallery-media';
+import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
+import { recordProductView } from '../../lib/recently-viewed';
+import { getOrCreateSessionId } from '../../lib/session-id';
+import { validateSlotsComplete } from '../../lib/editor-validation';
+import { fontFamilyForKey } from '../../lib/text-personalization-options';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
+import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 
 interface ProductDetailClientProps {
   product: Product;
   variants: Variant[];
   media: ProductMedia[];
+  // Fetched server-side (one query against the product's own frameTemplates
+  // subcollection) and passed down so the personalization editor is present
+  // on the very first paint — a client-side fetch here previously left the
+  // page showing the plain Gallery for ~1s before swapping to the editor
+  // once the fetch resolved.
+  initialTemplatesByVariant: Record<string, FrameTemplate>;
 }
 
-export function ProductDetailClient({ product, variants, media }: ProductDetailClientProps) {
+function orientationOf(v: Variant): Orientation {
+  return orientationFromDimensions(v.widthIn, v.heightIn);
+}
+
+/**
+ * Recomputes effectiveDpi for a slot from its current transform against the
+ * slot's own printable rect. Called after every transform change (zoom,
+ * rotate, drag, variant switch) so the DPI badge and the red-tier
+ * confirmation gate always reflect where the photo is CURRENTLY positioned.
+ * At 90°/270° rotation, variant.widthIn/heightIn must be axis-swapped
+ * before being passed in — see printDimensionsForRotation's doc comment —
+ * mirroring the identical swap /api/customizations applies server-side.
+ */
+function computeEffectiveDpi(
+  slotRect: { x: number; y: number; width: number; height: number },
+  widthPx: number,
+  heightPx: number,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+  rotationDeg: RotationDeg,
+  variant: Variant
+): number {
+  const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+  const cropRect = slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, scale, offsetX, offsetY, rotationDeg);
+  const { printWidthIn, printHeightIn } = printDimensionsForRotation(variant, rotationDeg);
+  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, printWidthIn, printHeightIn);
+  return effectiveDpi;
+}
+
+const MAX_ZOOM_MULTIPLE = 4;
+const ZOOM_STEP_FACTOR = 1.25;
+
+export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant }: ProductDetailClientProps) {
   const firstInStock = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
   const [selectedColour, setSelectedColour] = useState(firstInStock?.frameColour ?? '');
+  const [selectedOrientation, setSelectedOrientation] = useState<Orientation | ''>(
+    firstInStock ? orientationOf(firstInStock) : ''
+  );
 
   // Only the initial-load fallback (before the user has clicked anything).
-  // Once the user interacts, handleSelectSize/handleSelectColour below keep
-  // selectedSize/selectedColour pinned to a combination that actually has a
-  // matching variant, so this exact find() should always succeed post-interaction.
+  // Once the user interacts, the handlers below keep selectedSize/
+  // selectedColour/selectedOrientation pinned to a combination that
+  // actually has a matching variant, so this exact find() should always
+  // succeed post-interaction.
   const selectedVariant = useMemo(
     () => variants.find((v) => v.sizeLabel === selectedSize && v.frameColour === selectedColour) ?? firstInStock,
     [variants, selectedSize, selectedColour, firstInStock]
   );
 
-  // If the requested size doesn't pair with the currently-selected colour,
-  // jump to the first variant of that size and adopt its colour too, so the
-  // resulting (size, colour) pair always corresponds to a real variant.
   const handleSelectSize = (size: string) => {
     const matching = variants.find((v) => v.sizeLabel === size && v.frameColour === selectedColour);
     if (matching) {
@@ -39,21 +99,32 @@ export function ProductDetailClient({ product, variants, media }: ProductDetailC
     if (fallback) {
       setSelectedSize(fallback.sizeLabel);
       setSelectedColour(fallback.frameColour);
+      setSelectedOrientation(orientationOf(fallback));
     }
   };
 
-  // Symmetric to handleSelectSize: if the requested colour doesn't pair with
-  // the currently-selected size, jump to the first variant of that colour.
   const handleSelectColour = (colour: string) => {
     const matching = variants.find((v) => v.frameColour === colour && v.sizeLabel === selectedSize);
     if (matching) {
       setSelectedColour(colour);
       return;
     }
-    const fallback = variants.find((v) => v.frameColour === colour);
+    const sameOrientation = variants.find((v) => v.frameColour === colour && orientationOf(v) === selectedOrientation);
+    const fallback = sameOrientation ?? variants.find((v) => v.frameColour === colour);
     if (fallback) {
       setSelectedColour(fallback.frameColour);
       setSelectedSize(fallback.sizeLabel);
+      setSelectedOrientation(orientationOf(fallback));
+    }
+  };
+
+  const handleSelectOrientation = (orientation: Orientation) => {
+    const sameColour = variants.find((v) => orientationOf(v) === orientation && v.frameColour === selectedColour);
+    const fallback = sameColour ?? variants.find((v) => orientationOf(v) === orientation);
+    if (fallback) {
+      setSelectedOrientation(orientation);
+      setSelectedSize(fallback.sizeLabel);
+      setSelectedColour(fallback.frameColour);
     }
   };
 
@@ -62,17 +133,397 @@ export function ProductDetailClient({ product, variants, media }: ProductDetailC
     [media, selectedVariant]
   );
 
+  useEffect(() => {
+    recordProductView(product.id);
+  }, [product.id]);
+
+  // --- Personalization state, lifted up from the old modal editor so both
+  // the inline canvas panel (left column) and BuyBox's Add-to-Cart button
+  // (right column) can read/drive the same state. ---
+
+  // Seeded from the server-fetched prop — every variant's template is
+  // already known on first render, so switching Size/Colour swaps the
+  // canvas in place instantly with no blank/loading flash, and the editor
+  // (rather than a placeholder Gallery) is what the very first paint shows.
+  const [templatesByVariant] = useState<Map<string, FrameTemplate>>(
+    () => new Map(Object.entries(initialTemplatesByVariant))
+  );
+
+  const template = selectedVariant ? (templatesByVariant.get(selectedVariant.id) ?? null) : null;
+  const templateStatus: 'loaded' | 'empty' = template ? 'loaded' : 'empty';
+
+  const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  const [slots, setSlots] = useState<Map<number, SlotState>>(new Map());
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [textFields, setTextFields] = useState<TextFieldValueMap>(new Map());
+  const [selectedClipartId, setSelectedClipartId] = useState<string | null>(null);
+  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+
+  // Lazily resolved on first actual use (upload or add-to-cart), not on
+  // every mount — a product page that's never personalized shouldn't touch
+  // localStorage at all. Once resolved it's stable for the lifetime of this
+  // page's editing flow — see the original PersonalizationEditor's
+  // identical comment for why this must not be re-read per call (sign-in
+  // mid-flow rotates the stored id).
+  const sessionIdRef = useRef<string | null>(null);
+  const ensureSessionId = (): string => {
+    if (sessionIdRef.current === null) {
+      sessionIdRef.current = getOrCreateSessionId();
+    }
+    return sessionIdRef.current;
+  };
+
+  // When the resolved template for the selected variant changes (a
+  // Size/Colour switch that lands on a different FrameTemplate), re-fit
+  // every already-filled slot's photo to the new template's rect —
+  // preserving the photo and its rotation, but recentering scale/offset to
+  // a fresh cover fit, since the new rect's aspect ratio may differ. Only
+  // runs when there's something to re-fit; a no-op on first load.
+  const templateIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!template || templateIdRef.current === template.id) return;
+    templateIdRef.current = template.id;
+    setSlots((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map<number, SlotState>();
+      for (const [slotIndex, slot] of prev.entries()) {
+        const rect = template.printableRects.find((r) => r.slotIndex === slotIndex);
+        if (!rect) {
+          next.set(slotIndex, slot);
+          continue;
+        }
+        const canvasRect = fractionRectToCanvasRect(rect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+        const scale = coverScaleForRotation(canvasRect.width, canvasRect.height, slot.widthPx, slot.heightPx, slot.rotationDeg);
+        const { offsetX, offsetY } = centeredOffsetForRotation(
+          canvasRect.width,
+          canvasRect.height,
+          slot.widthPx,
+          slot.heightPx,
+          scale,
+          slot.rotationDeg
+        );
+        const effectiveDpi = selectedVariant
+          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
+          : slot.effectiveDpi;
+        next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi });
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template?.id]);
+
+  const activeSlot = slots.get(activeSlotIndex);
+  const activeRect = template?.printableRects.find((r) => r.slotIndex === activeSlotIndex);
+  const activeSlotIsRed = activeSlot !== undefined && dpiTier(activeSlot.effectiveDpi) === 'red';
+
+  const completion = validateSlotsComplete(
+    product.photoSlots,
+    new Map(Array.from(slots.entries()).map(([i, s]) => [i, { effectiveDpi: s.effectiveDpi, confirmedLowDpi: s.confirmedLowDpi }]))
+  );
+
+  const handleFileChange = async (file: File, slotIndex: number) => {
+    if (!selectedVariant || !template) return;
+    const slotRect = template.printableRects.find((r) => r.slotIndex === slotIndex);
+    if (!slotRect) {
+      setUploadError("We couldn't set up this photo slot — please close and reopen the editor.");
+      return;
+    }
+
+    setUploadError(null);
+
+    const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('This photo is too large — please use a file under 25 MB.');
+      return;
+    }
+
+    setUploadingSlot(slotIndex);
+    try {
+      const sessionId = ensureSessionId();
+      const formData = new FormData();
+      formData.append('file', file);
+      // The server looks up minUploadPx from this variantId itself — a
+      // client-supplied minUploadPx would be trivially bypassable.
+      formData.append('variantId', selectedVariant.id);
+
+      const res = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { 'X-Session-Id': sessionId },
+        body: formData,
+      });
+      const upload: Upload = await res.json();
+
+      if (!res.ok || upload.status === 'rejected') {
+        setUploadError("We couldn't process this photo — please try a different file.");
+        return;
+      }
+
+      const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const scale = coverScale(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx);
+      const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx, scale);
+      const effectiveDpi = computeEffectiveDpi(slotRect, upload.widthPx, upload.heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+
+      setSlots((prev) => {
+        const next = new Map(prev);
+        next.set(slotIndex, {
+          uploadId: upload.id,
+          originalUrl: upload.originalUrl,
+          widthPx: upload.widthPx,
+          heightPx: upload.heightPx,
+          scale,
+          offsetX,
+          offsetY,
+          rotationDeg: 0,
+          effectiveDpi,
+          // A fresh photo always needs a fresh confirmation if it's still
+          // red-tier — never inherit a previous photo's confirmation.
+          confirmedLowDpi: false,
+        });
+        return next;
+      });
+    } catch {
+      setUploadError('Upload failed. Please check your connection and try again.');
+    } finally {
+      setUploadingSlot(null);
+    }
+  };
+
+  const handleZoomTo = (newScale: number) => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current || !activeRect || !selectedVariant) return prev;
+      const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const minScale = coverScaleForRotation(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, current.rotationDeg);
+      const maxScale = minScale * MAX_ZOOM_MULTIPLE;
+      const clamped = Math.min(maxScale, Math.max(minScale, newScale));
+      if (clamped === current.scale) return prev;
+      const { offsetX, offsetY } = offsetAfterScaleChange(current.offsetX, current.offsetY, current.scale, clamped, canvasRect.width, canvasRect.height);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, clamped, offsetX, offsetY, current.rotationDeg, selectedVariant);
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, scale: clamped, offsetX, offsetY, effectiveDpi });
+      return next;
+    });
+  };
+
+  const handleZoom = (factor: number) => {
+    const current = slots.get(activeSlotIndex);
+    if (!current) return;
+    handleZoomTo(current.scale * factor);
+  };
+
+  const handleRotate = () => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current || !activeRect || !selectedVariant) return prev;
+      const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const newRotation = ((current.rotationDeg + 90) % 360) as RotationDeg;
+      const minScale = coverScaleForRotation(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, newRotation);
+      const newScale = Math.max(current.scale, minScale);
+      const { offsetX, offsetY } = centeredOffsetForRotation(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, newScale, newRotation);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, newScale, offsetX, offsetY, newRotation, selectedVariant);
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, rotationDeg: newRotation, scale: newScale, offsetX, offsetY, effectiveDpi });
+      return next;
+    });
+  };
+
+  const handleReset = () => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current || !activeRect || !selectedVariant) return prev;
+      const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const scale = coverScale(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx);
+      const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, scale);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, scale, offsetX, offsetY, rotationDeg: 0, effectiveDpi });
+      return next;
+    });
+  };
+
+  const handleTransformChange = (slotIndex: number, transform: { scale: number; offsetX: number; offsetY: number }) => {
+    setSlots((prev) => {
+      const current = prev.get(slotIndex);
+      const rect = template?.printableRects.find((r) => r.slotIndex === slotIndex);
+      if (!current || !rect || !selectedVariant) return prev;
+      const effectiveDpi = computeEffectiveDpi(rect, current.widthPx, current.heightPx, transform.scale, transform.offsetX, transform.offsetY, current.rotationDeg, selectedVariant);
+      const next = new Map(prev);
+      next.set(slotIndex, { ...current, ...transform, effectiveDpi });
+      return next;
+    });
+  };
+
+  const handleConfirmLowDpi = (checked: boolean) => {
+    setSlots((prev) => {
+      const current = prev.get(activeSlotIndex);
+      if (!current) return prev;
+      const next = new Map(prev);
+      next.set(activeSlotIndex, { ...current, confirmedLowDpi: checked });
+      return next;
+    });
+  };
+
+  const handleTextFieldChange = (fieldKey: string, value: { value: string; fontKey: string; color: string }) => {
+    setTextFields((prev) => {
+      const next = new Map(prev);
+      next.set(fieldKey, value);
+      return next;
+    });
+  };
+
+  const handleAddToCart = async (quantity: number, onDone: (personalizationId: string, previewUrl?: string) => void) => {
+    if (submitting || !selectedVariant || !template) return;
+    setSubmitting(true);
+    setSubmitError(null);
+
+    const personalizationId = crypto.randomUUID();
+    const sessionId = ensureSessionId();
+
+    // One shared preview for the whole personalization (every slot now
+    // renders onto the same persistent canvas) rather than one capture
+    // per slot — uploaded once and reused as every slot's Customization
+    // doc's previewUrl, and as the cart line's own thumbnail.
+    let sharedPreviewUrl: string | undefined;
+    if (previewDataUrl) {
+      try {
+        const previewRes = await fetch('/api/uploads/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+          body: JSON.stringify({ personalizationId, slotIndex: 0, dataUrl: previewDataUrl }),
+        });
+        if (previewRes.ok) {
+          const previewBody = await previewRes.json();
+          if (typeof previewBody.previewUrl === 'string') sharedPreviewUrl = previewBody.previewUrl;
+        }
+      } catch {
+        // Non-fatal — a failed preview export/upload must never block
+        // checkout completion.
+      }
+    }
+
+    const textFieldsJson: Record<string, { value: string; fontFamily: string; color: string }> | undefined =
+      product.allowsTextPersonalization
+        ? Object.fromEntries(
+            Array.from(textFields.entries())
+              .filter(([, field]) => field.value.trim().length > 0)
+              .map(([key, field]) => [key, { value: field.value, fontFamily: fontFamilyForKey(field.fontKey), color: field.color }])
+          )
+        : undefined;
+
+    try {
+      for (const [slotIndex, slot] of slots.entries()) {
+        const slotRect = template.printableRects.find((r) => r.slotIndex === slotIndex);
+        const cropRect = slotRect
+          ? (() => {
+              const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+              return slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, slot.scale, slot.offsetX, slot.offsetY, slot.rotationDeg);
+            })()
+          : { x: 0, y: 0, width: slot.widthPx / slot.scale, height: slot.heightPx / slot.scale };
+
+        const res = await fetch('/api/customizations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+          body: JSON.stringify({
+            sessionId,
+            personalizationId,
+            uploadId: slot.uploadId,
+            variantId: selectedVariant.id,
+            slotIndex,
+            transformJson: { scale: slot.scale, offsetX: slot.offsetX, offsetY: slot.offsetY, rotationDeg: slot.rotationDeg, cropRect },
+            templateVersion: template.version,
+            ...(selectedClipartId && { clipartId: selectedClipartId }),
+            previewUrl: sharedPreviewUrl,
+            renderStatus: 'pending',
+            ...(textFieldsJson && Object.keys(textFieldsJson).length > 0 && { textFieldsJson }),
+          }),
+        });
+        if (!res.ok) throw new Error(`Failed to save slot ${slotIndex + 1}`);
+      }
+
+      onDone(personalizationId, sharedPreviewUrl);
+      setSlots(new Map());
+      setTextFields(new Map());
+      setSelectedClipartId(null);
+      setPreviewDataUrl(null);
+    } catch {
+      setSubmitError("We couldn't save your personalization — please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const showInlineEditor = templateStatus === 'loaded' && template !== null;
+
+  // The frame column is the widest of the three: its canvas is square, so
+  // width is what gives it height, and at equal widths it finished well
+  // short of the other two cards and left a gap under the upload box.
+  //
+  // When the inline editor is showing, PersonalizationEditor returns TWO
+  // top-level blocks (canvas+its controls, then text/clipart controls) —
+  // see its own comment — so this becomes a 3-column layout on large
+  // screens (frame | customization controls | buy box) instead of
+  // stacking the controls under a tall canvas column. The Gallery
+  // fallback (no template yet) stays a plain 2-column layout.
   return (
-    <div className="grid md:grid-cols-2 gap-8">
-      <Gallery media={galleryMedia} productTitle={product.title} />
+    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_350px] gap-4 lg:gap-4' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
+      {showInlineEditor && selectedVariant ? (
+        <PersonalizationEditor
+          template={template}
+          photoSlots={product.photoSlots}
+          allowsTextPersonalization={product.allowsTextPersonalization}
+          activeSlotIndex={activeSlotIndex}
+          slots={slots}
+          textFields={textFields}
+          selectedClipartId={selectedClipartId}
+          uploadingSlot={uploadingSlot}
+          uploadError={uploadError}
+          zoomBounds={
+            activeSlot
+              ? (() => {
+                  const canvasRect = activeRect ? fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE) : null;
+                  const min = canvasRect
+                    ? coverScaleForRotation(canvasRect.width, canvasRect.height, activeSlot.widthPx, activeSlot.heightPx, activeSlot.rotationDeg)
+                    : activeSlot.scale;
+                  return { min, max: min * MAX_ZOOM_MULTIPLE };
+                })()
+              : null
+          }
+          activeSlotIsRed={activeSlotIsRed}
+          onSelectSlot={setActiveSlotIndex}
+          onFileChange={handleFileChange}
+          onZoomStep={handleZoom}
+          onZoomTo={handleZoomTo}
+          onRotate={handleRotate}
+          onReset={handleReset}
+          onTransformChange={handleTransformChange}
+          onCanvasUpdate={setPreviewDataUrl}
+          onConfirmLowDpi={handleConfirmLowDpi}
+          onTextFieldChange={handleTextFieldChange}
+          onSelectClipart={setSelectedClipartId}
+        />
+      ) : (
+        <div className="rounded-2xl bg-paper border border-line p-4 md:p-5">
+          <Gallery media={galleryMedia} productTitle={product.title} />
+        </div>
+      )}
       <BuyBox
         product={product}
         variants={variants}
         selectedVariant={selectedVariant}
         selectedSize={selectedSize}
         selectedColour={selectedColour}
+        selectedOrientation={selectedOrientation}
         onSelectSize={handleSelectSize}
         onSelectColour={handleSelectColour}
+        onSelectOrientation={handleSelectOrientation}
+        personalizationReady={showInlineEditor ? completion.complete : true}
+        personalizationReason={showInlineEditor ? completion.reason : undefined}
+        submitting={submitting}
+        submitError={submitError}
+        onAddToCart={showInlineEditor ? handleAddToCart : undefined}
       />
     </div>
   );

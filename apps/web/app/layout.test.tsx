@@ -6,6 +6,7 @@ import { AuthProvider } from '../lib/auth-context';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/',
 }));
 
 // LayoutChrome renders Header, which calls useAuth() directly and so

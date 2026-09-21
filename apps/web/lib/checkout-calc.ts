@@ -1,4 +1,4 @@
-import type { Variant } from '@bro-pics/shared';
+import type { Variant, DeliveryMethod } from '@bro-pics/shared';
 
 export interface PricedCartLine {
   variantId: string;
@@ -70,9 +70,44 @@ export function calculateSubtotal(priced: PricedCartLine[]): number {
   return priced.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 }
 
+// Same-day delivery is deliberately not offered: every order is a
+// personalized, freshly-printed product with its own dispatchDaysMin/Max
+// production time (see DeliveryTimeline.tsx) — no delivery method can skip
+// that, so promising same-day would be a promise this business can't keep.
+// Standard vs. express only changes the COURIER TRANSIT time after
+// dispatch, not the production time before it.
+export const DELIVERY_METHODS: DeliveryMethod[] = ['standard', 'express'];
+
+export interface ShippingSettings {
+  freeShippingThreshold: number;
+  flatShippingCharge: number;
+  // Optional so existing callers/fixtures with only the two fields above
+  // keep working unchanged for the (default) 'standard' method — only
+  // exercised when deliveryMethod is 'express'.
+  expressShippingCharge?: number;
+}
+
+// The single source of default shipping values — used when settings/shipping
+// doesn't exist yet (server-side, firestore-settings.ts) and as the
+// client-safe fallback the checkout page's delivery-method selector reads
+// against (client code can't import firestore-settings.ts, which pulls in
+// firebase-admin). Kept here, not duplicated, so the two never drift.
+export const DEFAULT_SHIPPING_SETTINGS: Required<ShippingSettings> = {
+  freeShippingThreshold: 150000,
+  flatShippingCharge: 5000,
+  expressShippingCharge: 15000,
+};
+
 export function calculateShipping(
   subtotal: number,
-  settings: { freeShippingThreshold: number; flatShippingCharge: number }
+  settings: ShippingSettings,
+  deliveryMethod: DeliveryMethod = 'standard'
 ): number {
+  if (deliveryMethod === 'express') {
+    // Express is a flat surcharge regardless of order size — free shipping
+    // is standard delivery's own threshold-based reward, not a discount on
+    // paying for a faster courier.
+    return settings.expressShippingCharge ?? DEFAULT_SHIPPING_SETTINGS.expressShippingCharge;
+  }
   return subtotal >= settings.freeShippingThreshold ? 0 : settings.flatShippingCharge;
 }

@@ -1,3 +1,56 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar stays fully functional — only the visual track/thumb is hidden. */
+html,
+body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* older Edge/IE */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, newer Edge */
+}
+
+/* The page field is a warm off-white, not pure white. White is reserved
+   for cards, so a product tile reads as a raised object in the same golden
+   light as the banners rather than as a hole in the page. */
+body {
+  background-color: #faf8f4;
+}
+
+/* Keyboard focus must stay visible everywhere. Hardcoded rather than
+   theme() so this rule survives independent of Tailwind's build. Matches
+   the `accent` token (Prussian Blue). */
+:focus-visible {
+  outline: 2px solid #14213d;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Horizontal rails (category circles, product rails, the browse bar) scroll
+   by drag and wheel; the visible track is hidden to match the page's own
+   hidden-but-functional scrollbars. */
+.rail {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}

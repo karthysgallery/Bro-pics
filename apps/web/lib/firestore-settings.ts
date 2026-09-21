@@ -1,5 +1,6 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
+import { DEFAULT_SHIPPING_SETTINGS } from './checkout-calc';
 
 export async function getAnnouncementBarSettings(): Promise<{
   text: string;
@@ -19,16 +20,18 @@ export async function getAnnouncementBarSettings(): Promise<{
 }
 
 // Placeholder values — the client hasn't supplied real shipping rules yet
-// (PROJECT_STATUS.md §6). Flat ₹50, free above ₹1500, both in paise. Settings
+// (PROJECT_STATUS.md §6). Flat ₹50, free above ₹1500, express ₹150 flat,
+// all in paise (DEFAULT_SHIPPING_SETTINGS, checkout-calc.ts — the single
+// source shared with the client-safe delivery-method selector). Settings
 // are stored one document per key (settings/{key}), matching how
 // getAnnouncementBarSettings above already reads settings/announcementBar —
 // NOT as one combined document, despite SettingsSchema's shape suggesting
 // that; nothing in this codebase actually writes a single combined document.
-const DEFAULT_SHIPPING_SETTINGS = { freeShippingThreshold: 150000, flatShippingCharge: 5000 };
 
 export async function getShippingSettings(): Promise<{
   freeShippingThreshold: number;
   flatShippingCharge: number;
+  expressShippingCharge: number;
 }> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('shipping').get();
@@ -43,6 +46,10 @@ export async function getShippingSettings(): Promise<{
     typeof data?.flatShippingCharge === 'number'
       ? data.flatShippingCharge
       : DEFAULT_SHIPPING_SETTINGS.flatShippingCharge;
+  const expressShippingCharge =
+    typeof data?.expressShippingCharge === 'number'
+      ? data.expressShippingCharge
+      : DEFAULT_SHIPPING_SETTINGS.expressShippingCharge;
 
-  return { freeShippingThreshold, flatShippingCharge };
+  return { freeShippingThreshold, flatShippingCharge, expressShippingCharge };
 }

@@ -1,58 +1,33 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AccountModal } from './AccountModal';
-import { useAuth } from '../../lib/auth-context';
 
-vi.mock('../../lib/auth-context', () => ({
-  useAuth: vi.fn(),
-}));
+// AccountModal no longer reads auth state — signed-in users never see it
+// (Header links straight to /account instead), so it only ever renders the
+// sign-in flow. No useAuth mock needed.
 
 describe('AccountModal', () => {
   it('renders nothing when closed', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false, signOut: vi.fn() });
     render(<AccountModal isOpen={false} onClose={() => {}} />);
     expect(screen.queryByTestId('account-modal')).not.toBeInTheDocument();
   });
 
-  it('renders PhoneSignIn when signed out', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false, signOut: vi.fn() });
+  it('renders PhoneSignIn when open', () => {
     render(<AccountModal isOpen={true} onClose={() => {}} />);
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign Out' })).not.toBeInTheDocument();
   });
 
-  it('renders the phone number, a My Orders link, and a Sign Out button when signed in', () => {
-    vi.mocked(useAuth).mockReturnValue({
-      user: { phoneNumber: '+911234567890' } as never,
-      loading: false,
-      signOut: vi.fn(),
-    });
-    render(<AccountModal isOpen={true} onClose={() => {}} />);
-    expect(screen.getByText('+911234567890')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My Orders' })).toHaveAttribute('href', '/orders');
-    expect(screen.getByRole('button', { name: 'Sign Out' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
-  });
-
-  it('calls onClose when the My Orders link is clicked', () => {
+  it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn();
-    vi.mocked(useAuth).mockReturnValue({
-      user: { phoneNumber: '+911234567890' } as never,
-      loading: false,
-      signOut: vi.fn(),
-    });
     render(<AccountModal isOpen={true} onClose={onClose} />);
-    fireEvent.click(screen.getByRole('link', { name: 'My Orders' }));
+    fireEvent.click(screen.getByLabelText('Close sign in'));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls signOut and onClose when Sign Out is clicked', () => {
-    const signOut = vi.fn();
+  it('calls onClose when the backdrop is clicked', () => {
     const onClose = vi.fn();
-    vi.mocked(useAuth).mockReturnValue({ user: { phoneNumber: '+911234567890' } as never, loading: false, signOut });
-    render(<AccountModal isOpen={true} onClose={onClose} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
-    expect(signOut).toHaveBeenCalled();
+    const { container } = render(<AccountModal isOpen={true} onClose={onClose} />);
+    fireEvent.click(container.querySelector('.absolute.inset-0')!);
     expect(onClose).toHaveBeenCalled();
   });
 });

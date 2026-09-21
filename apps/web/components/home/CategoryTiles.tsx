@@ -1,26 +1,58 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Category } from '@bro-pics/shared';
+import { Section } from '../ui/Section';
+import { SectionHeader } from '../ui/SectionHeader';
 
-export function CategoryTiles({ title, categories }: { title: string; categories: Category[] }) {
+interface CategoryTilesProps {
+  title: string;
+  categories: Category[];
+}
+
+/** A short promise per collection, so the row says something a bare name
+ *  cannot. Keyed by slug and skipped silently for anything unlisted. */
+const TAGLINES: Record<string, string> = {
+  'frames-wall-decor': 'Make your walls vibrant',
+  'canvas-prints': 'Art that speaks',
+  'collage-combo-sets': 'More memories together',
+  'personalized-gifts': 'Thoughtful & unique',
+};
+
+/**
+ * Pill cards rather than bare circles: a thumbnail on the left, the name and
+ * its promise on the right. The extra line is what turns a row of icons into
+ * a row of reasons to click.
+ */
+export function CategoryTiles({ title, categories }: CategoryTilesProps) {
+  if (categories.length === 0) return null;
+
   return (
-    <section className="px-4 py-10 md:px-8">
-      <h2 className="font-display text-2xl text-center mb-6">{title}</h2>
-      {/* pr-20 on mobile keeps a wrapped tile clear of the fixed WhatsApp
-          button (LayoutChrome renders it bottom-6 right-6 at w-14 h-14),
-          which otherwise can land on top of a tile at common scroll
-          positions and block taps on it -- same fix as VariantSelector's,
-          see that component's comment for the full explanation. */}
-      <div className="flex flex-wrap justify-center gap-6 pr-20 sm:pr-0">
+    <Section>
+      <SectionHeader title={title} subtitle="Find the perfect piece for every moment" href="/category" />
+      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {categories.map((category) => (
-          <Link key={category.id} href={`/category/${category.slug}`} className="flex flex-col items-center gap-2">
-            <div className="relative w-24 h-24">
-              <Image src={category.image} alt={category.name} fill sizes="96px" className="rounded-full object-cover" />
-            </div>
-            <span className="text-sm">{category.name}</span>
-          </Link>
+          <li key={category.id}>
+            <Link
+              href={`/category/${category.slug}`}
+              className="group flex items-center gap-3 rounded-2xl bg-paper border border-line p-2.5 hover:border-gold transition-colors"
+            >
+              <span className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden bg-tint">
+                {category.image ? (
+                  <Image src={category.image} alt="" fill sizes="56px" className="object-cover" />
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-ink truncate group-hover:text-accent transition-colors">
+                  {category.name}
+                </span>
+                {TAGLINES[category.slug] && (
+                  <span className="block text-2xs text-ink/55 truncate">{TAGLINES[category.slug]}</span>
+                )}
+              </span>
+            </Link>
+          </li>
         ))}
-      </div>
-    </section>
+      </ul>
+    </Section>
   );
 }

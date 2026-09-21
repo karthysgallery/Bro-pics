@@ -15,6 +15,7 @@ import {
   OrderItemSchema,
   OrderEventSchema,
   AddressSchema,
+  DeliveryMethodSchema,
   calculateCouponDiscount,
   type CounterTransaction,
 } from '@bro-pics/shared';
@@ -61,6 +62,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const couponCode =
     typeof body?.couponCode === 'string' && body.couponCode.trim().length > 0 ? body.couponCode.trim() : null;
+
+  // Absent entirely means 'standard' (backward-compatible with clients that
+  // predate this field); an explicitly-supplied-but-invalid value is a real
+  // client error, not silently coerced.
+  let deliveryMethod: 'standard' | 'express' = 'standard';
+  if (body?.deliveryMethod !== undefined) {
+    const parsedMethod = DeliveryMethodSchema.safeParse(body.deliveryMethod);
+    if (!parsedMethod.success) {
+      return NextResponse.json({ error: 'Invalid deliveryMethod' }, { status: 400 });
+    }
+    deliveryMethod = parsedMethod.data;
+  }
 
   const db = getFirestore(getAdminApp());
 
@@ -109,7 +122,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const subtotal = calculateSubtotal(priced);
   const shippingSettings = await getShippingSettings();
-  const shipping = calculateShipping(subtotal, shippingSettings);
+  const shipping = calculateShipping(subtotal, shippingSettings, deliveryMethod);
 
   let discount = 0;
   let appliedCouponId: string | undefined;
@@ -191,6 +204,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     addressJson: address,
     razorpayOrderId: razorpayOrder.id,
     placedAt: new Date(),
+    deliveryMethod,
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,

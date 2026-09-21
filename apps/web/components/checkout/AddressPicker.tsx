@@ -5,6 +5,9 @@ import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import type { Address } from '@bro-pics/shared';
 import { getFirebaseApp } from '../../lib/firebase-client';
 import { AddressForm } from './AddressForm';
+import { Skeleton } from '../ui/Skeleton';
+
+const TYPE_LABEL: Record<string, string> = { home: 'Home', work: 'Work', other: 'Other' };
 
 interface AddressPickerProps {
   userId: string;
@@ -43,7 +46,14 @@ export function AddressPicker({ userId, onSelect }: AddressPickerProps) {
     handleSelect(address.id);
   };
 
-  if (addresses === null) return <p>Loading addresses…</p>;
+  if (addresses === null) {
+    return (
+      <div className="flex flex-col gap-2" role="status" aria-label="Loading addresses">
+        <Skeleton className="h-6 w-full" />
+        <Skeleton className="h-6 w-2/3" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -55,6 +65,11 @@ export function AddressPicker({ userId, onSelect }: AddressPickerProps) {
             checked={selectedId === address.id}
             onChange={() => handleSelect(address.id)}
           />
+          {address.type && (
+            <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
+              {TYPE_LABEL[address.type]}
+            </span>
+          )}
           {address.label ? `${address.label} — ` : ''}
           {address.line1}, {address.city}, {address.state} {address.pincode}
         </label>

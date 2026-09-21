@@ -45,6 +45,21 @@ describe('OrderSchema money invariants', () => {
   });
 });
 
+describe('OrderSchema deliveryMethod', () => {
+  it('accepts an order with no deliveryMethod set (pre-existing orders)', () => {
+    expect(OrderSchema.safeParse(baseOrder()).success).toBe(true);
+  });
+
+  it('accepts "standard" and "express"', () => {
+    expect(OrderSchema.safeParse(baseOrder({ deliveryMethod: 'standard' })).success).toBe(true);
+    expect(OrderSchema.safeParse(baseOrder({ deliveryMethod: 'express' })).success).toBe(true);
+  });
+
+  it('rejects an unsupported delivery method (same-day is deliberately not offered)', () => {
+    expect(OrderSchema.safeParse(baseOrder({ deliveryMethod: 'same_day' })).success).toBe(false);
+  });
+});
+
 describe('OrderSchema courier/awbNumber', () => {
   it('accepts an order with courier and awbNumber set', () => {
     const result = OrderSchema.safeParse(baseOrder({ courier: 'BlueDart', awbNumber: 'BD123456789' }));

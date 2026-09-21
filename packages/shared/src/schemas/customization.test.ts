@@ -6,7 +6,7 @@ function baseCustomization(overrides: Record<string, unknown> = {}) {
     id: 'c1', sessionId: 'sess_1', personalizationId: 'p1', uploadId: 'up_1',
     variantId: 'v1', slotIndex: 0,
     transformJson: { scale: 1, offsetX: 0, offsetY: 0, rotationDeg: 0, cropRect: { x: 0, y: 0, width: 100, height: 100 } },
-    effectiveDpi: 300, renderStatus: 'done',
+    effectiveDpi: 300, renderStatus: 'done', templateVersion: 1,
     ...overrides,
   };
 }
@@ -52,7 +52,35 @@ describe('CustomizationSchema', () => {
 
   it('accepts a valid customization with textFieldsJson populated', () => {
     const result = CustomizationSchema.safeParse(
-      baseCustomization({ textFieldsJson: { line1: 'Happy Birthday', line2: 'From Bro' } })
+      baseCustomization({
+        textFieldsJson: {
+          line1: { value: 'Happy Birthday', fontFamily: 'serif', color: '#000000' },
+          line2: { value: 'From Bro', fontFamily: 'serif', color: '#000000' },
+        },
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects textFieldsJson with a plain string value (pre-upgrade shape)', () => {
+    const result = CustomizationSchema.safeParse(baseCustomization({ textFieldsJson: { line1: 'Happy Birthday' } }));
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an optional clipartId', () => {
+    const result = CustomizationSchema.safeParse(baseCustomization({ clipartId: 'heart' }));
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing templateVersion', () => {
+    const { templateVersion: _templateVersion, ...rest } = baseCustomization();
+    const result = CustomizationSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an optional renderedFileUrl', () => {
+    const result = CustomizationSchema.safeParse(
+      baseCustomization({ renderedFileUrl: 'https://storage.example.com/print/c1.jpg' })
     );
     expect(result.success).toBe(true);
   });

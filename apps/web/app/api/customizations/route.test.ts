@@ -68,6 +68,7 @@ const validBody = {
   },
   effectiveDpi: 999999, // client-lied value — must be ignored and overwritten
   renderStatus: 'pending',
+  templateVersion: 1,
 };
 
 function makeRequest(body: unknown, sessionId: string | null, authHeader?: string): Request {
@@ -108,6 +109,18 @@ describe('POST /api/customizations', () => {
     expect(body.sessionId).toBe('sess_1');
     expect(body.effectiveDpi).toBeCloseTo(300);
     expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ id: 'cust_test123', sessionId: 'sess_1' }));
+  });
+
+  it('rejects a body missing templateVersion', async () => {
+    const { templateVersion: _templateVersion, ...withoutVersion } = validBody;
+    const response = await POST(makeRequest(withoutVersion, 'sess_1'));
+    expect(response.status).toBe(400);
+  });
+
+  it('accepts an optional clipartId and passes it through', async () => {
+    const response = await POST(makeRequest({ ...validBody, clipartId: 'heart' }, 'sess_1'));
+    expect(response.status).toBe(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ clipartId: 'heart' }));
   });
 
   it('rejects a body that fails schema validation', async () => {

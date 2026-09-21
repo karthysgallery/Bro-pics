@@ -50,6 +50,36 @@ describe('GET /api/frame-templates/:variantId', () => {
     expect(body).toEqual([templateDoc]);
   });
 
+  it('returns the isCurrent version first when multiple versions exist for a variant', async () => {
+    const oldVersion = { ...templateDoc, id: 'ft_1_v1', version: 1, isCurrent: false };
+    const newVersion = { ...templateDoc, id: 'ft_1_v2', version: 2, isCurrent: true };
+    mockCollectionGroupGet.mockResolvedValueOnce({
+      docs: [{ data: () => oldVersion }, { data: () => newVersion }],
+    });
+
+    const response = await GET(new Request('http://localhost/api/frame-templates/var_1'), {
+      params: Promise.resolve({ variantId: 'var_1' }),
+    });
+    const body = await response.json();
+    expect(body[0].id).toBe('ft_1_v2');
+    expect(body[1].id).toBe('ft_1_v1');
+  });
+
+  it('falls back to the highest version when none is marked isCurrent', async () => {
+    const v1 = { ...templateDoc, id: 'ft_1_v1', version: 1, isCurrent: false };
+    const v3 = { ...templateDoc, id: 'ft_1_v3', version: 3, isCurrent: false };
+    const v2 = { ...templateDoc, id: 'ft_1_v2', version: 2, isCurrent: false };
+    mockCollectionGroupGet.mockResolvedValueOnce({
+      docs: [{ data: () => v1 }, { data: () => v3 }, { data: () => v2 }],
+    });
+
+    const response = await GET(new Request('http://localhost/api/frame-templates/var_1'), {
+      params: Promise.resolve({ variantId: 'var_1' }),
+    });
+    const body = await response.json();
+    expect(body[0].id).toBe('ft_1_v3');
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
     const response = await GET(new Request('http://localhost/api/frame-templates/var_1'), {

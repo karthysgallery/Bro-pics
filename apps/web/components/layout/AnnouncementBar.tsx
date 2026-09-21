@@ -5,7 +5,7 @@ interface AnnouncementBarProps {
 
 export function AnnouncementBar({ text, link }: AnnouncementBarProps) {
   const content = link ? (
-    <a href={link} className="hover:underline">
+    <a href={link} className="underline underline-offset-2">
       {text}
     </a>
   ) : (
@@ -13,7 +13,7 @@ export function AnnouncementBar({ text, link }: AnnouncementBarProps) {
   );
 
   return (
-    <div className="bg-charcoal text-cream text-center text-sm py-2 px-4">
+    <div className="bg-ink text-gold font-medium text-center text-xs py-2.5 px-4">
       {content}
     </div>
   );

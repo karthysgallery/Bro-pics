@@ -7,6 +7,7 @@ import type { Category } from '@bro-pics/shared';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/',
 }));
 
 // Header calls useAuth() directly (for the sign-in trigger), which requires
@@ -34,7 +35,7 @@ const categories: Category[] = [
 ];
 
 describe('Header', () => {
-  it('renders the logo, category links, and a search input', () => {
+  it('renders the logo, the search field, and a browse bar built from real categories', () => {
     render(
       <AuthProvider>
         <CartProvider>
@@ -42,9 +43,16 @@ describe('Header', () => {
         </CartProvider>
       </AuthProvider>
     );
-    expect(screen.getByText('BroPics')).toBeInTheDocument();
-    expect(screen.getByText('Frames & Wall Décor')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search products...')).toBeInTheDocument();
+    // The wordmark is two spans so 'Pics' can take the accent colour.
+    expect(screen.getByRole('link', { name: 'BroPics home' })).toBeInTheDocument();
+    expect(screen.getByText(/frames for a brighter you/i)).toBeInTheDocument();
+    // Two instances by design: the search sits inline in the logo row from
+    // md, and on its own full-width row below it on phones. Exactly one is
+    // ever displayed, but jsdom applies no media queries so both render.
+    expect(screen.getAllByPlaceholderText('Search for frames, gifts and more...')).toHaveLength(2);
+    // The second tier lists the categories passed in, not a hardcoded nav.
+    expect(screen.getAllByText('Frames & Wall Décor').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Shop all').length).toBeGreaterThan(0);
   });
 
   it('shows a cart badge with the current item count', () => {
@@ -83,7 +91,7 @@ describe('Header', () => {
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
   });
 
-  it('opens the account modal (not a direct link) when the Account icon is clicked while signed in', async () => {
+  it('links straight to /account (no modal) when signed in', async () => {
     // Mocks the auth-context module itself so Header's useAuth() reports a
     // signed-in user, while CartProvider's separate useContext(AuthContext)
     // read resolves against a FRESH, un-provided context (default null) —
@@ -106,13 +114,10 @@ describe('Header', () => {
         <HeaderWithSignedInAuth categories={categories} onCartClick={() => {}} />
       </FreshCartProvider>
     );
-    const accountButton = screen.getByLabelText('Account');
-    expect(accountButton.tagName).toBe('BUTTON');
+    const accountLink = screen.getByLabelText('Account');
+    expect(accountLink.tagName).toBe('A');
+    expect(accountLink).toHaveAttribute('href', '/account');
     expect(screen.queryByTestId('account-modal')).not.toBeInTheDocument();
-
-    fireEvent.click(accountButton);
-    expect(screen.getByTestId('account-modal')).toBeInTheDocument();
-    expect(screen.getByText('+911234567890')).toBeInTheDocument();
     expect(screen.queryByLabelText('Sign in')).not.toBeInTheDocument();
 
     vi.doUnmock('../../lib/auth-context');

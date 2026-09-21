@@ -33,15 +33,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   const app = getAdminApp();
   const db = getFirestore(app);
 
-  // minUploadPx must come from the server-fetched variant, never the
-  // client — a client can otherwise send an arbitrarily low value (or a
-  // non-numeric one, silently passing via `x < NaN` being false) to bypass
-  // the resolution-quality gate entirely. See Finding 7 in review.
+  // The variant must still exist (an unknown variantId is a real client
+  // error), but its minUploadPx is no longer used to hard-reject the
+  // upload here — a low-resolution photo is still accepted and stored;
+  // the editor's own DPI-tier badge (computed from the ACTUAL crop, not
+  // just the raw upload) is what tells the customer whether it'll print
+  // sharp, with a per-slot "use anyway" override at /api/customizations.
+  // Rejecting outright here blocked photos that would have cropped fine.
   const variant = await findVariantById(db, variantIdRaw);
   if (!variant) {
     return NextResponse.json({ error: `Unknown variantId: ${variantIdRaw}` }, { status: 400 });
   }
-  const minUploadPx = variant.minUploadPx;
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
   let probed;
@@ -56,26 +58,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const uploadRef = db.collection('uploads').doc();
   const uploadId = uploadRef.id;
-
-  if (probed.widthPx < minUploadPx || probed.heightPx < minUploadPx) {
-    const rejected: Upload = {
-      id: uploadId,
-      sessionId,
-      ...(userId && { userId }),
-      // UploadSchema requires a non-empty originalUrl even for rejected
-      // uploads (no dedicated "no file" representation) — the file was
-      // never written to storage, so this is a sentinel, not a real URL.
-      originalUrl: 'rejected://not-uploaded',
-      widthPx: probed.widthPx,
-      heightPx: probed.heightPx,
-      mime: probed.mime,
-      bytes: probed.strippedBuffer.byteLength,
-      exifStripped: true,
-      status: 'rejected',
-    };
-    await uploadRef.set(UploadSchema.parse(rejected));
-    return NextResponse.json(rejected, { status: 422 });
-  }
 
   const bucket = getStorage(app).bucket();
   const storagePath = `uploads/${sessionId}/${uploadId}/original.jpg`;

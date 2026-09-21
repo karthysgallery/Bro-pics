@@ -257,6 +257,18 @@ function toPrintPixels(widthIn: number, heightIn: number): { printWidthPx: numbe
   return { printWidthPx: Math.round(widthIn * 300), printHeightPx: Math.round(heightIn * 300) };
 }
 
+// Products where a Name/Date caption makes narrative sense (gifting/
+// anniversary/couple-oriented) — the rest stay image-only. Previously every
+// product hardcoded allowsTextPersonalization: false, so this feature was
+// unreachable in the live app despite the editor having built support for
+// it; this is the first real per-product configuration of it.
+const TEXT_PERSONALIZATION_PRODUCT_IDS = new Set([
+  'prod_classic_wooden_frame',
+  'prod_couples_eye_frame',
+  'prod_photo_collage_set',
+  'prod_personalized_photo_mug',
+]);
+
 export const seedProducts: Product[] = productInputs.map((input) => {
   // All seed variants have isActive: true, so every variant participates in
   // the facet/price fields below, matching calculateDenormalizedFields in
@@ -284,7 +296,7 @@ export const seedProducts: Product[] = productInputs.map((input) => {
     dispatchDaysMin: 3,
     dispatchDaysMax: 5,
     photoSlots: input.photoSlots,
-    allowsTextPersonalization: false,
+    allowsTextPersonalization: TEXT_PERSONALIZATION_PRODUCT_IDS.has(input.id),
     seo: { title: `${input.title} | BroPics`, description: input.shortDesc },
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
@@ -464,6 +476,44 @@ export function computePrintableRects(
   });
 }
 
+// Matches apps/web/lib/text-personalization-options.ts's defaultTextZoneRect
+// exactly (same stacked-band-near-the-bottom layout) — now baked into the
+// template doc as real per-product config instead of a client-side
+// fallback computed at render time for every product regardless of
+// allowsTextPersonalization.
+function computeTextZones(): FrameTemplate['textZones'] {
+  const stripTop = 0.84;
+  const stripHeight = 0.13;
+  const fields: Array<{ key: string; label: string }> = [
+    { key: 'name', label: 'Name' },
+    { key: 'date', label: 'Date' },
+  ];
+  const bandHeight = stripHeight / fields.length;
+  return fields.map((field, index) => ({
+    fieldKey: field.key,
+    label: field.label,
+    x: 0.08,
+    width: 0.84,
+    y: stripTop + bandHeight * index,
+    height: bandHeight,
+    maxLength: 40,
+    align: 'center' as const,
+    defaultFontFamily: 'dancing-script',
+    defaultColor: '#2b2420',
+  }));
+}
+
+// Stock/dev-provided clipart set (see apps/web/public/clipart/) — every
+// template gets the same small set for now; admin-uploadable per-product
+// selection is a data change for later, not a schema change (the shape
+// already supports it).
+function stockClipartOptions(): FrameTemplate['clipartOptions'] {
+  return [
+    { id: 'heart', label: 'Heart', assetUrl: '/clipart/heart.svg', x: 0.82, y: 0.06, width: 0.1, height: 0.1 },
+    { id: 'star', label: 'Star', assetUrl: '/clipart/star.svg', x: 0.82, y: 0.18, width: 0.1, height: 0.1 },
+  ];
+}
+
 export const seedFrameTemplates: FrameTemplate[] = seedVariants
   .filter((v) => v.isActive)
   .map((variant) => {
@@ -480,6 +530,10 @@ export const seedFrameTemplates: FrameTemplate[] = seedVariants
       printableRects,
       bleedMm: 2,
       matInset: 0,
+      version: 1,
+      isCurrent: true,
+      textZones: product.allowsTextPersonalization ? computeTextZones() : [],
+      clipartOptions: stockClipartOptions(),
     };
   });
 
@@ -501,10 +555,38 @@ export const seedHomepageSections: HomepageSection[] = [
     type: 'hero_slider',
     title: 'Handcrafted With Love',
     subtitle: 'Personalized photo frames made from your favourite memories',
-    image: '/placeholders/home/hero-1.svg',
-    mobileImage: '/placeholders/home/hero-1-mobile.svg',
+    image: '/placeholders/redesign/hero-banner.jpg',
+    mobileImage: '/placeholders/redesign/hero-banner.jpg',
     link: '/category/frames-wall-decor',
     sortOrder: 1,
+    startsAt: null,
+    endsAt: null,
+    isActive: true,
+    config: {},
+  },
+  {
+    id: 'sec_hero_2',
+    type: 'hero_slider',
+    title: 'Frames Built To Last',
+    subtitle: 'Premium materials, finished by hand, made for everyday display',
+    image: '/placeholders/redesign/bento-banner.jpg',
+    mobileImage: '/placeholders/redesign/bento-banner.jpg',
+    link: '/category/frames-wall-decor',
+    sortOrder: 2,
+    startsAt: null,
+    endsAt: null,
+    isActive: true,
+    config: {},
+  },
+  {
+    id: 'sec_hero_3',
+    type: 'hero_slider',
+    title: 'Every Memory Deserves A Frame',
+    subtitle: 'From a single photo to a whole gallery wall — we help you choose',
+    image: '/placeholders/redesign/closing-cta.jpg',
+    mobileImage: '/placeholders/redesign/closing-cta.jpg',
+    link: '/category/frames-wall-decor',
+    sortOrder: 3,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -518,7 +600,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 2,
+    sortOrder: 4,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -532,7 +614,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '/category/all',
-    sortOrder: 3,
+    sortOrder: 5,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -546,7 +628,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 4,
+    sortOrder: 6,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -560,7 +642,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '/category/frames-wall-decor',
-    sortOrder: 5,
+    sortOrder: 7,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -574,7 +656,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 6,
+    sortOrder: 8,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -588,7 +670,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 7,
+    sortOrder: 9,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -602,7 +684,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '/placeholders/home/why-us.svg',
     mobileImage: '/placeholders/home/why-us.svg',
     link: '',
-    sortOrder: 8,
+    sortOrder: 10,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -616,7 +698,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 9,
+    sortOrder: 11,
     startsAt: null,
     endsAt: null,
     isActive: true,
@@ -630,7 +712,7 @@ export const seedHomepageSections: HomepageSection[] = [
     image: '',
     mobileImage: '',
     link: '',
-    sortOrder: 10,
+    sortOrder: 12,
     startsAt: null,
     endsAt: null,
     isActive: true,

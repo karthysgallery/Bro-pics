@@ -5,14 +5,14 @@ import { Footer } from './Footer';
 describe('Footer', () => {
   it('renders the policy links', () => {
     render(<Footer />);
-    expect(screen.getByText('About Us')).toBeInTheDocument();
+    expect(screen.getByText('About us')).toBeInTheDocument();
     expect(screen.getByText('FAQ')).toBeInTheDocument();
-    expect(screen.getByText('Return & Refund Policy')).toBeInTheDocument();
-    expect(screen.getByText('Shipping Policy')).toBeInTheDocument();
+    expect(screen.getByText('Return & refund policy')).toBeInTheDocument();
+    expect(screen.getByText('Shipping policy')).toBeInTheDocument();
   });
 
   it('renders a newsletter signup form', () => {
     render(<Footer />);
-    expect(screen.getByPlaceholderText('Your email address')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Email address')).toBeInTheDocument();
   });
 });

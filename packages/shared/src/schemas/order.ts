@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// Same-day is deliberately not an option — see checkout-calc.ts's
+// DELIVERY_METHODS comment for why (every order needs its own production
+// time before a courier is even involved).
+export const DeliveryMethodSchema = z.enum(['standard', 'express']);
+
 export const OrderStatusSchema = z.enum([
   'pending_payment',
   'paid',
@@ -31,6 +36,10 @@ export const OrderSchema = z
     courier: z.string().optional(),
     awbNumber: z.string().optional(),
     placedAt: z.date(),
+    // Optional so an order placed before this field existed still parses;
+    // callers that need a concrete value treat an absent field as
+    // 'standard' (the pre-existing, only-ever behavior).
+    deliveryMethod: DeliveryMethodSchema.optional(),
     paymentMode: z.enum(['prepaid', 'partial_cod']),
     amountPaidOnline: z.number().int().nonnegative(),
     amountDueOnDelivery: z.number().int().nonnegative(),
@@ -53,3 +62,4 @@ export const OrderSchema = z
 
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
+export type DeliveryMethod = z.infer<typeof DeliveryMethodSchema>;

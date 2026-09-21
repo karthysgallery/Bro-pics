@@ -11,6 +11,28 @@ import { AuthContext } from './auth-context';
 
 export interface CartItem extends CartLine {}
 
+const GUEST_CART_STORAGE_KEY = 'bropics_guest_cart';
+
+function readGuestCart(): CartItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(GUEST_CART_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeGuestCart(items: CartItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // localStorage can throw in private-browsing/blocked-storage contexts —
+    // guest-cart persistence is a convenience, fail silently.
+  }
+}
+
 export interface CartContextValue {
   items: CartItem[];
   addItem: (item: CartItem) => void;
@@ -86,6 +108,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [firestoreItems, setFirestoreItems] = useState<CartItem[] | null>(null);
   const [reconcileSucceeded, setReconcileSucceeded] = useState(false);
   const hasReconciledRef = useRef(false);
+
+  // Rehydrate a signed-out cart from localStorage — deliberately NOT a
+  // useState lazy initializer, which would read localStorage during the
+  // very first render and make the client's first paint differ from the
+  // server's (the same hydration-mismatch class documented on BuyBox's
+  // WhatsApp message). Loading it in an effect instead means both the
+  // server render and the client's first paint start from an empty cart,
+  // then upgrade one render later. Only applies if nothing has already
+  // been added before this effect runs (e.g. a fast add-to-cart click).
+  useEffect(() => {
+    const stored = readGuestCart();
+    if (stored.length > 0) {
+      setLocalItems((current) => (current.length === 0 ? stored : current));
+    }
+  }, []);
+
+  // Mirrors the guest cart to localStorage on every change so it survives
+  // a refresh — only while signed out; a signed-in `localItems` is just
+  // the transient pre-reconcile buffer, cleared once reconcile succeeds,
+  // and persisting that would risk resurrecting stale items on a later
+  // sign-out on the same browser.
+  useEffect(() => {
+    if (!user) writeGuestCart(localItems);
+  }, [localItems, user]);
 
   useEffect(() => {
     if (!user) {
@@ -169,10 +215,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const unsubscribe = onSnapshot(cartRef, (snapshot) => {
-      const data = snapshot.exists() ? (snapshot.data() as { items: CartItem[] }) : undefined;
-      setFirestoreItems(data?.items ?? []);
-    });
+    const unsubscribe = onSnapshot(
+      cartRef,
+      (snapshot) => {
+        const data = snapshot.exists() ? (snapshot.data() as { items: CartItem[] }) : undefined;
+        setFirestoreItems(data?.items ?? []);
+      },
+      (error) => {
+        // Same "never make the cart vanish" philosophy as the reconcile
+        // failure above: a dropped listener leaves firestoreItems at
+        // whatever it last was (possibly still null pre-first-snapshot),
+        // so `items` below keeps blending in localItems rather than
+        // silently going empty.
+        console.error('Cart listener failed:', error);
+      }
+    );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);

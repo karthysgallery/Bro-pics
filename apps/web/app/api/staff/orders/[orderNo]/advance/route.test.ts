@@ -9,6 +9,9 @@ vi.mock('../../../../../../lib/verify-id-token', () => ({
 const mockFindOrder = vi.fn();
 vi.mock('../../../../../../lib/order-lookup', () => ({ findOrderByOrderNo: (...args: unknown[]) => mockFindOrder(...args) }));
 
+const mockWriteNotification = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../../lib/notify', () => ({ writeNotification: (...args: unknown[]) => mockWriteNotification(...args) }));
+
 const mockTransactionGet = vi.fn();
 const mockTransactionSet = vi.fn();
 const mockTransactionUpdate = vi.fn();
@@ -105,6 +108,29 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     expect(mockTransactionUpdate).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ status: 'printed_packed' })
+    );
+  });
+
+  it('writes a notification to the order\'s owner on a status change', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', userId: 'user_1', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('printed_packed');
+
+    await POST(
+      makeRequest({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' }),
+      { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) }
+    );
+
+    expect(mockWriteNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      'shipping',
+      'Order shipped',
+      expect.stringContaining('BP-2026-00001'),
+      '/orders/order_1'
     );
   });
 

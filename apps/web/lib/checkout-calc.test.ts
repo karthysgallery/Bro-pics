@@ -110,4 +110,14 @@ describe('calculateShipping', () => {
     expect(calculateShipping(150000, settings)).toBe(0);
     expect(calculateShipping(200000, settings)).toBe(0);
   });
+
+  it('charges a flat express surcharge regardless of subtotal, ignoring the free-shipping threshold', () => {
+    expect(calculateShipping(100000, settings, 'express')).toBe(15000);
+    expect(calculateShipping(200000, settings, 'express')).toBe(15000);
+  });
+
+  it('uses a settings-provided express charge over the default when present', () => {
+    const customSettings = { ...settings, expressShippingCharge: 25000 };
+    expect(calculateShipping(100000, customSettings, 'express')).toBe(25000);
+  });
 });

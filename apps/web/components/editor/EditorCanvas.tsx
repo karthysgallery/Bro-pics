@@ -1,110 +1,421 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { Stage, Layer, Image as KonvaImage, Rect } from 'react-konva';
-import useImage from 'use-image';
-import type Konva from 'konva';
-import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE, type Rect as GeometryRect } from '../../lib/editor-geometry';
+import { useEffect, useRef, useState } from 'react';
+import { PAPER, ALERT } from '../../lib/design-tokens';
+import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE, type Rect as GeometryRect, type RotationDeg } from '@bro-pics/shared';
 
 const CANVAS_SIZE = EDITOR_CANVAS_SIZE;
 
-interface EditorCanvasProps {
-  mockupUrl: string;
+export interface SlotDrawState {
+  slotIndex: number;
+  rect: GeometryRect;
+  maskUrl?: string | null;
   photoUrl: string | null;
-  slotRect: GeometryRect;
   scale: number;
   offsetX: number;
   offsetY: number;
-  rotationDeg: 0 | 90 | 180 | 270;
-  onTransformChange: (transform: { scale: number; offsetX: number; offsetY: number }) => void;
-  // Fires with a fresh stage.toDataURL() PNG data URL whenever the visible
-  // canvas actually changes (image loads, or scale/offset/rotation moves),
-  // and with null if a capture isn't currently possible (no photo loaded
-  // yet, or toDataURL() threw — e.g. a cross-origin canvas-taint
-  // SecurityError). The parent stores the latest value per slot and uses
-  // it as that slot's preview export on Done — next/dynamic's loadable
-  // wrapper (used to keep react-konva, which touches `window` at import
-  // time, off the server bundle) does not forward refs to the wrapped
-  // component, so exposing the Stage via forwardRef/useImperativeHandle
-  // and reading it later from the parent would silently resolve to null.
-  // A callback invoked from inside this already-dynamically-loaded
-  // component sidesteps that entirely. See Finding 3 in review.
+  rotationDeg: RotationDeg;
+}
+
+export interface CanvasTextField {
+  key: string;
+  value: string;
+  color: string;
+  fontFamily: string;
+  zoneRect: GeometryRect;
+  align: 'left' | 'center' | 'right';
+}
+
+export interface CanvasClipart {
+  assetUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface EditorCanvasProps {
+  mockupUrl: string;
+  // Drawn once, after the mockup, before text/clipart — lets a template add
+  // a decorative element (glass glare, embossed border) on top of the
+  // composited photo without it being cropped by any slot mask.
+  overlayUrl?: string | null;
+  // Every filled slot draws simultaneously (a real live preview, not just
+  // whichever slot happens to be "active") — only `activeSlotIndex`'s rect
+  // gets pointer-drag handlers.
+  slots: SlotDrawState[];
+  activeSlotIndex: number;
+  textFields?: CanvasTextField[];
+  clipart?: CanvasClipart | null;
+  onTransformChange: (slotIndex: number, transform: { scale: number; offsetX: number; offsetY: number }) => void;
+  // Fires with a fresh canvas.toDataURL() PNG data URL of the WHOLE
+  // composed canvas (mockup + every slot + overlay + text + clipart)
+  // whenever it changes — one shared preview for the entire
+  // personalization rather than one capture per slot, since every slot now
+  // renders onto the same persistent canvas at once.
   onCanvasUpdate?: (dataUrl: string | null) => void;
+}
+
+/**
+ * Loads an <img> for `src`, retrying without `crossOrigin: 'anonymous'` if
+ * the anonymous load fails — a signed GCS URL needs `crossOrigin: 'anonymous'`
+ * to avoid tainting the canvas (which would break the preview-export
+ * toDataURL() call), but if the bucket's CORS isn't configured for it, the
+ * ANONYMOUS load fails outright rather than just tainting — worse than a
+ * tainted canvas, since the customer would see an empty slot. So: try
+ * anonymous first, and only fall back to a plain (taint-accepting) load if
+ * that fails.
+ */
+function useHtmlImage(src: string | null | undefined): HTMLImageElement | null {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!src) {
+      setImage(null);
+      return;
+    }
+    let cancelled = false;
+
+    const anonymousImg = new Image();
+    anonymousImg.crossOrigin = 'anonymous';
+    anonymousImg.onload = () => {
+      if (!cancelled) setImage(anonymousImg);
+    };
+    anonymousImg.onerror = () => {
+      if (cancelled) return;
+      const fallbackImg = new Image();
+      fallbackImg.onload = () => {
+        if (!cancelled) setImage(fallbackImg);
+      };
+      fallbackImg.onerror = () => {
+        if (!cancelled) setImage(null);
+      };
+      fallbackImg.src = src;
+    };
+    anonymousImg.src = src;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return image;
+}
+
+// A handful of images across all slots + mockup + overlay + clipart — a
+// small fixed-size cache keyed by URL is simpler and cheaper than a hook
+// per possible image, and means switching slots doesn't reload an image
+// that's already loaded.
+function useImageCache(urls: (string | null | undefined)[]): { cache: Map<string, HTMLImageElement>; version: number } {
+  // `version` is the piece that actually belongs in a consuming effect's
+  // dependency array — `cacheRef.current` is the same Map instance on every
+  // render (mutated in place), so a dependency array that lists the Map
+  // itself never sees it as "changed" once an image finishes loading async,
+  // and the draw effect would silently skip repainting the newly loaded photo.
+  const [version, setVersion] = useState(0);
+  const cacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const key = urls.filter(Boolean).join('|');
+
+  useEffect(() => {
+    let cancelled = false;
+    const wanted = urls.filter((u): u is string => !!u);
+    for (const url of wanted) {
+      if (cacheRef.current.has(url)) continue;
+      const anonymousImg = new Image();
+      anonymousImg.crossOrigin = 'anonymous';
+      anonymousImg.onload = () => {
+        if (cancelled) return;
+        cacheRef.current.set(url, anonymousImg);
+        setVersion((n) => n + 1);
+      };
+      anonymousImg.onerror = () => {
+        if (cancelled) return;
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          if (cancelled) return;
+          cacheRef.current.set(url, fallbackImg);
+          setVersion((n) => n + 1);
+        };
+        fallbackImg.src = url;
+      };
+      anonymousImg.src = url;
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return { cache: cacheRef.current, version };
+}
+
+function drawTextField(ctx: CanvasRenderingContext2D, field: CanvasTextField) {
+  if (!field.value) return;
+  const zoneRect = fractionRectToCanvasRect(field.zoneRect, CANVAS_SIZE, CANVAS_SIZE);
+
+  // Auto-shrink: step the font size down until the text fits both the
+  // zone's width and its height, rather than squishing glyphs with
+  // fillText's maxWidth argument (which distorts rather than resizes).
+  let fontSize = Math.max(10, Math.min(32, zoneRect.height));
+  ctx.save();
+  ctx.fillStyle = field.color;
+  ctx.textBaseline = 'middle';
+  for (; fontSize > 8; fontSize -= 1) {
+    ctx.font = `${fontSize}px ${field.fontFamily}`;
+    const width = ctx.measureText(field.value).width;
+    if (width <= zoneRect.width && fontSize <= zoneRect.height) break;
+  }
+
+  let x: number;
+  if (field.align === 'left') {
+    ctx.textAlign = 'left';
+    x = zoneRect.x;
+  } else if (field.align === 'right') {
+    ctx.textAlign = 'right';
+    x = zoneRect.x + zoneRect.width;
+  } else {
+    ctx.textAlign = 'center';
+    x = zoneRect.x + zoneRect.width / 2;
+  }
+  ctx.fillText(field.value, x, zoneRect.y + zoneRect.height / 2);
+  ctx.restore();
+}
+
+/**
+ * Draws one slot's photo, masked or clipped to its rect. With a `maskUrl`,
+ * the photo is composited on an offscreen canvas sized to the slot rect
+ * (so the mask image — which is authored at the slot's own aspect ratio —
+ * lines up 1:1), then blitted onto the main canvas with no further
+ * clipping (the mask has already done the cropping). Without a `maskUrl`,
+ * falls back to the original plain-rectangle `ctx.clip()` — zero risk to
+ * existing templates that don't specify one.
+ */
+function drawSlotPhoto(
+  ctx: CanvasRenderingContext2D,
+  slot: SlotDrawState,
+  canvasRect: GeometryRect,
+  photoImage: HTMLImageElement | null,
+  maskImage: HTMLImageElement | null
+) {
+  if (!photoImage) return;
+
+  if (slot.maskUrl && maskImage) {
+    const offscreen = document.createElement('canvas');
+    offscreen.width = canvasRect.width;
+    offscreen.height = canvasRect.height;
+    const offCtx = offscreen.getContext('2d');
+    if (!offCtx) return;
+
+    offCtx.save();
+    offCtx.translate(slot.offsetX, slot.offsetY);
+    offCtx.rotate((slot.rotationDeg * Math.PI) / 180);
+    offCtx.scale(slot.scale, slot.scale);
+    offCtx.drawImage(photoImage, 0, 0);
+    offCtx.restore();
+
+    offCtx.globalCompositeOperation = 'destination-in';
+    offCtx.drawImage(maskImage, 0, 0, canvasRect.width, canvasRect.height);
+
+    ctx.drawImage(offscreen, canvasRect.x, canvasRect.y);
+    return;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+  ctx.clip();
+  ctx.translate(canvasRect.x + slot.offsetX, canvasRect.y + slot.offsetY);
+  ctx.rotate((slot.rotationDeg * Math.PI) / 180);
+  ctx.scale(slot.scale, slot.scale);
+  ctx.drawImage(photoImage, 0, 0);
+  ctx.restore();
 }
 
 export function EditorCanvas({
   mockupUrl,
-  photoUrl,
-  slotRect,
-  scale,
-  offsetX,
-  offsetY,
-  rotationDeg,
+  overlayUrl,
+  slots,
+  activeSlotIndex,
+  textFields,
+  clipart,
   onTransformChange,
   onCanvasUpdate,
 }: EditorCanvasProps) {
-  const [mockupImage] = useImage(mockupUrl);
-  // 'anonymous' is required for photos loaded from a cross-origin signed
-  // GCS URL: without it, drawing the image into the canvas taints the
-  // canvas and stage.toDataURL() (used for the Task 7 preview-export flow)
-  // throws a SecurityError. This requires the Storage bucket to actually
-  // send CORS headers permitting the app's origin (see cors.json at the
-  // repo root) — but if that isn't configured (or hasn't been applied via
-  // `gsutil cors set` yet), the browser doesn't just taint the canvas, it
-  // FAILS the image load outright, and the customer would see an empty
-  // slot instead of their photo. That's worse than a tainted canvas, so we
-  // fall back to a same-URL, non-anonymous load (which taints the canvas
-  // but still displays) whenever the anonymous load reports 'failed'. See
-  // Finding 1 in the second-round review.
-  const [anonymousPhotoImage, anonymousPhotoStatus] = useImage(photoUrl ?? '', 'anonymous');
-  const [fallbackPhotoImage] = useImage(anonymousPhotoStatus === 'failed' ? (photoUrl ?? '') : '');
-  const photoImage = anonymousPhotoStatus === 'failed' ? fallbackPhotoImage : anonymousPhotoImage;
-  const photoNodeRef = useRef<Konva.Image>(null);
-  const stageRef = useRef<Konva.Stage>(null);
+  const mockupImage = useHtmlImage(mockupUrl);
+  const overlayImage = useHtmlImage(overlayUrl);
+  const clipartImage = useHtmlImage(clipart?.assetUrl);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [fontsReady, setFontsReady] = useState(false);
 
-  const canvasSlotRect = fractionRectToCanvasRect(slotRect, CANVAS_SIZE, CANVAS_SIZE);
+  const photoUrls = slots.map((s) => s.photoUrl);
+  const maskUrls = slots.map((s) => s.maskUrl);
+  const { cache: imageCache, version: imageCacheVersion } = useImageCache([...photoUrls, ...maskUrls]);
 
+  // Cheap, defensive — closes any remaining FOUT gap even though
+  // next/font's self-hosting already makes it unlikely, so the very first
+  // paint doesn't measure/draw text against a fallback font metric.
   useEffect(() => {
-    if (!onCanvasUpdate) return;
-    if (!photoImage || !stageRef.current) {
-      onCanvasUpdate(null);
+    if (typeof document === 'undefined' || !document.fonts) {
+      setFontsReady(true);
       return;
     }
-    try {
-      onCanvasUpdate(stageRef.current.toDataURL());
-    } catch {
-      // Canvas-taint SecurityError (missing/misconfigured Storage CORS) or
-      // any other export failure — treated as "no preview available",
-      // never thrown up into the render path.
-      onCanvasUpdate(null);
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) setFontsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Live drag state — kept in a ref (not React state) so pointermove can
+  // read/update it synchronously every frame without waiting on a render.
+  const dragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const activeSlot = slots.find((s) => s.slotIndex === activeSlotIndex);
+  const activeCanvasRect = activeSlot ? fractionRectToCanvasRect(activeSlot.rect, CANVAS_SIZE, CANVAS_SIZE) : null;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    // Photo layer: every filled slot draws simultaneously, clipped/masked
+    // to its own rect. Transform order (translate slot-relative offset,
+    // rotate, scale, then draw the image at its own local origin) MUST
+    // stay in lockstep with the crop-rect math in
+    // @bro-pics/shared's editor-geometry.ts, which was derived from this
+    // exact transform order.
+    for (const slot of slots) {
+      const canvasRect = fractionRectToCanvasRect(slot.rect, CANVAS_SIZE, CANVAS_SIZE);
+      const photoImage = slot.photoUrl ? (imageCache.get(slot.photoUrl) ?? null) : null;
+      const maskImage = slot.maskUrl ? (imageCache.get(slot.maskUrl) ?? null) : null;
+      drawSlotPhoto(ctx, slot, canvasRect, photoImage, maskImage);
+
+      // Slot outline only for the active slot — with several filled slots
+      // visible at once, outlining all of them reads as visual clutter.
+      if (slot.slotIndex === activeSlotIndex) {
+        ctx.strokeStyle = ALERT;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+      }
     }
-    // Re-capture whenever anything that changes the rendered pixels
-    // changes; deliberately NOT depending on `onCanvasUpdate` itself,
-    // which is a fresh closure every parent render.
+
+    if (mockupImage) {
+      ctx.drawImage(mockupImage, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    }
+
+    if (overlayImage) {
+      ctx.drawImage(overlayImage, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    }
+
+    if (fontsReady && textFields) {
+      for (const field of textFields) {
+        drawTextField(ctx, field);
+      }
+    }
+
+    if (clipart && clipartImage) {
+      const rect = fractionRectToCanvasRect(clipart, CANVAS_SIZE, CANVAS_SIZE);
+      ctx.drawImage(clipartImage, rect.x, rect.y, rect.width, rect.height);
+    }
+
+    if (onCanvasUpdate) {
+      const hasAnyPhoto = slots.some((s) => s.photoUrl);
+      if (!hasAnyPhoto) {
+        onCanvasUpdate(null);
+      } else {
+        try {
+          onCanvasUpdate(canvas.toDataURL());
+        } catch {
+          // Canvas-taint SecurityError (missing/misconfigured Storage
+          // CORS) or any other export failure — "no preview available".
+          onCanvasUpdate(null);
+        }
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoImage, scale, offsetX, offsetY, rotationDeg]);
+  }, [
+    mockupImage,
+    overlayImage,
+    clipartImage,
+    fontsReady,
+    imageCacheVersion,
+    activeSlotIndex,
+    JSON.stringify(slots),
+    JSON.stringify(textFields),
+    JSON.stringify(clipart),
+  ]);
+
+  const canvasPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * CANVAS_SIZE,
+      y: ((event.clientY - rect.top) / rect.height) * CANVAS_SIZE,
+    };
+  };
+
+  const pointInActiveRect = (point: { x: number; y: number }) => {
+    if (!activeCanvasRect) return false;
+    return (
+      point.x >= activeCanvasRect.x &&
+      point.x <= activeCanvasRect.x + activeCanvasRect.width &&
+      point.y >= activeCanvasRect.y &&
+      point.y <= activeCanvasRect.y + activeCanvasRect.height
+    );
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!activeSlot?.photoUrl) return;
+    const point = canvasPointFromEvent(event);
+    if (!pointInActiveRect(point)) return;
+    dragRef.current = { startX: point.x, startY: point.y, startOffsetX: activeSlot.offsetX, startOffsetY: activeSlot.offsetY };
+    setIsDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag || !activeSlot) return;
+    const point = canvasPointFromEvent(event);
+    onTransformChange(activeSlot.slotIndex, {
+      scale: activeSlot.scale,
+      offsetX: drag.startOffsetX + (point.x - drag.startX),
+      offsetY: drag.startOffsetY + (point.y - drag.startY),
+    });
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setIsDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   return (
-    <Stage ref={stageRef} width={CANVAS_SIZE} height={CANVAS_SIZE} className="rounded-lg overflow-hidden bg-cream">
-      <Layer clipX={canvasSlotRect.x} clipY={canvasSlotRect.y} clipWidth={canvasSlotRect.width} clipHeight={canvasSlotRect.height}>
-        {photoImage && (
-          <KonvaImage
-            ref={photoNodeRef}
-            image={photoImage}
-            x={canvasSlotRect.x + offsetX}
-            y={canvasSlotRect.y + offsetY}
-            scaleX={scale}
-            scaleY={scale}
-            rotation={rotationDeg}
-            draggable
-            onDragEnd={(e) => onTransformChange({ scale, offsetX: e.target.x() - canvasSlotRect.x, offsetY: e.target.y() - canvasSlotRect.y })}
-          />
-        )}
-      </Layer>
-      <Layer>
-        <Rect x={canvasSlotRect.x} y={canvasSlotRect.y} width={canvasSlotRect.width} height={canvasSlotRect.height} stroke="#C1592A" strokeWidth={2} />
-        {mockupImage && <KonvaImage image={mockupImage} width={CANVAS_SIZE} height={CANVAS_SIZE} listening={false} />}
-      </Layer>
-    </Stage>
+    <canvas
+      ref={canvasRef}
+      width={CANVAS_SIZE}
+      height={CANVAS_SIZE}
+      className="rounded-xl overflow-hidden"
+      style={{
+        touchAction: 'none',
+        cursor: activeSlot?.photoUrl ? (isDragging ? 'grabbing' : 'grab') : 'default',
+        width: '100%',
+        maxWidth: 560,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerLeave={endDrag}
+    />
   );
 }

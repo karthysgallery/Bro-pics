@@ -17,11 +17,11 @@ export function ReviewForm({ productId }: { productId: string }) {
   }
 
   if (!user) {
-    return <p className="text-sm text-charcoal/70">Sign in to write a review.</p>;
+    return <p className="text-sm text-ink/70">Sign in to write a review.</p>;
   }
 
   if (submitted) {
-    return <p className="text-sm text-sage">Thanks — your review is awaiting approval.</p>;
+    return <p className="text-sm text-accent">Thanks — your review is awaiting approval.</p>;
   }
 
   const trimmedTitle = title.trim();
@@ -63,7 +63,7 @@ export function ReviewForm({ productId }: { productId: string }) {
         id="review-rating"
         value={rating}
         onChange={(e) => setRating(Number(e.target.value))}
-        className="rounded border border-charcoal/20 px-3 py-2 w-fit"
+        className="rounded border border-line px-3 py-2 w-fit"
       >
         {[5, 4, 3, 2, 1].map((n) => (
           <option key={n} value={n}>
@@ -73,17 +73,17 @@ export function ReviewForm({ productId }: { productId: string }) {
       </select>
 
       <label htmlFor="review-title">Title</label>
-      <input id="review-title" value={title} onChange={(e) => setTitle(e.target.value)} className="rounded border border-charcoal/20 px-3 py-2" />
+      <input id="review-title" value={title} onChange={(e) => setTitle(e.target.value)} className="rounded border border-line px-3 py-2" />
 
       <label htmlFor="review-body">Your review</label>
-      <textarea id="review-body" value={body} onChange={(e) => setBody(e.target.value)} className="rounded border border-charcoal/20 px-3 py-2" />
+      <textarea id="review-body" value={body} onChange={(e) => setBody(e.target.value)} className="rounded border border-line px-3 py-2" />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-alert">{error}</p>}
 
       <button
         onClick={handleSubmit}
         disabled={!trimmedTitle || !trimmedBody || isSubmitting}
-        className="rounded bg-charcoal text-cream px-4 py-2 w-fit"
+        className="rounded bg-ink text-paper px-4 py-2 w-fit"
       >
         Submit
       </button>

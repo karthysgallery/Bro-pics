@@ -1,28 +1,35 @@
-import type { HomepageSection } from '@bro-pics/shared';
+import { Section } from '../ui/Section';
+import { SectionHeader } from '../ui/SectionHeader';
 
-const steps = [
-  { label: 'Upload', description: 'Upload your favourite photo' },
-  { label: 'Adjust', description: 'Crop, zoom, and position it perfectly' },
-  { label: 'Preview', description: 'See it live inside your chosen frame' },
-  { label: 'Order', description: 'We print and ship it to your door' },
+interface HowItWorksProps {
+  title: string;
+  subtitle?: string;
+}
+
+// This genuinely is a sequence, so the steps are numbered — the number is the
+// only ornament each step gets.
+const STEPS = [
+  { label: 'Upload', desc: 'Pick your favourite photo from your phone or camera.' },
+  { label: 'Adjust', desc: 'Crop, zoom and rotate it to fit the frame.' },
+  { label: 'Preview', desc: 'See exactly how it will look inside the frame, live.' },
+  { label: 'Order', desc: 'Confirm, and we print, frame and dispatch it.' },
 ];
 
-export function HowItWorks({ section }: { section: HomepageSection }) {
+export function HowItWorks({ title, subtitle }: HowItWorksProps) {
   return (
-    <section className="px-4 py-10 md:px-8 text-center">
-      <h2 className="font-display text-2xl mb-2">{section.title}</h2>
-      <p className="text-charcoal/70 mb-6">{section.subtitle}</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
-        {steps.map((step, index) => (
-          <div key={step.label}>
-            <div className="w-10 h-10 rounded-full bg-terracotta text-cream flex items-center justify-center mx-auto mb-2">
+    <Section tone="tint">
+      <SectionHeader title={title} subtitle={subtitle} href="/how-it-works" linkLabel="Read the full guide" />
+      <ol className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-6">
+        {STEPS.map((step, index) => (
+          <li key={step.label}>
+            <span className="w-8 h-8 rounded-full bg-gold text-ink text-sm font-bold flex items-center justify-center">
               {index + 1}
-            </div>
-            <h3 className="font-medium">{step.label}</h3>
-            <p className="text-sm text-charcoal/70">{step.description}</p>
-          </div>
+            </span>
+            <p className="mt-3 text-sm font-semibold text-ink">{step.label}</p>
+            <p className="mt-0.5 text-sm text-ink/60">{step.desc}</p>
+          </li>
         ))}
-      </div>
-    </section>
+      </ol>
+    </Section>
   );
 }

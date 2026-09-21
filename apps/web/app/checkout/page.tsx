@@ -1,12 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatPaise } from '../../lib/format-price';
+import { SignedOutNotice } from '../../components/account/SignedOutNotice';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import { getFirebaseApp } from '../../lib/firebase-client';
 import { useAuth } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
 import { AddressPicker } from '../../components/checkout/AddressPicker';
 import { loadRazorpayCheckoutScript } from '../../lib/razorpay-checkout-script';
+import { calculateShipping, DELIVERY_METHODS, DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '../../lib/checkout-calc';
+import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
+import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/DeliveryTimeline';
+import type { DeliveryMethod } from '@bro-pics/shared';
+
+const DELIVERY_METHOD_LABEL: Record<DeliveryMethod, string> = { standard: 'Standard', express: 'Express' };
+// Only the courier-transit portion changes by method — production/dispatch
+// time is per-product and not shortened by paying for faster shipping (see
+// checkout-calc.ts's DELIVERY_METHODS comment for why same-day isn't offered).
+const EXPRESS_TRANSIT_DAYS_MIN = 1;
+const EXPRESS_TRANSIT_DAYS_MAX = 2;
 
 declare global {
   interface Window {
@@ -35,6 +48,15 @@ export default function CheckoutPage() {
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPaise: number; freeShipping: boolean } | null>(null);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('standard');
+  // Starts at the same default constant used server-side, so there's
+  // nothing to mismatch between server and client render — only upgraded
+  // (in an effect, below) if settings/shipping actually overrides it.
+  const [shippingSettings, setShippingSettings] = useState<Required<ShippingSettings>>(DEFAULT_SHIPPING_SETTINGS);
+
+  useEffect(() => {
+    getShippingSettingsClient().then(setShippingSettings);
+  }, []);
 
   // Subscribe to orders/{orderId} once an order has been created, so the
   // page can detect the webhook flipping status to 'paid' and show a real
@@ -56,21 +78,28 @@ export default function CheckoutPage() {
     }
     const db = getFirestore(getFirebaseApp());
     const orderRef = doc(db, 'orders', orderId);
-    const unsubscribe = onSnapshot(orderRef, (snapshot) => {
-      if (!snapshot.exists()) return;
-      // Read fields directly off the raw snapshot data rather than
-      // OrderSchema.parse(...) — Firestore returns placedAt as a Timestamp,
-      // not a JS Date, so OrderSchema's z.date() would fail here. This is a
-      // read-only UI concern, not a write boundary, so no schema validation
-      // is needed.
-      const data = snapshot.data() as { status?: string; paymentStatus?: string; orderNo?: string };
-      setOrderStatus({ status: data.status, paymentStatus: data.paymentStatus, orderNo: data.orderNo });
-    });
+    const unsubscribe = onSnapshot(
+      orderRef,
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        // Read fields directly off the raw snapshot data rather than
+        // OrderSchema.parse(...) — Firestore returns placedAt as a Timestamp,
+        // not a JS Date, so OrderSchema's z.date() would fail here. This is a
+        // read-only UI concern, not a write boundary, so no schema validation
+        // is needed.
+        const data = snapshot.data() as { status?: string; paymentStatus?: string; orderNo?: string };
+        setOrderStatus({ status: data.status, paymentStatus: data.paymentStatus, orderNo: data.orderNo });
+      },
+      (error) => {
+        console.error('Order listener failed:', error);
+        setError('Lost connection while confirming your order. Refresh to check its status.');
+      }
+    );
     return unsubscribe;
   }, [orderId, user?.uid]);
 
   if (!user) {
-    return <p>Please sign in to check out.</p>;
+    return <SignedOutNotice action="check out" />;
   }
 
   const handleApplyCoupon = async () => {
@@ -103,6 +132,18 @@ export default function CheckoutPage() {
     setCouponMessage(null);
   };
 
+  // A retryable-in-place path for a failed payment, replacing the old
+  // "refresh the page" instruction — the Razorpay modal may still be open
+  // and retryable when this fires, so telling the customer to refresh was
+  // actively misleading. Resetting orderId brings back the Place order
+  // button so a fresh order (and a fresh Razorpay session) can be created
+  // without leaving this page.
+  const handleRetryAfterFailure = () => {
+    setOrderId(null);
+    setOrderStatus(null);
+    setError(null);
+  };
+
   const handlePlaceOrder = async () => {
     if (!addressId) {
       setError('Please choose or add a delivery address.');
@@ -115,7 +156,7 @@ export default function CheckoutPage() {
       const response = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined }),
+        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod }),
       });
 
       if (response.status === 409) {
@@ -153,10 +194,16 @@ export default function CheckoutPage() {
 
   const isPaid = orderStatus?.status === 'paid';
   const isFailed = orderStatus?.paymentStatus === 'failed';
+  const shippingCost = appliedCoupon?.freeShipping ? 0 : calculateShipping(totalPaise, shippingSettings, deliveryMethod);
+  // Clamped for display only — the real order total is always recomputed
+  // and clamped server-side (calculateCouponDiscount already caps a
+  // discount at the subtotal); this just keeps the on-page summary honest
+  // if a coupon's discount happens to exceed subtotal + shipping.
+  const grandTotal = Math.max(0, totalPaise - (appliedCoupon?.discountPaise ?? 0) + shippingCost);
 
   return (
-    <main className="flex flex-col gap-6 p-6">
-      <h1 className="font-display text-2xl">Checkout</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-6">
+      <h1 className="text-2xl font-semibold text-ink">Checkout</h1>
 
       {isPaid ? (
         // Once the order-status listener sees status flip to 'paid', this
@@ -164,7 +211,7 @@ export default function CheckoutPage() {
         // cart legitimately goes empty once the webhook clears it, and
         // showing that alongside "payment confirmed" would look like the
         // order itself had vanished.
-        <p className="text-sm text-charcoal/70">
+        <p className="text-sm text-ink/70">
           Payment confirmed! Your order {orderStatus?.orderNo ?? orderId} is being processed.
         </p>
       ) : (
@@ -177,20 +224,66 @@ export default function CheckoutPage() {
                 <span>{item.title} × {item.qty}</span>
               </div>
             ))}
-            <div className="flex justify-between font-medium pt-2 border-t border-charcoal/10">
+            <div className="flex justify-between font-medium pt-2 border-t border-line">
               <span>Subtotal</span>
-              <span>₹{(totalPaise / 100).toFixed(2)}</span>
+              <span>{formatPaise(totalPaise)}</span>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 pt-2 border-t border-charcoal/10">
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
+            <span className="text-sm font-medium text-ink">Delivery</span>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Delivery method">
+              {DELIVERY_METHODS.map((method) => {
+                const cost = method === 'express' ? shippingSettings.expressShippingCharge : calculateShipping(totalPaise, shippingSettings, 'standard');
+                const transitLabel =
+                  method === 'express'
+                    ? `${EXPRESS_TRANSIT_DAYS_MIN}-${EXPRESS_TRANSIT_DAYS_MAX} days after dispatch`
+                    : `${TRANSIT_DAYS_MIN}-${TRANSIT_DAYS_MAX} days after dispatch`;
+                return (
+                  <label
+                    key={method}
+                    className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm cursor-pointer ${
+                      deliveryMethod === method ? 'border-accent bg-accent/5' : 'border-line'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="delivery-method"
+                        checked={deliveryMethod === method}
+                        onChange={() => setDeliveryMethod(method)}
+                      />
+                      <span>
+                        <span className="font-medium text-ink">{DELIVERY_METHOD_LABEL[method]}</span>
+                        <span className="block text-xs text-ink/60">{transitLabel}</span>
+                      </span>
+                    </span>
+                    <span className="text-ink/70 whitespace-nowrap">{cost === 0 ? 'Free' : formatPaise(cost)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 pt-2 border-t border-line text-sm">
+            <div className="flex justify-between text-ink/70">
+              <span>Shipping</span>
+              <span>{shippingCost === 0 ? 'Free' : formatPaise(shippingCost)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-ink">
+              <span>Total</span>
+              <span>{formatPaise(grandTotal)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
             {appliedCoupon ? (
               <div className="flex items-center justify-between text-sm">
                 <span>
                   Coupon <strong>{appliedCoupon.code}</strong> applied
-                  {appliedCoupon.freeShipping ? ' — free shipping' : ` — ₹${(appliedCoupon.discountPaise / 100).toFixed(2)} off`}
+                  {appliedCoupon.freeShipping ? ' — free shipping' : ` — ${formatPaise(appliedCoupon.discountPaise)} off`}
                 </span>
-                <button onClick={handleRemoveCoupon} className="text-xs underline">Remove</button>
+                <button onClick={handleRemoveCoupon} className="text-xs text-accent hover:text-accent-dark underline">Remove</button>
               </div>
             ) : (
               <div className="flex gap-2">
@@ -200,32 +293,32 @@ export default function CheckoutPage() {
                   value={couponCodeInput}
                   onChange={(e) => setCouponCodeInput(e.target.value)}
                   placeholder="Coupon code"
-                  className="rounded border border-charcoal/20 px-3 py-2 text-sm"
+                  className="rounded-md border border-line px-3 py-2 text-sm text-ink placeholder:text-ink/40"
                 />
-                <button onClick={handleApplyCoupon} disabled={!couponCodeInput} className="rounded border border-charcoal/30 px-3 py-2 text-sm">
+                <button onClick={handleApplyCoupon} disabled={!couponCodeInput} className="rounded-md border border-line px-3 py-2 text-sm text-ink placeholder:text-ink/40">
                   Apply
                 </button>
               </div>
             )}
-            {couponMessage && <p className="text-xs text-red-600">{couponMessage}</p>}
+            {couponMessage && <p className="text-xs text-alert">{couponMessage}</p>}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-alert">{error}</p>}
           {isFailed && (
-            // The Place Order button stays hidden for the rest of this page's
-            // lifetime once orderId is set (Fix 2, closing the double-submit
-            // window), so this can't offer an in-place retry button — point
-            // the user at a refresh instead of implying a button that isn't
-            // there.
-            <p className="text-sm text-red-600">Payment failed. Please refresh the page to try again.</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-alert">Payment failed.</p>
+              <button onClick={handleRetryAfterFailure} className="text-sm text-accent hover:text-accent-dark underline">
+                Try again
+              </button>
+            </div>
           )}
           {orderId && !isFailed && (
-            <p className="text-sm text-charcoal/70">Order {orderId} created — complete payment in the window that opened.</p>
+            <p className="text-sm text-ink/70">Order {orderId} created — complete payment in the window that opened.</p>
           )}
 
           {!orderId && (
-            <button onClick={handlePlaceOrder} disabled={placing} className="rounded bg-charcoal text-cream px-4 py-2 w-fit">
-              Place Order
+            <button onClick={handlePlaceOrder} disabled={placing} className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold w-fit hover:bg-gold-deep transition-colors disabled:opacity-40">
+              Place order
             </button>
           )}
         </>

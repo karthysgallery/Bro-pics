@@ -35,20 +35,20 @@ const media: ProductMedia[] = [
 
 describe('ProductDetailClient', () => {
   it('shows the default variant (first in stock, 8x12/Black) with its dedicated media and price', () => {
-    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
-    expect(screen.getByText('₹799.00')).toBeInTheDocument();
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
+    expect(screen.getByText('₹799')).toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', '/black.svg');
   });
 
   it('falls back to variant-agnostic media when transitioning into a colour with no dedicated photos', () => {
-    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
-    expect(screen.getByText('₹849.00')).toBeInTheDocument();
+    expect(screen.getByText('₹849')).toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', '/generic.svg');
   });
 
   it('never offers a size×colour combination with no matching variant, and every reachable click resolves to a real variant', () => {
-    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} /></Providers>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
 
     // Default: 8x12 / Black. Both sizes are selectable here (Black pairs with both).
     expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe('ProductDetailClient', () => {
     // longer be offered as a size option (this is the impossible combination
     // from the finding: 12x18 + White has no matching variant).
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
-    expect(screen.getByText('₹849.00')).toBeInTheDocument();
+    expect(screen.getByText('₹849')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '12x18 in' })).not.toBeInTheDocument();
 
     // Switch colour back to Black — 12x18 becomes selectable again.
@@ -69,7 +69,7 @@ describe('ProductDetailClient', () => {
     // silently mismatched fallback — and White must no longer be offered as a
     // colour option, since 12x18 has no White variant.
     fireEvent.click(screen.getByRole('button', { name: '12x18 in' }));
-    expect(screen.getByText('₹999.00')).toBeInTheDocument();
+    expect(screen.getByText('₹999')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'White' })).not.toBeInTheDocument();
   });
 });

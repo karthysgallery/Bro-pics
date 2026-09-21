@@ -44,13 +44,13 @@ describe('ProductCard', () => {
   it('renders the title, price, and rating', () => {
     render(<ProductCard product={product} />);
     expect(screen.getByText('Classic Wooden Photo Frame')).toBeInTheDocument();
-    expect(screen.getByText('₹799.00')).toBeInTheDocument();
+    expect(screen.getByText('₹799')).toBeInTheDocument();
     expect(screen.getByText('4.5')).toBeInTheDocument();
   });
 
-  it('shows a "Customizable" tag', () => {
-    render(<ProductCard product={product} />);
-    expect(screen.getByText('Customizable')).toBeInTheDocument();
+  it('renders a price range when the variants span more than one price', () => {
+    render(<ProductCard product={{ ...product, maxPrice: 129900 }} />);
+    expect(screen.getByText('₹799 – ₹1,299')).toBeInTheDocument();
   });
 
   it('renders the best-seller badge when present', () => {

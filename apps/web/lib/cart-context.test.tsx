@@ -96,6 +96,46 @@ describe('CartProvider / useCart', () => {
     expect(screen.getByTestId('count').textContent).toBe('0');
   });
 
+  it('persists the guest cart to localStorage so it survives a refresh', async () => {
+    render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>
+    );
+    fireEvent.click(screen.getByText('Add'));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]');
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({ variantId: 'var_1', personalizationId: 'pers_default', qty: 1 });
+    });
+  });
+
+  it('rehydrates a guest cart already in localStorage on mount', async () => {
+    localStorage.setItem(
+      'bropics_guest_cart',
+      JSON.stringify([{ variantId: 'var_1', personalizationId: 'pers_default', title: 'Stored Frame', unitPriceSnapshot: 20000, qty: 2 }])
+    );
+    render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('count').textContent).toBe('2'));
+    expect(screen.getByTestId('item-0-title').textContent).toBe('Stored Frame');
+  });
+
+  it('clears the persisted guest cart once the cart is emptied', async () => {
+    render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>
+    );
+    fireEvent.click(screen.getByText('Add'));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]')).toHaveLength(1));
+    fireEvent.click(screen.getByText('Remove'));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]')).toHaveLength(0));
+  });
+
   it('keeps two personalizations of the same variant as separate cart lines', () => {
     render(
       <CartProvider>

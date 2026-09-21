@@ -21,13 +21,13 @@ export function ProductTabs({ product, variants = [] }: { product: Product; vari
 
   return (
     <div className="mt-12">
-      <div className="flex flex-wrap gap-2 border-b border-charcoal/10 mb-4">
+      <div className="flex flex-wrap gap-2 border-b border-line mb-4">
         {TAB_LABELS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-3 py-2 text-sm ${
-              activeTab === tab ? 'border-b-2 border-terracotta text-charcoal font-medium' : 'text-charcoal/60'
+              activeTab === tab ? 'border-b-2 border-accent text-ink font-medium' : 'text-ink/60'
             }`}
           >
             {tab}
@@ -62,7 +62,7 @@ export function ProductTabs({ product, variants = [] }: { product: Product; vari
           {product.faq.map((entry) => (
             <div key={entry.question}>
               <p className="font-medium text-sm">{entry.question}</p>
-              <p className="text-sm text-charcoal/70">{entry.answer}</p>
+              <p className="text-sm text-ink/70">{entry.answer}</p>
             </div>
           ))}
         </div>

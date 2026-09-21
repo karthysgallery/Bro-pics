@@ -9,7 +9,7 @@ export function SlotPicker({ slotCount, activeSlotIndex, filledSlots, onSelectSl
   if (slotCount <= 1) return null;
 
   return (
-    <div className="flex gap-2 overflow-x-auto py-2">
+    <div className="rail flex gap-2 overflow-x-auto py-2">
       {Array.from({ length: slotCount }, (_, slotIndex) => (
         <button
           key={slotIndex}
@@ -18,8 +18,8 @@ export function SlotPicker({ slotCount, activeSlotIndex, filledSlots, onSelectSl
           aria-label={`Slot ${slotIndex + 1}`}
           className={`w-10 h-10 flex-shrink-0 rounded-lg border text-sm ${
             slotIndex === activeSlotIndex
-              ? 'bg-terracotta text-cream border-terracotta'
-              : 'bg-surface text-charcoal border-charcoal/20'
+              ? 'bg-accent text-paper border-accent'
+              : 'bg-paper text-ink border-line'
           }`}
         >
           {filledSlots.has(slotIndex) ? '✓' : slotIndex + 1}

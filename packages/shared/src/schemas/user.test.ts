@@ -26,6 +26,35 @@ describe('UserSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts the additive profile fields', () => {
+    const result = UserSchema.safeParse({
+      id: 'user_1',
+      phone: '+919876543210',
+      email: null,
+      displayName: 'Karthik R',
+      createdAt: '2026-09-03T00:00:00.000Z',
+      updatedAt: '2026-09-03T00:00:00.000Z',
+      firstName: 'Karthik',
+      lastName: 'R',
+      photoUrl: 'https://example.com/photo.jpg',
+      dob: '1990-05-14',
+      gender: 'male',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('parses an existing user doc with none of the additive profile fields present', () => {
+    const result = UserSchema.safeParse({
+      id: 'user_1',
+      phone: '+919876543210',
+      email: null,
+      displayName: null,
+      createdAt: '2026-09-03T00:00:00.000Z',
+      updatedAt: '2026-09-03T00:00:00.000Z',
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects a missing phone', () => {
     const result = UserSchema.safeParse({
       id: 'user_1',

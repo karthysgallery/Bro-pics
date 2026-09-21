@@ -1,14 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { SignedOutNotice } from '../../../../components/account/SignedOutNotice';
+import { OrderStatusTimeline } from '../../../../components/orders/OrderStatusTimeline';
+import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
+import { useToast } from '../../../../components/ui/Toast';
+import { PageSkeleton } from '../../../../components/ui/Skeleton';
 import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
-import type { Order, OrderItem, OrderEvent } from '@bro-pics/shared';
+import type { Order, OrderItem, OrderEvent, Return, ReturnStatus } from '@bro-pics/shared';
+
+const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = {
+  requested: 'Return requested',
+  approved: 'Return approved',
+  rejected: 'Return rejected',
+  pickup_scheduled: 'Pickup scheduled',
+  picked_up: 'Picked up',
+  refund_processing: 'Refund processing',
+  refunded: 'Refunded',
+};
 
 interface OrderDetailPageProps {
   params: Promise<{ orderId: string }>;
 }
+
+// Cancellation is only offered while an order hasn't reached the point of
+// no real-world return — matches the server-side check in
+// /api/orders/[orderId]/cancel exactly, so the button never offers
+// something the API would then reject.
+const CANCELLABLE_STATUSES = new Set(['pending_payment', 'paid', 'in_production']);
 
 // order.placedAt comes back from the client Firestore SDK as a Timestamp
 // object (with a toDate() method), not a plain Date or ISO string, so this
@@ -27,11 +49,21 @@ function formatPlacedAt(value: unknown): string {
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const uid = user?.uid;
   const [orderId, setOrderId] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [events, setEvents] = useState<OrderEvent[]>([]);
+  const [productSlugs, setProductSlugs] = useState<Map<string, string>>(new Map());
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [existingReturn, setExistingReturn] = useState<Return | null>(null);
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   useEffect(() => {
     params.then((p) => setOrderId(p.orderId));
@@ -44,41 +76,215 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     getDoc(doc(db, 'orders', orderId)).then((snapshot) => {
       if (snapshot.exists()) setOrder(snapshot.data() as Order);
     });
-    getDocs(collection(db, 'orders', orderId, 'items')).then((snapshot) => {
-      setItems(snapshot.docs.map((d) => d.data() as OrderItem));
+    getDocs(collection(db, 'orders', orderId, 'items')).then(async (snapshot) => {
+      const loadedItems = snapshot.docs.map((d) => d.data() as OrderItem);
+      setItems(loadedItems);
+
+      // "Personalize again" needs each item's product SLUG, but OrderItem
+      // only stores productId (the product route is slug-based) — fetched
+      // once per distinct product here rather than denormalizing the slug
+      // onto every order item.
+      const uniqueProductIds = [...new Set(loadedItems.map((item) => item.productId).filter(Boolean))];
+      const entries = await Promise.all(
+        uniqueProductIds.map(async (productId) => {
+          const productSnap = await getDoc(doc(db, 'products', productId));
+          return [productId, productSnap.exists() ? (productSnap.data() as { slug?: string }).slug ?? null : null] as const;
+        })
+      );
+      setProductSlugs(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
     });
     getDocs(query(collection(db, 'orders', orderId, 'events'), orderBy('createdAt', 'asc'))).then((snapshot) => {
       setEvents(snapshot.docs.map((d) => d.data() as OrderEvent));
     });
   }, [uid, orderId]);
 
-  if (!user) return <p>Please sign in to see this order.</p>;
-  if (!order) return <p>Loading…</p>;
+  // Returns live in a top-level `returns` collection unreachable by direct
+  // client reads (deny-by-default, same as every other new collection this
+  // round) — fetched through the admin-backed route instead. Only ever
+  // relevant once delivered, so gated on that rather than firing for
+  // every order regardless of status. Depends on `uid` (a stable
+  // primitive), not the whole `user` object — same fix as AddressesPage's
+  // own effect: the Firebase User object is a fresh reference on every
+  // AuthProvider re-render, so depending on it directly would refire this
+  // on every render (and, worse here, stomp a just-submitted return back
+  // to null on the very next render after POSTing it).
+  useEffect(() => {
+    if (!user || !uid || !orderId || order?.status !== 'delivered') return;
+    (async () => {
+      const idToken = await user.getIdToken();
+      const response = await fetch(`/api/orders/${orderId}/returns`, { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!response.ok) return;
+      const body = await response.json();
+      setExistingReturn(body.returns?.[0] ?? null);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, orderId, order?.status]);
+
+  if (!user) return <SignedOutNotice action="see this order" />;
+  if (!order) return <PageSkeleton rows={2} />;
 
   const hasPendingPaymentEvent = events.some((event) => event.status === 'pending_payment');
+  const isCancellable = CANCELLABLE_STATUSES.has(order.status);
+
+  const handleCancel = async () => {
+    if (!orderId || !user) return;
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (!response.ok) {
+        setCancelError('Could not cancel this order. Try again.');
+        showToast('Could not cancel this order. Try again.', 'error');
+        return;
+      }
+      setOrder((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+      setShowCancelConfirm(false);
+      showToast('Order cancelled', 'success');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleRequestReturn = async () => {
+    if (!orderId || !user || !returnReason.trim()) return;
+    setIsSubmittingReturn(true);
+    setReturnError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch(`/api/orders/${orderId}/returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ reason: returnReason.trim() }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message = body?.error ?? 'Could not submit your return request. Try again.';
+        setReturnError(message);
+        showToast(message, 'error');
+        return;
+      }
+      const body = await response.json();
+      setExistingReturn(body.return);
+      setShowReturnForm(false);
+      showToast('Return requested', 'success');
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  };
 
   return (
-    <main className="flex flex-col gap-6 p-6">
-      <h1 className="font-display text-2xl">Order {order.orderNo}</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-semibold text-ink">Order {order.orderNo}</h1>
+        <Link href={`/orders/${orderId}/invoice`} className="text-sm text-accent hover:text-accent-dark">
+          View invoice
+        </Link>
+      </div>
 
-      <ul className="flex flex-col gap-1">
-        {items.map((item, i) => (
-          <li key={i}>
-            <span>{item.title}</span> × {item.qty}
-          </li>
-        ))}
+      <OrderStatusTimeline status={order.status} />
+
+      <ul className="flex flex-col gap-2 text-accent/80">
+        {items.map((item, i) => {
+          const slug = productSlugs.get(item.productId);
+          return (
+            <li key={i} className="flex items-center justify-between gap-3">
+              <span>
+                <span>{item.title}</span> × {item.qty}
+              </span>
+              {slug && (
+                <Link href={`/product/${slug}`} className="text-sm text-accent hover:text-accent-dark whitespace-nowrap">
+                  Personalize again
+                </Link>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
-      <div className="flex flex-col gap-2 pt-4 border-t border-charcoal/10">
-        <h2 className="font-medium">Status timeline</h2>
+      {isCancellable && (
+        <div className="pt-2">
+          <button
+            onClick={() => setShowCancelConfirm(true)}
+            className="rounded-md border border-alert text-alert px-4 py-2 text-sm font-semibold hover:bg-alert hover:text-paper transition-colors"
+          >
+            Cancel order
+          </button>
+          {cancelError && <p className="text-sm text-alert mt-2">{cancelError}</p>}
+          <ConfirmDialog
+            isOpen={showCancelConfirm}
+            title="Cancel this order?"
+            message="This can't be undone."
+            confirmLabel="Yes, cancel order"
+            cancelLabel="Keep order"
+            isLoading={isCancelling}
+            onConfirm={handleCancel}
+            onCancel={() => setShowCancelConfirm(false)}
+          />
+        </div>
+      )}
+
+      {order.status === 'delivered' && (
+        <div className="pt-2">
+          {existingReturn ? (
+            <div className="rounded-md border border-line p-4 flex flex-col gap-1">
+              <span className="text-sm font-semibold text-ink">{RETURN_STATUS_LABEL[existingReturn.status]}</span>
+              <span className="text-sm text-ink/60">&ldquo;{existingReturn.reason}&rdquo;</span>
+              {existingReturn.staffNote && <span className="text-sm text-ink/60">Note: {existingReturn.staffNote}</span>}
+            </div>
+          ) : showReturnForm ? (
+            <div className="rounded-md border border-line p-4 flex flex-col gap-3">
+              <label htmlFor="return-reason" className="text-sm font-medium text-ink">
+                Why are you returning this order?
+              </label>
+              <textarea
+                id="return-reason"
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                rows={3}
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink"
+              />
+              {returnError && <p className="text-sm text-alert">{returnError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleRequestReturn}
+                  disabled={isSubmittingReturn || !returnReason.trim()}
+                  className="rounded-md bg-alert text-paper px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {isSubmittingReturn ? 'Submitting…' : 'Submit return request'}
+                </button>
+                <button
+                  onClick={() => setShowReturnForm(false)}
+                  className="rounded-md border border-line text-ink px-4 py-2 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowReturnForm(true)}
+              className="rounded-md border border-alert text-alert px-4 py-2 text-sm font-semibold hover:bg-alert hover:text-paper transition-colors"
+            >
+              Return product
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 pt-4 border-t border-line">
+        <h2 className="font-medium text-accent-dark">Status timeline</h2>
         {!hasPendingPaymentEvent && (
-          <div className="text-sm">
+          <div className="text-sm text-accent/80">
             <span>Order placed</span>
             {order.placedAt !== undefined && <span> — <span>{formatPlacedAt(order.placedAt)}</span></span>}
           </div>
         )}
         {events.map((event) => (
-          <div key={event.id} className="text-sm">
+          <div key={event.id} className="text-sm text-accent/80">
             <span>{event.status}</span>
             {event.createdAt !== undefined && (
               <span> — <span>{formatPlacedAt(event.createdAt)}</span></span>

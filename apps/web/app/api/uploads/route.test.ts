@@ -7,8 +7,6 @@ const mockSet = vi.fn().mockResolvedValue(undefined);
 const mockSave = vi.fn().mockResolvedValue(undefined);
 const mockGetSignedUrl = vi.fn().mockResolvedValue(['https://signed.example.com/original.jpg']);
 
-// variant_2400 has minUploadPx 2400 — the server-side gate a client can no
-// longer bypass by sending its own minUploadPx (see Finding 7 in review).
 const variantDoc = { id: 'var_1', minUploadPx: 2400 };
 const mockCollectionGroupGet = vi.fn().mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
 
@@ -94,13 +92,13 @@ describe('POST /api/uploads', () => {
     expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready', sessionId: 'sess_test' }));
   });
 
-  it('rejects a photo below the variant minUploadPx', async () => {
+  it('accepts a photo below the variant minUploadPx — quality is communicated via the editor DPI badge, not a hard reject', async () => {
     const buffer = readFileSync(join(fixturesDir, 'tiny-photo.jpg'));
     const response = await POST(makeRequest(buffer, 'sess_test'));
     const body = await response.json();
 
-    expect(response.status).toBe(422);
-    expect(body.status).toBe('rejected');
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('ready');
   });
 
   it('returns 400 for a malformed/undecodable image without writing to Firestore', async () => {
@@ -156,24 +154,6 @@ describe('POST /api/uploads', () => {
     expect(response.status).toBe(200);
     expect(body.userId).toBeUndefined();
     expect(mockSet).toHaveBeenCalledWith(expect.not.objectContaining({ userId: expect.anything() }));
-  });
-
-  it('ignores a client-supplied minUploadPx and uses the server-fetched variant\'s value instead', async () => {
-    // A "tiny" photo (300x450) would pass a client-lied minUploadPx of 1,
-    // but must still be rejected using the server-side variant's real
-    // minUploadPx (2400) — the whole point of Finding 7's fix.
-    const buffer = readFileSync(join(fixturesDir, 'tiny-photo.jpg'));
-    const formData = new FormData();
-    formData.append('file', new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' }), 'photo.jpg');
-    formData.append('variantId', 'var_1');
-    formData.append('minUploadPx', '1'); // attempted bypass — must be ignored
-    const request = new Request('http://localhost/api/uploads', {
-      method: 'POST',
-      headers: { 'X-Session-Id': 'sess_test' },
-      body: formData,
-    });
-    const response = await POST(request);
-    expect(response.status).toBe(422);
   });
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {

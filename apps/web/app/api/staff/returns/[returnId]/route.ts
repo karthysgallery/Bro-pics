@@ -1,0 +1,148 @@
+import { NextResponse } from 'next/server';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminApp } from '../../../../../lib/firebase-admin';
+import { getStaffUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
+import { checkRateLimit } from '../../../../../lib/rate-limit';
+import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
+import { writeNotification } from '../../../../../lib/notify';
+import { ReturnStatusSchema, isValidReturnStatusTransition, OrderEventSchema, type Return, type ReturnStatus, type Order } from '@bro-pics/shared';
+
+interface RouteParams {
+  params: Promise<{ returnId: string }>;
+}
+
+const TERMINAL_STATUSES: ReturnStatus[] = ['rejected', 'refunded'];
+
+const NOTIFICATION_BY_RETURN_STATUS: Partial<Record<ReturnStatus, { title: string; body: string }>> = {
+  approved: { title: 'Return approved', body: 'has been approved.' },
+  rejected: { title: 'Return rejected', body: 'was not approved.' },
+  pickup_scheduled: { title: 'Pickup scheduled', body: 'has a pickup scheduled.' },
+  picked_up: { title: 'Item picked up', body: 'has been picked up.' },
+  refund_processing: { title: 'Refund processing', body: 'is being processed.' },
+  refunded: { title: 'Refund complete', body: 'has been refunded.' },
+};
+
+export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const staffUserId = await getStaffUserIdFromAuthHeader(request);
+  if (!staffUserId) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const statusParsed = ReturnStatusSchema.safeParse(body?.status);
+  if (!statusParsed.success) {
+    return NextResponse.json({ error: 'Missing or invalid status' }, { status: 400 });
+  }
+  const nextStatus = statusParsed.data;
+  const staffNote = typeof body?.staffNote === 'string' ? body.staffNote : null;
+
+  const { returnId } = await params;
+  const db = getFirestore(getAdminApp());
+  const returnRef = db.collection('returns').doc(returnId);
+  const returnSnap = await returnRef.get();
+  if (!returnSnap.exists) {
+    return NextResponse.json({ error: `Unknown returnId: ${returnId}` }, { status: 404 });
+  }
+  const currentReturn = returnSnap.data() as Return;
+  if (!isValidReturnStatusTransition(currentReturn.status, nextStatus)) {
+    return NextResponse.json({ error: `Cannot transition from ${currentReturn.status} to ${nextStatus}` }, { status: 400 });
+  }
+
+  const orderRef = db.collection('orders').doc(currentReturn.orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) {
+    return NextResponse.json({ error: 'Order for this return no longer exists' }, { status: 400 });
+  }
+  const order = orderSnap.data() as Order;
+
+  // Real money movement, so it happens BEFORE any Firestore write and
+  // outside the transaction below (an external HTTP call must never sit
+  // inside a Firestore transaction, which can retry on contention — see
+  // create-order's own Razorpay-order-creation step for the same rule).
+  // A race where a concurrent request also advances this same return
+  // between this check and the transaction's own re-check below could, in
+  // principle, call Razorpay twice — documented as a known gap in
+  // razorpay-client.ts (no idempotency key on this call yet), acceptable
+  // for a low-concurrency, staff-only action.
+  let razorpayRefundId: string | undefined;
+  if (nextStatus === 'refunded') {
+    if (!order.razorpayPaymentId) {
+      return NextResponse.json({ error: 'Order has no payment to refund' }, { status: 400 });
+    }
+    const refund = await createRazorpayRefund({
+      paymentId: order.razorpayPaymentId,
+      amount: currentReturn.refundAmount,
+      notes: { returnId },
+    });
+    razorpayRefundId = refund.id;
+  }
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const freshReturnSnap = await transaction.get(returnRef);
+      const freshStatus = (freshReturnSnap.data() as Return | undefined)?.status;
+      if (!freshStatus || !isValidReturnStatusTransition(freshStatus, nextStatus)) {
+        throw new StatusConflictError();
+      }
+
+      const returnUpdate: Record<string, unknown> = { status: nextStatus, staffNote };
+      if (TERMINAL_STATUSES.includes(nextStatus)) {
+        returnUpdate.resolvedAt = new Date().toISOString();
+      }
+      if (razorpayRefundId) {
+        returnUpdate.razorpayRefundId = razorpayRefundId;
+      }
+      transaction.update(returnRef, returnUpdate);
+
+      // Once a return actually completes, the parent order moves to
+      // 'refunded' too — 'delivered' -> 'refunded' is already a legal
+      // OrderStatus transition (status-transitions.ts), reusing the same
+      // event-log pattern every other order status change goes through.
+      if (nextStatus === 'refunded') {
+        const eventRef = orderRef.collection('events').doc();
+        const event = OrderEventSchema.parse({
+          id: eventRef.id,
+          status: 'refunded',
+          note: `Return ${returnId} refunded`,
+          courier: null,
+          awbNumber: null,
+          createdAt: new Date().toISOString(),
+          createdBy: staffUserId,
+        });
+        transaction.set(eventRef, event);
+        transaction.update(orderRef, { status: 'refunded' });
+      }
+    });
+  } catch (error) {
+    if (error instanceof StatusConflictError) {
+      return NextResponse.json({ error: 'Return status changed, please retry' }, { status: 409 });
+    }
+    throw error;
+  }
+
+  // Best-effort, outside the transaction — same fire-and-forget pattern as
+  // the staff order-advance and customer cancel routes.
+  const notification = NOTIFICATION_BY_RETURN_STATUS[nextStatus];
+  if (notification) {
+    writeNotification(
+      db,
+      currentReturn.userId,
+      'refund',
+      notification.title,
+      `Return for order ${order.orderNo} ${notification.body}`,
+      `/orders/${currentReturn.orderId}`
+    ).catch((error) => console.error('Failed to write notification:', error));
+  }
+
+  return NextResponse.json({ status: nextStatus, razorpayRefundId }, { status: 200 });
+}
+
+class StatusConflictError extends Error {}

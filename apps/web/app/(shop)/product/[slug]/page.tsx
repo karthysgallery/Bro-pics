@@ -6,12 +6,14 @@ import {
   getRelatedProducts,
   getAllActiveProductSlugs,
   getCategoryById,
+  getFrameTemplatesByProductId,
 } from '../../../../lib/firestore-product-detail';
 import { ProductDetailClient } from '../../../../components/product/ProductDetailClient';
 import { ProductTabs } from '../../../../components/product/ProductTabs';
 import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
+import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
 
 export const revalidate = 60;
 
@@ -51,9 +53,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
   if (!detail) notFound();
 
   const { product, variants, media, reviews } = detail;
-  const [relatedProducts, category] = await Promise.all([
+  const [relatedProducts, category, templatesByVariant] = await Promise.all([
     getRelatedProducts(product.categoryId, product.id, 8),
     getCategoryById(product.categoryId),
+    getFrameTemplatesByProductId(product.id),
   ]);
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
@@ -81,27 +84,33 @@ export default async function ProductPage({ params }: ProductPageProps) {
   };
 
   return (
-    <div className="px-4 py-8 md:px-8">
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <nav aria-label="Breadcrumb" className="text-xs text-charcoal/60 mb-6">
-        <Link href="/">Home</Link>
+      <nav aria-label="Breadcrumb" className="text-2xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-accent">Home</Link>
         {category && (
           <>
             {' / '}
-            <Link href={`/category/${category.slug}`}>{category.name}</Link>
+            <Link href={`/category/${category.slug}`} className="hover:text-accent">{category.name}</Link>
           </>
         )}
         {' / '}
-        <span className="text-charcoal">{product.title}</span>
+        <span className="text-ink/70">{product.title}</span>
       </nav>
 
-      <ProductDetailClient product={product} variants={variants} media={media} />
+      <ProductDetailClient
+        product={product}
+        variants={variants}
+        media={media}
+        initialTemplatesByVariant={templatesByVariant}
+      />
 
       <ProductTabs product={product} variants={variants} />
       <VideoRail media={media} />
       <ReviewsSection product={product} reviews={reviews} />
       <RelatedProducts products={relatedProducts} />
+      <RecentlyViewedRail excludeProductId={product.id} />
     </div>
   );
 }

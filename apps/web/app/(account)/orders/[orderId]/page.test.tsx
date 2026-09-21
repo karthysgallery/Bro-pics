@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import OrderDetailPage from './page';
 
 vi.mock('../../../../lib/auth-context', () => ({
-  useAuth: vi.fn(() => ({ user: { uid: 'user_1' }, loading: false })),
+  useAuth: vi.fn(() => ({ user: { uid: 'user_1', getIdToken: () => Promise.resolve('id-token') }, loading: false })),
 }));
 
 const mockGetDoc = vi.fn();
@@ -99,5 +99,40 @@ describe('OrderDetailPage', () => {
 
     await screen.findByText('pending_payment');
     expect(screen.queryByText('Order placed')).not.toBeInTheDocument();
+  });
+
+  it('offers to return a delivered order, and shows the request status once submitted', async () => {
+    // Branches on method rather than call order — the GET-existing-returns
+    // fetch (on mount) and the POST-new-return fetch (on submit) are two
+    // independent async flows with no ordering guarantee relative to when
+    // "Return product" first appears, so a plain FIFO mockResolvedValueOnce
+    // queue would be a race.
+    const mockFetch = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        return { ok: true, json: async () => ({ return: { status: 'requested', reason: 'Frame arrived damaged' } }) };
+      }
+      return { ok: true, json: async () => ({ returns: [] }) };
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ orderNo: 'BP-2026-00004', status: 'delivered', total: 50000 }),
+    });
+    mockGetDocs.mockResolvedValueOnce({ docs: [] }).mockResolvedValueOnce({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_4' })} />);
+
+    const returnButton = await screen.findByText('Return product');
+    fireEvent.click(returnButton);
+
+    fireEvent.change(await screen.findByLabelText(/why are you returning/i), { target: { value: 'Frame arrived damaged' } });
+    fireEvent.click(screen.getByText('Submit return request'));
+
+    expect(await screen.findByText('Return requested')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/orders/order_4/returns',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ reason: 'Frame arrived damaged' }) })
+    );
   });
 });

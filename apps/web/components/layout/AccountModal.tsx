@@ -1,50 +1,32 @@
 'use client';
 
-import Link from 'next/link';
 import { PhoneSignIn } from '../auth/PhoneSignIn';
-import { useAuth } from '../../lib/auth-context';
 
 interface AccountModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Signed-in users never see this modal — the header links straight to
+// /account instead of opening it (see Header.tsx) — so this only ever
+// needs to render the sign-in flow.
 export function AccountModal({ isOpen, onClose }: AccountModalProps) {
-  const { user, signOut } = useAuth();
   if (!isOpen) return null;
-
-  const handleSignOut = () => {
-    signOut();
-    onClose();
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="account-modal">
-      <div className="absolute inset-0 bg-charcoal/40" onClick={onClose} />
-      <div className="relative bg-cream w-full max-w-sm rounded p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl">{user ? 'My account' : 'Sign in'}</h2>
-          <button
-            aria-label={user ? 'Close account menu' : 'Close sign in'}
-            onClick={onClose}
-            className="text-charcoal"
-          >
+      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <div className="relative bg-paper w-full max-w-sm rounded-2xl border border-line p-6 flex flex-col gap-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Sign in</h2>
+            <p className="mt-0.5 text-sm text-ink/60">We&rsquo;ll text you a one-time code.</p>
+          </div>
+          <button aria-label="Close sign in" onClick={onClose} className="text-ink/60 hover:text-ink text-lg leading-none">
             ✕
           </button>
         </div>
-        {user ? (
-          <div className="flex flex-col gap-3">
-            <p>{user.phoneNumber}</p>
-            <Link href="/orders" className="text-sage underline" onClick={onClose}>
-              My Orders
-            </Link>
-            <button onClick={handleSignOut} className="rounded bg-charcoal text-cream px-4 py-2 w-fit">
-              Sign Out
-            </button>
-          </div>
-        ) : (
-          <PhoneSignIn onSignedIn={onClose} />
-        )}
+        <PhoneSignIn onSignedIn={onClose} />
       </div>
     </div>
   );

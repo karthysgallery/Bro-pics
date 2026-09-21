@@ -18,17 +18,24 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     : { products: [], totalCount: 0 };
 
   return (
-    <div className="px-4 py-8 md:px-8">
-      <h1 className="font-display text-3xl mb-2">
-        {query ? `Search results for "${query}"` : 'Search'}
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
+      <h1 className="text-2xl font-semibold text-ink">
+        {query ? <>Results for &ldquo;{query}&rdquo;</> : 'Search'}
       </h1>
-      <p className="text-charcoal/70 mb-6">{totalCount} products</p>
+      <p className="mt-1 mb-5 text-sm text-ink/60">
+        {query ? `${totalCount} products` : 'Type in the search bar above to find a frame.'}
+      </p>
 
       {products.length === 0 && query && (
-        <p className="text-charcoal/70">No products found. Try a different search, or browse our best sellers.</p>
+        <div className="py-8">
+          <p className="text-sm text-ink/70">Nothing matched that search.</p>
+          <a href="/category" className="mt-2 inline-block text-sm font-medium text-accent hover:text-accent-dark">
+            Browse all collections <span aria-hidden="true">&rsaquo;</span>
+          </a>
+        </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-7">
         {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}

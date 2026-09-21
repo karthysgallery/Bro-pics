@@ -287,6 +287,50 @@ describe('POST /api/checkout/create-order', () => {
     mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
   }
 
+  describe('delivery method', () => {
+    it('defaults to standard shipping when deliveryMethod is omitted', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      expect(writtenOrder).toMatchObject({ shipping: 5000, deliveryMethod: 'standard' });
+    });
+
+    it('charges the express flat rate and records deliveryMethod on the order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      mockCartDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 2, previewUrl: 'x.png' }] }),
+      });
+      mockAddressDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      });
+      mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+      // A subtotal well above the free-shipping threshold — express must
+      // still charge its flat rate, proving it ignores that threshold.
+      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 1500, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+      mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
+        fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
+      );
+      mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', deliveryMethod: 'express' }));
+      expect(response.status).toBe(200);
+      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      expect(writtenOrder).toMatchObject({ shipping: 15000, deliveryMethod: 'express' });
+    });
+
+    it('returns 400 for an unsupported deliveryMethod (e.g. same_day)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      const response = await POST(makeRequest({ addressId: 'addr_1', deliveryMethod: 'same_day' }));
+      expect(response.status).toBe(400);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+  });
+
   describe('coupon application', () => {
     it('applies a valid coupon: reduces total and writes couponId onto the order', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');

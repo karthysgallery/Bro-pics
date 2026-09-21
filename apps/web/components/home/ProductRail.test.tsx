@@ -51,9 +51,9 @@ describe('ProductRail', () => {
     expect(screen.getByText('Frame Two')).toBeInTheDocument();
   });
 
-  it('renders nothing extra when the product list is empty', () => {
-    render(<ProductRail title="Best Sellers" products={[]} />);
-    expect(screen.getByText('Best Sellers')).toBeInTheDocument();
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
+  it('renders nothing at all when the product list is empty — an empty rail is dead weight', () => {
+    const { container } = render(<ProductRail title="Best Sellers" products={[]} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Best Sellers')).not.toBeInTheDocument();
   });
 });

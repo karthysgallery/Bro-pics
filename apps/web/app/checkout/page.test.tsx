@@ -21,10 +21,12 @@ vi.mock('../../lib/razorpay-checkout-script', () => ({ loadRazorpayCheckoutScrip
 
 const mockOnSnapshot = vi.fn();
 const mockUnsubscribe = vi.fn();
+const mockGetDoc = vi.fn().mockResolvedValue({ exists: () => false });
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
   doc: vi.fn((_db, ...segments: string[]) => ({ path: segments.join('/') })),
   onSnapshot: (...args: unknown[]) => mockOnSnapshot(...args),
+  getDoc: (...args: unknown[]) => mockGetDoc(...args),
 }));
 vi.mock('../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
 
@@ -37,24 +39,61 @@ describe('CheckoutPage', () => {
     mockOnSnapshot.mockReset();
     mockUnsubscribe.mockReset();
     mockOnSnapshot.mockImplementation(() => mockUnsubscribe);
+    mockGetDoc.mockReset();
+    mockGetDoc.mockResolvedValue({ exists: () => false });
     (global as unknown as { Razorpay?: unknown }).Razorpay = vi.fn().mockImplementation(() => ({ open: vi.fn() }));
+  });
+
+  it('offers standard and express delivery, and switching to express updates the shipping/total lines', async () => {
+    render(<CheckoutPage />);
+
+    expect(await screen.findByText('Standard')).toBeInTheDocument();
+    expect(screen.getByText('Express')).toBeInTheDocument();
+    // Below the ₹1500 free-shipping threshold: standard costs the flat ₹50.
+    expect(screen.getAllByText('₹50')).toHaveLength(2); // the radio row + the Shipping summary line
+
+    fireEvent.click(screen.getByRole('radio', { name: /express/i }));
+
+    await waitFor(() => {
+      // Express is a flat ₹150 regardless of subtotal.
+      expect(screen.getAllByText('₹150')).toHaveLength(2);
+    });
+  });
+
+  it('includes the selected deliveryMethod in the place-order request', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'rzp_1', amount: 1000, keyId: 'key_1' }),
+    });
+    render(<CheckoutPage />);
+
+    await screen.findByText('Express');
+    fireEvent.click(screen.getByRole('radio', { name: /express/i }));
+    fireEvent.click(await screen.findByText('Place order'));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/checkout/create-order',
+        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: undefined, deliveryMethod: 'express' }) })
+      )
+    );
   });
 
   it('shows a sign-in prompt when signed out', async () => {
     const { useAuth } = await import('../../lib/auth-context');
     vi.mocked(useAuth).mockReturnValueOnce({ user: null, loading: false, signOut: vi.fn() });
     render(<CheckoutPage />);
-    expect(screen.getByText(/sign in/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /sign in to check out/i })).toBeInTheDocument();
   });
 
-  it('calls create-order and opens Razorpay Checkout on "Place Order"', async () => {
+  it('calls create-order and opens Razorpay Checkout on "Place order"', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     render(<CheckoutPage />);
 
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() =>
       expect(mockFetch).toHaveBeenCalledWith(
@@ -75,20 +114,20 @@ describe('CheckoutPage', () => {
       json: () => Promise.resolve({ unavailable: [{ variantId: 'v1', reason: 'out_of_stock' }] }),
     });
     render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
     expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
   });
 
-  it('hides the Place Order button once an order has been created, closing the double-submit window', async () => {
+  it('hides the Place order button once an order has been created, closing the double-submit window', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
-    expect(screen.queryByText('Place Order')).not.toBeInTheDocument();
+    expect(screen.queryByText('Place order')).not.toBeInTheDocument();
   });
 
   it('subscribes to orders/{orderId} and replaces the cart summary with a confirmation once status flips to paid', async () => {
@@ -97,7 +136,7 @@ describe('CheckoutPage', () => {
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
     const [, onNext] = mockOnSnapshot.mock.calls[0];
@@ -119,7 +158,7 @@ describe('CheckoutPage', () => {
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
     const [, onNext] = mockOnSnapshot.mock.calls[0];
@@ -128,7 +167,28 @@ describe('CheckoutPage', () => {
       data: () => ({ status: 'pending_payment', paymentStatus: 'failed', orderNo: 'BP-2026-00001' }),
     });
 
-    expect(await screen.findByText(/payment failed.*refresh/i)).toBeInTheDocument();
+    expect(await screen.findByText(/payment failed/i)).toBeInTheDocument();
+  });
+
+  it('lets the customer retry in place after a failed payment, without a page refresh', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place order'));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    const [, onNext] = mockOnSnapshot.mock.calls[0];
+    onNext({
+      exists: () => true,
+      data: () => ({ status: 'pending_payment', paymentStatus: 'failed', orderNo: 'BP-2026-00001' }),
+    });
+
+    fireEvent.click(await screen.findByText('Try again'));
+
+    expect(await screen.findByText('Place order')).toBeInTheDocument();
+    expect(screen.queryByText(/payment failed/i)).not.toBeInTheDocument();
   });
 
   it('unsubscribes the order listener on unmount', async () => {
@@ -137,7 +197,7 @@ describe('CheckoutPage', () => {
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     const { unmount } = render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
     unmount();
@@ -151,7 +211,7 @@ describe('CheckoutPage', () => {
       json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
     });
     const { rerender } = render(<CheckoutPage />);
-    fireEvent.click(await screen.findByText('Place Order'));
+    fireEvent.click(await screen.findByText('Place order'));
 
     await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
     expect(mockUnsubscribe).not.toHaveBeenCalled();
@@ -213,7 +273,7 @@ describe('CheckoutPage coupon UI', () => {
     await waitFor(() =>
       expect(mockFetch).toHaveBeenLastCalledWith(
         '/api/checkout/create-order',
-        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: 'NEW10' }) })
+        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: 'NEW10', deliveryMethod: 'standard' }) })
       )
     );
   });

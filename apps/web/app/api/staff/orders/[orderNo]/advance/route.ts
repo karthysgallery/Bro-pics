@@ -4,11 +4,23 @@ import { getAdminApp } from '../../../../../../lib/firebase-admin';
 import { getStaffUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
 import { findOrderByOrderNo } from '../../../../../../lib/order-lookup';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
-import { OrderEventSchema, isValidStatusTransition, type OrderStatus } from '@bro-pics/shared';
+import { writeNotification } from '../../../../../../lib/notify';
+import { OrderEventSchema, isValidStatusTransition, type OrderStatus, type NotificationCategory } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderNo: string }>;
 }
+
+const NOTIFICATION_BY_STATUS: Partial<Record<OrderStatus, { category: NotificationCategory; title: string; body: string }>> = {
+  paid: { category: 'payment', title: 'Payment confirmed', body: 'has been confirmed.' },
+  in_production: { category: 'order', title: 'Order in production', body: 'is now being printed.' },
+  printed_packed: { category: 'order', title: 'Order packed', body: 'has been printed and packed.' },
+  shipped: { category: 'shipping', title: 'Order shipped', body: 'has shipped.' },
+  delivered: { category: 'delivery', title: 'Order delivered', body: 'has been delivered.' },
+  cancelled: { category: 'order', title: 'Order cancelled', body: 'has been cancelled.' },
+  refunded: { category: 'refund', title: 'Order refunded', body: 'has been refunded.' },
+  replacement_issued: { category: 'order', title: 'Replacement issued', body: 'has a replacement on the way.' },
+};
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
@@ -92,6 +104,21 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       return NextResponse.json({ error: 'order status changed, please retry' }, { status: 409 });
     }
     throw error;
+  }
+
+  // Best-effort, outside the transaction — a notification is a side effect
+  // of the status change, not part of its correctness; a failure here
+  // shouldn't turn an otherwise-successful advance into an error response.
+  const notification = NOTIFICATION_BY_STATUS[status];
+  if (notification) {
+    writeNotification(
+      db,
+      found.data.userId,
+      notification.category,
+      notification.title,
+      `Order ${found.data.orderNo} ${notification.body}`,
+      `/orders/${found.id}`
+    ).catch((error) => console.error('Failed to write notification:', error));
   }
 
   return NextResponse.json({ order: { ...found.data, ...orderUpdate } }, { status: 200 });

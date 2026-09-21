@@ -11,19 +11,13 @@ interface State {
 }
 
 /**
- * Wraps EditorCanvas (react-konva) to catch a known, already-diagnosed
- * dev-mode-only crash: react-reconciler@0.29.2 (a react-konva dependency)
- * reads several React/ReactDOM internal properties (ReactCurrentOwner,
- * ReactCurrentActQueue.isBatchingLegacy) that Next.js 15's dev-mode client
- * bundle renames/restructures, so the whole page hard-crashes the instant
- * the Konva <Stage> mounts. Confirmed this does NOT happen in a production
- * build (`next build && next start`) — see PROJECT_STATUS.md's
- * "Personalization Editor crashes in next dev only" note. No available
- * react-konva/react-reconciler version bump fixes this without a React 19
- * upgrade (checked 2026-09-13) — that's a much bigger, separate decision,
- * not a quick patch — so rather than let Next's global error overlay take
- * down the whole page in local dev, this shows an honest, scoped fallback
- * instead.
+ * Wraps EditorCanvas as a generic safety net — a failure here (a corrupt
+ * image, an unexpected canvas API error) shows a scoped, honest fallback
+ * instead of taking down the whole product page via Next's global error
+ * overlay. EditorCanvas itself no longer depends on react-konva/
+ * react-reconciler (replaced with plain <canvas> + native Image() — see
+ * PROJECT_STATUS.md's "react-konva removed" note), which is what used to
+ * make this boundary trip on every mount; it should now rarely fire.
  */
 export class EditorCanvasErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
@@ -42,7 +36,7 @@ export class EditorCanvasErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="aspect-square bg-cream rounded-lg flex items-center justify-center p-4 text-center text-sm text-charcoal/70">
+        <div className="aspect-square bg-paper rounded-lg flex items-center justify-center p-4 text-center text-sm text-ink/70">
           Photo preview isn&apos;t available in local development mode.
           <br />
           It works correctly in production — run <code>pnpm build &amp;&amp; pnpm start</code> to verify.

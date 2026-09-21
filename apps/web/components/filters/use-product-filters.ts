@@ -3,9 +3,15 @@ import { parseSearchFilters, type SearchFilters } from '@bro-pics/shared';
 
 export interface ProductFiltersController {
   filters: SearchFilters;
+  // Orientation has no backend field yet (derived client-side from
+  // width/height — see docs/superpowers/specs/2026-09-14-frames-only-backend-changes.md),
+  // so it's tracked as a plain "orientation" URL param outside the shared
+  // SearchFilters shape rather than added to that schema.
+  selectedOrientations: string[];
   toggleSize: (size: string) => URLSearchParams;
   toggleColour: (colour: string) => URLSearchParams;
   toggleMaterial: (material: string) => URLSearchParams;
+  toggleOrientation: (orientation: string) => URLSearchParams;
   setPriceRange: (minPrice: number, maxPrice: number) => URLSearchParams;
   clearAll: () => URLSearchParams;
 }
@@ -28,9 +34,11 @@ export function useProductFilters(params: URLSearchParams): ProductFiltersContro
 
   return {
     filters,
+    selectedOrientations: params.getAll('orientation'),
     toggleSize: (size) => toggleListParam(params, 'size', size),
     toggleColour: (colour) => toggleListParam(params, 'colour', colour),
     toggleMaterial: (material) => toggleListParam(params, 'material', material),
+    toggleOrientation: (orientation) => toggleListParam(params, 'orientation', orientation),
     setPriceRange: (minPrice, maxPrice) => {
       const next = new URLSearchParams(params);
       next.set('minPrice', String(minPrice));
