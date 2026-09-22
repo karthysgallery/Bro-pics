@@ -36,7 +36,7 @@ export default function ContactPage() {
       <p>Two things answer most messages faster than we can:</p>
       <ul>
         <li>
-          Order status and tracking are on <Link href="/account/orders">your orders page</Link>.
+          Order status and tracking are on <Link href="/orders">your orders page</Link>.
         </li>
         <li>
           Sizing, delivery times and refunds are covered in the{' '}

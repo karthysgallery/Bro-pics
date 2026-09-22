@@ -23,7 +23,7 @@ const helpLinks = [
 ];
 
 const accountLinks = [
-  { label: 'My orders', href: '/account/orders' },
+  { label: 'My orders', href: '/orders' },
   { label: 'Wishlist', href: '/account/wishlist' },
   { label: 'Saved addresses', href: '/account/addresses' },
   { label: 'Profile', href: '/account' },

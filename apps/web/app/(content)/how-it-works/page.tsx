@@ -44,7 +44,7 @@ export default function HowItWorksPage() {
       <p>
         We print, mount and assemble by hand, then check the result against your preview before it
         is packed. Dispatch times are shown on each product page, and tracking appears on{' '}
-        <Link href="/account/orders">your orders page</Link> once the parcel leaves us.
+        <Link href="/orders">your orders page</Link> once the parcel leaves us.
       </p>
 
       <h2>If something is not right</h2>

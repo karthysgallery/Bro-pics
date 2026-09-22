@@ -32,7 +32,7 @@ export default function ShippingPolicyPage() {
         longer, and we will tell you if yours is one of them.
       </p>
       <p>
-        Tracking is added to <Link href="/account/orders">your orders page</Link> when the parcel
+        Tracking is added to <Link href="/orders">your orders page</Link> when the parcel
         leaves us.
       </p>
 

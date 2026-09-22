@@ -75,7 +75,7 @@ const FAQS: { section: string; items: { q: string; a: React.ReactNode }[] }[] = 
         q: 'Where is my order?',
         a: (
           <>
-            Tracking appears on <Link href="/account/orders">your orders page</Link> as soon as the
+            Tracking appears on <Link href="/orders">your orders page</Link> as soon as the
             parcel leaves us.
           </>
         ),

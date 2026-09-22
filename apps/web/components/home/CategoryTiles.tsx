@@ -29,7 +29,13 @@ export function CategoryTiles({ title, categories }: CategoryTilesProps) {
   return (
     <Section>
       <SectionHeader title={title} subtitle="Find the perfect piece for every moment" href="/category" />
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* pr-20 on mobile keeps a full-width tile clear of LayoutChrome's fixed
+          bottom-right WhatsApp button (bottom-6 right-6, ~48px), which
+          otherwise lands on top of a stacked single-column tile at common
+          scroll positions and blocks taps on it — same recurring class of
+          overlap as VariantSelector/BuyBox/Footer, see VariantSelector's
+          comment for the fuller explanation. */}
+      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pr-20 sm:pr-0">
         {categories.map((category) => (
           <li key={category.id}>
             <Link
