@@ -55,8 +55,8 @@ export function TextFieldEditor({ fieldKey, label, field, onChange, maxLength = 
       />
 
       <div className="mt-2">
-        <span className="block text-xs text-ink/60 mb-1">Font</span>
-        <div className="flex flex-wrap gap-2" role="group" aria-label={`${label} font`}>
+        <span className="block text-xs text-ink/70 mb-1.5">Font</span>
+        <div className="flex flex-wrap gap-2.5" role="group" aria-label={`${label} font`}>
           {TEXT_FONT_OPTIONS.map((font) => (
             <button
               key={font.key}
@@ -77,8 +77,8 @@ export function TextFieldEditor({ fieldKey, label, field, onChange, maxLength = 
       </div>
 
       <div className="mt-2">
-        <span className="block text-xs text-ink/60 mb-1">Colour</span>
-        <div className="flex items-center gap-2" role="group" aria-label={`${label} colour`}>
+        <span className="block text-xs text-ink/70 mb-1.5">Colour</span>
+        <div className="flex items-center gap-2.5" role="group" aria-label={`${label} colour`}>
           {TEXT_COLOR_OPTIONS.map((color) => (
             <button
               key={color.key}
