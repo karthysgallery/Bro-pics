@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import type { ProductMedia } from '@bro-pics/shared';
+import { Lightbox } from '../ui/Lightbox';
 
 interface GalleryProps {
   media: ProductMedia[];
@@ -64,20 +65,7 @@ export function Gallery({ media, productTitle }: GalleryProps) {
       )}
 
       {isZoomed && active.type === 'image' && (
-        <div
-          className="fixed inset-0 z-50 bg-ink/90 flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setIsZoomed(false)}
-        >
-          <div className="relative w-full h-full">
-            <Image
-              src={active.url}
-              alt={active.alt || productTitle}
-              fill
-              sizes="100vw"
-              className="object-contain"
-            />
-          </div>
-        </div>
+        <Lightbox src={active.url} alt={active.alt || productTitle} onClose={() => setIsZoomed(false)} />
       )}
     </div>
   );
