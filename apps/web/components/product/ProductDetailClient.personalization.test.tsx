@@ -12,6 +12,13 @@ import { CartProvider } from '../../lib/cart-context';
 // lived self-contained inside a modal.
 
 let lastEditorCanvasProps: Record<string, unknown> | undefined;
+// Toggled by individual tests (via withheldPreviewFrame()) to simulate the
+// real EditorCanvas's null-preview window — e.g. the async first draw not
+// having completed yet, or toDataURL() throwing on a canvas-taint
+// SecurityError — where onCanvasUpdate is never called with a real string.
+// Reset in beforeEach so it never leaks into other tests, which all rely on
+// the default (a real preview frame reported synchronously on mount).
+let withholdPreviewFrame = false;
 vi.mock('../editor/EditorCanvas', () => ({
   EditorCanvas: (props: Record<string, unknown>) => {
     lastEditorCanvasProps = props;
@@ -20,6 +27,7 @@ vi.mock('../editor/EditorCanvas', () => ({
     // after every draw — needed so tests can exercise the Preview button's
     // lightbox, which reads previewDataUrl from that same callback.
     useEffect(() => {
+      if (withholdPreviewFrame) return;
       (props.onCanvasUpdate as ((url: string) => void) | undefined)?.('data:image/png;base64,mockPreview');
     }, [props.onCanvasUpdate]);
     return <div data-testid="editor-canvas" />;
@@ -143,6 +151,7 @@ describe('ProductDetailClient — inline personalization', () => {
     // URLs/session state), so this is safely omitted rather than worked
     // around.
     lastEditorCanvasProps = undefined;
+    withholdPreviewFrame = false;
   });
 
   it('disables Add to Cart until every slot has a photo', async () => {
@@ -452,6 +461,29 @@ describe('ProductDetailClient — inline personalization', () => {
       const dialog = await screen.findByRole('dialog');
       const img = within(dialog).getByRole('img');
       expect(img.getAttribute('src')).toContain('mockPreview');
+    });
+
+    it('does not render the Preview button when a slot has a photo but the canvas has not reported a preview frame yet', async () => {
+      // Covers the gap the shared mock otherwise hides: EditorCanvas calls
+      // onCanvasUpdate(null) on a canvas-taint SecurityError, and there's
+      // also an ordinary timing window where a slot is filled before the
+      // canvas's first async draw completes — in both cases previewDataUrl
+      // stays null even though slots.size > 0. Without the
+      // `previewDataUrl` guard on the Preview button's render condition,
+      // the button would render and be clickable while doing nothing.
+      withholdPreviewFrame = true;
+      mockUploadFetch();
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+      // Wait for the slot to register as filled (the zoom slider only
+      // renders once activeSlot is set), then assert the Preview button is
+      // still absent even though the slot has a photo.
+      await screen.findByRole('slider', { name: /zoom/i });
+      expect(screen.queryByRole('button', { name: /^preview$/i })).not.toBeInTheDocument();
     });
   });
 

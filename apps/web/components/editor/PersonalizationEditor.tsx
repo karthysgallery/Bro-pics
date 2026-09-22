@@ -234,7 +234,7 @@ export function PersonalizationEditor({
           </div>
         )}
 
-        {slots.size > 0 && (
+        {slots.size > 0 && previewDataUrl && (
           <div className="mt-3 flex justify-end">
             <button
               type="button"
