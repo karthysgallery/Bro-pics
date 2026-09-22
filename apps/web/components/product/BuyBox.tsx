@@ -10,6 +10,7 @@ import { QuantityStepper } from '../ui/QuantityStepper';
 import { Button } from '../ui/Button';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { formatPaise } from '../../lib/format-price';
+import { HelpCallout } from './HelpCallout';
 
 const ORIENTATION_LABELS: Record<Orientation, string> = {
   portrait: 'Portrait',
@@ -197,14 +198,9 @@ export function BuyBox({
         {submitting ? 'Adding…' : 'Add to cart'}
       </Button>
 
-      <a
-        href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}?text=${encodeURIComponent(whatsappMessage)}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block text-center mt-3 text-sm text-accent hover:text-accent-dark"
-      >
-        Need help? Chat with us on WhatsApp
-      </a>
+      <HelpCallout
+        whatsappHref={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}?text=${encodeURIComponent(whatsappMessage)}`}
+      />
 
       <ul className="mt-5 grid grid-cols-3 rounded-2xl bg-tint divide-x divide-line">
         {TRUST_POINTS.map((point) => (

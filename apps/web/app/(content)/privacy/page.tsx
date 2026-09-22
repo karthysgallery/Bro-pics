@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { SUPPORT_EMAIL } from '../../../lib/support-contact';
 
 export const metadata: Metadata = {
   title: 'Privacy policy — BroPics',
@@ -54,7 +55,7 @@ export default function PrivacyPage() {
       <p>
         You can ask us for a copy of what we hold about you, ask us to correct it, or ask us to
         delete your account and its data. Write to{' '}
-        <a href="mailto:support@bropics.in">support@bropics.in</a> and we will action it within 30
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we will action it within 30
         days. Deleting your account does not remove order records we are legally required to keep.
       </p>
 
@@ -67,7 +68,7 @@ export default function PrivacyPage() {
       <h2>Contact</h2>
       <p>
         Questions about this policy go to{' '}
-        <a href="mailto:support@bropics.in">support@bropics.in</a>, or via the{' '}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>, or via the{' '}
         <Link href="/contact">contact page</Link>.
       </p>
     </>

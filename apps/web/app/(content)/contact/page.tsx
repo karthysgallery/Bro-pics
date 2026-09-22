@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { SUPPORT_EMAIL } from '../../../lib/support-contact';
 
 export const metadata: Metadata = {
   title: 'Contact — BroPics',
@@ -28,7 +29,7 @@ export default function ContactPage() {
 
       <h2>Email</h2>
       <p>
-        <a href="mailto:support@bropics.in">support@bropics.in</a> — best for anything that needs
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> — best for anything that needs
         a paper trail: refunds, invoices, bulk and corporate orders.
       </p>
 
