@@ -44,8 +44,13 @@ export function GalleryStrip({ media, productTitle }: GalleryStripProps) {
         ))}
       </div>
 
-      {openItem && openItem.type === 'image' && (
-        <Lightbox src={openItem.url} alt={openItem.alt || productTitle} onClose={() => setOpenIndex(null)} />
+      {openItem && (
+        <Lightbox
+          src={openItem.url}
+          alt={openItem.alt || productTitle}
+          type={openItem.type}
+          onClose={() => setOpenIndex(null)}
+        />
       )}
     </div>
   );
