@@ -15,7 +15,7 @@ export function ClipartPicker({ options, selectedId, onSelect }: ClipartPickerPr
   return (
     <div className="mt-4 border-t border-line pt-4">
       <span className="block text-sm font-medium text-ink mb-2">Add a clipart (optional)</span>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Clipart">
+      <div className="flex flex-wrap gap-3" role="group" aria-label="Clipart">
         {options.map((option) => (
           <button
             key={option.id}
@@ -23,11 +23,16 @@ export function ClipartPicker({ options, selectedId, onSelect }: ClipartPickerPr
             aria-label={option.label}
             aria-pressed={selectedId === option.id}
             onClick={() => onSelect(selectedId === option.id ? null : option.id)}
-            className={`w-11 h-11 rounded-md border flex items-center justify-center bg-paper transition-colors ${
-              selectedId === option.id ? 'border-accent ring-1 ring-accent' : 'border-line hover:border-accent'
-            }`}
+            className="flex flex-col items-center gap-1 w-16"
           >
-            <Image src={option.assetUrl} alt="" width={28} height={28} />
+            <span
+              className={`w-14 h-14 rounded-md border flex items-center justify-center bg-paper transition-colors ${
+                selectedId === option.id ? 'border-accent ring-1 ring-accent' : 'border-line hover:border-accent'
+              }`}
+            >
+              <Image src={option.assetUrl} alt="" width={32} height={32} />
+            </span>
+            <span className="text-2xs text-ink/60 text-center leading-tight truncate w-full">{option.label}</span>
           </button>
         ))}
       </div>

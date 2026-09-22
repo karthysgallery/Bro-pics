@@ -16,10 +16,10 @@ export function SlotPicker({ slotCount, activeSlotIndex, filledSlots, onSelectSl
           onClick={() => onSelectSlot(slotIndex)}
           aria-pressed={slotIndex === activeSlotIndex}
           aria-label={`Slot ${slotIndex + 1}`}
-          className={`w-10 h-10 flex-shrink-0 rounded-lg border text-sm ${
+          className={`w-11 h-11 flex-shrink-0 rounded-lg border text-sm font-semibold transition-colors ${
             slotIndex === activeSlotIndex
-              ? 'bg-accent text-paper border-accent'
-              : 'bg-paper text-ink border-line'
+              ? 'bg-gold text-ink border-gold'
+              : 'bg-paper text-ink border-line hover:border-gold'
           }`}
         >
           {filledSlots.has(slotIndex) ? '✓' : slotIndex + 1}
