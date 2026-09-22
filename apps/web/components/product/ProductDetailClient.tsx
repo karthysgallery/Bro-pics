@@ -474,6 +474,9 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
           template={template}
           photoSlots={product.photoSlots}
           allowsTextPersonalization={product.allowsTextPersonalization}
+          media={galleryMedia}
+          productTitle={product.title}
+          previewDataUrl={previewDataUrl}
           activeSlotIndex={activeSlotIndex}
           slots={slots}
           textFields={textFields}

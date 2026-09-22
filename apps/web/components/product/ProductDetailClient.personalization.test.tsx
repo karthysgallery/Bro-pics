@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { Product, Variant, ProductMedia, FrameTemplate } from '@bro-pics/shared';
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
@@ -14,6 +15,13 @@ let lastEditorCanvasProps: Record<string, unknown> | undefined;
 vi.mock('../editor/EditorCanvas', () => ({
   EditorCanvas: (props: Record<string, unknown>) => {
     lastEditorCanvasProps = props;
+    // Simulates the real canvas reporting a rendered frame back to the
+    // parent, the same way the actual EditorCanvas calls onCanvasUpdate
+    // after every draw — needed so tests can exercise the Preview button's
+    // lightbox, which reads previewDataUrl from that same callback.
+    useEffect(() => {
+      (props.onCanvasUpdate as ((url: string) => void) | undefined)?.('data:image/png;base64,mockPreview');
+    }, [props.onCanvasUpdate]);
     return <div data-testid="editor-canvas" />;
   },
 }));
@@ -398,6 +406,12 @@ describe('ProductDetailClient — inline personalization', () => {
 
   it('submits every filled slot to /api/customizations with templateVersion, then adds one cart line', async () => {
     mockUploadFetch();
+    // The EditorCanvas mock now reports a rendered frame on mount (see the
+    // shared mock above), so previewDataUrl is populated by the time
+    // Add to Cart is clicked — just like the real canvas — and
+    // handleAddToCart uploads that shared preview via /api/uploads/preview
+    // before posting each slot to /api/customizations.
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ previewUrl: '/preview.jpg' }) } as Response); // /api/uploads/preview
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response); // /api/customizations
 
     renderProduct(makeProduct(), [variant], [makeTemplate({ version: 3 })]);
@@ -409,11 +423,43 @@ describe('ProductDetailClient — inline personalization', () => {
     await waitFor(() => expect(addButton).toBeEnabled());
     fireEvent.click(addButton);
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    const [url, init] = vi.mocked(fetch).mock.calls[1];
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    const [url, init] = vi.mocked(fetch).mock.calls[2];
     expect(url).toBe('/api/customizations');
     const body = JSON.parse((init?.body as string) ?? '{}');
     expect(body.templateVersion).toBe(3);
     expect(body.variantId).toBe('var_1');
+  });
+
+  describe('preview lightbox', () => {
+    it('does not render a Preview button before any photo is uploaded', async () => {
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      await screen.findByLabelText(/upload a photo/i);
+      expect(screen.queryByRole('button', { name: /^preview$/i })).not.toBeInTheDocument();
+    });
+
+    it('shows a Preview button once a slot has a photo, and opens the lightbox with the current canvas preview on click', async () => {
+      mockUploadFetch();
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+      const previewButton = await screen.findByRole('button', { name: /^preview$/i });
+      fireEvent.click(previewButton);
+
+      const dialog = await screen.findByRole('dialog');
+      const img = within(dialog).getByRole('img');
+      expect(img.getAttribute('src')).toContain('mockPreview');
+    });
+  });
+
+  describe('gallery strip', () => {
+    it('renders a thumbnail for each product media item alongside the live editor', async () => {
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      await screen.findByLabelText(/upload a photo/i);
+      expect(screen.getByRole('button', { name: /view product photo 1/i })).toBeInTheDocument();
+    });
   });
 });

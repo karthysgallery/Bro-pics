@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { FrameTemplate } from '@bro-pics/shared';
+import type { FrameTemplate, ProductMedia } from '@bro-pics/shared';
 import type { RotationDeg } from '@bro-pics/shared';
 import { SlotPicker } from './SlotPicker';
 import { DpiBadge } from './DpiBadge';
@@ -11,6 +11,8 @@ import { TextFieldEditor, type TextFieldValue } from './TextFieldEditor';
 import { ClipartPicker } from './ClipartPicker';
 import type { CanvasTextField, SlotDrawState } from './EditorCanvas';
 import { resolveFontFamilyForCanvas, DEFAULT_TEXT_FONT_KEY } from '../../lib/text-personalization-options';
+import { GalleryStrip } from '../product/GalleryStrip';
+import { Lightbox } from '../ui/Lightbox';
 
 // EditorCanvas draws into a native <canvas> and loads images via `new
 // Image()`, both of which need `window`/`document` — 'use client' only
@@ -38,6 +40,9 @@ interface PersonalizationEditorProps {
   template: FrameTemplate;
   photoSlots: number;
   allowsTextPersonalization: boolean;
+  media: ProductMedia[];
+  productTitle: string;
+  previewDataUrl: string | null;
   activeSlotIndex: number;
   slots: Map<number, SlotState>;
   textFields: TextFieldValueMap;
@@ -84,6 +89,9 @@ export function PersonalizationEditor({
   template,
   photoSlots,
   allowsTextPersonalization,
+  media,
+  productTitle,
+  previewDataUrl,
   activeSlotIndex,
   slots,
   textFields,
@@ -105,6 +113,7 @@ export function PersonalizationEditor({
   onSelectClipart,
 }: PersonalizationEditorProps) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [debouncedTextFields, setDebouncedTextFields] = useState(textFields);
 
   useEffect(() => {
@@ -153,6 +162,7 @@ export function PersonalizationEditor({
   return (
     <>
       <div className="rounded-2xl bg-paper border border-line p-4 md:p-5 flex flex-col">
+        <GalleryStrip media={media} productTitle={productTitle} />
         <SlotPicker
           slotCount={photoSlots}
           activeSlotIndex={activeSlotIndex}
@@ -220,6 +230,18 @@ export function PersonalizationEditor({
               className="px-3 h-8 rounded-md border border-line text-ink text-sm shrink-0 hover:border-accent transition-colors"
             >
               Reset
+            </button>
+          </div>
+        )}
+
+        {slots.size > 0 && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="px-4 h-9 rounded-full bg-gold text-ink text-sm font-semibold hover:bg-gold-deep transition-colors"
+            >
+              Preview
             </button>
           </div>
         )}
@@ -326,6 +348,10 @@ export function PersonalizationEditor({
 
         <ClipartPicker options={template.clipartOptions} selectedId={selectedClipartId} onSelect={onSelectClipart} />
       </div>
+
+      {showPreview && previewDataUrl && (
+        <Lightbox src={previewDataUrl} alt="Your personalized preview" onClose={() => setShowPreview(false)} />
+      )}
     </>
   );
 }
