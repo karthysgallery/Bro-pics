@@ -11,7 +11,7 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
 }
 
 function makePaymentTx(
-  order: { id: string; userId: string; status: string } | null,
+  order: { id: string; userId: string; status: string; couponId?: string } | null,
   customizationIdsToLock: string[] = []
 ): PaymentEventTransaction {
   return {
@@ -22,6 +22,7 @@ function makePaymentTx(
     clearCart: vi.fn(),
     recordEvent: vi.fn(),
     lockCustomizations: vi.fn(),
+    incrementCouponUsedCount: vi.fn(),
   };
 }
 
@@ -56,6 +57,32 @@ describe('handlePaymentCaptured', () => {
     });
 
     expect(paymentTx.lockCustomizations).toHaveBeenCalledWith(['cust_1', 'cust_2']);
+  });
+
+  it('increments the coupon usedCount when the order applied one [BE-14]', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment', couponId: 'NEW10' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.incrementCouponUsedCount).toHaveBeenCalledWith('NEW10');
+  });
+
+  it('does not touch usedCount when the order had no coupon', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.incrementCouponUsedCount).not.toHaveBeenCalled();
   });
 
   it('does not call lockCustomizations when the order was already processed', async () => {

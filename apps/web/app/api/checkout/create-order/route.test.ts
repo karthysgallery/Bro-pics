@@ -39,6 +39,7 @@ const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
 const mockRunTransaction = vi.fn();
 const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ docs: [] });
 const mockIdempotencyWhereGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
+const mockPerUserLimitWhereGet = vi.fn().mockResolvedValue({ size: 0 });
 const mockDb = {
   collection: vi.fn((name: string) => ({
     doc: vi.fn((id?: string) => {
@@ -74,7 +75,11 @@ const mockDb = {
             // BE-13: orders.where('userId',...).where('idempotencyKey',...).limit(1).get()
             return { limit: vi.fn(() => ({ get: (...args: unknown[]) => mockIdempotencyWhereGet(...args) })) };
           }
-          return { get: vi.fn().mockResolvedValue({ size: 0 }) };
+          // BE-14: orders.where('userId',...).where('couponId',...).where('paymentStatus','==','paid').get()
+          return {
+            where: vi.fn(() => ({ get: (...args: unknown[]) => mockPerUserLimitWhereGet(...args) })),
+            get: (...args: unknown[]) => mockPerUserLimitWhereGet(...args),
+          };
         }),
       };
     }),
@@ -428,7 +433,7 @@ describe('POST /api/checkout/create-order', () => {
       expect(mockBatchUpdate).not.toHaveBeenCalled();
     });
 
-    it('increments the coupon usedCount in the same batch as a successful coupon order', async () => {
+    it('does NOT increment usedCount at order creation [BE-14] — only razorpayWebhook does, once payment is confirmed', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
       setUpValidCartAndAddress();
       mockFindCouponByCode.mockResolvedValueOnce({
@@ -436,7 +441,27 @@ describe('POST /api/checkout/create-order', () => {
         startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
       });
       await POST(makeRequest({ addressId: 'addr_1', couponCode: 'NEW10' }));
-      expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), { usedCount: expect.anything() });
+      expect(mockBatchUpdate).not.toHaveBeenCalledWith(expect.anything(), { usedCount: expect.anything() });
+    });
+
+    it('applies the coupon when the customer has abandoned (unpaid) prior attempts but zero PAID uses [BE-14]', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'ONECOUP', type: 'percent', value: 10, appliesTo: 'all', usedCount: 3, perUserLimit: 1,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      // The mock's paymentStatus-filtered query returns 0 — proving the
+      // check is scoped to paid orders, not every order this coupon code
+      // has ever appeared on for this user.
+      mockPerUserLimitWhereGet.mockResolvedValueOnce({ size: 0 });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'ONECOUP' }));
+      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+
+      expect(response.status).toBe(200);
+      expect(orderArg?.discount).toBeGreaterThan(0);
+      expect(orderArg?.couponId).toBe('ONECOUP');
     });
 
     it('still produces discount: 0, no couponId when no couponCode is sent (backward compatible)', async () => {

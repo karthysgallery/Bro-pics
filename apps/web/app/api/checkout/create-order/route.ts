@@ -1,6 +1,6 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
 import { getShippingSettings } from '../../../../lib/firestore-settings';
@@ -177,10 +177,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         // from doc.id inside findCouponByCode), not the raw couponCode —
         // orders always write couponId as coupon.code, so matching against
         // anything else could under/over-count a customer's prior usage.
+        // [BE-14] paymentStatus == 'paid' only — an order the customer
+        // abandoned at the Razorpay modal (stays pending_payment forever)
+        // must not count against their limit; counting it previously meant
+        // an abandoned attempt could permanently burn a one-time coupon.
         const usedSnapshot = await db
           .collection('orders')
           .where('userId', '==', userId)
           .where('couponId', '==', coupon.code)
+          .where('paymentStatus', '==', 'paid')
           .get();
         perUserOk = usedSnapshot.size < coupon.perUserLimit;
       }
@@ -260,16 +265,11 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const batch = db.batch();
   batch.set(orderRef, order);
-  if (appliedCouponId) {
-    // Counts this order regardless of eventual payment outcome — an order
-    // that stays `pending_payment` forever (customer abandons the Razorpay
-    // modal) still increments usedCount here, and nothing anywhere ever
-    // decrements it. This is a real, documented gap (see PROJECT_STATUS.md
-    // §5's coupon-application-flow bullet), not an oversight; a real fix
-    // means moving this increment into the webhook's payment-success
-    // handler, out of scope for this plan.
-    batch.update(db.collection('coupons').doc(appliedCouponId), { usedCount: FieldValue.increment(1) });
-  }
+  // [BE-14] usedCount is NOT incremented here — an order that stays
+  // pending_payment forever (customer abandons the Razorpay modal) must
+  // not burn a use of the coupon. razorpayWebhook's payment.captured
+  // handler increments it instead, only once payment is actually
+  // confirmed. See that file for the increment itself.
 
   const eventRef = orderRef.collection('events').doc();
   batch.set(

@@ -1,13 +1,18 @@
 import { isDuplicateWebhookEvent, markWebhookProcessed, type WebhookTransaction } from './idempotency';
 import { onRequest } from 'firebase-functions/v2/https';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { OrderEventSchema, type OrderEvent } from '@bro-pics/shared';
 
 export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
     razorpayOrderId: string
-  ): Promise<{ id: string; userId: string; status: string } | null>;
+  ): Promise<{ id: string; userId: string; status: string; couponId?: string } | null>;
+  // [BE-14] Only called when a coupon was actually applied — increments
+  // AFTER payment is confirmed, not at order creation, so an order the
+  // customer abandons at the Razorpay modal (stays pending_payment
+  // forever) never burns a use of the coupon.
+  incrementCouponUsedCount(couponId: string): void;
   // [BE-10/BE-12] Reads the order's items' personalizationIds, then the
   // matching Customization docs currently in 'ordered' status (set by
   // create-order when the order was placed) — a read, called before any
@@ -64,6 +69,9 @@ export async function handlePaymentCaptured(
   });
   paymentTx.clearCart(order.userId);
   paymentTx.lockCustomizations(customizationIdsToLock);
+  if (order.couponId) {
+    paymentTx.incrementCouponUsedCount(order.couponId);
+  }
   markWebhookProcessed(webhookTx, params.eventId, order.id);
 }
 
@@ -118,8 +126,8 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       );
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
-      const data = doc.data() as { userId: string; status: string };
-      return { id: doc.id, userId: data.userId, status: data.status };
+      const data = doc.data() as { userId: string; status: string; couponId?: string };
+      return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId };
     },
     async findCustomizationIdsToLock(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
@@ -164,6 +172,9 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       for (const id of customizationIds) {
         transaction.update(db.collection('customizations').doc(id), { status: 'locked', lockedAt: new Date() });
       }
+    },
+    incrementCouponUsedCount(couponId) {
+      transaction.update(db.collection('coupons').doc(couponId), { usedCount: FieldValue.increment(1) });
     },
   };
 }
