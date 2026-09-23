@@ -53,3 +53,19 @@ export async function getShippingSettings(): Promise<{
 
   return { freeShippingThreshold, flatShippingCharge, expressShippingCharge };
 }
+
+// [BE-22] Same per-key settings/{key} document convention as
+// getShippingSettings above. Defaults to GST disabled — no admin UI
+// exists yet to turn this on, so behavior is unchanged (order.taxLines
+// stays empty) until someone deliberately writes settings/gst.
+export async function getGstSettings(): Promise<{ gstEnabled: boolean; taxRate: number; gstin?: string }> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('gst').get();
+  if (!doc.exists) return { gstEnabled: false, taxRate: 0 };
+
+  const data = doc.data();
+  const gstEnabled = data?.gstEnabled === true;
+  const taxRate = typeof data?.taxRate === 'number' ? data.taxRate : 0;
+  const gstin = typeof data?.gstin === 'string' && data.gstin.length > 0 ? data.gstin : undefined;
+  return { gstEnabled, taxRate, ...(gstin && { gstin }) };
+}

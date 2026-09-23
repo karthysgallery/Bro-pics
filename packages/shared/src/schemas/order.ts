@@ -64,6 +64,11 @@ export const OrderSchema = z
     idempotencyKey: z.string().optional(),
     razorpayOrderId: z.string().optional(),
     razorpayPaymentId: z.string().optional(),
+    // [BE-22] Sequential GST invoice number, assigned once payment is
+    // confirmed (never at order creation — see generateInvoiceNo's own
+    // doc comment). Absent for any order still pending_payment, and for
+    // every order placed before this field existed.
+    invoiceNo: z.string().optional(),
     notes: z.string().optional(),
     courier: z.string().optional(),
     awbNumber: z.string().optional(),

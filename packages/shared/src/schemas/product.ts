@@ -18,6 +18,14 @@ export const ProductSchema = z.object({
   dispatchDaysMax: z.number().int().nonnegative(),
   photoSlots: z.number().int().positive(),
   allowsTextPersonalization: z.boolean(),
+  // [BE-22] GST invoices need each line item's HSN code — optional and
+  // unset for now, since which HSN code(s) apply to printed photo frames
+  // is a real compliance/classification decision the client hasn't made
+  // yet (logged, same client-pending bucket as shipping rules). Schema
+  // readiness only: once a real code exists, an admin can fill it in and
+  // it's ready to flow through to OrderItem/the invoice with no further
+  // schema change.
+  hsnCode: z.string().optional(),
   seo: z.object({
     title: z.string().optional(),
     description: z.string().optional(),

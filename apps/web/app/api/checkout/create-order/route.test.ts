@@ -16,8 +16,10 @@ vi.mock('../../../../lib/razorpay-client', () => ({
 }));
 
 const mockGetShippingSettings = vi.fn();
+const mockGetGstSettings = vi.fn().mockResolvedValue({ gstEnabled: false, taxRate: 0 });
 vi.mock('../../../../lib/firestore-settings', () => ({
   getShippingSettings: () => mockGetShippingSettings(),
+  getGstSettings: () => mockGetGstSettings(),
 }));
 
 const mockFindVariantById = vi.fn();
@@ -319,6 +321,35 @@ describe('POST /api/checkout/create-order', () => {
     );
     mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
   }
+
+  describe('GST [BE-22]', () => {
+    it('leaves taxLines empty when GST is disabled (the default)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      expect(orderArg?.taxLines).toEqual([]);
+    });
+
+    it('populates taxLines with a GST split of the total when GST is enabled, never adding to the total', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockGetGstSettings.mockResolvedValueOnce({ gstEnabled: true, taxRate: 18, gstin: '33AAAAA0000A1Z5' });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      expect(orderArg?.taxLines).toHaveLength(1);
+      const [taxLine] = orderArg!.taxLines as Array<{ gstin: string; rate: number; amount: number }>;
+      expect(taxLine.gstin).toBe('33AAAAA0000A1Z5');
+      expect(taxLine.rate).toBe(18);
+      expect(taxLine.amount).toBeGreaterThan(0);
+      // Never an addition on top of what the customer pays.
+      expect(orderArg?.total).toBe(2000 + 5000);
+    });
+  });
 
   describe('delivery method', () => {
     it('defaults to standard shipping when deliveryMethod is omitted', async () => {

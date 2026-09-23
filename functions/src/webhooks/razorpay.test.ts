@@ -20,6 +20,8 @@ function makePaymentTx(
     findCustomizationsToLock: vi.fn().mockResolvedValue(customizationsToLock),
     findOrderItems: vi.fn().mockResolvedValue(orderItems),
     markPaymentCaptured: vi.fn(),
+    generateInvoiceNo: vi.fn().mockResolvedValue('INV-2026-00001'),
+    setInvoiceNo: vi.fn(),
     markPaymentFailed: vi.fn(),
     clearCart: vi.fn(),
     recordEvent: vi.fn(),
@@ -48,6 +50,20 @@ describe('handlePaymentCaptured', () => {
     );
     expect(paymentTx.clearCart).toHaveBeenCalledWith('user_1');
     expect(webhookTx.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ orderId: 'order_1' }));
+  });
+
+  it('[BE-22] assigns a sequential invoice number on payment confirmation', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.generateInvoiceNo).toHaveBeenCalledWith(new Date().getFullYear());
+    expect(paymentTx.setInvoiceNo).toHaveBeenCalledWith('order_1', 'INV-2026-00001');
   });
 
   it('locks every customization returned by findCustomizationsToLock [BE-10/BE-12]', async () => {

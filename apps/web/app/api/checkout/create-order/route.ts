@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
-import { getShippingSettings } from '../../../../lib/firestore-settings';
+import { getShippingSettings, getGstSettings } from '../../../../lib/firestore-settings';
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { findCouponByCode } from '../../../../lib/coupon-lookup';
@@ -17,6 +17,7 @@ import {
   AddressSchema,
   DeliveryMethodSchema,
   calculateCouponDiscount,
+  splitGstFromInclusiveTotal,
   type CounterTransaction,
 } from '@bro-pics/shared';
 
@@ -163,6 +164,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const subtotal = calculateSubtotal(priced);
   const shippingSettings = await getShippingSettings();
   const shipping = calculateShipping(subtotal, shippingSettings, deliveryMethod);
+  const gstSettings = await getGstSettings();
 
   let discount = 0;
   let appliedCouponId: string | undefined;
@@ -213,6 +215,23 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const total = subtotal - discount + effectiveShipping;
 
+  // [BE-22] taxLines is a descriptive GST breakdown of the already
+  // GST-inclusive total, for invoice display — never an addition to what
+  // the customer pays (see splitGstFromInclusiveTotal's own doc comment).
+  // Stays empty until an admin actually configures settings/gst
+  // (getGstSettings defaults gstEnabled: false), matching this codebase's
+  // existing "safe default until real settings exist" pattern for
+  // shipping.
+  const taxLines = gstSettings.gstEnabled
+    ? [
+        {
+          ...(gstSettings.gstin && { gstin: gstSettings.gstin }),
+          rate: gstSettings.taxRate,
+          amount: splitGstFromInclusiveTotal(total, gstSettings.taxRate).gstAmountPaise,
+        },
+      ]
+    : [];
+
   // Step 1: generate the order number in its own short transaction — this
   // commits BEFORE the Razorpay HTTP call below. An external API call must
   // never sit inside a Firestore transaction (transactions can retry on
@@ -255,7 +274,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,
-    taxLines: [],
+    taxLines,
     // Firestore's Admin SDK rejects `undefined` field values (this project
     // never sets ignoreUndefinedProperties), so couponId must be omitted
     // entirely — not set to a possibly-undefined value — when no coupon

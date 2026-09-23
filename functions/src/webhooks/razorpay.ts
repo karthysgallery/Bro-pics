@@ -2,7 +2,15 @@ import { isDuplicateWebhookEvent, markWebhookProcessed, type WebhookTransaction 
 import { onRequest } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { OrderEventSchema, orderStatusEvent, buildQueuedPrintJob, type OrderEvent, type OrderStatus } from '@bro-pics/shared';
+import {
+  OrderEventSchema,
+  orderStatusEvent,
+  buildQueuedPrintJob,
+  generateInvoiceNo,
+  type CounterTransaction,
+  type OrderEvent,
+  type OrderStatus,
+} from '@bro-pics/shared';
 
 export interface CustomizationToLock {
   id: string;
@@ -34,6 +42,14 @@ export interface PaymentEventTransaction {
   // to queue one print job per item once photo_validation passes.
   findOrderItems(orderId: string): Promise<OrderItemRef[]>;
   markPaymentCaptured(orderId: string, razorpayPaymentId: string): void;
+  // [BE-22] Sequential GST invoice number — a read (the counter doc) plus
+  // a write (its increment), both bundled inside this one call. Must run
+  // before any of this transaction's OTHER writes below, since Firestore
+  // requires every read to finish before any write anywhere in the
+  // transaction (see generateInvoiceNo's own doc comment for why this is
+  // assigned only at payment confirmation, never at order creation).
+  generateInvoiceNo(year: number): Promise<string>;
+  setInvoiceNo(orderId: string, invoiceNo: string): void;
   markPaymentFailed(orderId: string): void;
   clearCart(userId: string): void;
   recordEvent(orderId: string, event: Omit<OrderEvent, 'id'>): void;
@@ -84,8 +100,14 @@ export async function handlePaymentCaptured(
 
   const customizationsToLock = await paymentTx.findCustomizationsToLock(order.id);
   const orderItems = await paymentTx.findOrderItems(order.id);
+  // [BE-22] Must happen here, with the other reads, before any write
+  // below — generateInvoiceNo bundles a read+write of its own counter
+  // doc, and Firestore requires every transaction read to finish before
+  // any write anywhere in that transaction.
+  const invoiceNo = await paymentTx.generateInvoiceNo(new Date().getFullYear());
 
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
+  paymentTx.setInvoiceNo(order.id, invoiceNo);
   paymentTx.recordEvent(order.id, orderStatusEvent('paid', 'system'));
   paymentTx.clearCart(order.userId);
   paymentTx.lockCustomizations(customizationsToLock.map((c) => c.id));
@@ -218,6 +240,21 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
         paymentStatus: 'paid',
         razorpayPaymentId,
       });
+    },
+    async generateInvoiceNo(year) {
+      const counterAdapter: CounterTransaction = {
+        async get(ref) {
+          const snap = await transaction.get(db.doc(ref.path));
+          return { exists: snap.exists, data: () => (snap.exists ? (snap.data() as { value: number }) : undefined) };
+        },
+        set(ref, data) {
+          transaction.set(db.doc(ref.path), data);
+        },
+      };
+      return generateInvoiceNo(counterAdapter, year);
+    },
+    setInvoiceNo(orderId, invoiceNo) {
+      transaction.update(db.collection('orders').doc(orderId), { invoiceNo });
     },
     markPaymentFailed(orderId) {
       transaction.update(db.collection('orders').doc(orderId), { paymentStatus: 'failed' });
