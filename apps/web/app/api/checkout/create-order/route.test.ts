@@ -353,6 +353,18 @@ describe('POST /api/checkout/create-order', () => {
     });
   });
 
+  describe('productIds denormalization [BE-25a]', () => {
+    it('writes the distinct set of productIds from the priced cart lines onto the order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress(); // single line, variant v1 -> productId 'p1'
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      expect(orderArg?.productIds).toEqual(['p1']);
+    });
+  });
+
   describe('delivery method', () => {
     it('defaults to standard shipping when deliveryMethod is omitted', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');

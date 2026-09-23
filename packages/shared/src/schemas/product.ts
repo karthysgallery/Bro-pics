@@ -47,6 +47,12 @@ export const ProductSchema = z.object({
   ratingAverage: z.number().min(0).max(5),
   ratingCount: z.number().int().nonnegative(),
 
+  // [BE-25] Total units ever sold (paid orders only), incremented by
+  // razorpayWebhook's payment_confirmed step — for a future trending/
+  // best-sellers sort. Optional so a product seeded before this field
+  // existed still parses; treated as 0 wherever it's read.
+  salesCount: z.number().int().nonnegative().optional(),
+
   // Interim Firestore-only search fields (see packages/shared/src/search).
   titleLower: z.string(),
   searchTokens: z.array(z.string()),

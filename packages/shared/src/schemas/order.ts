@@ -56,6 +56,13 @@ export const OrderSchema = z
     total: z.number().int().nonnegative(),
     couponId: z.string().optional(),
     addressJson: z.record(z.string(), z.unknown()),
+    // [BE-25a] Denormalized from the order's line items at creation —
+    // lets a future "frequently bought together" query filter orders
+    // with `.where('productIds', 'array-contains', productId)` directly,
+    // without a collectionGroup query across every order's items
+    // subcollection. Optional so an order placed before this field
+    // existed still parses.
+    productIds: z.array(z.string()).optional(),
     // One per checkout attempt (generated client-side, stable across
     // retries of that same attempt) — lets create-order detect a
     // double-click/retried request and return the existing order instead

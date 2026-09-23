@@ -272,6 +272,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     shipping: effectiveShipping,
     total,
     addressJson: address,
+    // [BE-25a] Denormalized for a future frequently-bought-together query.
+    productIds: [...new Set(priced.map((line) => line.productId))],
     razorpayOrderId: razorpayOrder.id,
     placedAt: new Date(),
     deliveryMethod,

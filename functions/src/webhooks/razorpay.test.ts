@@ -27,6 +27,7 @@ function makePaymentTx(
     recordEvent: vi.fn(),
     lockCustomizations: vi.fn(),
     incrementCouponUsedCount: vi.fn(),
+    incrementProductSalesCount: vi.fn(),
     setOrderStatus: vi.fn(),
     queuePrintJob: vi.fn(),
   };
@@ -108,6 +109,27 @@ describe('handlePaymentCaptured', () => {
     expect(paymentTx.incrementCouponUsedCount).not.toHaveBeenCalled();
   });
 
+  it('[BE-25] increments each purchased product\'s salesCount by its qty', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx(
+      { id: 'order_1', userId: 'user_1', status: 'pending_payment' },
+      [],
+      [
+        { itemId: 'item_1', personalizationId: 'p1', productId: 'prod_1', qty: 1 },
+        { itemId: 'item_2', personalizationId: 'p2', productId: 'prod_2', qty: 3 },
+      ]
+    );
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.incrementProductSalesCount).toHaveBeenCalledWith('prod_1', 1);
+    expect(paymentTx.incrementProductSalesCount).toHaveBeenCalledWith('prod_2', 3);
+  });
+
   it('does not call lockCustomizations when the order was already processed', async () => {
     const webhookTx = makeWebhookTx(true);
     const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, [
@@ -178,8 +200,8 @@ describe('handlePaymentCaptured', () => {
           { id: 'cust_2', personalizationId: 'p2', dpiBand: 'amber' },
         ],
         [
-          { itemId: 'item_1', personalizationId: 'p1' },
-          { itemId: 'item_2', personalizationId: 'p2' },
+          { itemId: 'item_1', personalizationId: 'p1', productId: 'prod_1', qty: 1 },
+          { itemId: 'item_2', personalizationId: 'p2', productId: 'prod_2', qty: 2 },
         ]
       );
 
@@ -205,8 +227,8 @@ describe('handlePaymentCaptured', () => {
           { id: 'cust_2', personalizationId: 'p2', dpiBand: 'red' },
         ],
         [
-          { itemId: 'item_1', personalizationId: 'p1' },
-          { itemId: 'item_2', personalizationId: 'p2' },
+          { itemId: 'item_1', personalizationId: 'p1', productId: 'prod_1', qty: 1 },
+          { itemId: 'item_2', personalizationId: 'p2', productId: 'prod_2', qty: 2 },
         ]
       );
 

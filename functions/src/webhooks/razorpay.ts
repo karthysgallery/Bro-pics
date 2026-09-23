@@ -21,6 +21,10 @@ export interface CustomizationToLock {
 export interface OrderItemRef {
   itemId: string;
   personalizationId: string;
+  // [BE-25] Needed to increment each purchased product's salesCount by
+  // the right amount, not just +1 per line.
+  productId: string;
+  qty: number;
 }
 
 export interface PaymentEventTransaction {
@@ -61,6 +65,11 @@ export interface PaymentEventTransaction {
   // photo_validation, print_rendering — never a terminal/manual state,
   // those only ever come from the staff-advance route).
   setOrderStatus(orderId: string, status: OrderStatus): void;
+  // [BE-25] Total units ever sold, for a future trending/best-sellers
+  // sort — incremented here, not at order creation, for the same reason
+  // every other "only once payment is real" counter in this file is
+  // (an abandoned pending_payment order never should have counted).
+  incrementProductSalesCount(productId: string, qty: number): void;
   // [BE-18] Writes a queued printJobs/{orderId}_{itemId} doc directly in
   // this same transaction — NOT via print-jobs.ts's createPrintJob, which
   // opens its own db.runTransaction and can't be nested inside this one.
@@ -113,6 +122,11 @@ export async function handlePaymentCaptured(
   paymentTx.lockCustomizations(customizationsToLock.map((c) => c.id));
   if (order.couponId) {
     paymentTx.incrementCouponUsedCount(order.couponId);
+  }
+  // [BE-25] A sale counts once payment is real, regardless of how photo
+  // validation later resolves — the customer bought the item either way.
+  for (const item of orderItems) {
+    paymentTx.incrementProductSalesCount(item.productId, item.qty);
   }
 
   paymentTx.setOrderStatus(order.id, 'payment_confirmed');
@@ -229,10 +243,10 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     },
     async findOrderItems(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
-      return itemsSnapshot.docs.map((doc) => ({
-        itemId: doc.id,
-        personalizationId: (doc.data() as { personalizationId: string }).personalizationId,
-      }));
+      return itemsSnapshot.docs.map((doc) => {
+        const data = doc.data() as { personalizationId: string; productId: string; qty: number };
+        return { itemId: doc.id, personalizationId: data.personalizationId, productId: data.productId, qty: data.qty };
+      });
     },
     markPaymentCaptured(orderId, razorpayPaymentId) {
       transaction.update(db.collection('orders').doc(orderId), {
@@ -273,6 +287,9 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     },
     incrementCouponUsedCount(couponId) {
       transaction.update(db.collection('coupons').doc(couponId), { usedCount: FieldValue.increment(1) });
+    },
+    incrementProductSalesCount(productId, qty) {
+      transaction.update(db.collection('products').doc(productId), { salesCount: FieldValue.increment(qty) });
     },
     setOrderStatus(orderId, status) {
       transaction.update(db.collection('orders').doc(orderId), { status });
