@@ -52,3 +52,4 @@ export * from './print-jobs/backoff';
 export * from './notifications/notification-outbox';
 export * from './reconciliation/stuck-orders';
 export * from './cleanup/stale-anonymous-docs';
+export * from './logging/logger';

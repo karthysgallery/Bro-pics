@@ -1,4 +1,5 @@
 import express, { type Express } from 'express';
+import { logger } from '@bro-pics/shared';
 // Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
 // doc comment for why. This is a standalone Cloud Run service, so
 // importing it directly here is exactly the intended use.
@@ -37,7 +38,7 @@ export function createServer(deps: RenderJobDependencies): Express {
         res.status(409).json({ error: error.message });
         return;
       }
-      console.error(`Render job ${jobId} failed:`, error);
+      logger.error('Render job failed', { jobId, error: error instanceof Error ? error.message : String(error) });
       res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
@@ -49,6 +50,6 @@ if (process.env.NODE_ENV !== 'test') {
   const { buildFirestoreRenderDeps } = await import('./firestore-render-deps');
   const port = process.env.PORT ? Number(process.env.PORT) : 8080;
   createServer(buildFirestoreRenderDeps()).listen(port, () => {
-    console.log(`print-render listening on port ${port}`);
+    logger.info('print-render listening', { port });
   });
 }

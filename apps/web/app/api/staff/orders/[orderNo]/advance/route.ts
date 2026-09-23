@@ -9,6 +9,7 @@ import {
   OrderEventSchema,
   isValidStatusTransition,
   ManualShippingProvider,
+  logger,
   type OrderStatus,
   type NotificationCategory,
   type ShipmentTracking,
@@ -182,7 +183,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       notification.title,
       `Order ${found.data.orderNo} ${notification.body}`,
       `/orders/${found.id}`
-    ).catch((error) => console.error('Failed to write notification:', error));
+    ).catch((error) => logger.error('Failed to write notification', { orderId: found.id, uid: found.data.userId, error: String(error) }));
   }
 
   return NextResponse.json({ order: { ...found.data, ...orderUpdate } }, { status: 200 });

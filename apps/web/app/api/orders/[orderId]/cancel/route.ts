@@ -4,7 +4,7 @@ import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../lib/notify';
-import { OrderEventSchema, type OrderStatus } from '@bro-pics/shared';
+import { OrderEventSchema, logger, type OrderStatus } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
@@ -67,7 +67,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     // Best-effort, same as the staff-advance route — a notification is a
     // side effect of the cancellation, not part of its correctness.
     writeNotification(db, userId, 'order', 'Order cancelled', `Order ${orderNo} has been cancelled.`, `/orders/${orderId}`).catch(
-      (error) => console.error('Failed to write notification:', error)
+      (error) => logger.error('Failed to write notification', { orderId, uid: userId, error: String(error) })
     );
 
     return NextResponse.json({ status: updatedStatus }, { status: 200 });

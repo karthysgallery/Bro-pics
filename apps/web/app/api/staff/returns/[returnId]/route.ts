@@ -10,6 +10,7 @@ import {
   isValidReturnStatusTransition,
   OrderEventSchema,
   ReturnEventSchema,
+  logger,
   type Return,
   type ReturnStatus,
   type Order,
@@ -160,7 +161,9 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       notification.title,
       `Return for order ${order.orderNo} ${notification.body}`,
       `/orders/${currentReturn.orderId}`
-    ).catch((error) => console.error('Failed to write notification:', error));
+    ).catch((error) =>
+      logger.error('Failed to write notification', { orderId: currentReturn.orderId, uid: currentReturn.userId, returnId, error: String(error) })
+    );
   }
 
   return NextResponse.json({ status: nextStatus, razorpayRefundId }, { status: 200 });
