@@ -68,6 +68,9 @@ export const CustomizationSchema = z.object({
   // requirements doc) — undefined until renderStatus reaches 'done'.
   renderedFilePath: z.string().optional(),
   renderStatus: z.enum(['pending', 'rendering', 'done', 'failed']),
+  // [BE-35] Same TTL-cleanup reasoning as Upload.createdAt — optional for
+  // the same pre-existing-doc reason.
+  createdAt: z.date().optional(),
 });
 
 export type Customization = z.infer<typeof CustomizationSchema>;

@@ -13,6 +13,12 @@ export const UploadSchema = z.object({
   bytes: z.number().int().nonnegative(),
   exifStripped: z.boolean(),
   status: z.enum(['ready', 'rejected']),
+  // [BE-35] Needed to identify stale, never-reconciled anonymous uploads
+  // for TTL cleanup. Optional — a pre-existing upload written before this
+  // field existed has no createdAt and is simply never a cleanup
+  // candidate until a future backfill (same pattern as BE-05a's
+  // storage-path migration) gives it one.
+  createdAt: z.date().optional(),
 });
 
 export type Upload = z.infer<typeof UploadSchema>;

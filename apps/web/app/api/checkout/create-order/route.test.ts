@@ -589,7 +589,7 @@ describe('POST /api/checkout/create-order', () => {
     setUpValidCartAndAddress();
     const custDocRef = { id: 'cust_1' };
     mockCustomizationsWhereGet.mockResolvedValueOnce({
-      docs: [{ ref: custDocRef, data: () => ({ status: 'draft' }) }],
+      docs: [{ ref: custDocRef, data: () => ({ status: 'draft', userId: 'user_1' }) }],
     });
 
     await POST(makeRequest({ addressId: 'addr_1' }));
@@ -602,12 +602,53 @@ describe('POST /api/checkout/create-order', () => {
     setUpValidCartAndAddress();
     const custDocRef = { id: 'cust_1' };
     mockCustomizationsWhereGet.mockResolvedValueOnce({
-      docs: [{ ref: custDocRef, data: () => ({ status: 'ordered' }) }],
+      docs: [{ ref: custDocRef, data: () => ({ status: 'ordered', userId: 'user_1' }) }],
     });
 
     await POST(makeRequest({ addressId: 'addr_1' }));
 
     expect(mockBatchUpdate).not.toHaveBeenCalledWith(custDocRef, { status: 'ordered' });
+  });
+
+  describe('personalizationId ownership [BE-35]', () => {
+    it('returns 404 and commits nothing when a referenced customization belongs to a different user', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCustomizationsWhereGet.mockResolvedValueOnce({
+        docs: [{ ref: { id: 'cust_1' }, data: () => ({ status: 'draft', userId: 'someone_else' }) }],
+      });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(404);
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when a referenced customization has no userId at all (never reconciled to an account)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCustomizationsWhereGet.mockResolvedValueOnce({
+        docs: [{ ref: { id: 'cust_1' }, data: () => ({ status: 'draft' }) }],
+      });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(404);
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+
+    it('proceeds normally when every referenced customization belongs to the caller', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCustomizationsWhereGet.mockResolvedValueOnce({
+        docs: [{ ref: { id: 'cust_1' }, data: () => ({ status: 'draft', userId: 'user_1' }) }],
+      });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(200);
+      expect(mockBatchCommit).toHaveBeenCalled();
+    });
   });
 
   describe('idempotency [BE-13]', () => {

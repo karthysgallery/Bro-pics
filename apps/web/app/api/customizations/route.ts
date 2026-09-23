@@ -123,6 +123,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     ...(dpiBand === 'red' && confirmedLowDpi && { redConfirmedAt: new Date() }),
     status: 'draft',
     ...(userId && { userId }),
+    createdAt: new Date(),
   });
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid customization payload', issues: parsed.error.issues }, { status: 400 });

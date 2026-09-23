@@ -328,6 +328,30 @@ export async function POST(request: Request): Promise<NextResponse> {
   const customizationSnapshots = await Promise.all(
     uniquePersonalizationIds.map((pid) => db.collection('customizations').where('personalizationId', '==', pid).get())
   );
+
+  // [BE-35] A cart line's personalizationId is client-supplied (it lives
+  // in carts/{userId}, itself client-writable) — without this check,
+  // nothing stopped a customer from ordering with a personalizationId
+  // that belongs to someone else's session/account, placing an order
+  // built from another customer's uploaded photo without their consent.
+  // reconcileSessionOnLogin (Phase 4 Plan A) stamps userId onto every
+  // customization at sign-in, so by checkout time an owned customization
+  // always has userId set to its actual owner — any doc still missing it,
+  // or set to someone else's uid, fails this check. Checked BEFORE the
+  // batch commits (nothing has been written yet at this point), so a
+  // rejected order leaves no partial state behind.
+  for (const snapshot of customizationSnapshots) {
+    for (const doc of snapshot.docs) {
+      if (doc.data().userId !== userId) {
+        // Matches this codebase's existing "not yours" convention (see
+        // the returns/order-lookup routes' own 404-not-403 choice) —
+        // never confirms whether the personalizationId exists at all,
+        // just that nothing usable was found for THIS caller.
+        return NextResponse.json({ error: 'One or more items in your cart could not be found' }, { status: 404 });
+      }
+    }
+  }
+
   for (const snapshot of customizationSnapshots) {
     for (const doc of snapshot.docs) {
       if (doc.data().status === 'draft') {

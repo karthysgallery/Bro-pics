@@ -107,6 +107,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     bytes: probed.strippedBuffer.byteLength,
     exifStripped: true,
     status: 'ready',
+    createdAt: new Date(),
   };
   await uploadRef.set(UploadSchema.parse(ready));
 

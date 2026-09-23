@@ -51,3 +51,4 @@ export * from './print-jobs/backoff';
 // '@bro-pics/shared/src/print-jobs/print-jobs'.
 export * from './notifications/notification-outbox';
 export * from './reconciliation/stuck-orders';
+export * from './cleanup/stale-anonymous-docs';
