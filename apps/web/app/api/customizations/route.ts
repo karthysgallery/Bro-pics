@@ -4,7 +4,7 @@ import { getAdminApp } from '../../../lib/firebase-admin';
 import { findVariantById } from '../../../lib/variant-lookup';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../lib/rate-limit';
-import { CustomizationSchema } from '@bro-pics/shared';
+import { CustomizationSchema, CURRENT_SCHEMA_VERSION } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
 import type { Upload } from '@bro-pics/shared';
 
@@ -93,7 +93,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     typeof rotationDeg === 'number' ? rotationDeg : 0
   );
 
-  const { effectiveDpi } = effectiveDpiFromCropRect(
+  const { effectiveDpi, tier: dpiBand } = effectiveDpiFromCropRect(
     upload.widthPx,
     upload.heightPx,
     cropRect,
@@ -101,13 +101,27 @@ export async function POST(request: Request): Promise<NextResponse> {
     printHeightIn
   );
 
+  // The "use this photo anyway" confirmation used to be pure client state
+  // (SlotState.confirmedLowDpi) that never reached the server at all — a
+  // red-tier photo in a real order looked identical, to fulfillment,
+  // whether the customer was warned and proceeded deliberately or the
+  // check was bypassed some other way. redConfirmedAt is only ever set
+  // when the server's OWN dpiBand computation (not the client's claim)
+  // agrees the photo is actually red-tier — a client can't fabricate a
+  // confirmation timestamp for a photo the server considers fine.
+  const confirmedLowDpi = (body as Record<string, unknown>).confirmedLowDpi === true;
+
   const docRef = db.collection('customizations').doc();
 
   const parsed = CustomizationSchema.safeParse({
     ...body,
     id: docRef.id,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     sessionId,
     effectiveDpi,
+    dpiBand,
+    ...(dpiBand === 'red' && confirmedLowDpi && { redConfirmedAt: new Date() }),
+    status: 'draft',
     ...(userId && { userId }),
   });
   if (!parsed.success) {

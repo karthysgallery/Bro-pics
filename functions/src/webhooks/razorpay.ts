@@ -8,10 +8,20 @@ export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
     razorpayOrderId: string
   ): Promise<{ id: string; userId: string; status: string } | null>;
+  // [BE-10/BE-12] Reads the order's items' personalizationIds, then the
+  // matching Customization docs currently in 'ordered' status (set by
+  // create-order when the order was placed) — a read, called before any
+  // write in handlePaymentCaptured, same "reads before writes" transaction
+  // rule the rest of this file already follows.
+  findCustomizationIdsToLock(orderId: string): Promise<string[]>;
   markPaymentCaptured(orderId: string, razorpayPaymentId: string): void;
   markPaymentFailed(orderId: string): void;
   clearCart(userId: string): void;
   recordEvent(orderId: string, event: Omit<OrderEvent, 'id'>): void;
+  // ordered -> locked: payment is now confirmed, so the customizations
+  // this order was built from are frozen — an edit attempt via
+  // PUT /api/customizations/{id} 409s from here on.
+  lockCustomizations(customizationIds: string[]): void;
 }
 
 /**
@@ -41,6 +51,8 @@ export async function handlePaymentCaptured(
   // added after their previous order already settled.
   if (order.status === 'paid') return;
 
+  const customizationIdsToLock = await paymentTx.findCustomizationIdsToLock(order.id);
+
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
   paymentTx.recordEvent(order.id, {
     status: 'paid',
@@ -51,6 +63,7 @@ export async function handlePaymentCaptured(
     createdBy: 'system',
   });
   paymentTx.clearCart(order.userId);
+  paymentTx.lockCustomizations(customizationIdsToLock);
   markWebhookProcessed(webhookTx, params.eventId, order.id);
 }
 
@@ -108,6 +121,28 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       const data = doc.data() as { userId: string; status: string };
       return { id: doc.id, userId: data.userId, status: data.status };
     },
+    async findCustomizationIdsToLock(orderId) {
+      const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
+      const personalizationIds = [
+        ...new Set(itemsSnapshot.docs.map((doc) => (doc.data() as { personalizationId: string }).personalizationId)),
+      ];
+      if (personalizationIds.length === 0) return [];
+
+      // Firestore's 'in' operator caps at 30 values per query — chunk
+      // rather than assume a cart never has more than 30 distinct
+      // personalizations (firestore.rules' carts/{userId} bound is 50
+      // line items, so this is a real, if unlikely, ceiling to respect).
+      const chunks: string[][] = [];
+      for (let i = 0; i < personalizationIds.length; i += 30) {
+        chunks.push(personalizationIds.slice(i, i + 30));
+      }
+      const snapshots = await Promise.all(
+        chunks.map((chunk) => transaction.get(db.collection('customizations').where('personalizationId', 'in', chunk)))
+      );
+      return snapshots.flatMap((snapshot) =>
+        snapshot.docs.filter((doc) => (doc.data() as { status?: string }).status === 'ordered').map((doc) => doc.id)
+      );
+    },
     markPaymentCaptured(orderId, razorpayPaymentId) {
       transaction.update(db.collection('orders').doc(orderId), {
         status: 'paid',
@@ -124,6 +159,11 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     recordEvent(orderId, event) {
       const eventRef = db.collection('orders').doc(orderId).collection('events').doc();
       transaction.set(eventRef, OrderEventSchema.parse({ ...event, id: eventRef.id }));
+    },
+    lockCustomizations(customizationIds) {
+      for (const id of customizationIds) {
+        transaction.update(db.collection('customizations').doc(id), { status: 'locked', lockedAt: new Date() });
+      }
     },
   };
 }

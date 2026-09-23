@@ -11,14 +11,17 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
 }
 
 function makePaymentTx(
-  order: { id: string; userId: string; status: string } | null
+  order: { id: string; userId: string; status: string } | null,
+  customizationIdsToLock: string[] = []
 ): PaymentEventTransaction {
   return {
     findOrderByRazorpayOrderId: vi.fn().mockResolvedValue(order),
+    findCustomizationIdsToLock: vi.fn().mockResolvedValue(customizationIdsToLock),
     markPaymentCaptured: vi.fn(),
     markPaymentFailed: vi.fn(),
     clearCart: vi.fn(),
     recordEvent: vi.fn(),
+    lockCustomizations: vi.fn(),
   };
 }
 
@@ -40,6 +43,32 @@ describe('handlePaymentCaptured', () => {
     );
     expect(paymentTx.clearCart).toHaveBeenCalledWith('user_1');
     expect(webhookTx.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ orderId: 'order_1' }));
+  });
+
+  it('locks every customization returned by findCustomizationIdsToLock [BE-10/BE-12]', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, ['cust_1', 'cust_2']);
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.lockCustomizations).toHaveBeenCalledWith(['cust_1', 'cust_2']);
+  });
+
+  it('does not call lockCustomizations when the order was already processed', async () => {
+    const webhookTx = makeWebhookTx(true);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, ['cust_1']);
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.lockCustomizations).not.toHaveBeenCalled();
   });
 
   it('does nothing when the event was already processed (idempotent retry)', async () => {

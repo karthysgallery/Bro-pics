@@ -255,6 +255,26 @@ export async function POST(request: Request): Promise<NextResponse> {
     const itemRef = orderRef.collection('items').doc();
     batch.set(itemRef, OrderItemSchema.parse({ ...line, id: itemRef.id }));
   }
+
+  // [BE-10/BE-12] draft -> ordered: a customization referenced by this
+  // order can no longer be freely edited via PUT /api/customizations/{id}
+  // (that route 409s on anything but 'draft'). Not yet 'locked' — payment
+  // hasn't been confirmed, and razorpayWebhook's payment.captured handler
+  // is what advances ordered -> locked. One personalizationId can span
+  // multiple Customization docs (one per photo slot), so this queries by
+  // personalizationId rather than assuming a single doc.
+  const uniquePersonalizationIds = [...new Set(priced.map((line) => line.personalizationId))];
+  const customizationSnapshots = await Promise.all(
+    uniquePersonalizationIds.map((pid) => db.collection('customizations').where('personalizationId', '==', pid).get())
+  );
+  for (const snapshot of customizationSnapshots) {
+    for (const doc of snapshot.docs) {
+      if (doc.data().status === 'draft') {
+        batch.update(doc.ref, { status: 'ordered' });
+      }
+    }
+  }
+
   await batch.commit();
 
   return NextResponse.json(

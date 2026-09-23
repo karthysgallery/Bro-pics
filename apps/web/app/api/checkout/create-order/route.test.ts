@@ -37,6 +37,7 @@ const mockBatchSet = vi.fn();
 const mockBatchUpdate = vi.fn();
 const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
 const mockRunTransaction = vi.fn();
+const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ docs: [] });
 const mockDb = {
   collection: vi.fn((name: string) => ({
     doc: vi.fn((id?: string) => {
@@ -61,7 +62,13 @@ const mockDb = {
       }
       return { id: id ?? 'generated_id', get: vi.fn(), collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'item_id' })) })) };
     }),
-    where: vi.fn(() => ({ where: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ size: 0 }) })) })),
+    where: vi.fn((field: string) => {
+      if (field === 'personalizationId') {
+        // The BE-10/BE-12 draft->ordered query: customizations.where('personalizationId', '==', pid).get()
+        return { get: (...args: unknown[]) => mockCustomizationsWhereGet(...args) };
+      }
+      return { where: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ size: 0 }) })) };
+    }),
   })),
   doc: vi.fn(() => ({})),
   runTransaction: (...args: unknown[]) => mockRunTransaction(...args),
@@ -440,6 +447,32 @@ describe('POST /api/checkout/create-order', () => {
       // `couponId: appliedCouponId` key would also satisfy).
       expect(orderArg && 'couponId' in orderArg).toBe(false);
     });
+  });
+
+  it('transitions a referenced draft customization to ordered in the same batch [BE-10/BE-12]', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    setUpValidCartAndAddress();
+    const custDocRef = { id: 'cust_1' };
+    mockCustomizationsWhereGet.mockResolvedValueOnce({
+      docs: [{ ref: custDocRef, data: () => ({ status: 'draft' }) }],
+    });
+
+    await POST(makeRequest({ addressId: 'addr_1' }));
+
+    expect(mockBatchUpdate).toHaveBeenCalledWith(custDocRef, { status: 'ordered' });
+  });
+
+  it('does not re-transition a customization that is not still a draft (e.g. already ordered by a prior attempt)', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    setUpValidCartAndAddress();
+    const custDocRef = { id: 'cust_1' };
+    mockCustomizationsWhereGet.mockResolvedValueOnce({
+      docs: [{ ref: custDocRef, data: () => ({ status: 'ordered' }) }],
+    });
+
+    await POST(makeRequest({ addressId: 'addr_1' }));
+
+    expect(mockBatchUpdate).not.toHaveBeenCalledWith(custDocRef, { status: 'ordered' });
   });
 
   it('returns 429 and does not touch Firestore or Razorpay when rate-limited', async () => {

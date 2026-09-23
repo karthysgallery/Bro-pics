@@ -84,4 +84,30 @@ describe('CustomizationSchema', () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it('defaults schemaVersion to 1 and status to draft for a v1 doc missing both fields', () => {
+    const result = CustomizationSchema.safeParse(baseCustomization());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe(1);
+      expect(result.data.status).toBe('draft');
+    }
+  });
+
+  it('accepts a v2 doc with schemaVersion, dpiBand, status and lockedAt all set', () => {
+    const result = CustomizationSchema.safeParse(
+      baseCustomization({ schemaVersion: 2, dpiBand: 'red', redConfirmedAt: new Date(), status: 'locked', lockedAt: new Date() })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an invalid dpiBand value', () => {
+    const result = CustomizationSchema.safeParse(baseCustomization({ dpiBand: 'yellow' }));
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an invalid status value', () => {
+    const result = CustomizationSchema.safeParse(baseCustomization({ status: 'in_cart' }));
+    expect(result.success).toBe(false);
+  });
 });
