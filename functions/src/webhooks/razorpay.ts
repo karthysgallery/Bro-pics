@@ -7,9 +7,12 @@ import {
   orderStatusEvent,
   buildQueuedPrintJob,
   generateInvoiceNo,
+  buildQueuedNotification,
+  notificationOutboxId,
   type CounterTransaction,
   type OrderEvent,
   type OrderStatus,
+  type NotificationCategory,
 } from '@bro-pics/shared';
 
 export interface CustomizationToLock {
@@ -30,7 +33,7 @@ export interface OrderItemRef {
 export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
     razorpayOrderId: string
-  ): Promise<{ id: string; userId: string; status: string; couponId?: string } | null>;
+  ): Promise<{ id: string; userId: string; status: string; couponId?: string; orderNo: string } | null>;
   // [BE-14] Only called when a coupon was actually applied — increments
   // AFTER payment is confirmed, not at order creation, so an order the
   // customer abandons at the Razorpay modal (stays pending_payment
@@ -74,6 +77,24 @@ export interface PaymentEventTransaction {
   // this same transaction — NOT via print-jobs.ts's createPrintJob, which
   // opens its own db.runTransaction and can't be nested inside this one.
   queuePrintJob(orderId: string, itemId: string, personalizationId: string): void;
+  // [BE-27a] Queues a notificationOutbox entry for a real channel (email,
+  // for now — see NotificationOutboxChannelSchema) inside this same
+  // transaction. transitionKey feeds notificationOutboxId, so a
+  // redelivered webhook event queuing the same transition twice is a
+  // no-op, not a duplicate notification. Only 'paid' and 'payment_failed'
+  // are ever queued from this file — payment_confirmed/photo_validation/
+  // print_rendering are internal plumbing the customer doesn't act on
+  // (the staff-advance route's own NOTIFICATION_BY_STATUS made this same
+  // call for those statuses already).
+  queueNotification(
+    orderId: string,
+    userId: string,
+    transitionKey: string,
+    category: NotificationCategory,
+    title: string,
+    body: string,
+    linkHref: string | null
+  ): void;
 }
 
 const DPI_SEVERITY: Record<'green' | 'amber' | 'red', number> = { green: 0, amber: 1, red: 2 };
@@ -118,6 +139,19 @@ export async function handlePaymentCaptured(
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
   paymentTx.setInvoiceNo(order.id, invoiceNo);
   paymentTx.recordEvent(order.id, orderStatusEvent('paid', 'system'));
+  // [BE-27a] The webhook never emitted any customer notification at all
+  // before this — a documented gap (see lib/notify.ts's own doc comment
+  // in apps/web, written when this file was still out of scope). 'paid'
+  // is the one customer-visible milestone in this whole handler.
+  paymentTx.queueNotification(
+    order.id,
+    order.userId,
+    'paid',
+    'payment',
+    'Payment confirmed',
+    `Order ${order.orderNo} has been confirmed.`,
+    `/orders/${order.id}`
+  );
   paymentTx.clearCart(order.userId);
   paymentTx.lockCustomizations(customizationsToLock.map((c) => c.id));
   if (order.couponId) {
@@ -181,6 +215,15 @@ export async function handlePaymentFailed(
   if (!order) return;
   if (order.status !== 'pending_payment') return;
   paymentTx.markPaymentFailed(order.id);
+  paymentTx.queueNotification(
+    order.id,
+    order.userId,
+    'payment_failed',
+    'payment',
+    'Payment failed',
+    `Payment for order ${order.orderNo} failed. Please try again.`,
+    `/orders/${order.id}`
+  );
 }
 
 function verifySignature(rawBody: string, signature: string, secret: string): boolean {
@@ -211,8 +254,8 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       );
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
-      const data = doc.data() as { userId: string; status: string; couponId?: string };
-      return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId };
+      const data = doc.data() as { userId: string; status: string; couponId?: string; orderNo: string };
+      return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId, orderNo: data.orderNo };
     },
     async findCustomizationsToLock(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
@@ -297,6 +340,18 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     queuePrintJob(orderId, itemId, personalizationId) {
       const job = buildQueuedPrintJob(orderId, itemId, personalizationId);
       transaction.set(db.collection('printJobs').doc(job.id), job);
+    },
+    queueNotification(orderId, userId, transitionKey, category, title, body, linkHref) {
+      const entry = buildQueuedNotification({
+        id: notificationOutboxId('order', orderId, transitionKey),
+        userId,
+        channel: 'email',
+        category,
+        title,
+        body,
+        linkHref,
+      });
+      transaction.set(db.collection('notificationOutbox').doc(entry.id), entry);
     },
   };
 }

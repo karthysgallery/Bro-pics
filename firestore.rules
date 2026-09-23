@@ -93,6 +93,15 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isStaffOrAdmin();
         allow write: if isOwner(userId);
       }
+
+      // [BE-27] Admin-SDK-only, same as printJobs/webhookEvents — no
+      // client ever reads or writes the denormalized notification
+      // unread counter directly. (Already covered by default-deny even
+      // without this explicit block, same as users/{userId}/notifications
+      // — added for the same documentation-clarity reason printJobs was.)
+      match /private/{docId} {
+        allow read, write: if false;
+      }
     }
 
     match /coupons/{code} {
@@ -132,6 +141,12 @@ service cloud.firestore {
     // [BE-17/BE-18] Admin-SDK-only, same as webhookEvents/reconciliations
     // above — no client ever reads or writes a print job directly.
     match /printJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    // [BE-27] Same admin-SDK-only pattern — no client ever reads or
+    // writes a queued notification-channel dispatch directly.
+    match /notificationOutbox/{entryId} {
       allow read, write: if false;
     }
   }

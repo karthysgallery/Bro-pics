@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
@@ -30,6 +30,18 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: `Unknown notification: ${id}` }, { status: 404 });
   }
 
+  // [BE-27] Only decrement if it was actually unread — marking an
+  // already-read notification read again (a retried/duplicate client
+  // request) must not decrement twice.
+  const wasUnread = (snap.data() as { isRead?: boolean }).isRead !== true;
   await ref.update({ isRead: true });
+  if (wasUnread) {
+    await db
+      .collection('users')
+      .doc(userId)
+      .collection('private')
+      .doc('notificationStats')
+      .set({ unreadCount: FieldValue.increment(-1) }, { merge: true });
+  }
   return NextResponse.json({ isRead: true }, { status: 200 });
 }

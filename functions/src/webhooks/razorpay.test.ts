@@ -11,12 +11,14 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
 }
 
 function makePaymentTx(
-  order: { id: string; userId: string; status: string; couponId?: string } | null,
+  order: { id: string; userId: string; status: string; couponId?: string; orderNo?: string } | null,
   customizationsToLock: CustomizationToLock[] = [],
   orderItems: OrderItemRef[] = []
 ): PaymentEventTransaction {
   return {
-    findOrderByRazorpayOrderId: vi.fn().mockResolvedValue(order),
+    findOrderByRazorpayOrderId: vi
+      .fn()
+      .mockResolvedValue(order ? { orderNo: 'BP-2026-00001', ...order } : null),
     findCustomizationsToLock: vi.fn().mockResolvedValue(customizationsToLock),
     findOrderItems: vi.fn().mockResolvedValue(orderItems),
     markPaymentCaptured: vi.fn(),
@@ -30,6 +32,7 @@ function makePaymentTx(
     incrementProductSalesCount: vi.fn(),
     setOrderStatus: vi.fn(),
     queuePrintJob: vi.fn(),
+    queueNotification: vi.fn(),
   };
 }
 
@@ -243,6 +246,40 @@ describe('handlePaymentCaptured', () => {
       expect(paymentTx.queuePrintJob).not.toHaveBeenCalled();
     });
   });
+
+  it('[BE-27a] queues a payment-confirmed email notification, keyed on {orderId}_paid', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment', orderNo: 'BP-2026-00042' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.queueNotification).toHaveBeenCalledWith(
+      'order_1',
+      'user_1',
+      'paid',
+      'payment',
+      'Payment confirmed',
+      expect.stringContaining('BP-2026-00042'),
+      '/orders/order_1'
+    );
+  });
+
+  it('does not queue a notification when the event was already processed (idempotent retry)', async () => {
+    const webhookTx = makeWebhookTx(true);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.queueNotification).not.toHaveBeenCalled();
+  });
 });
 
 describe('handlePaymentFailed', () => {
@@ -252,6 +289,26 @@ describe('handlePaymentFailed', () => {
     expect(paymentTx.markPaymentFailed).toHaveBeenCalledWith('order_1');
     expect(paymentTx.clearCart).not.toHaveBeenCalled();
     expect(paymentTx.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('[BE-27a] queues a payment-failed email notification, keyed on {orderId}_payment_failed', async () => {
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment', orderNo: 'BP-2026-00042' });
+    await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_1' });
+    expect(paymentTx.queueNotification).toHaveBeenCalledWith(
+      'order_1',
+      'user_1',
+      'payment_failed',
+      'payment',
+      'Payment failed',
+      expect.stringContaining('BP-2026-00042'),
+      '/orders/order_1'
+    );
+  });
+
+  it('does not queue a notification when no matching order is found', async () => {
+    const paymentTx = makePaymentTx(null);
+    await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_unknown' });
+    expect(paymentTx.queueNotification).not.toHaveBeenCalled();
   });
 
   it('does nothing when no matching order is found', async () => {

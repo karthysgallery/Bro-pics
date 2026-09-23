@@ -7,8 +7,16 @@ vi.mock('../../../lib/verify-id-token', () => ({
 }));
 
 const mockGet = vi.fn();
+const mockStatsGet = vi.fn().mockResolvedValue({ data: () => undefined });
 const mockDb = {
-  collection: vi.fn(() => ({ doc: vi.fn(() => ({ collection: vi.fn(() => ({ get: mockGet })) })) })),
+  collection: vi.fn(() => ({
+    doc: vi.fn(() => ({
+      collection: vi.fn((subName: string) => {
+        if (subName === 'private') return { doc: vi.fn(() => ({ get: mockStatsGet })) };
+        return { get: mockGet };
+      }),
+    })),
+  })),
 };
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
 vi.mock('../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
@@ -50,6 +58,20 @@ describe('GET /api/notifications', () => {
     const body = await response.json();
     expect(body.notifications.map((n: { id: string }) => n.id)).toEqual(['n2', 'n3', 'n1']);
     expect(body.unreadCount).toBe(2);
+  });
+
+  it('[BE-27] uses the denormalized unread counter when present, instead of the capped-slice count', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockGet.mockResolvedValueOnce(
+      makeSnapshot([{ id: 'n1', createdAt: '2026-01-01T00:00:00.000Z', isRead: false }])
+    );
+    // The real, denormalized count reflects unread notifications beyond
+    // what this capped read even fetched — proving it's not derived from
+    // the slice.
+    mockStatsGet.mockResolvedValueOnce({ data: () => ({ unreadCount: 57 }) });
+    const response = await GET(new Request('https://example.com/api/notifications'));
+    const body = await response.json();
+    expect(body.unreadCount).toBe(57);
   });
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
