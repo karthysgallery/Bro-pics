@@ -17,10 +17,17 @@ export const ReturnStatusSchema = z.enum([
   'refunded',
 ]);
 
+// [BE-19] A coarse category for filtering/reporting in the admin returns
+// queue — 'reason' below stays the free-text detail the customer actually
+// wrote, never replaced by this.
+export const ReturnReasonCategorySchema = z.enum(['damaged', 'wrong_item', 'quality', 'changed_mind', 'other']);
+export type ReturnReasonCategory = z.infer<typeof ReturnReasonCategorySchema>;
+
 export const ReturnSchema = z.object({
   id: z.string(),
   orderId: z.string(),
   userId: z.string(),
+  reasonCategory: ReturnReasonCategorySchema,
   reason: z.string().min(1),
   status: ReturnStatusSchema,
   requestedAt: z.string(),
@@ -34,6 +41,11 @@ export const ReturnSchema = z.object({
   // partial approved instead") — optional, distinct from the customer's
   // own `reason` for requesting the return.
   staffNote: z.string().nullable().optional(),
+  // [BE-19] Storage object paths (never signed URLs — see
+  // Upload.originalPath's own doc comment for why) for photos the
+  // customer attached as evidence. Optional: a return can still be filed
+  // without photos, same as before this field existed.
+  evidencePaths: z.array(z.string()).optional(),
 });
 
 export type ReturnStatus = z.infer<typeof ReturnStatusSchema>;

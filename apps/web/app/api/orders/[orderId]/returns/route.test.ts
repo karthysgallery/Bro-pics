@@ -62,7 +62,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
 
   it('returns 401 when signed out', async () => {
     mockGetUserId.mockResolvedValueOnce(null);
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(401);
   });
 
@@ -72,24 +72,55 @@ describe('POST /api/orders/[orderId]/returns', () => {
     expect(response.status).toBe(400);
   });
 
+  it('[BE-19] returns 400 when reasonCategory is missing or invalid', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    expect(response.status).toBe(400);
+
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    const response2 = await POST(makeRequest({ reason: 'damaged', reasonCategory: 'not_a_category' }), {
+      params: Promise.resolve({ orderId: 'order_1' }),
+    });
+    expect(response2.status).toBe(400);
+  });
+
+  it('[BE-19] stores evidencePaths on the return doc when provided', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+
+    const response = await POST(
+      makeRequest({ reasonCategory: 'damaged', reason: 'Frame arrived damaged', evidencePaths: ['returns/ret_1/photo1.jpg'] }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockReturnSet).toHaveBeenCalledWith(
+      expect.objectContaining({ evidencePaths: ['returns/ret_1/photo1.jpg'] })
+    );
+  });
+
   it('returns 404 when the order does not exist', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: false });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 404 when the order belongs to someone else', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...DELIVERED_ORDER, userId: 'someone_else' }) });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 400 when the order is not delivered', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...DELIVERED_ORDER, status: 'shipped' }) });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(400);
   });
 
@@ -97,7 +128,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
     mockReturnsWhereGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({}) }] });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(409);
   });
 
@@ -108,7 +139,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
       empty: false,
       docs: [{ data: () => ({ status: 'delivered', createdAt: '2020-01-01T00:00:00.000Z' }) }],
     });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(400);
     expect(mockReturnSet).not.toHaveBeenCalled();
   });
@@ -121,7 +152,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
       docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
     });
 
-    const response = await POST(makeRequest({ reason: 'Frame arrived damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'Frame arrived damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
 
     expect(response.status).toBe(200);
     expect(mockReturnSet).toHaveBeenCalledWith(
@@ -131,7 +162,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 5 });
-    const response = await POST(makeRequest({ reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(429);
     expect(mockGetUserId).not.toHaveBeenCalled();
   });

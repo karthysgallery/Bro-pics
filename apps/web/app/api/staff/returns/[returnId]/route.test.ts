@@ -24,7 +24,12 @@ const mockRunTransaction = vi.fn();
 const mockDb = {
   collection: vi.fn((name: string) => {
     if (name === 'returns') {
-      return { doc: vi.fn(() => ({ get: mockReturnGet })) };
+      return {
+        doc: vi.fn(() => ({
+          get: mockReturnGet,
+          collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'return_event_1' })) })),
+        })),
+      };
     }
     if (name === 'orders') {
       return {
@@ -145,6 +150,26 @@ describe('POST /api/staff/returns/[returnId]', () => {
       'Refund complete',
       expect.stringContaining('BP-2026-00001'),
       '/orders/order_1'
+    );
+  });
+
+  it('[BE-19] writes a return history event on every status change', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockReturnGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
+    });
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ orderNo: 'BP-2026-00001' }) });
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status: 'requested' }) });
+
+    const response = await POST(makeRequest({ status: 'approved', staffNote: 'Looks legit' }), {
+      params: Promise.resolve({ returnId: 'ret_1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'approved', staffNote: 'Looks legit', createdBy: 'staff_1' })
     );
   });
 

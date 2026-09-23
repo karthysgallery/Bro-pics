@@ -5,7 +5,15 @@ import { getStaffUserIdFromAuthHeader } from '../../../../../lib/verify-id-token
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
 import { writeNotification } from '../../../../../lib/notify';
-import { ReturnStatusSchema, isValidReturnStatusTransition, OrderEventSchema, type Return, type ReturnStatus, type Order } from '@bro-pics/shared';
+import {
+  ReturnStatusSchema,
+  isValidReturnStatusTransition,
+  OrderEventSchema,
+  ReturnEventSchema,
+  type Return,
+  type ReturnStatus,
+  type Order,
+} from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ returnId: string }>;
@@ -101,6 +109,19 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
         returnUpdate.razorpayRefundId = razorpayRefundId;
       }
       transaction.update(returnRef, returnUpdate);
+
+      // [BE-19] History entry for every staff status change, not just the
+      // terminal refunded one — mirrors orders/{id}/events (see
+      // OrderEventSchema's use in the staff-advance route).
+      const returnEventRef = returnRef.collection('events').doc();
+      const returnEvent = ReturnEventSchema.parse({
+        id: returnEventRef.id,
+        status: nextStatus,
+        staffNote,
+        createdAt: new Date().toISOString(),
+        createdBy: staffUserId,
+      });
+      transaction.set(returnEventRef, returnEvent);
 
       // Once a return actually completes, the parent order moves to
       // 'refunded' too — 'delivered' -> 'refunded' is already a legal

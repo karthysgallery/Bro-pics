@@ -15,6 +15,7 @@ export * from './schemas/frame-template';
 export * from './schemas/user';
 export * from './schemas/address';
 export * from './schemas/return';
+export * from './schemas/return-event';
 export * from './schemas/notification';
 export * from './schemas/print-job';
 export * from './search/types';

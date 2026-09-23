@@ -126,13 +126,16 @@ describe('OrderDetailPage', () => {
     const returnButton = await screen.findByText('Return product');
     fireEvent.click(returnButton);
 
-    fireEvent.change(await screen.findByLabelText(/why are you returning/i), { target: { value: 'Frame arrived damaged' } });
+    fireEvent.change(await screen.findByLabelText(/tell us more/i), { target: { value: 'Frame arrived damaged' } });
     fireEvent.click(screen.getByText('Submit return request'));
 
     expect(await screen.findByText('Return requested')).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/orders/order_4/returns',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ reason: 'Frame arrived damaged' }) })
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ reasonCategory: 'damaged', reason: 'Frame arrived damaged' }),
+      })
     );
   });
 });
