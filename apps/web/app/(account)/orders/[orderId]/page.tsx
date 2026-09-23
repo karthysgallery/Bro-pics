@@ -196,6 +196,26 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
       <OrderStatusTimeline status={order.status} />
 
+      {order.shipmentTracking && (
+        <div className="text-sm text-accent/80">
+          {order.shipmentTracking.provider} — {order.shipmentTracking.awbNumber}
+          {order.shipmentTracking.trackingUrl && (
+            <>
+              {' '}
+              ·{' '}
+              <a
+                href={order.shipmentTracking.trackingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:text-accent-dark underline"
+              >
+                Track shipment
+              </a>
+            </>
+          )}
+        </div>
+      )}
+
       <ul className="flex flex-col gap-2 text-accent/80">
         {items.map((item, i) => {
           const slug = productSlugs.get(item.productId);

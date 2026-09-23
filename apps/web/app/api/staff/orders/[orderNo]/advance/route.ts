@@ -9,9 +9,16 @@ import {
   OrderEventSchema,
   isValidStatusTransition,
   buildQueuedPrintJob,
+  ManualShippingProvider,
   type OrderStatus,
   type NotificationCategory,
+  type ShipmentTracking,
 } from '@bro-pics/shared';
+
+// [BE-20] No real courier API integration exists yet — see
+// ManualShippingProvider's own doc comment. Module-scoped since it's
+// stateless; swapping in a real provider later is a one-line change here.
+const shippingProvider = new ManualShippingProvider();
 
 interface RouteParams {
   params: Promise<{ orderNo: string }>;
@@ -75,6 +82,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   if (status === 'shipped') {
     orderUpdate.courier = courier;
     orderUpdate.awbNumber = awbNumber;
+    const shippedAt = new Date().toISOString();
+    const shipmentTracking: ShipmentTracking = {
+      provider: courier!,
+      awbNumber: awbNumber!,
+      trackingUrl: shippingProvider.trackingUrlFor(courier!, awbNumber!),
+      status: 'shipped',
+      shippedAt,
+      deliveredAt: null,
+    };
+    orderUpdate.shipmentTracking = shipmentTracking;
   }
 
   try {
@@ -91,6 +108,25 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
         throw new StatusConflictError(
           `Cannot transition from ${currentStatus ?? 'unknown'} to ${status}`
         );
+      }
+
+      // [BE-20] 'delivered' updates the SAME shipmentTracking object
+      // 'shipped' created, rather than replacing it — provider/awbNumber/
+      // trackingUrl/shippedAt all carry forward, only status and
+      // deliveredAt change. If an order somehow reaches 'delivered' with
+      // no prior shipmentTracking (e.g. one shipped before this field
+      // existed), there's nothing to merge into — leave it absent rather
+      // than fabricate placeholder provider/awbNumber values.
+      if (status === 'delivered') {
+        const existing = orderSnap.data()?.shipmentTracking as ShipmentTracking | undefined;
+        if (existing) {
+          const shipmentTracking: ShipmentTracking = {
+            ...existing,
+            status: 'delivered',
+            deliveredAt: new Date().toISOString(),
+          };
+          orderUpdate.shipmentTracking = shipmentTracking;
+        }
       }
 
       // [BE-18] A red-tier order holds at photo_validation until staff

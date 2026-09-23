@@ -31,5 +31,6 @@ export * from './orders/status-transitions';
 export * from './orders/order-status-event';
 export * from './orders/return-status-transitions';
 export * from './editor-geometry';
+export * from './shipping/shipping-provider';
 export * from './print-jobs/backoff';
 export * from './print-jobs/print-jobs';

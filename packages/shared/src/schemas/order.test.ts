@@ -70,3 +70,57 @@ describe('OrderSchema courier/awbNumber', () => {
     expect(OrderSchema.safeParse(baseOrder()).success).toBe(true);
   });
 });
+
+describe('OrderSchema shipmentTracking [BE-20]', () => {
+  it('accepts an order with a shipped shipmentTracking', () => {
+    const result = OrderSchema.safeParse(
+      baseOrder({
+        shipmentTracking: {
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          trackingUrl: null,
+          status: 'shipped',
+          shippedAt: '2026-09-10T00:00:00.000Z',
+          deliveredAt: null,
+        },
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a delivered shipmentTracking with deliveredAt set', () => {
+    const result = OrderSchema.safeParse(
+      baseOrder({
+        shipmentTracking: {
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          trackingUrl: 'https://bluedart.com/track/BD123456789',
+          status: 'delivered',
+          shippedAt: '2026-09-10T00:00:00.000Z',
+          deliveredAt: '2026-09-13T00:00:00.000Z',
+        },
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an order with no shipmentTracking set (pre-existing orders)', () => {
+    expect(OrderSchema.safeParse(baseOrder()).success).toBe(true);
+  });
+
+  it('rejects an unknown shipmentTracking status', () => {
+    const result = OrderSchema.safeParse(
+      baseOrder({
+        shipmentTracking: {
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          trackingUrl: null,
+          status: 'in_transit',
+          shippedAt: '2026-09-10T00:00:00.000Z',
+          deliveredAt: null,
+        },
+      })
+    );
+    expect(result.success).toBe(false);
+  });
+});

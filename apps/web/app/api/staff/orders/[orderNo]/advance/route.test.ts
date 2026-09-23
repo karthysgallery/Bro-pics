@@ -162,6 +162,90 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     expect(body.order.awbNumber).toBe('BD123456789');
   });
 
+  it('[BE-20] sets shipmentTracking with status shipped and a null trackingUrl (no courier API integrated)', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('printed_packed');
+
+    const response = await POST(
+      makeRequest({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123456789' }),
+      { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        shipmentTracking: expect.objectContaining({
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          trackingUrl: null,
+          status: 'shipped',
+          deliveredAt: null,
+        }),
+      })
+    );
+  });
+
+  it('[BE-20] merges into the existing shipmentTracking on delivered, preserving provider/awbNumber/shippedAt', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'shipped', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockTransactionGet.mockResolvedValueOnce({
+      data: () => ({
+        status: 'shipped',
+        shipmentTracking: {
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          trackingUrl: null,
+          status: 'shipped',
+          shippedAt: '2026-09-10T00:00:00.000Z',
+          deliveredAt: null,
+        },
+      }),
+    });
+
+    const response = await POST(makeRequest({ status: 'delivered' }), {
+      params: Promise.resolve({ orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        shipmentTracking: expect.objectContaining({
+          provider: 'BlueDart',
+          awbNumber: 'BD123456789',
+          shippedAt: '2026-09-10T00:00:00.000Z',
+          status: 'delivered',
+          deliveredAt: expect.any(String),
+        }),
+      })
+    );
+  });
+
+  it('[BE-20] does not fabricate shipmentTracking on delivered when no prior shipmentTracking exists', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'shipped', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status: 'shipped' }) });
+
+    const response = await POST(makeRequest({ status: 'delivered' }), {
+      params: Promise.resolve({ orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(response.status).toBe(200);
+    const updateCall = mockTransactionUpdate.mock.calls.find((call) => (call[1] as Record<string, unknown>).status === 'delivered');
+    expect(updateCall?.[1]).not.toHaveProperty('shipmentTracking');
+  });
+
   it('nulls courier/awbNumber on the written event for a non-shipped transition even if the body includes them', async () => {
     mockGetStaffUserId.mockResolvedValueOnce('staff_1');
     mockFindOrder.mockResolvedValueOnce({

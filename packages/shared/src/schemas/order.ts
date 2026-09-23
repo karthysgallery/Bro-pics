@@ -5,6 +5,21 @@ import { z } from 'zod';
 // time before a courier is even involved).
 export const DeliveryMethodSchema = z.enum(['standard', 'express']);
 
+// [BE-20] Named shipmentTracking, deliberately NOT `shipping` — that name
+// is already taken by the shipping FEE (a number, below). Denormalized
+// onto the order for the customer-facing tracking link; the underlying
+// courier/awbNumber fields and the shipped/delivered timestamps already
+// implicit in orders/{id}/events both still exist independently of this.
+export const ShipmentTrackingSchema = z.object({
+  provider: z.string().min(1),
+  awbNumber: z.string().min(1),
+  trackingUrl: z.string().nullable(),
+  status: z.enum(['shipped', 'delivered']),
+  shippedAt: z.string(),
+  deliveredAt: z.string().nullable(),
+});
+export type ShipmentTracking = z.infer<typeof ShipmentTrackingSchema>;
+
 export const OrderStatusSchema = z.enum([
   'pending_payment',
   'paid',
@@ -52,6 +67,10 @@ export const OrderSchema = z
     notes: z.string().optional(),
     courier: z.string().optional(),
     awbNumber: z.string().optional(),
+    // [BE-20] Optional so an order shipped before this field existed
+    // still parses — its courier/awbNumber above remain the source of
+    // truth for those, this is purely additive tracking-link/status info.
+    shipmentTracking: ShipmentTrackingSchema.optional(),
     placedAt: z.date(),
     // Optional so an order placed before this field existed still parses;
     // callers that need a concrete value treat an absent field as
