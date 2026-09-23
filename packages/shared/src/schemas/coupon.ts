@@ -11,6 +11,12 @@ export const CouponSchema = z.object({
   usageLimit: z.number().int().nonnegative().optional(),
   perUserLimit: z.number().int().nonnegative().optional(),
   appliesTo: z.enum(['all', 'category', 'product']),
+  // [BE-24] Only meaningful (and only ever read) when appliesTo is
+  // 'category' or 'product' respectively — absent/empty for an 'all'
+  // coupon. See eligibleSubtotalForCoupon: a category/product coupon
+  // with no ids configured matches nothing, not everything.
+  categoryIds: z.array(z.string()).optional(),
+  productIds: z.array(z.string()).optional(),
   usedCount: z.number().int().nonnegative(),
 });
 

@@ -7,6 +7,7 @@ import { getShippingSettings, getGstSettings } from '../../../../lib/firestore-s
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { findCouponByCode } from '../../../../lib/coupon-lookup';
+import { computeEligibleSubtotal } from '../../../../lib/coupon-eligibility';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import {
@@ -192,7 +193,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         perUserOk = usedSnapshot.size < coupon.perUserLimit;
       }
       if (perUserOk) {
-        const result = calculateCouponDiscount(subtotal, coupon);
+        // [BE-24] For an 'all' coupon this is just the order subtotal
+        // (unchanged behavior); for 'category'/'product' it's only the
+        // portion of the cart the coupon actually covers, so the
+        // discount below can never apply against ineligible items.
+        const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
+        const result = calculateCouponDiscount(eligibleSubtotal, coupon);
         if (result.valid) {
           discount = result.discountPaise;
           // Source from coupon.code (normalized, doc.id-backed), not the

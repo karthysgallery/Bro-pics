@@ -42,10 +42,12 @@ const mockRunTransaction = vi.fn();
 const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ docs: [] });
 const mockIdempotencyWhereGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
 const mockPerUserLimitWhereGet = vi.fn().mockResolvedValue({ size: 0 });
+const mockProductDocGet = vi.fn().mockResolvedValue({ exists: false });
 const mockDb = {
   collection: vi.fn((name: string) => ({
     doc: vi.fn((id?: string) => {
       if (name === 'carts') return mockCartDoc;
+      if (name === 'products') return { id: id ?? 'product_id', get: () => mockProductDocGet(id) };
       if (name === 'users') {
         return {
           id: id ?? 'user_id',
@@ -493,6 +495,62 @@ describe('POST /api/checkout/create-order', () => {
       expect(response.status).toBe(200);
       expect(orderArg?.discount).toBeGreaterThan(0);
       expect(orderArg?.couponId).toBe('ONECOUP');
+    });
+
+    describe('appliesTo enforcement [BE-24]', () => {
+      it('applies the full discount when the cart\'s product is in a product-scoped coupon\'s productIds', async () => {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        setUpValidCartAndAddress(); // cart line's productId is 'p1', subtotal 2000
+        mockFindCouponByCode.mockResolvedValueOnce({
+          code: 'P1ONLY', type: 'percent', value: 10, appliesTo: 'product', productIds: ['p1'], usedCount: 0,
+          startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+        });
+        const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'P1ONLY' }));
+        expect(response.status).toBe(200);
+        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        expect(orderArg?.discount).toBe(200); // 10% of the full 2000 subtotal — the whole cart is eligible
+      });
+
+      it('applies zero discount when the cart has no line matching a product-scoped coupon\'s productIds', async () => {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        setUpValidCartAndAddress(); // cart line's productId is 'p1'
+        mockFindCouponByCode.mockResolvedValueOnce({
+          code: 'OTHERPRODUCT', type: 'percent', value: 10, appliesTo: 'product', productIds: ['p_unrelated'], usedCount: 0,
+          startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+        });
+        const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'OTHERPRODUCT' }));
+        expect(response.status).toBe(200);
+        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        expect(orderArg?.discount).toBe(0);
+      });
+
+      it('applies the discount when the cart\'s product resolves to a category in a category-scoped coupon\'s categoryIds', async () => {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        setUpValidCartAndAddress();
+        mockProductDocGet.mockResolvedValueOnce({ exists: true, id: 'p1', data: () => ({ categoryId: 'c1' }) });
+        mockFindCouponByCode.mockResolvedValueOnce({
+          code: 'CAT1', type: 'percent', value: 10, appliesTo: 'category', categoryIds: ['c1'], usedCount: 0,
+          startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+        });
+        const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'CAT1' }));
+        expect(response.status).toBe(200);
+        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        expect(orderArg?.discount).toBe(200);
+      });
+
+      it('applies zero discount when the cart\'s product resolves to a category NOT in a category-scoped coupon\'s categoryIds', async () => {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        setUpValidCartAndAddress();
+        mockProductDocGet.mockResolvedValueOnce({ exists: true, id: 'p1', data: () => ({ categoryId: 'c_unrelated' }) });
+        mockFindCouponByCode.mockResolvedValueOnce({
+          code: 'CAT1', type: 'percent', value: 10, appliesTo: 'category', categoryIds: ['c1'], usedCount: 0,
+          startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+        });
+        const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'CAT1' }));
+        expect(response.status).toBe(200);
+        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        expect(orderArg?.discount).toBe(0);
+      });
     });
 
     it('still produces discount: 0, no couponId when no couponCode is sent (backward compatible)', async () => {

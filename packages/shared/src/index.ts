@@ -26,6 +26,7 @@ export * from './search/parse-search-params';
 export * from './pricing/money';
 export * from './pricing/coupon';
 export * from './pricing/gst';
+export * from './pricing/coupon-eligibility';
 export * from './dpi/calculate';
 export * from './cart/merge-cart-items';
 export * from './orders/order-number';
