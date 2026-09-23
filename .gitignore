@@ -1,6 +1,7 @@
 node_modules/
 dist/
 functions/lib/
+services/print-render/lib/
 .next/
 .firebase/
 firebase-debug.log
