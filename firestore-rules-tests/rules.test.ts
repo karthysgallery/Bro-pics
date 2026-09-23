@@ -151,6 +151,39 @@ describe('carts collection', () => {
     const unauth = testEnv.unauthenticatedContext();
     await assertFails(unauth.firestore().doc('carts/user_a').get());
   });
+
+  function validLine(overrides: Record<string, unknown> = {}) {
+    return {
+      variantId: 'var_1',
+      personalizationId: 'pers_1',
+      title: 'Classic Wooden Frame',
+      unitPriceSnapshot: 79900,
+      qty: 2,
+      ...overrides,
+    };
+  }
+
+  it('allows a well-formed cart with items', async () => {
+    const userA = testEnv.authenticatedContext('user_a');
+    await assertSucceeds(userA.firestore().doc('carts/user_a').set({ items: [validLine()] }));
+  });
+
+  it('denies a write whose items field is not a list at all', async () => {
+    const userA = testEnv.authenticatedContext('user_a');
+    await assertFails(userA.firestore().doc('carts/user_a').set({ items: 'not-a-list' }));
+  });
+
+  it('denies more than 50 line items [BE-09] — Firestore rules can bound list size, but not validate each element (no .all()/.map() macro; per-item qty/shape bounds live in create-order instead)', async () => {
+    const userA = testEnv.authenticatedContext('user_a');
+    const items = Array.from({ length: 51 }, (_, i) => validLine({ personalizationId: `pers_${i}` }));
+    await assertFails(userA.firestore().doc('carts/user_a').set({ items }));
+  });
+
+  it('allows exactly 50 line items', async () => {
+    const userA = testEnv.authenticatedContext('user_a');
+    const items = Array.from({ length: 50 }, (_, i) => validLine({ personalizationId: `pers_${i}` }));
+    await assertSucceeds(userA.firestore().doc('carts/user_a').set({ items }));
+  });
 });
 
 describe('customizations collection', () => {

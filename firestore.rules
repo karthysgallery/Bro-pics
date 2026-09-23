@@ -100,8 +100,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The client is trusted for display convenience only — every field
+    // here (including unitPriceSnapshot) is re-derived from the variant
+    // server-side at create-order and NEVER trusted for money (see that
+    // route's own comment). Firestore rules has no per-element predicate
+    // over an arbitrary-length list (no .all()/.map() macro — confirmed
+    // against the real emulator, not assumed), so per-item shape/qty
+    // bounds [BE-09] live in create-order's own isMalformedCartLine
+    // instead; this rule is limited to what rules CAN actually express: a
+    // bound on the list itself, so a client can't grow an unbounded array
+    // into a single document.
     match /carts/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) &&
+        request.resource.data.items is list &&
+        request.resource.data.items.size() <= 50;
     }
 
     match /webhookEvents/{eventId} {

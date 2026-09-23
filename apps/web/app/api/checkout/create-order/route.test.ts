@@ -149,6 +149,18 @@ describe('POST /api/checkout/create-order', () => {
     expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for a malformed cart line (qty above the 20-unit bound) [BE-09] without ever calling Razorpay or the order-number transaction', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockCartDoc.get.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 21 }] }),
+    });
+    const response = await POST(makeRequest({ addressId: 'addr_1' }));
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for a malformed cart line (blank title) without ever calling Razorpay or the order-number transaction', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockCartDoc.get.mockResolvedValueOnce({

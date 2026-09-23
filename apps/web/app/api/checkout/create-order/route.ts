@@ -20,6 +20,13 @@ import {
   type CounterTransaction,
 } from '@bro-pics/shared';
 
+// Matches firestore.rules' carts/{userId} bound exactly [BE-09] — this is
+// the defense-in-depth copy, since the Admin SDK (which this route uses)
+// bypasses Firestore rules entirely. Not a money concern either way
+// (unitPrice is always re-derived from the variant below, never trusted
+// from the cart line), just closing an unbounded-qty/garbage-data path.
+const MAX_LINE_QTY = 20;
+
 function isMalformedCartLine(item: CartLineInput): boolean {
   return (
     typeof item.variantId !== 'string' ||
@@ -31,6 +38,7 @@ function isMalformedCartLine(item: CartLineInput): boolean {
     typeof item.qty !== 'number' ||
     !Number.isInteger(item.qty) ||
     item.qty <= 0 ||
+    item.qty > MAX_LINE_QTY ||
     // previewPath is optional (CartLineInput: `previewPath?: string`) but if
     // present must actually be a string — this also rejects `null`
     // deliberately: the app itself never writes previewPath as null onto a
