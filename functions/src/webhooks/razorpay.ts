@@ -5,7 +5,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   OrderEventSchema,
   orderStatusEvent,
-  buildQueuedPrintJob,
   generateInvoiceNo,
   buildQueuedNotification,
   notificationOutboxId,
@@ -14,6 +13,12 @@ import {
   type OrderStatus,
   type NotificationCategory,
 } from '@bro-pics/shared';
+// Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
+// doc comment for why (a real firebase-admin/firestore import there
+// would break any client bundle this package's barrel ever reaches).
+// This file is Cloud Functions server code, so importing it directly is
+// exactly the intended use.
+import { buildQueuedPrintJob } from '@bro-pics/shared/src/print-jobs/print-jobs';
 
 export interface CustomizationToLock {
   id: string;

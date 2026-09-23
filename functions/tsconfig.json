@@ -6,7 +6,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@bro-pics/shared": ["../packages/shared/src/index.ts"]
+      "@bro-pics/shared": ["../packages/shared/src/index.ts"],
+      "@bro-pics/shared/src/*": ["../packages/shared/src/*"]
     }
   },
   "include": ["src"]

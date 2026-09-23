@@ -1,3 +1,13 @@
+// Server-only: the FieldValue import below is a REAL (value, not type)
+// import of firebase-admin/firestore, which cannot run in a browser.
+// This module is deliberately NOT re-exported from '@bro-pics/shared''s
+// main barrel (index.ts) for exactly that reason — import it directly:
+// '@bro-pics/shared/src/print-jobs/print-jobs'. A barrel re-export here
+// once broke the entire site's client bundle the moment any client
+// component imported anything at all from '@bro-pics/shared' (webpack
+// pulls in this whole module, Node built-ins and all, for every
+// consumer of a barrel it's part of — tree-shaking a single unused named
+// export back out is not something it reliably does across a barrel).
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { PrintJobSchema, type PrintJobStatus } from '../schemas/print-job';
 import { OrderEventSchema } from '../schemas/order-event';

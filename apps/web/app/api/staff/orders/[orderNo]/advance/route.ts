@@ -8,12 +8,16 @@ import { writeNotification } from '../../../../../../lib/notify';
 import {
   OrderEventSchema,
   isValidStatusTransition,
-  buildQueuedPrintJob,
   ManualShippingProvider,
   type OrderStatus,
   type NotificationCategory,
   type ShipmentTracking,
 } from '@bro-pics/shared';
+// Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
+// doc comment for why. This is a Next.js route handler (always
+// server-only, never bundled for the client either way), so importing it
+// directly here is exactly the intended use.
+import { buildQueuedPrintJob } from '@bro-pics/shared/src/print-jobs/print-jobs';
 
 // [BE-20] No real courier API integration exists yet — see
 // ManualShippingProvider's own doc comment. Module-scoped since it's

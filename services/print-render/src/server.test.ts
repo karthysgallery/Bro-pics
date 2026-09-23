@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createServer } from './server';
 import type { RenderJobDependencies } from './render-job';
-import { PrintJobNotLeasableError } from '@bro-pics/shared';
+import { PrintJobNotLeasableError } from '@bro-pics/shared/src/print-jobs/print-jobs';
 
 class NotLeasable extends Error {}
 

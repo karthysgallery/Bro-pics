@@ -39,6 +39,15 @@ export * from './editor-geometry';
 export * from './shipping/shipping-provider';
 export * from './shipping/pincode-zones';
 export * from './print-jobs/backoff';
-export * from './print-jobs/print-jobs';
+// print-jobs/print-jobs.ts is deliberately NOT re-exported from this
+// barrel — see its own top-of-file comment. A real (non-type) import of
+// firebase-admin/firestore anywhere in a module this barrel exports gets
+// pulled into EVERY consumer's bundle, including client components (this
+// broke the whole site's client bundle once a client component imported
+// anything from this package — cart-context.tsx did, via mergeCartItems
+// — discovered live via preview_start while testing BE-34, not by
+// typecheck or the test suite, neither of which catches bundler-level
+// module resolution). Server-only callers import it directly by path:
+// '@bro-pics/shared/src/print-jobs/print-jobs'.
 export * from './notifications/notification-outbox';
 export * from './reconciliation/stuck-orders';

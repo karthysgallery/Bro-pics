@@ -1,5 +1,8 @@
 import express, { type Express } from 'express';
-import { PrintJobNotLeasableError } from '@bro-pics/shared';
+// Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
+// doc comment for why. This is a standalone Cloud Run service, so
+// importing it directly here is exactly the intended use.
+import { PrintJobNotLeasableError } from '@bro-pics/shared/src/print-jobs/print-jobs';
 import { renderPrintJob, type RenderJobDependencies } from './render-job';
 
 /**

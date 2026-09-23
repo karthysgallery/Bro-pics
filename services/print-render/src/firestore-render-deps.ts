@@ -1,7 +1,11 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { leasePrintJob, failPrintJob, completePrintJobAndAdvanceOrder } from '@bro-pics/shared';
 import type { FrameTemplate, Variant } from '@bro-pics/shared';
+// Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
+// doc comment for why. This is a standalone Cloud Run service (never
+// bundled for a browser), so importing it directly here is exactly the
+// intended use.
+import { leasePrintJob, failPrintJob, completePrintJobAndAdvanceOrder } from '@bro-pics/shared/src/print-jobs/print-jobs';
 import { getAdminApp } from './firebase-admin';
 import type { RenderJobDependencies } from './render-job';
 
