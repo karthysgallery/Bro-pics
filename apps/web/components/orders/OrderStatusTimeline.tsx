@@ -5,6 +5,15 @@ const MAIN_STEPS: OrderStatus[] = ['pending_payment', 'paid', 'in_production', '
 const STEP_LABELS: Record<OrderStatus, string> = {
   pending_payment: 'Awaiting payment',
   paid: 'Payment confirmed',
+  // [BE-18] System-driven sub-stages between paid and in_production —
+  // fine-grained enough to be useful in the admin queue, but the
+  // customer-facing stepper below (MAIN_STEPS) collapses all four into
+  // the same 'paid' position rather than adding four more steps for
+  // internal fulfillment plumbing the customer doesn't act on.
+  payment_confirmed: 'Payment confirmed',
+  photo_validation: 'Checking your photos',
+  print_rendering: 'Preparing your print',
+  print_ready: 'Ready to print',
   in_production: 'In production',
   printed_packed: 'Printed & packed',
   shipped: 'Shipped',
@@ -14,11 +23,34 @@ const STEP_LABELS: Record<OrderStatus, string> = {
   replacement_issued: 'Replacement issued',
 };
 
+// Where each real OrderStatus should render in the 6-step customer
+// stepper — every BE-18 sub-stage maps to the same position as 'paid'
+// itself, since none of them represent a customer-visible milestone.
+const STEPPER_POSITION: Record<OrderStatus, OrderStatus> = {
+  pending_payment: 'pending_payment',
+  paid: 'paid',
+  payment_confirmed: 'paid',
+  photo_validation: 'paid',
+  print_rendering: 'paid',
+  print_ready: 'paid',
+  in_production: 'in_production',
+  printed_packed: 'printed_packed',
+  shipped: 'shipped',
+  delivered: 'delivered',
+  cancelled: 'paid',
+  refunded: 'paid',
+  replacement_issued: 'delivered',
+};
+
 // Used on both the customer order-list (a compact chip) and admin queue
 // rows — a single label/colour source so the two never drift.
 export const STATUS_CHIP_STYLES: Record<OrderStatus, string> = {
   pending_payment: 'bg-neutral-100 text-neutral-700',
   paid: 'bg-blue-50 text-blue-700',
+  payment_confirmed: 'bg-blue-50 text-blue-700',
+  photo_validation: 'bg-blue-50 text-blue-700',
+  print_rendering: 'bg-blue-50 text-blue-700',
+  print_ready: 'bg-blue-50 text-blue-700',
   in_production: 'bg-blue-50 text-blue-700',
   printed_packed: 'bg-blue-50 text-blue-700',
   shipped: 'bg-blue-50 text-blue-700',
@@ -62,7 +94,7 @@ export function OrderStatusTimeline({ status }: OrderStatusTimelineProps) {
     );
   }
 
-  const currentIndex = MAIN_STEPS.indexOf(status);
+  const currentIndex = MAIN_STEPS.indexOf(STEPPER_POSITION[status]);
 
   return (
     <ol role="list" aria-label="Order status" className="flex flex-col gap-0">

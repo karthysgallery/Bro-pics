@@ -1,5 +1,7 @@
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { PrintJobSchema, type PrintJobStatus } from '../schemas/print-job';
+import { OrderEventSchema } from '../schemas/order-event';
+import { orderStatusEvent } from '../orders/order-status-event';
 import { printJobId, backoffMinutesAfterAttempt, MAX_PRINT_JOB_ATTEMPTS } from './backoff';
 
 const COLLECTION = 'printJobs';
@@ -27,34 +29,45 @@ interface RawPrintJobFields {
 }
 
 /**
+ * Builds a fresh queued print job's document shape — no Firestore access,
+ * just PrintJobSchema.parse over the right defaults. Factored out of
+ * createPrintJob so a caller that's already inside its own transaction
+ * (e.g. the payment webhook) can transaction.set() this directly instead
+ * of nesting a second db.runTransaction call, which the Admin SDK doesn't
+ * support.
+ */
+export function buildQueuedPrintJob(orderId: string, itemId: string, personalizationId: string) {
+  const now = new Date();
+  return PrintJobSchema.parse({
+    id: printJobId(orderId, itemId),
+    orderId,
+    itemId,
+    personalizationId,
+    status: 'queued',
+    attempts: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
  * Creates a queued print job for one order item, or does nothing if a job
  * for this exact (orderId, itemId) already exists — the deterministic id
- * makes this call idempotent, so a webhook retry or a re-run of the
- * job-creation step for an order never produces duplicate jobs.
+ * makes this call idempotent, so a re-run of the job-creation step for an
+ * order never produces duplicate jobs. Standalone convenience wrapper for
+ * callers that are not already inside a transaction of their own.
  */
 export async function createPrintJob(
   db: Firestore,
   orderId: string,
   itemId: string,
-  customizationId: string
+  personalizationId: string
 ): Promise<void> {
-  const id = printJobId(orderId, itemId);
-  const ref = db.collection(COLLECTION).doc(id);
+  const ref = db.collection(COLLECTION).doc(printJobId(orderId, itemId));
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     if (snap.exists) return;
-    const now = new Date();
-    const job = PrintJobSchema.parse({
-      id,
-      orderId,
-      itemId,
-      customizationId,
-      status: 'queued',
-      attempts: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
-    transaction.set(ref, job);
+    transaction.set(ref, buildQueuedPrintJob(orderId, itemId, personalizationId));
   });
 }
 
@@ -96,12 +109,49 @@ export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationM
   });
 }
 
-export async function completePrintJob(db: Firestore, jobId: string, renderedFilePath: string): Promise<void> {
+/**
+ * Marks one job done, then checks whether every other print job for the
+ * same order is also done — if so [BE-18], the order advances
+ * print_rendering -> print_ready automatically, no staff action needed.
+ * This is the third caller of an order-status transition (after the
+ * webhook and the staff-advance route); it only needs the validity check
+ * (isValidStatusTransition is implicitly satisfied here since
+ * print_rendering -> print_ready is always legal) and the same
+ * event-shape helper, not a full shared transitionOrder() — the read/
+ * write mechanics differ enough per caller (this one fans out to a
+ * sibling-jobs query first) that forcing one orchestrator on top wouldn't
+ * remove real duplication, just relocate it.
+ */
+export async function completePrintJobAndAdvanceOrder(db: Firestore, jobId: string, renderedFilePath: string): Promise<void> {
   const ref = db.collection(COLLECTION).doc(jobId);
-  await ref.update({
-    status: 'done' satisfies PrintJobStatus,
-    renderedFilePath,
-    updatedAt: new Date(),
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) return;
+    const raw = snap.data() as { orderId: string };
+    const orderRef = db.collection('orders').doc(raw.orderId);
+
+    // Reads-before-writes: every read this transaction needs, including
+    // the conditional order read, happens before the first write below.
+    const siblingsSnap = await transaction.get(db.collection(COLLECTION).where('orderId', '==', raw.orderId));
+    const allOthersDone = siblingsSnap.docs.every(
+      (doc) => doc.id === jobId || (doc.data() as { status: string }).status === 'done'
+    );
+    const orderSnap = allOthersDone ? await transaction.get(orderRef) : null;
+
+    transaction.update(ref, {
+      status: 'done' satisfies PrintJobStatus,
+      renderedFilePath,
+      updatedAt: new Date(),
+    });
+
+    if (orderSnap) {
+      const orderStatus = (orderSnap.data() as { status?: string } | undefined)?.status;
+      if (orderStatus === 'print_rendering') {
+        transaction.update(orderRef, { status: 'print_ready' });
+        const eventRef = orderRef.collection('events').doc();
+        transaction.set(eventRef, OrderEventSchema.parse({ ...orderStatusEvent('print_ready', 'system'), id: eventRef.id }));
+      }
+    }
   });
 }
 

@@ -5,7 +5,13 @@ import { getStaffUserIdFromAuthHeader } from '../../../../../../lib/verify-id-to
 import { findOrderByOrderNo } from '../../../../../../lib/order-lookup';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../../lib/notify';
-import { OrderEventSchema, isValidStatusTransition, type OrderStatus, type NotificationCategory } from '@bro-pics/shared';
+import {
+  OrderEventSchema,
+  isValidStatusTransition,
+  buildQueuedPrintJob,
+  type OrderStatus,
+  type NotificationCategory,
+} from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderNo: string }>;
@@ -87,6 +93,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
         );
       }
 
+      // [BE-18] A red-tier order holds at photo_validation until staff
+      // manually advances it — this is that path's equivalent of the
+      // webhook's own auto-pass: reaching print_rendering always means
+      // "queue a print job per item," whichever caller got it there. The
+      // items read must happen here, before any write below (Firestore's
+      // reads-before-writes rule), even though it's only used when
+      // status === 'print_rendering'.
+      const itemsSnap =
+        status === 'print_rendering' ? await transaction.get(orderRef.collection('items')) : null;
+
       const event = OrderEventSchema.parse({
         id: eventRef.id,
         status,
@@ -98,6 +114,14 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       });
       transaction.set(eventRef, event);
       transaction.update(orderRef, orderUpdate);
+
+      if (itemsSnap) {
+        for (const itemDoc of itemsSnap.docs) {
+          const personalizationId = (itemDoc.data() as { personalizationId: string }).personalizationId;
+          const job = buildQueuedPrintJob(found.id, itemDoc.id, personalizationId);
+          transaction.set(db.collection('printJobs').doc(job.id), job);
+        }
+      }
     });
   } catch (error) {
     if (error instanceof StatusConflictError) {

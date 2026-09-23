@@ -27,6 +27,7 @@ export * from './dpi/calculate';
 export * from './cart/merge-cart-items';
 export * from './orders/order-number';
 export * from './orders/status-transitions';
+export * from './orders/order-status-event';
 export * from './orders/return-status-transitions';
 export * from './editor-geometry';
 export * from './print-jobs/backoff';

@@ -2,7 +2,18 @@ import { isDuplicateWebhookEvent, markWebhookProcessed, type WebhookTransaction 
 import { onRequest } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { OrderEventSchema, type OrderEvent } from '@bro-pics/shared';
+import { OrderEventSchema, orderStatusEvent, buildQueuedPrintJob, type OrderEvent, type OrderStatus } from '@bro-pics/shared';
+
+export interface CustomizationToLock {
+  id: string;
+  personalizationId: string;
+  dpiBand?: 'green' | 'amber' | 'red';
+}
+
+export interface OrderItemRef {
+  itemId: string;
+  personalizationId: string;
+}
 
 export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
@@ -13,12 +24,15 @@ export interface PaymentEventTransaction {
   // customer abandons at the Razorpay modal (stays pending_payment
   // forever) never burns a use of the coupon.
   incrementCouponUsedCount(couponId: string): void;
-  // [BE-10/BE-12] Reads the order's items' personalizationIds, then the
-  // matching Customization docs currently in 'ordered' status (set by
-  // create-order when the order was placed) — a read, called before any
-  // write in handlePaymentCaptured, same "reads before writes" transaction
-  // rule the rest of this file already follows.
-  findCustomizationIdsToLock(orderId: string): Promise<string[]>;
+  // [BE-10/BE-12/BE-18] Reads the order's items' personalizationIds, then
+  // the matching Customization docs currently in 'ordered' status (set by
+  // create-order when the order was placed). Now also returns
+  // personalizationId + dpiBand per doc so handlePaymentCaptured can both
+  // lock them AND classify photo_validation per item.
+  findCustomizationsToLock(orderId: string): Promise<CustomizationToLock[]>;
+  // [BE-18] The order's line items (itemId + personalizationId) — needed
+  // to queue one print job per item once photo_validation passes.
+  findOrderItems(orderId: string): Promise<OrderItemRef[]>;
   markPaymentCaptured(orderId: string, razorpayPaymentId: string): void;
   markPaymentFailed(orderId: string): void;
   clearCart(userId: string): void;
@@ -27,7 +41,17 @@ export interface PaymentEventTransaction {
   // this order was built from are frozen — an edit attempt via
   // PUT /api/customizations/{id} 409s from here on.
   lockCustomizations(customizationIds: string[]): void;
+  // [BE-18] Advances the order's own status field (payment_confirmed,
+  // photo_validation, print_rendering — never a terminal/manual state,
+  // those only ever come from the staff-advance route).
+  setOrderStatus(orderId: string, status: OrderStatus): void;
+  // [BE-18] Writes a queued printJobs/{orderId}_{itemId} doc directly in
+  // this same transaction — NOT via print-jobs.ts's createPrintJob, which
+  // opens its own db.runTransaction and can't be nested inside this one.
+  queuePrintJob(orderId: string, itemId: string, personalizationId: string): void;
 }
+
+const DPI_SEVERITY: Record<'green' | 'amber' | 'red', number> = { green: 0, amber: 1, red: 2 };
 
 /**
  * Firestore transactions require every read to finish before any write —
@@ -47,31 +71,55 @@ export async function handlePaymentCaptured(
   const order = await paymentTx.findOrderByRazorpayOrderId(params.razorpayOrderId);
   if (!order) return;
 
-  // Guards against a genuinely DIFFERENT payment.captured event (a
-  // different Razorpay payment id) arriving for an order that has already
-  // settled to paid. isDuplicateWebhookEvent above only protects against a
-  // REDELIVERY of the same event id — this protects against a second,
-  // distinct capture event for an already-paid order, which would
-  // otherwise clearCart() again and silently wipe items the customer
-  // added after their previous order already settled.
-  if (order.status === 'paid') return;
+  // [BE-18] paid is no longer a terminal state — this same call advances
+  // it through payment_confirmed and beyond before returning. So the
+  // guard against reprocessing a settled order can no longer check for
+  // status === 'paid' specifically (a genuinely later, distinct capture
+  // event redelivered for this order would see payment_confirmed or
+  // further by the time it's read here, never 'paid'). Guarding on
+  // "anything other than the pre-payment state" catches every one of
+  // those later statuses in one check, same as the original 'paid' guard
+  // did for its narrower state space.
+  if (order.status !== 'pending_payment') return;
 
-  const customizationIdsToLock = await paymentTx.findCustomizationIdsToLock(order.id);
+  const customizationsToLock = await paymentTx.findCustomizationsToLock(order.id);
+  const orderItems = await paymentTx.findOrderItems(order.id);
 
   paymentTx.markPaymentCaptured(order.id, params.razorpayPaymentId);
-  paymentTx.recordEvent(order.id, {
-    status: 'paid',
-    note: null,
-    courier: null,
-    awbNumber: null,
-    createdAt: new Date().toISOString(),
-    createdBy: 'system',
-  });
+  paymentTx.recordEvent(order.id, orderStatusEvent('paid', 'system'));
   paymentTx.clearCart(order.userId);
-  paymentTx.lockCustomizations(customizationIdsToLock);
+  paymentTx.lockCustomizations(customizationsToLock.map((c) => c.id));
   if (order.couponId) {
     paymentTx.incrementCouponUsedCount(order.couponId);
   }
+
+  paymentTx.setOrderStatus(order.id, 'payment_confirmed');
+  paymentTx.recordEvent(order.id, orderStatusEvent('payment_confirmed', 'system'));
+
+  paymentTx.setOrderStatus(order.id, 'photo_validation');
+  paymentTx.recordEvent(order.id, orderStatusEvent('photo_validation', 'system'));
+
+  // Worst dpiBand across every locked customization, grouped by which
+  // item they belong to isn't needed for the go/no-go decision itself —
+  // ANY red-tier slot anywhere in the order holds the WHOLE order at
+  // photo_validation for staff. Per-item partial progress (some items'
+  // print jobs queued while others wait on a red slot) would add real
+  // complexity for a fulfillment nuance nothing currently depends on —
+  // staff reviews a held order as one unit via the existing admin UI.
+  const anyRed = customizationsToLock.some((c) => c.dpiBand === 'red');
+
+  if (!anyRed) {
+    for (const item of orderItems) {
+      paymentTx.queuePrintJob(order.id, item.itemId, item.personalizationId);
+    }
+    paymentTx.setOrderStatus(order.id, 'print_rendering');
+    paymentTx.recordEvent(order.id, orderStatusEvent('print_rendering', 'system'));
+  }
+  // anyRed: order stays at photo_validation. Staff advances it to
+  // print_rendering via the same staff-advance route used for every
+  // other manual transition, which queues the print jobs itself at that
+  // point (see apps/web/app/api/staff/orders/[orderNo]/advance/route.ts).
+
   markWebhookProcessed(webhookTx, params.eventId, order.id);
 }
 
@@ -80,10 +128,11 @@ export async function handlePaymentCaptured(
  * payment.captured and payment.failed deliveries for the same order are
  * not guaranteed to arrive in order — a failed-then-retried-successfully
  * payment can have its payment.failed webhook redelivered (or delivered
- * late) after payment.captured already flipped the order to paid. Both
- * handlers now carry two independent guards: isDuplicateWebhookEvent /
- * event-id tracking protects against reprocessing the *same* event twice,
- * while this order.status === 'paid' check (mirrored in
+ * late) after payment.captured already flipped the order past
+ * pending_payment. Both handlers now carry two independent guards:
+ * isDuplicateWebhookEvent / event-id tracking protects against
+ * reprocessing the *same* event twice, while this
+ * order.status !== 'pending_payment' check (mirrored in
  * handlePaymentCaptured above) is a current-state check that protects
  * against a *different*, stale or out-of-order event undoing — or
  * redundantly repeating side effects on — a settled, correct outcome.
@@ -94,7 +143,7 @@ export async function handlePaymentFailed(
 ): Promise<void> {
   const order = await paymentTx.findOrderByRazorpayOrderId(params.razorpayOrderId);
   if (!order) return;
-  if (order.status === 'paid') return;
+  if (order.status !== 'pending_payment') return;
   paymentTx.markPaymentFailed(order.id);
 }
 
@@ -129,7 +178,7 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       const data = doc.data() as { userId: string; status: string; couponId?: string };
       return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId };
     },
-    async findCustomizationIdsToLock(orderId) {
+    async findCustomizationsToLock(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
       const personalizationIds = [
         ...new Set(itemsSnapshot.docs.map((doc) => (doc.data() as { personalizationId: string }).personalizationId)),
@@ -148,8 +197,20 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
         chunks.map((chunk) => transaction.get(db.collection('customizations').where('personalizationId', 'in', chunk)))
       );
       return snapshots.flatMap((snapshot) =>
-        snapshot.docs.filter((doc) => (doc.data() as { status?: string }).status === 'ordered').map((doc) => doc.id)
+        snapshot.docs
+          .filter((doc) => (doc.data() as { status?: string }).status === 'ordered')
+          .map((doc) => {
+            const data = doc.data() as { personalizationId: string; dpiBand?: 'green' | 'amber' | 'red' };
+            return { id: doc.id, personalizationId: data.personalizationId, dpiBand: data.dpiBand };
+          })
       );
+    },
+    async findOrderItems(orderId) {
+      const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
+      return itemsSnapshot.docs.map((doc) => ({
+        itemId: doc.id,
+        personalizationId: (doc.data() as { personalizationId: string }).personalizationId,
+      }));
     },
     markPaymentCaptured(orderId, razorpayPaymentId) {
       transaction.update(db.collection('orders').doc(orderId), {
@@ -175,6 +236,13 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     },
     incrementCouponUsedCount(couponId) {
       transaction.update(db.collection('coupons').doc(couponId), { usedCount: FieldValue.increment(1) });
+    },
+    setOrderStatus(orderId, status) {
+      transaction.update(db.collection('orders').doc(orderId), { status });
+    },
+    queuePrintJob(orderId, itemId, personalizationId) {
+      const job = buildQueuedPrintJob(orderId, itemId, personalizationId);
+      transaction.set(db.collection('printJobs').doc(job.id), job);
     },
   };
 }

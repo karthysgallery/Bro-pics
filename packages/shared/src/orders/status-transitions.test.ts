@@ -71,12 +71,50 @@ describe('isValidStatusTransition — replacement_issued branch', () => {
 describe('isValidStatusTransition — terminal states', () => {
   it('rejects every outbound transition from cancelled, refunded, and replacement_issued', () => {
     const terminal: OrderStatus[] = ['cancelled', 'refunded', 'replacement_issued'];
-    const anyOther: OrderStatus[] = ['pending_payment', 'paid', 'in_production', 'printed_packed', 'shipped', 'delivered'];
+    const anyOther: OrderStatus[] = [
+      'pending_payment',
+      'paid',
+      'payment_confirmed',
+      'photo_validation',
+      'print_rendering',
+      'print_ready',
+      'in_production',
+      'printed_packed',
+      'shipped',
+      'delivered',
+    ];
     for (const from of terminal) {
       for (const to of [...anyOther, ...terminal]) {
         if (from === to) continue;
         expect(isValidStatusTransition(from, to)).toBe(false);
       }
+    }
+  });
+});
+
+describe('isValidStatusTransition — payment-to-print pipeline [BE-18]', () => {
+  it('allows the fully automatic green/yellow path step by step', () => {
+    expect(isValidStatusTransition('paid', 'payment_confirmed')).toBe(true);
+    expect(isValidStatusTransition('payment_confirmed', 'photo_validation')).toBe(true);
+    expect(isValidStatusTransition('photo_validation', 'print_rendering')).toBe(true);
+    expect(isValidStatusTransition('print_rendering', 'print_ready')).toBe(true);
+    expect(isValidStatusTransition('print_ready', 'in_production')).toBe(true);
+  });
+
+  it('still allows paid straight to in_production, for orders that predate this chain', () => {
+    expect(isValidStatusTransition('paid', 'in_production')).toBe(true);
+  });
+
+  it('rejects skipping photo_validation entirely', () => {
+    expect(isValidStatusTransition('payment_confirmed', 'print_rendering')).toBe(false);
+    expect(isValidStatusTransition('payment_confirmed', 'print_ready')).toBe(false);
+  });
+
+  it('allows cancelled/refunded from every step in the new chain', () => {
+    const steps: OrderStatus[] = ['payment_confirmed', 'photo_validation', 'print_rendering', 'print_ready'];
+    for (const from of steps) {
+      expect(isValidStatusTransition(from, 'cancelled')).toBe(true);
+      expect(isValidStatusTransition(from, 'refunded')).toBe(true);
     }
   });
 });

@@ -14,7 +14,11 @@ export const PrintJobSchema = z.object({
   id: z.string(),
   orderId: z.string(),
   itemId: z.string(),
-  customizationId: z.string(),
+  // Groups every slot's Customization doc for this item (a multi-slot
+  // collage item has N Customization docs, one per slotIndex, all
+  // sharing one personalizationId) — never a single customizationId,
+  // since one print job renders the whole item, not one slot.
+  personalizationId: z.string(),
   status: PrintJobStatusSchema,
   attempts: z.number().int().nonnegative(),
   // Set on creation and after every failed attempt; a lease is only

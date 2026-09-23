@@ -203,6 +203,39 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     expect(mockTransactionUpdate).not.toHaveBeenCalled();
   });
 
+  it('[BE-18] queues one print job per order item when a red-tier order is manually advanced to print_rendering', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'photo_validation', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    // First get(): the order's own status re-read. Second get(): the
+    // items subcollection, only fetched because status === 'print_rendering'.
+    mockTransactionGet
+      .mockResolvedValueOnce({ data: () => ({ status: 'photo_validation' }) })
+      .mockResolvedValueOnce({
+        docs: [
+          { id: 'item_1', data: () => ({ personalizationId: 'p1' }) },
+          { id: 'item_2', data: () => ({ personalizationId: 'p2' }) },
+        ],
+      });
+
+    const response = await POST(
+      makeRequest({ status: 'print_rendering' }),
+      { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'order_1', itemId: 'item_1', personalizationId: 'p1', status: 'queued' })
+    );
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'order_1', itemId: 'item_2', personalizationId: 'p2', status: 'queued' })
+    );
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
     const response = await POST(makeRequest({ status: 'paid' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });

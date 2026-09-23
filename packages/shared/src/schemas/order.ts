@@ -8,6 +8,17 @@ export const DeliveryMethodSchema = z.enum(['standard', 'express']);
 export const OrderStatusSchema = z.enum([
   'pending_payment',
   'paid',
+  // System-driven sub-stages between payment and physical production
+  // [BE-18]: payment_confirmed (webhook has settled the payment side
+  // effects) -> photo_validation (every locked customization checked;
+  // green/yellow auto-advances past this, red holds here for staff) ->
+  // print_rendering (print jobs queued/rendering) -> print_ready (every
+  // job for the order reached 'done'). Staff then manually starts
+  // in_production as before.
+  'payment_confirmed',
+  'photo_validation',
+  'print_rendering',
+  'print_ready',
   'in_production',
   'printed_packed',
   'shipped',

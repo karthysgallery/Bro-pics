@@ -128,5 +128,11 @@ service cloud.firestore {
     match /counters/{id} {
       allow read, write: if false;
     }
+
+    // [BE-17/BE-18] Admin-SDK-only, same as webhookEvents/reconciliations
+    // above — no client ever reads or writes a print job directly.
+    match /printJobs/{jobId} {
+      allow read, write: if false;
+    }
   }
 }

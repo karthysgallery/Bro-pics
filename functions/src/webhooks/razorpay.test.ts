@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handlePaymentCaptured, handlePaymentFailed } from './razorpay';
-import type { PaymentEventTransaction } from './razorpay';
+import type { PaymentEventTransaction, CustomizationToLock, OrderItemRef } from './razorpay';
 import type { WebhookTransaction } from './idempotency';
 
 function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
@@ -12,17 +12,21 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
 
 function makePaymentTx(
   order: { id: string; userId: string; status: string; couponId?: string } | null,
-  customizationIdsToLock: string[] = []
+  customizationsToLock: CustomizationToLock[] = [],
+  orderItems: OrderItemRef[] = []
 ): PaymentEventTransaction {
   return {
     findOrderByRazorpayOrderId: vi.fn().mockResolvedValue(order),
-    findCustomizationIdsToLock: vi.fn().mockResolvedValue(customizationIdsToLock),
+    findCustomizationsToLock: vi.fn().mockResolvedValue(customizationsToLock),
+    findOrderItems: vi.fn().mockResolvedValue(orderItems),
     markPaymentCaptured: vi.fn(),
     markPaymentFailed: vi.fn(),
     clearCart: vi.fn(),
     recordEvent: vi.fn(),
     lockCustomizations: vi.fn(),
     incrementCouponUsedCount: vi.fn(),
+    setOrderStatus: vi.fn(),
+    queuePrintJob: vi.fn(),
   };
 }
 
@@ -46,9 +50,12 @@ describe('handlePaymentCaptured', () => {
     expect(webhookTx.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ orderId: 'order_1' }));
   });
 
-  it('locks every customization returned by findCustomizationIdsToLock [BE-10/BE-12]', async () => {
+  it('locks every customization returned by findCustomizationsToLock [BE-10/BE-12]', async () => {
     const webhookTx = makeWebhookTx(false);
-    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, ['cust_1', 'cust_2']);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, [
+      { id: 'cust_1', personalizationId: 'p1', dpiBand: 'green' },
+      { id: 'cust_2', personalizationId: 'p1', dpiBand: 'green' },
+    ]);
 
     await handlePaymentCaptured(webhookTx, paymentTx, {
       eventId: 'pay_abc',
@@ -87,7 +94,9 @@ describe('handlePaymentCaptured', () => {
 
   it('does not call lockCustomizations when the order was already processed', async () => {
     const webhookTx = makeWebhookTx(true);
-    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, ['cust_1']);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment' }, [
+      { id: 'cust_1', personalizationId: 'p1', dpiBand: 'green' },
+    ]);
 
     await handlePaymentCaptured(webhookTx, paymentTx, {
       eventId: 'pay_abc',
@@ -127,7 +136,7 @@ describe('handlePaymentCaptured', () => {
     expect(paymentTx.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('does nothing when the order is already paid (a different, distinct capture event for an already-settled order)', async () => {
+  it('does nothing when the order is already past pending_payment (a different, distinct capture event for an already-settled order)', async () => {
     const webhookTx = makeWebhookTx(false);
     const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'paid' });
 
@@ -141,6 +150,60 @@ describe('handlePaymentCaptured', () => {
     expect(paymentTx.clearCart).not.toHaveBeenCalled();
     expect(paymentTx.recordEvent).not.toHaveBeenCalled();
     expect(webhookTx.set).not.toHaveBeenCalled();
+  });
+
+  describe('[BE-18] photo_validation classification', () => {
+    it('auto-advances straight through to print_rendering and queues one print job per item when every customization is green/yellow', async () => {
+      const webhookTx = makeWebhookTx(false);
+      const paymentTx = makePaymentTx(
+        { id: 'order_1', userId: 'user_1', status: 'pending_payment' },
+        [
+          { id: 'cust_1', personalizationId: 'p1', dpiBand: 'green' },
+          { id: 'cust_2', personalizationId: 'p2', dpiBand: 'amber' },
+        ],
+        [
+          { itemId: 'item_1', personalizationId: 'p1' },
+          { itemId: 'item_2', personalizationId: 'p2' },
+        ]
+      );
+
+      await handlePaymentCaptured(webhookTx, paymentTx, {
+        eventId: 'pay_abc',
+        razorpayOrderId: 'order_rzp_1',
+        razorpayPaymentId: 'pay_abc',
+      });
+
+      expect(paymentTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'payment_confirmed');
+      expect(paymentTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'photo_validation');
+      expect(paymentTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'print_rendering');
+      expect(paymentTx.queuePrintJob).toHaveBeenCalledWith('order_1', 'item_1', 'p1');
+      expect(paymentTx.queuePrintJob).toHaveBeenCalledWith('order_1', 'item_2', 'p2');
+    });
+
+    it('holds at photo_validation and queues no print jobs when any customization is red-tier', async () => {
+      const webhookTx = makeWebhookTx(false);
+      const paymentTx = makePaymentTx(
+        { id: 'order_1', userId: 'user_1', status: 'pending_payment' },
+        [
+          { id: 'cust_1', personalizationId: 'p1', dpiBand: 'green' },
+          { id: 'cust_2', personalizationId: 'p2', dpiBand: 'red' },
+        ],
+        [
+          { itemId: 'item_1', personalizationId: 'p1' },
+          { itemId: 'item_2', personalizationId: 'p2' },
+        ]
+      );
+
+      await handlePaymentCaptured(webhookTx, paymentTx, {
+        eventId: 'pay_abc',
+        razorpayOrderId: 'order_rzp_1',
+        razorpayPaymentId: 'pay_abc',
+      });
+
+      expect(paymentTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'photo_validation');
+      expect(paymentTx.setOrderStatus).not.toHaveBeenCalledWith('order_1', 'print_rendering');
+      expect(paymentTx.queuePrintJob).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -160,7 +223,7 @@ describe('handlePaymentFailed', () => {
     expect(paymentTx.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('does nothing when the order is already paid (out-of-order/redelivered webhook)', async () => {
+  it('does nothing when the order is already past pending_payment (out-of-order/redelivered webhook)', async () => {
     const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'paid' });
     await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_1' });
     expect(paymentTx.markPaymentFailed).not.toHaveBeenCalled();
