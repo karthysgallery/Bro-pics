@@ -48,5 +48,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   await storageFile.save(probed.strippedBuffer, { contentType: probed.mime });
   const [signedUrl] = await storageFile.getSignedUrl({ action: 'read', expires: Date.now() + 1000 * 60 * 60 });
 
-  return NextResponse.json({ previewUrl: signedUrl }, { status: 200 });
+  // `previewPath` is what callers should persist (Customization, cart line,
+  // order item); `previewUrl` is a freshly-signed, never-persisted URL for
+  // immediate display right after this upload (e.g. the cart drawer's
+  // thumbnail in the same session it was just added).
+  return NextResponse.json({ previewPath: storagePath, previewUrl: signedUrl }, { status: 200 });
 }

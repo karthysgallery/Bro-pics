@@ -7,7 +7,7 @@ export interface PricedCartLine {
   title: string;
   unitPrice: number;
   qty: number;
-  previewUrl: string | null;
+  previewPath: string | null;
 }
 
 export interface UnavailableLine {
@@ -20,7 +20,7 @@ export interface CartLineInput {
   personalizationId: string;
   title: string;
   qty: number;
-  previewUrl?: string;
+  previewPath?: string;
 }
 
 /**
@@ -59,7 +59,7 @@ export function priceCartLines(
       title: item.title,
       unitPrice: variant.price,
       qty: item.qty,
-      previewUrl: item.previewUrl ?? null,
+      previewPath: item.previewPath ?? null,
     });
   }
 

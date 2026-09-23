@@ -46,7 +46,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 /**
  * Single-item merge for addItem: on a match (same variantId AND
- * personalizationId), the INCOMING item's title/previewUrl/unitPriceSnapshot
+ * personalizationId), the INCOMING item's title/previewPath/unitPriceSnapshot
  * win and only qty is summed — matching mergeCartItems' documented contract
  * (Task 2), since incoming is always the more recently-added data.
  */

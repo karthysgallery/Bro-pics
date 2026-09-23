@@ -28,7 +28,8 @@ export const CustomizationSchema = z.object({
     .optional(),
   clipartId: z.string().optional(),
   effectiveDpi: z.number().nonnegative(),
-  previewUrl: z.string().optional(),
+  // Storage object paths, never signed URLs — see Upload.originalPath.
+  previewPath: z.string().optional(),
   // Pins the exact FrameTemplate.version this customization was built
   // against — never the "current" template — so a later template edit
   // (which creates a new version doc rather than mutating this one) can
@@ -37,7 +38,7 @@ export const CustomizationSchema = z.object({
   // Populated by the print-render pipeline once the final, authoritative
   // 300 DPI print file has been produced server-side (see the backend
   // requirements doc) — undefined until renderStatus reaches 'done'.
-  renderedFileUrl: z.string().optional(),
+  renderedFilePath: z.string().optional(),
   renderStatus: z.enum(['pending', 'rendering', 'done', 'failed']),
 });
 

@@ -254,7 +254,10 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         headers: { 'X-Session-Id': sessionId },
         body: formData,
       });
-      const upload: Upload = await res.json();
+      // POST /api/uploads returns the persisted Upload doc (originalPath)
+      // plus a freshly-signed, never-persisted originalUrl for immediate
+      // canvas display — see that route for why the two are kept separate.
+      const upload: Upload & { originalUrl: string } = await res.json();
 
       if (!res.ok || upload.status === 'rejected') {
         setUploadError("We couldn't process this photo — please try a different file.");
@@ -374,7 +377,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     });
   };
 
-  const handleAddToCart = async (quantity: number, onDone: (personalizationId: string, previewUrl?: string) => void) => {
+  const handleAddToCart = async (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => {
     if (submitting || !selectedVariant || !template) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -385,8 +388,10 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     // One shared preview for the whole personalization (every slot now
     // renders onto the same persistent canvas) rather than one capture
     // per slot — uploaded once and reused as every slot's Customization
-    // doc's previewUrl, and as the cart line's own thumbnail.
-    let sharedPreviewUrl: string | undefined;
+    // doc's previewPath, and as the cart line's own thumbnail (resolved to
+    // a display URL on demand — see lib/resolve-media-url.ts — never
+    // persisted as a URL, which would expire in an hour).
+    let sharedPreviewPath: string | undefined;
     if (previewDataUrl) {
       try {
         const previewRes = await fetch('/api/uploads/preview', {
@@ -396,7 +401,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         });
         if (previewRes.ok) {
           const previewBody = await previewRes.json();
-          if (typeof previewBody.previewUrl === 'string') sharedPreviewUrl = previewBody.previewUrl;
+          if (typeof previewBody.previewPath === 'string') sharedPreviewPath = previewBody.previewPath;
         }
       } catch {
         // Non-fatal — a failed preview export/upload must never block
@@ -435,7 +440,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
             transformJson: { scale: slot.scale, offsetX: slot.offsetX, offsetY: slot.offsetY, rotationDeg: slot.rotationDeg, cropRect },
             templateVersion: template.version,
             ...(selectedClipartId && { clipartId: selectedClipartId }),
-            previewUrl: sharedPreviewUrl,
+            previewPath: sharedPreviewPath,
             renderStatus: 'pending',
             ...(textFieldsJson && Object.keys(textFieldsJson).length > 0 && { textFieldsJson }),
           }),
@@ -443,7 +448,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         if (!res.ok) throw new Error(`Failed to save slot ${slotIndex + 1}`);
       }
 
-      onDone(personalizationId, sharedPreviewUrl);
+      onDone(personalizationId, sharedPreviewPath);
       setSlots(new Map());
       setTextFields(new Map());
       setSelectedClipartId(null);

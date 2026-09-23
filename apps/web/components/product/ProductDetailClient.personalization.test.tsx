@@ -420,7 +420,7 @@ describe('ProductDetailClient — inline personalization', () => {
     // Add to Cart is clicked — just like the real canvas — and
     // handleAddToCart uploads that shared preview via /api/uploads/preview
     // before posting each slot to /api/customizations.
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ previewUrl: '/preview.jpg' }) } as Response); // /api/uploads/preview
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ previewPath: 'uploads/sess/previews/p1/slot-0.png' }) } as Response); // /api/uploads/preview
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response); // /api/customizations
 
     renderProduct(makeProduct(), [variant], [makeTemplate({ version: 3 })]);

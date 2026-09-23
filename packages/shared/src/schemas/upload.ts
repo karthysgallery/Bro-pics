@@ -4,7 +4,9 @@ export const UploadSchema = z.object({
   id: z.string(),
   sessionId: z.string().min(1),
   userId: z.string().min(1).optional(),
-  originalUrl: z.string().min(1),
+  // A Storage object path, never a signed URL — URLs expire; paths don't.
+  // Clients resolve a display URL on demand via GET /api/media/url.
+  originalPath: z.string().min(1),
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),
   mime: z.string().min(1),

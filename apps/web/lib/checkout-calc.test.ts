@@ -28,7 +28,7 @@ const cartLine = {
   personalizationId: 'pers_1',
   title: 'Classic Wooden Frame — 8x12 in',
   qty: 2,
-  previewUrl: 'https://example.com/preview.png',
+  previewPath: 'uploads/sess_1/previews/pers_1/slot-0.png',
 };
 
 describe('priceCartLines', () => {
@@ -44,16 +44,16 @@ describe('priceCartLines', () => {
         title: 'Classic Wooden Frame — 8x12 in',
         unitPrice: 79900,
         qty: 2,
-        previewUrl: 'https://example.com/preview.png',
+        previewPath: 'uploads/sess_1/previews/pers_1/slot-0.png',
       },
     ]);
   });
 
-  it('defaults previewUrl to null when the cart line has none', () => {
+  it('defaults previewPath to null when the cart line has none', () => {
     const variantsById = new Map([['var_1', makeVariant()]]);
-    const { previewUrl: _drop, ...lineWithoutPreview } = cartLine;
+    const { previewPath: _drop, ...lineWithoutPreview } = cartLine;
     const { priced } = priceCartLines([lineWithoutPreview], variantsById);
-    expect(priced[0].previewUrl).toBeNull();
+    expect(priced[0].previewPath).toBeNull();
   });
 
   it('flags a line as unavailable when the variant is not found', () => {
@@ -88,8 +88,8 @@ describe('priceCartLines', () => {
 describe('calculateSubtotal', () => {
   it('sums unitPrice * qty across all priced lines', () => {
     const priced = [
-      { variantId: 'v1', productId: 'p1', personalizationId: 'pers_1', title: 'A', unitPrice: 1000, qty: 2, previewUrl: null },
-      { variantId: 'v2', productId: 'p2', personalizationId: 'pers_2', title: 'B', unitPrice: 500, qty: 3, previewUrl: null },
+      { variantId: 'v1', productId: 'p1', personalizationId: 'pers_1', title: 'A', unitPrice: 1000, qty: 2, previewPath: null },
+      { variantId: 'v2', productId: 'p2', personalizationId: 'pers_2', title: 'B', unitPrice: 500, qty: 3, previewPath: null },
     ];
     expect(calculateSubtotal(priced)).toBe(1000 * 2 + 500 * 3);
   });

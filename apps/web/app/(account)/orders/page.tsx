@@ -10,6 +10,7 @@ import { STATUS_CHIP_STYLES, statusLabel } from '../../../components/orders/Orde
 import { PageSkeleton } from '../../../components/ui/Skeleton';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { Card } from '../../../components/ui/Card';
+import { resolveMediaUrl, getIdTokenSafe } from '../../../lib/resolve-media-url';
 import type { Order, OrderItem } from '@bro-pics/shared';
 
 function formatPaise(paise: number): string {
@@ -31,15 +32,20 @@ export default function OrdersPage() {
       const loaded = snapshot.docs.map((d) => ({ id: d.id, data: d.data() as Order }));
       setOrders(loaded);
 
-      // One preview per order (its first line item's previewUrl) — a
-      // best-effort thumbnail, so any failure here just leaves that order
-      // without one rather than blocking the list itself from rendering.
+      // One preview per order (its first line item's previewPath, resolved
+      // to a fresh signed URL) — a best-effort thumbnail, so any failure
+      // here just leaves that order without one rather than blocking the
+      // list itself from rendering. previewPath is a Storage object path,
+      // never a signed URL — a URL minted at order-placement time and
+      // reused here would be expired for any order older than an hour.
+      const idToken = await getIdTokenSafe(user);
       const entries = await Promise.all(
         loaded.map(async ({ id }) => {
           try {
             const itemsSnapshot = await getDocs(collection(db, 'orders', id, 'items'));
             const firstItem = itemsSnapshot.docs[0]?.data() as OrderItem | undefined;
-            return [id, firstItem?.previewUrl ?? null] as const;
+            if (!firstItem?.previewPath) return [id, null] as const;
+            return [id, await resolveMediaUrl(firstItem.previewPath, idToken)] as const;
           } catch {
             return [id, null] as const;
           }

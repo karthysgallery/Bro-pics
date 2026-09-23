@@ -67,7 +67,7 @@ interface BuyBoxProps {
   personalizationReason?: string;
   submitting: boolean;
   submitError: string | null;
-  onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewUrl?: string) => void) => void;
+  onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => void;
 }
 
 export function BuyBox({
@@ -116,14 +116,14 @@ export function BuyBox({
 
   const handleAddToCart = () => {
     if (!selectedVariant || !onAddToCart) return;
-    onAddToCart(quantity, (personalizationId, previewUrl) => {
+    onAddToCart(quantity, (personalizationId, previewPath) => {
       addItem({
         variantId: selectedVariant.id,
         personalizationId,
         title: `${product.title} — ${selectedVariant.sizeLabel}`,
         unitPriceSnapshot: selectedVariant.price,
         qty: quantity,
-        previewUrl,
+        previewPath,
       });
     });
   };

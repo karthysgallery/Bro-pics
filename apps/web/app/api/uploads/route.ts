@@ -69,7 +69,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     id: uploadId,
     sessionId,
     ...(userId && { userId }),
-    originalUrl: signedUrl,
+    originalPath: storagePath,
     widthPx: probed.widthPx,
     heightPx: probed.heightPx,
     mime: probed.mime,
@@ -79,5 +79,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   };
   await uploadRef.set(UploadSchema.parse(ready));
 
-  return NextResponse.json(ready, { status: 200 });
+  // The client needs a real, immediately-fetchable URL for the live editing
+  // session (canvas image loading) — that's `originalUrl` below, freshly
+  // signed on every request and never persisted. Only `originalPath`
+  // (already on `ready`) goes to Firestore.
+  return NextResponse.json({ ...ready, originalUrl: signedUrl }, { status: 200 });
 }

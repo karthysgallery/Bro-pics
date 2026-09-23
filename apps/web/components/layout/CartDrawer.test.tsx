@@ -33,7 +33,7 @@ function SeedCartWithPreview() {
       title: 'Classic Wooden Frame â€” 8x12 in',
       unitPriceSnapshot: 79900,
       qty: 3,
-      previewUrl: 'https://example.com/preview.png',
+      previewPath: 'uploads/sess_1/previews/pers_1/slot-0.png',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,14 +134,24 @@ describe('CartDrawer', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('renders a thumbnail image when the item has a previewUrl', () => {
+  it('resolves the previewPath to a signed URL and renders a thumbnail image', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://signed.example.com/preview.png' }),
+    }) as unknown as typeof fetch;
+
     render(
       <Providers>
         <SeedCartWithPreview />
         <CartDrawer isOpen={true} onClose={() => {}} />
       </Providers>
     );
-    expect(screen.getByRole('img', { name: 'Classic Wooden Frame â€” 8x12 in' })).toBeInTheDocument();
+    const img = await screen.findByRole('img', { name: 'Classic Wooden Frame â€” 8x12 in' });
+    expect(img).toHaveAttribute('src', expect.stringContaining('signed.example.com'));
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/media/url?path=uploads%2Fsess_1%2Fpreviews%2Fpers_1%2Fslot-0.png'),
+      expect.anything()
+    );
   });
 
   it('does not let the quantity drop below 1', () => {

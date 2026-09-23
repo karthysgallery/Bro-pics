@@ -78,9 +78,9 @@ describe('CustomizationSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts an optional renderedFileUrl', () => {
+  it('accepts an optional renderedFilePath', () => {
     const result = CustomizationSchema.safeParse(
-      baseCustomization({ renderedFileUrl: 'https://storage.example.com/print/c1.jpg' })
+      baseCustomization({ renderedFilePath: 'print-files/order_1/item_1/print.png' })
     );
     expect(result.success).toBe(true);
   });

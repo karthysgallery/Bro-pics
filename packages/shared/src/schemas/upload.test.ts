@@ -5,7 +5,7 @@ function baseUpload(overrides: Record<string, unknown> = {}) {
   return {
     id: 'up_1',
     sessionId: 'sess_1',
-    originalUrl: 'https://x/y.jpg',
+    originalPath: 'uploads/sess_1/up_1/original.jpg',
     widthPx: 4000,
     heightPx: 3000,
     mime: 'image/jpeg',
