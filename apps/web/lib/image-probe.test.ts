@@ -67,4 +67,17 @@ describe('probeAndStripImage', () => {
     expect(outputMetadata.width).toBe(300);
     expect(outputMetadata.height).toBe(400);
   });
+
+  it('rejects a decompression-bomb-sized image (over the 120 MP limit) instead of decoding it', async () => {
+    // 20000x20000 = 400 MP, well over the limit — sharp's own
+    // limitInputPixels throws before doing the expensive full decode.
+    const bomb = await sharp({
+      create: { width: 20000, height: 20000, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      limitInputPixels: false,
+    })
+      .jpeg()
+      .toBuffer();
+
+    await expect(probeAndStripImage(bomb)).rejects.toThrow();
+  });
 });

@@ -101,15 +101,43 @@ describe('POST /api/uploads', () => {
     expect(body.status).toBe('ready');
   });
 
-  it('returns 400 for a malformed/undecodable image without writing to Firestore', async () => {
+  it('returns 400 with a coded error for a malformed/undecodable image (spoofed MIME — Content-Type claims image/jpeg) without writing to Firestore', async () => {
     mockSet.mockClear();
     const buffer = Buffer.from('this is not a valid image, just plain text bytes');
     const response = await POST(makeRequest(buffer, 'sess_test'));
     const body = await response.json();
 
     expect(response.status).toBe(400);
+    expect(body.code).toBe('decode_failed');
     expect(body.error).toBeTruthy();
     expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a file over the 40 MB limit (post-parse Blob.size check) without probing the image', async () => {
+    const oversized = Buffer.alloc(41 * 1024 * 1024);
+    const response = await POST(makeRequest(oversized, 'sess_test'));
+    const body = await response.json();
+
+    expect(response.status).toBe(413);
+    expect(body.code).toBe('file_too_large');
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a request whose Content-Length header alone already exceeds the limit, before parsing formData', async () => {
+    const buffer = readFileSync(join(fixturesDir, 'small-photo.jpg'));
+    const formData = new FormData();
+    formData.append('file', new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' }), 'photo.jpg');
+    formData.append('variantId', 'var_1');
+    const request = new Request('http://localhost/api/uploads', {
+      method: 'POST',
+      headers: { 'X-Session-Id': 'sess_test', 'Content-Length': String(41 * 1024 * 1024) },
+      body: formData,
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(413);
+    expect(body.code).toBe('file_too_large');
   });
 
   it('requires a session ID header', async () => {
