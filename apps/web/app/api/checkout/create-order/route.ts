@@ -70,6 +70,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const couponCode =
     typeof body?.couponCode === 'string' && body.couponCode.trim().length > 0 ? body.couponCode.trim() : null;
+  const idempotencyKey =
+    typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim().length > 0 ? body.idempotencyKey.trim() : null;
 
   // Absent entirely means 'standard' (backward-compatible with clients that
   // predate this field); an explicitly-supplied-but-invalid value is a real
@@ -84,6 +86,36 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
+
+  // [BE-13] A double-click on "Place Order," a retried request after a
+  // network blip, or the customer closing/failing the Razorpay modal and
+  // clicking "Place Order" again all reuse the SAME idempotencyKey (the
+  // client generates it once per checkout attempt and keeps it stable
+  // across retries of that attempt — see checkout/page.tsx). Finding a
+  // still-pending order under this key returns it as-is: the same
+  // razorpayOrderId is handed back so the customer's retry opens the SAME
+  // Razorpay order rather than minting a new one and abandoning the first.
+  // An already-paid order under this key means the retry arrived after
+  // payment had already gone through — reported distinctly so the client
+  // doesn't show a payment modal for something already completed.
+  if (idempotencyKey) {
+    const existingSnapshot = await db
+      .collection('orders')
+      .where('userId', '==', userId)
+      .where('idempotencyKey', '==', idempotencyKey)
+      .limit(1)
+      .get();
+    if (!existingSnapshot.empty) {
+      const existing = existingSnapshot.docs[0].data() as { id: string; status: string; razorpayOrderId?: string; total: number };
+      if (existing.status === 'paid') {
+        return NextResponse.json({ error: 'This order has already been paid for', code: 'already_paid', orderId: existing.id }, { status: 409 });
+      }
+      return NextResponse.json(
+        { orderId: existing.id, razorpayOrderId: existing.razorpayOrderId, amount: existing.total, keyId: process.env.RAZORPAY_KEY_ID },
+        { status: 200 }
+      );
+    }
+  }
 
   const cartDoc = await db.collection('carts').doc(userId).get();
   const cartItems = (cartDoc.exists ? (cartDoc.data() as { items: CartLineInput[] }).items : []) ?? [];
@@ -213,6 +245,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     razorpayOrderId: razorpayOrder.id,
     placedAt: new Date(),
     deliveryMethod,
+    // Same Firestore-rejects-undefined rule as couponId below.
+    ...(idempotencyKey && { idempotencyKey }),
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,

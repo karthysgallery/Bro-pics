@@ -30,6 +30,12 @@ export const OrderSchema = z
     total: z.number().int().nonnegative(),
     couponId: z.string().optional(),
     addressJson: z.record(z.string(), z.unknown()),
+    // One per checkout attempt (generated client-side, stable across
+    // retries of that same attempt) — lets create-order detect a
+    // double-click/retried request and return the existing order instead
+    // of creating a duplicate. Optional so an order placed before this
+    // field existed still parses.
+    idempotencyKey: z.string().optional(),
     razorpayOrderId: z.string().optional(),
     razorpayPaymentId: z.string().optional(),
     notes: z.string().optional(),
