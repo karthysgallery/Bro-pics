@@ -21,6 +21,7 @@ export * from './schemas/print-job';
 export * from './search/types';
 export * from './search/build-query-plan';
 export * from './search/search-products';
+export * from './search/search-provider';
 export * from './search/parse-search-params';
 export * from './pricing/money';
 export * from './pricing/coupon';

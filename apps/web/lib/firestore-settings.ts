@@ -69,3 +69,18 @@ export async function getGstSettings(): Promise<{ gstEnabled: boolean; taxRate: 
   const gstin = typeof data?.gstin === 'string' && data.gstin.length > 0 ? data.gstin : undefined;
   return { gstEnabled, taxRate, ...(gstin && { gstin }) };
 }
+
+// [BE-23] Same per-key settings/{key} convention as the others above.
+// Defaults to [] — no admin UI exists yet to curate this list, so
+// search-suggestions simply shows nothing extra for a blank query until
+// someone deliberately writes settings/search.
+export async function getPopularSearches(): Promise<string[]> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('search').get();
+  if (!doc.exists) return [];
+
+  const data = doc.data();
+  const terms = data?.popularSearches;
+  if (!Array.isArray(terms)) return [];
+  return terms.filter((t): t is string => typeof t === 'string' && t.length > 0);
+}
