@@ -28,7 +28,7 @@ vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
 
 import { checkRateLimit, resetRateLimitState } from '../../../../../lib/rate-limit';
 
-const currentMedia = { id: 'media_1', path: 'public/media/a.jpg', type: 'image', alt: 'Old alt', tags: [], isActive: true };
+const currentMedia = { id: 'media_1', path: 'public/media/a.jpg', type: 'image', alt: 'Old alt', tags: [], usageRefs: [], isActive: true };
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
   return new Request('https://example.com/api/admin/media/media_1', {
@@ -81,5 +81,43 @@ describe('PATCH /api/admin/media/[id]', () => {
     const response = await PATCH(makeRequest({ alt: 'x' }), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-11] returns 409 with the referencing usageRefs when archiving an asset still in use', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockMediaGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ ...currentMedia, usageRefs: [{ resource: 'product', resourceId: 'prod_1' }] }),
+    });
+    const response = await PATCH(makeRequest({ isActive: false }), makeParams());
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error.details.usageRefs).toEqual([{ resource: 'product', resourceId: 'prod_1' }]);
+    expect(mockMediaUpdate).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-11] allows archiving an in-use asset when force: true is passed', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockMediaGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ ...currentMedia, usageRefs: [{ resource: 'product', resourceId: 'prod_1' }] }),
+    });
+    const response = await PATCH(makeRequest({ isActive: false, force: true }), makeParams());
+    expect(response.status).toBe(200);
+    expect(mockMediaUpdate).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
+  });
+
+  it('[ABE-11] does not persist the force flag itself onto the document', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await PATCH(makeRequest({ alt: 'New alt', force: true }), makeParams());
+    const updateArg = mockMediaUpdate.mock.calls[0][0];
+    expect(updateArg).not.toHaveProperty('force');
+  });
+
+  it('[ABE-11] archiving an asset with no usageRefs needs no force flag', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    const response = await PATCH(makeRequest({ isActive: false }), makeParams());
+    expect(response.status).toBe(200);
+    expect(mockMediaUpdate).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
   });
 });

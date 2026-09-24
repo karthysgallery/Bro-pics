@@ -13,13 +13,10 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// [ABE-10] Only alt/tags/isActive are editable — path/type/dimensions
+// [ABE-10/11] Only alt/tags/isActive are editable — path/type/dimensions
 // are fixed at upload time (changing them would mean the doc no longer
 // describes the actual Storage object). "Archive instead of delete"
-// again: isActive: false, no DELETE handler. The "warn when this asset
-// is still referenced" check ABE-11 asks for is NOT built here — this
-// PATCH lets an asset with non-empty usageRefs be archived without any
-// warning; that gate is ABE-11's own task.
+// again: isActive: false, no DELETE handler.
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
   if (!rateLimit.allowed) {
@@ -50,7 +47,21 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
   const body = parsed.data;
 
-  const update: Record<string, unknown> = { ...body, updatedAt: new Date() };
+  // [ABE-11] A WARNING, not an unconditional block (unlike categories'
+  // active-products check) — the caller can pass force: true to archive
+  // anyway once they've seen what's still referencing it.
+  const isArchiving = body.isActive === false && current.isActive !== false;
+  if (isArchiving && current.usageRefs.length > 0 && !body.force) {
+    return adminApiError(
+      409,
+      'conflict',
+      'This media asset is still referenced elsewhere — pass force: true to archive it anyway',
+      { usageRefs: current.usageRefs }
+    );
+  }
+
+  const { force: _force, ...fieldsToUpdate } = body;
+  const update: Record<string, unknown> = { ...fieldsToUpdate, updatedAt: new Date() };
   await ref.update(update);
 
   await writeAuditLog(db, {
@@ -58,7 +69,7 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     action: body.isActive === false ? 'media.archive' : 'media.update',
     resource: 'media',
     resourceId: id,
-    details: { changedFields: Object.keys(body) },
+    details: { changedFields: Object.keys(fieldsToUpdate) },
   }).catch((error) => logger.error('Failed to write audit log', { mediaId: id, error: String(error) }));
 
   const merged = { ...current, ...update };

@@ -18,6 +18,11 @@ export const UpdateMediaAssetBodySchema = z
     alt: z.string().optional(),
     tags: z.array(z.string()).optional(),
     isActive: z.boolean().optional(),
+    // [ABE-11] Archiving (isActive: false) an asset with non-empty
+    // usageRefs is a WARNING, not a hard block (unlike categories'
+    // active-products check, which is unconditional) — force: true
+    // overrides it. Ignored for every other field change.
+    force: z.boolean().default(false),
   })
   .strict();
 
