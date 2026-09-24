@@ -15,7 +15,8 @@ vi.mock('firebase-admin/firestore', () => ({
   getFirestore: () => ({
     collection: vi.fn((name: string) => {
       if (name === 'reviews') {
-        return { where: vi.fn(() => ({ get: mockReviewsGet })) };
+        const chainable = { where: vi.fn(() => chainable), get: mockReviewsGet };
+        return { where: vi.fn(() => chainable) };
       }
       if (name === 'products') {
         return { doc: vi.fn(() => ({ get: mockProductGet })) };
@@ -160,5 +161,49 @@ describe('GET /api/staff/reviews', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockReviewsGet).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-22] returns 400 for an invalid rating filter', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=pending&rating=7'));
+    expect(response.status).toBe(400);
+  });
+
+  it('[ABE-22] filters client-side by q over title and body', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockReviewsGet.mockResolvedValueOnce({
+      docs: [
+        { id: 'review_1', data: () => ({ productId: 'prod_1', userId: 'user_1', rating: 5, title: 'Great frame', body: 'Loved it', isVerified: true, status: 'pending', createdAt: 'x' }) },
+        { id: 'review_2', data: () => ({ productId: 'prod_1', userId: 'user_2', rating: 4, title: 'Meh', body: 'It was okay', isVerified: true, status: 'pending', createdAt: 'x' }) },
+      ],
+    });
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ title: 'Frame' }) });
+
+    const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=pending&q=great'));
+    const body = await response.json();
+    expect(body.reviews).toHaveLength(1);
+    expect(body.reviews[0].id).toBe('review_1');
+  });
+
+  it('[ABE-22] returns featured/placement/moderationNote fields when present', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockReviewsGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'review_1',
+          data: () => ({
+            productId: 'prod_1', userId: 'user_1', rating: 5, title: 'Great', body: 'Loved it',
+            isVerified: true, status: 'approved', createdAt: 'x', featured: true, placement: 'homepage', moderationNote: 'ok',
+          }),
+        },
+      ],
+    });
+    mockProductGet.mockResolvedValueOnce({ exists: true, data: () => ({ title: 'Frame' }) });
+
+    const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=approved'));
+    const body = await response.json();
+    expect(body.reviews[0]).toEqual(
+      expect.objectContaining({ featured: true, placement: 'homepage', moderationNote: 'ok' })
+    );
   });
 });

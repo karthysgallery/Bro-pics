@@ -97,6 +97,20 @@ describe('POST /api/staff/reviews/[id]/moderate', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
+  it('[ABE-22] returns 400 when note is not a string', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    const response = await POST(makeRequest({ action: 'approve', note: 42 }), makeContext());
+    expect(response.status).toBe(400);
+  });
+
+  it('[ABE-22] persists moderationNote alongside the status update', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'pending' }) });
+    const response = await POST(makeRequest({ action: 'reject', note: 'Off-topic content' }), makeContext());
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith({ status: 'rejected', moderationNote: 'Off-topic content' });
+  });
+
   it('[ABE-03] writes an audit log entry on a successful moderation', async () => {
     mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'pending' }) });

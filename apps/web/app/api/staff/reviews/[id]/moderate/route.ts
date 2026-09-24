@@ -30,6 +30,13 @@ export async function POST(
   if (action !== 'approve' && action !== 'reject') {
     return NextResponse.json({ error: "action must be 'approve' or 'reject'" }, { status: 400 });
   }
+  // [ABE-22] Optional moderation note — visible only to staff (nothing
+  // public reads `moderationNote`), typically used to record why a
+  // borderline review was rejected or what was edited/redacted.
+  const note = body?.note;
+  if (note !== undefined && typeof note !== 'string') {
+    return NextResponse.json({ error: 'note must be a string' }, { status: 400 });
+  }
 
   const { id } = await context.params;
   const db = getFirestore(getAdminApp());
@@ -44,7 +51,11 @@ export async function POST(
   }
 
   const nextStatus = action === 'approve' ? 'approved' : 'rejected';
-  await reviewRef.update({ status: nextStatus });
+  const update: Record<string, unknown> = { status: nextStatus };
+  if (typeof note === 'string') {
+    update.moderationNote = note;
+  }
+  await reviewRef.update(update);
 
   await writeAuditLog(db, {
     actorUid: staffUserId,
