@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import robots from './robots';
 
 describe('robots', () => {
-  it('disallows admin, dashboard, staff, checkout, orders, and api routes', () => {
+  it('disallows admin, dashboard, staff, checkout, orders, account, and api routes', () => {
     const result = robots();
     const rules = Array.isArray(result.rules) ? result.rules[0] : result.rules;
     expect(rules?.disallow).toEqual(
-      expect.arrayContaining(['/admin', '/dashboard', '/staff', '/checkout', '/orders', '/api'])
+      expect.arrayContaining(['/admin', '/dashboard', '/staff', '/checkout', '/orders', '/account', '/api'])
     );
   });
 
