@@ -49,24 +49,3 @@ export async function getStaffUserIdFromAuthHeader(request: Request): Promise<st
     return null;
   }
 }
-
-/**
- * Like getStaffUserIdFromAuthHeader, but requires 'admin' or 'super_admin'
- * specifically — 'staff' does not pass. Used for role-management routes,
- * which are more sensitive than order lookup/advance. See
- * getStaffUserIdFromAuthHeader's own doc comment for why super_admin is
- * included alongside admin.
- */
-export async function getAdminUserIdFromAuthHeader(request: Request): Promise<string | null> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const idToken = authHeader.slice('Bearer '.length);
-  try {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
-    const role = (decoded as { role?: string }).role;
-    if (role !== 'admin' && role !== 'super_admin') return null;
-    return decoded.uid;
-  } catch {
-    return null;
-  }
-}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getUserIdFromAuthHeader, getStaffUserIdFromAuthHeader, getAdminUserIdFromAuthHeader } from './verify-id-token';
+import { getUserIdFromAuthHeader, getStaffUserIdFromAuthHeader } from './verify-id-token';
 
 const mockVerifyIdToken = vi.fn();
 vi.mock('server-only', () => ({}));
@@ -76,42 +76,5 @@ describe('getStaffUserIdFromAuthHeader', () => {
     mockVerifyIdToken.mockRejectedValueOnce(new Error('invalid token'));
     const request = new Request('https://example.com', { headers: { Authorization: 'Bearer bad-token' } });
     expect(await getStaffUserIdFromAuthHeader(request)).toBeNull();
-  });
-});
-
-describe('getAdminUserIdFromAuthHeader', () => {
-  it('returns null when there is no Authorization header', async () => {
-    const request = new Request('https://example.com', { headers: {} });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBeNull();
-  });
-
-  it('returns the uid when the token verifies and role is admin', async () => {
-    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'admin_1', role: 'admin' });
-    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBe('admin_1');
-  });
-
-  it('[ABE-01] returns the uid when the token verifies and role is super_admin', async () => {
-    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'super_1', role: 'super_admin' });
-    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBe('super_1');
-  });
-
-  it('returns null when the token verifies but role is staff (not admin)', async () => {
-    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'staff_1', role: 'staff' });
-    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBeNull();
-  });
-
-  it('returns null when the token verifies but has no role claim', async () => {
-    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'customer_1' });
-    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer good-token' } });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBeNull();
-  });
-
-  it('returns null when verifyIdToken rejects', async () => {
-    mockVerifyIdToken.mockRejectedValueOnce(new Error('invalid token'));
-    const request = new Request('https://example.com', { headers: { Authorization: 'Bearer bad-token' } });
-    expect(await getAdminUserIdFromAuthHeader(request)).toBeNull();
   });
 });

@@ -34,10 +34,10 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
 
   // [ABE-01] Generalized from the old "must stay 'admin'" check to "must
   // keep whatever role still grants THIS route's own access" — a
-  // super_admin demoting themselves to plain admin is fine (still passes
-  // getAdminUserIdFromAuthHeader); demoting themselves to staff or
-  // clearing the role entirely would lock them out of role management
-  // with no other super_admin/admin necessarily available to undo it.
+  // super_admin demoting themselves to plain admin is fine (still grants
+  // team:manage); demoting themselves to staff or clearing the role
+  // entirely would lock them out of role management with no other
+  // super_admin/admin necessarily available to undo it.
   if (uid === adminUserId && role !== 'admin' && role !== 'super_admin') {
     return NextResponse.json(
       { error: 'You cannot demote or clear your own admin-tier role' },
