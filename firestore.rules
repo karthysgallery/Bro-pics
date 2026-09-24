@@ -57,6 +57,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // [ABE-18] Static content pages (About, Contact, policies, How It
+    // Works, Picture Quality Guide) and FAQ items — same public-read,
+    // server-write-only pattern as every other CMS-ish collection here.
+    match /pages/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /faqs/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /reviews/{id} {
       allow read: if resource.data.status == 'approved' || isStaffOrAdmin();
       allow write: if false;
