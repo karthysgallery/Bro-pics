@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { POST } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../lib/require-permission', () => ({
@@ -109,5 +114,11 @@ describe('POST /api/admin/inventory/bulk-update', () => {
     const response = await POST(makeRequest({ updates: validUpdates }));
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the homepage on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await POST(makeRequest({ updates: validUpdates }));
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/');
   });
 });

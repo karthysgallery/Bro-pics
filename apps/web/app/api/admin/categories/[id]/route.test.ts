@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { PATCH } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../lib/require-permission', () => ({
@@ -124,5 +129,12 @@ describe('PATCH /api/admin/categories/[id]', () => {
     const response = await PATCH(makeRequest({ name: 'x' }), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the category page and the homepage on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await PATCH(makeRequest({ name: 'New Name' }), makeParams());
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/category/wooden-frames');
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/');
   });
 });

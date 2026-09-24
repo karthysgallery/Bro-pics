@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
+import { revalidateHomepage, revalidateProductPage, revalidateCategoryPage } from '../../../../lib/revalidate-catalogue';
 import { CreateProductBodySchema } from './product-request-schema';
 import { ProductSchema, buildProductSearchFields, logger } from '@bro-pics/shared';
 
@@ -47,6 +48,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!categorySnap.exists) {
     return adminApiError(400, 'invalid_request', `Unknown categoryId: ${body.categoryId}`);
   }
+  const categorySlug = (categorySnap.data() as { slug: string }).slug;
 
   const ref = db.collection('products').doc();
   const now = new Date();
@@ -84,6 +86,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     resourceId: ref.id,
     details: { slug: body.slug, status: body.status },
   }).catch((error) => logger.error('Failed to write audit log', { productId: ref.id, error: String(error) }));
+
+  revalidateProductPage(body.slug);
+  revalidateCategoryPage(categorySlug);
+  revalidateHomepage();
 
   return NextResponse.json({ product }, { status: 201 });
 }

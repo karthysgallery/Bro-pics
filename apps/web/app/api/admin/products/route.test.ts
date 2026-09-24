@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { POST } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../lib/require-permission', () => ({
@@ -57,7 +62,7 @@ describe('POST /api/admin/products', () => {
     resetRateLimitState();
     vi.clearAllMocks();
     mockSlugQueryGet.mockResolvedValue({ empty: true, docs: [] });
-    mockCategoryGet.mockResolvedValue({ exists: true });
+    mockCategoryGet.mockResolvedValue({ exists: true, data: () => ({ slug: 'frames' }) });
   });
 
   it('returns the permission-denied status when requirePermission fails', async () => {
@@ -151,5 +156,13 @@ describe('POST /api/admin/products', () => {
     const response = await POST(makeRequest(validBody));
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the product page, its category page, and the homepage on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await POST(makeRequest(validBody));
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/classic-frame');
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/category/frames');
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/');
   });
 });

@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
+import { revalidateHomepage } from '../../../../../lib/revalidate-catalogue';
 import { BulkInventoryUpdateBodySchema } from './inventory-request-schema';
 import { logger } from '@bro-pics/shared';
 
@@ -66,6 +67,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     resourceId: updates.map((u) => u.variantId).join(','),
     details: { count: updates.length, countByStatus },
   }).catch((error) => logger.error('Failed to write audit log', { error: String(error) }));
+
+  // [ABE-09] Revalidates only the homepage/listing-level ISR, not each
+  // affected product's own page — doing that would need a slug lookup
+  // per distinct productId in the batch (up to 200 extra reads for a
+  // bulk endpoint meant to be cheap). Individual product pages still
+  // pick up the stock-status change within the existing 60s ISR window;
+  // accepted narrowing for a bulk-only endpoint, not silently dropped.
+  revalidateHomepage();
 
   return NextResponse.json({ updated: updates.length }, { status: 200 });
 }

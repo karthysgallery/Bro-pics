@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
+import { revalidateHomepage, revalidateProductPage, revalidateCategoryPage } from '../../../../../lib/revalidate-catalogue';
 import { UpdateProductBodySchema } from '../product-request-schema';
 import { buildProductSearchFields, logger, type Product } from '@bro-pics/shared';
 
@@ -53,11 +54,13 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     }
   }
 
+  let newCategorySlug: string | undefined;
   if (body.categoryId && body.categoryId !== current.categoryId) {
     const categorySnap = await db.collection('categories').doc(body.categoryId).get();
     if (!categorySnap.exists) {
       return adminApiError(400, 'invalid_request', `Unknown categoryId: ${body.categoryId}`);
     }
+    newCategorySlug = (categorySnap.data() as { slug: string }).slug;
   }
 
   const update: Record<string, unknown> = { ...body, updatedAt: new Date() };
@@ -83,6 +86,18 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     resourceId: id,
     details: { changedFields: Object.keys(body) },
   }).catch((error) => logger.error('Failed to write audit log', { productId: id, error: String(error) }));
+
+  // Revalidate both the old and new slug's page when the slug itself
+  // changed — the old path would otherwise keep serving stale ISR
+  // content (or a 404 once the doc no longer matches it) for up to 60s.
+  revalidateProductPage(current.slug);
+  if (body.slug && body.slug !== current.slug) {
+    revalidateProductPage(body.slug);
+  }
+  if (newCategorySlug) {
+    revalidateCategoryPage(newCategorySlug);
+  }
+  revalidateHomepage();
 
   return NextResponse.json({ product: { ...current, ...update } }, { status: 200 });
 }

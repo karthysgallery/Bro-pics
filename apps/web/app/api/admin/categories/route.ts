@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
+import { revalidateHomepage, revalidateCategoryPage } from '../../../../lib/revalidate-catalogue';
 import { CreateCategoryBodySchema } from './category-request-schema';
 import { CategorySchema, logger } from '@bro-pics/shared';
 
@@ -58,6 +59,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     resourceId: ref.id,
     details: { slug: body.slug },
   }).catch((error) => logger.error('Failed to write audit log', { categoryId: ref.id, error: String(error) }));
+
+  revalidateCategoryPage(body.slug);
+  revalidateHomepage();
 
   return NextResponse.json({ category }, { status: 201 });
 }

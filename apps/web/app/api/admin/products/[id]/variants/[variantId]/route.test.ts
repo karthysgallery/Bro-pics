@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { PATCH } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../../../lib/require-permission', () => ({
@@ -12,11 +17,13 @@ vi.mock('../../../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: 
 const mockVariantGet = vi.fn();
 const mockVariantUpdate = vi.fn().mockResolvedValue(undefined);
 const mockSkuQueryGet = vi.fn();
+const mockProductGet = vi.fn();
 const mockDb = {
   collection: vi.fn((name: string) => {
     if (name === 'products') {
       return {
         doc: vi.fn(() => ({
+          get: mockProductGet,
           collection: vi.fn(() => ({
             doc: vi.fn(() => ({ get: mockVariantGet, update: mockVariantUpdate })),
             where: vi.fn(() => ({ limit: vi.fn(() => ({ get: mockSkuQueryGet })) })),
@@ -57,6 +64,7 @@ describe('PATCH /api/admin/products/[id]/variants/[variantId]', () => {
     vi.clearAllMocks();
     mockVariantGet.mockResolvedValue({ exists: true, data: () => currentVariant });
     mockSkuQueryGet.mockResolvedValue({ empty: true, docs: [] });
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ slug: 'classic-frame' }) });
   });
 
   it('returns 404 when the variant does not exist', async () => {
@@ -109,5 +117,11 @@ describe('PATCH /api/admin/products/[id]/variants/[variantId]', () => {
     const response = await PATCH(makeRequest({ price: 1 }), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the parent product page on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await PATCH(makeRequest({ price: 50000 }), makeParams());
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/classic-frame');
   });
 });

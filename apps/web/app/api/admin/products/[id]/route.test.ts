@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { PATCH } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../lib/require-permission', () => ({
@@ -65,7 +70,7 @@ describe('PATCH /api/admin/products/[id]', () => {
     vi.clearAllMocks();
     mockProductGet.mockResolvedValue({ exists: true, data: () => currentProduct });
     mockSlugQueryGet.mockResolvedValue({ empty: true, docs: [] });
-    mockCategoryGet.mockResolvedValue({ exists: true });
+    mockCategoryGet.mockResolvedValue({ exists: true, data: () => ({ slug: 'frames' }) });
   });
 
   it('returns the permission-denied status when requirePermission fails', async () => {
@@ -160,5 +165,13 @@ describe('PATCH /api/admin/products/[id]', () => {
     const response = await PATCH(makeRequest({ title: 'x' }), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the old and new slug pages when the slug changes, plus the homepage', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await PATCH(makeRequest({ slug: 'new-slug' }), makeParams());
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/classic-frame');
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/new-slug');
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/');
   });
 });

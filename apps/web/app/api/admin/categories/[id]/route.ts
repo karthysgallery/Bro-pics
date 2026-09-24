@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
+import { revalidateHomepage, revalidateCategoryPage } from '../../../../../lib/revalidate-catalogue';
 import { UpdateCategoryBodySchema } from '../category-request-schema';
 import { logger, type Category } from '@bro-pics/shared';
 
@@ -85,6 +86,12 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     resourceId: id,
     details: { changedFields: Object.keys(body) },
   }).catch((error) => logger.error('Failed to write audit log', { categoryId: id, error: String(error) }));
+
+  revalidateCategoryPage(current.slug);
+  if (body.slug && body.slug !== current.slug) {
+    revalidateCategoryPage(body.slug);
+  }
+  revalidateHomepage();
 
   return NextResponse.json({ category: { ...current, ...update } }, { status: 200 });
 }

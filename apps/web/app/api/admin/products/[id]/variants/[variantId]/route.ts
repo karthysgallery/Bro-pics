@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../../lib/audit-log';
+import { revalidateProductPage } from '../../../../../../../lib/revalidate-catalogue';
 import { UpdateVariantBodySchema } from '../variant-request-schema';
 import { deriveVariantPrintPixels, logger, type Variant } from '@bro-pics/shared';
 
@@ -71,6 +72,14 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     resourceId: variantId,
     details: { productId, changedFields: Object.keys(body) },
   }).catch((error) => logger.error('Failed to write audit log', { variantId, error: String(error) }));
+
+  // A price/stock-status/size change on any variant affects the parent
+  // product's detail page (price range, size options) — one extra read
+  // for the slug, worth it since this route doesn't otherwise know it.
+  const productSnap = await db.collection('products').doc(productId).get();
+  if (productSnap.exists) {
+    revalidateProductPage((productSnap.data() as { slug: string }).slug);
+  }
 
   return NextResponse.json({ variant: { ...current, ...update } }, { status: 200 });
 }

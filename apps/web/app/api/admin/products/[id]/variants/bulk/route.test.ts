@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { POST } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../../../lib/require-permission', () => ({
@@ -61,7 +66,7 @@ describe('POST /api/admin/products/[id]/variants/bulk', () => {
     resetRateLimitState();
     vi.clearAllMocks();
     variantDocCounter = 0;
-    mockProductGet.mockResolvedValue({ exists: true });
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ slug: 'classic-frame' }) });
     mockExistingVariantsGet.mockResolvedValue({ docs: [] });
   });
 
@@ -119,5 +124,11 @@ describe('POST /api/admin/products/[id]/variants/bulk', () => {
     const response = await POST(makeRequest({ variants: [variantInput] }), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the parent product page on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await POST(makeRequest({ variants: [variantInput] }), makeParams());
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/classic-frame');
   });
 });

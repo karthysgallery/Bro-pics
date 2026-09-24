@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../lib/audit-log';
+import { revalidateProductPage } from '../../../../../../lib/revalidate-catalogue';
 import { CreateVariantBodySchema } from './variant-request-schema';
 import { VariantSchema, deriveVariantPrintPixels, logger } from '@bro-pics/shared';
 
@@ -32,6 +33,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   if (!productSnap.exists) {
     return adminApiError(404, 'not_found', `Unknown product id: ${productId}`);
   }
+  const productSlug = (productSnap.data() as { slug: string }).slug;
 
   const rawBody = await request.json().catch(() => null);
   const parsed = CreateVariantBodySchema.safeParse(rawBody);
@@ -71,6 +73,8 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     resourceId: ref.id,
     details: { productId, sku: body.sku },
   }).catch((error) => logger.error('Failed to write audit log', { variantId: ref.id, error: String(error) }));
+
+  revalidateProductPage(productSlug);
 
   return NextResponse.json({ variant }, { status: 201 });
 }

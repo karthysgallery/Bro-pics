@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { POST } from './route';
+import { revalidatePath } from 'next/cache';
 
 const mockRequirePermission = vi.fn();
 vi.mock('../../../../../../lib/require-permission', () => ({
@@ -56,7 +61,7 @@ describe('POST /api/admin/products/[id]/variants', () => {
   beforeEach(() => {
     resetRateLimitState();
     vi.clearAllMocks();
-    mockProductGet.mockResolvedValue({ exists: true });
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ slug: 'classic-frame' }) });
     mockSkuQueryGet.mockResolvedValue({ empty: true, docs: [] });
   });
 
@@ -111,5 +116,11 @@ describe('POST /api/admin/products/[id]/variants', () => {
     const response = await POST(makeRequest(validBody), makeParams());
     expect(response.status).toBe(429);
     expect(mockRequirePermission).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-09] revalidates the parent product page on success', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await POST(makeRequest(validBody), makeParams());
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/product/classic-frame');
   });
 });
