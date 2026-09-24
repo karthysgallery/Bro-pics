@@ -198,7 +198,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         // portion of the cart the coupon actually covers, so the
         // discount below can never apply against ineligible items.
         const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
-        const result = calculateCouponDiscount(eligibleSubtotal, coupon);
+        const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
         if (result.valid) {
           discount = result.discountPaise;
           // Source from coupon.code (normalized, doc.id-backed), not the

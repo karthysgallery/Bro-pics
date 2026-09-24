@@ -73,4 +73,37 @@ describe('calculateCouponDiscount', () => {
     const result = calculateCouponDiscount(1000, makeCoupon({ type: 'flat', value: 5000 }));
     expect(result.discountPaise).toBe(1000);
   });
+
+  it('[ABE-21] rejects when isActive is explicitly false', () => {
+    const result = calculateCouponDiscount(100000, makeCoupon({ isActive: false }));
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('inactive');
+  });
+
+  it('[ABE-21] accepts when isActive is true or absent', () => {
+    expect(calculateCouponDiscount(100000, makeCoupon({ isActive: true })).valid).toBe(true);
+    expect(calculateCouponDiscount(100000, makeCoupon()).valid).toBe(true);
+  });
+
+  it('[ABE-21] rejects a coupon assigned to a different user', () => {
+    const result = calculateCouponDiscount(100000, makeCoupon({ assignedUserId: 'user_1' }), new Date(), 'user_2');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('not_assigned_to_you');
+  });
+
+  it('[ABE-21] rejects an assigned coupon when no userId is given', () => {
+    const result = calculateCouponDiscount(100000, makeCoupon({ assignedUserId: 'user_1' }));
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('not_assigned_to_you');
+  });
+
+  it('[ABE-21] accepts an assigned coupon for the matching user', () => {
+    const result = calculateCouponDiscount(100000, makeCoupon({ assignedUserId: 'user_1' }), new Date(), 'user_1');
+    expect(result.valid).toBe(true);
+  });
+
+  it('[ABE-21] accepts an unassigned coupon for any user', () => {
+    const result = calculateCouponDiscount(100000, makeCoupon({ assignedUserId: null }), new Date(), 'user_2');
+    expect(result.valid).toBe(true);
+  });
 });

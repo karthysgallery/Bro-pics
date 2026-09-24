@@ -65,7 +65,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // reasoning, kept in sync so a coupon that's rejected/discounted
   // differently here vs. at actual checkout would be a real bug.
   const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
-  const result = calculateCouponDiscount(eligibleSubtotal, coupon);
+  const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
   if (!result.valid) {
     return NextResponse.json({ valid: false, reason: result.reason }, { status: 200 });
   }

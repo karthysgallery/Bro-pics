@@ -18,6 +18,12 @@ export const CouponSchema = z.object({
   categoryIds: z.array(z.string()).optional(),
   productIds: z.array(z.string()).optional(),
   usedCount: z.number().int().nonnegative(),
+  // [ABE-21] Both optional (not defaulted) so every pre-existing Coupon
+  // object literal in tests/seed data still typechecks unchanged. Absent
+  // `isActive` means active (existing behavior, unaffected); absent
+  // `assignedUserId` means public (anyone can use it, existing behavior).
+  isActive: z.boolean().optional(),
+  assignedUserId: z.string().nullable().optional(),
 });
 
 export type Coupon = z.infer<typeof CouponSchema>;
