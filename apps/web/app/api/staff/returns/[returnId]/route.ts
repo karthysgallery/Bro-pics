@@ -5,6 +5,8 @@ import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
 import { writeNotification } from '../../../../../lib/notify';
+import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../lib/admin-idempotency';
+import { writeAuditLog } from '../../../../../lib/audit-log';
 import {
   ReturnStatusSchema,
   isValidReturnStatusTransition,
@@ -45,6 +47,19 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
   const staffUserId = permission.uid;
+  const db = getFirestore(getAdminApp());
+
+  // [ABE-03] Closes the race this route's own comment below has long
+  // documented: a retried advance to 'refunded' (timeout, double-click)
+  // with the same Idempotency-Key returns the ORIGINAL response instead
+  // of calling Razorpay's refund API a second time.
+  const idempotencyKey = getIdempotencyKeyHeader(request);
+  if (idempotencyKey) {
+    const existing = await findIdempotentResponse(db, 'staff.returns.advance', idempotencyKey);
+    if (existing) {
+      return NextResponse.json(existing.body, { status: existing.status });
+    }
+  }
 
   const body = await request.json();
   const statusParsed = ReturnStatusSchema.safeParse(body?.status);
@@ -55,7 +70,6 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const staffNote = typeof body?.staffNote === 'string' ? body.staffNote : null;
 
   const { returnId } = await params;
-  const db = getFirestore(getAdminApp());
   const returnRef = db.collection('returns').doc(returnId);
   const returnSnap = await returnRef.get();
   if (!returnSnap.exists) {
@@ -77,11 +91,13 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   // outside the transaction below (an external HTTP call must never sit
   // inside a Firestore transaction, which can retry on contention — see
   // create-order's own Razorpay-order-creation step for the same rule).
-  // A race where a concurrent request also advances this same return
-  // between this check and the transaction's own re-check below could, in
-  // principle, call Razorpay twice — documented as a known gap in
-  // razorpay-client.ts (no idempotency key on this call yet), acceptable
-  // for a low-concurrency, staff-only action.
+  // [ABE-03] A SEQUENTIAL retry (timeout, double-click) with the same
+  // Idempotency-Key is now caught above, before this call. What remains,
+  // documented as a known gap in razorpay-client.ts: two genuinely
+  // CONCURRENT requests racing between this check and the transaction's
+  // own re-check below could still both call Razorpay — accepted for a
+  // low-concurrency, staff-only action; closing it needs a lock/lease
+  // around the whole handler, not just idempotency-key caching.
   let razorpayRefundId: string | undefined;
   if (nextStatus === 'refunded') {
     if (!order.razorpayPaymentId) {
@@ -167,7 +183,23 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  return NextResponse.json({ status: nextStatus, razorpayRefundId }, { status: 200 });
+  const responseBody = { status: nextStatus, razorpayRefundId };
+
+  await writeAuditLog(db, {
+    actorUid: staffUserId,
+    action: 'return.advance',
+    resource: 'return',
+    resourceId: returnId,
+    details: { fromStatus: currentReturn.status, toStatus: nextStatus, razorpayRefundId },
+  }).catch((error) => logger.error('Failed to write audit log', { returnId, error: String(error) }));
+
+  if (idempotencyKey) {
+    await recordIdempotentResponse(db, 'staff.returns.advance', idempotencyKey, 200, responseBody).catch((error) =>
+      logger.error('Failed to record idempotent response', { returnId, error: String(error) })
+    );
+  }
+
+  return NextResponse.json(responseBody, { status: 200 });
 }
 
 class StatusConflictError extends Error {}

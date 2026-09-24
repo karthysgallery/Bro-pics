@@ -5,6 +5,8 @@ import { requirePermission } from '../../../../../../lib/require-permission';
 import { findOrderByOrderNo } from '../../../../../../lib/order-lookup';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../../lib/notify';
+import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../../lib/admin-idempotency';
+import { writeAuditLog } from '../../../../../../lib/audit-log';
 import {
   OrderEventSchema,
   isValidStatusTransition,
@@ -57,6 +59,19 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
 
   const { orderNo } = await params;
   const db = getFirestore(getAdminApp());
+
+  // [ABE-03] A retried advance (timeout, double-click) with the same
+  // Idempotency-Key returns the original response instead of re-running
+  // the transition — which would otherwise queue a second print job per
+  // item on every retry into print_rendering.
+  const idempotencyKey = getIdempotencyKeyHeader(request);
+  if (idempotencyKey) {
+    const existing = await findIdempotentResponse(db, 'staff.orders.advance', idempotencyKey);
+    if (existing) {
+      return NextResponse.json(existing.body, { status: existing.status });
+    }
+  }
+
   const found = await findOrderByOrderNo(db, orderNo);
   if (!found) {
     return NextResponse.json({ error: `Unknown orderNo: ${orderNo}` }, { status: 404 });
@@ -187,7 +202,23 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     ).catch((error) => logger.error('Failed to write notification', { orderId: found.id, uid: found.data.userId, error: String(error) }));
   }
 
-  return NextResponse.json({ order: { ...found.data, ...orderUpdate } }, { status: 200 });
+  const responseBody = { order: { ...found.data, ...orderUpdate } };
+
+  await writeAuditLog(db, {
+    actorUid: staffUserId,
+    action: 'order.advance',
+    resource: 'order',
+    resourceId: found.id,
+    details: { fromStatus: found.data.status, toStatus: status },
+  }).catch((error) => logger.error('Failed to write audit log', { orderId: found.id, error: String(error) }));
+
+  if (idempotencyKey) {
+    await recordIdempotentResponse(db, 'staff.orders.advance', idempotencyKey, 200, responseBody).catch((error) =>
+      logger.error('Failed to record idempotent response', { orderId: found.id, error: String(error) })
+    );
+  }
+
+  return NextResponse.json(responseBody, { status: 200 });
 }
 
 class StatusConflictError extends Error {}

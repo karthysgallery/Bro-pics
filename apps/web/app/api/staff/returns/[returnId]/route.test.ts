@@ -14,6 +14,20 @@ vi.mock('../../../../../lib/razorpay-client', () => ({
 const mockWriteNotification = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../../../../lib/notify', () => ({ writeNotification: (...args: unknown[]) => mockWriteNotification(...args) }));
 
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
+
+const mockFindIdempotentResponse = vi.fn().mockResolvedValue(null);
+const mockRecordIdempotentResponse = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../lib/admin-idempotency', () => ({
+  getIdempotencyKeyHeader: (request: Request) => {
+    const value = request.headers.get('Idempotency-Key');
+    return value && value.trim().length > 0 ? value.trim() : null;
+  },
+  findIdempotentResponse: (...args: unknown[]) => mockFindIdempotentResponse(...args),
+  recordIdempotentResponse: (...args: unknown[]) => mockRecordIdempotentResponse(...args),
+}));
+
 const mockReturnGet = vi.fn();
 const mockOrderGet = vi.fn();
 const mockTransactionGet = vi.fn();
@@ -53,10 +67,14 @@ vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
 
 import { checkRateLimit, resetRateLimitState } from '../../../../../lib/rate-limit';
 
-function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
+function makeRequest(body: unknown, authHeader = 'Bearer good-token', idempotencyKey?: string): Request {
   return new Request('https://example.com/api/staff/returns/ret_1', {
     method: 'POST',
-    headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json',
+      ...(idempotencyKey && { 'Idempotency-Key': idempotencyKey }),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -206,5 +224,65 @@ describe('POST /api/staff/returns/[returnId]', () => {
     const response = await POST(makeRequest({ status: 'approved' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
     expect(response.status).toBe(429);
     expect(mockGetStaffUserId).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] writes an audit log entry on a successful advance', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockReturnGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
+    });
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ orderNo: 'BP-2026-00001' }) });
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status: 'requested' }) });
+
+    await POST(makeRequest({ status: 'approved' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
+
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUid: 'staff_1',
+        action: 'return.advance',
+        resource: 'return',
+        resourceId: 'ret_1',
+        details: expect.objectContaining({ fromStatus: 'requested', toStatus: 'approved' }),
+      })
+    );
+  });
+
+  it('[ABE-03] returns the original response and skips Razorpay when a prior Idempotency-Key response exists', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockFindIdempotentResponse.mockResolvedValueOnce({ status: 200, body: { status: 'refunded', razorpayRefundId: 'rfnd_1' } });
+
+    const response = await POST(makeRequest({ status: 'refunded' }, 'Bearer good-token', 'retry-key-1'), {
+      params: Promise.resolve({ returnId: 'ret_1' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ status: 'refunded', razorpayRefundId: 'rfnd_1' });
+    expect(mockReturnGet).not.toHaveBeenCalled();
+    expect(mockCreateRazorpayRefund).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] records the response under the Idempotency-Key after a successful advance', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockReturnGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
+    });
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ orderNo: 'BP-2026-00001' }) });
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status: 'requested' }) });
+
+    await POST(makeRequest({ status: 'approved' }, 'Bearer good-token', 'retry-key-2'), {
+      params: Promise.resolve({ returnId: 'ret_1' }),
+    });
+
+    expect(mockRecordIdempotentResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      'staff.returns.advance',
+      'retry-key-2',
+      200,
+      expect.objectContaining({ status: 'approved' })
+    );
   });
 });

@@ -12,6 +12,20 @@ vi.mock('../../../../../../lib/order-lookup', () => ({ findOrderByOrderNo: (...a
 const mockWriteNotification = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../../../../../lib/notify', () => ({ writeNotification: (...args: unknown[]) => mockWriteNotification(...args) }));
 
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
+
+const mockFindIdempotentResponse = vi.fn().mockResolvedValue(null);
+const mockRecordIdempotentResponse = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../../lib/admin-idempotency', () => ({
+  getIdempotencyKeyHeader: (request: Request) => {
+    const value = request.headers.get('Idempotency-Key');
+    return value && value.trim().length > 0 ? value.trim() : null;
+  },
+  findIdempotentResponse: (...args: unknown[]) => mockFindIdempotentResponse(...args),
+  recordIdempotentResponse: (...args: unknown[]) => mockRecordIdempotentResponse(...args),
+}));
+
 const mockTransactionGet = vi.fn();
 const mockTransactionSet = vi.fn();
 const mockTransactionUpdate = vi.fn();
@@ -35,10 +49,14 @@ vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
 
 import { checkRateLimit, resetRateLimitState } from '../../../../../../lib/rate-limit';
 
-function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
+function makeRequest(body: unknown, authHeader = 'Bearer good-token', idempotencyKey?: string): Request {
   return new Request('https://example.com/api/staff/orders/BP-2026-00001/advance', {
     method: 'POST',
-    headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json',
+      ...(idempotencyKey && { 'Idempotency-Key': idempotencyKey }),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -326,5 +344,77 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockFindOrder).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] writes an audit log entry on a successful advance', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('in_production');
+
+    await POST(makeRequest({ status: 'printed_packed' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
+
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUid: 'staff_1',
+        action: 'order.advance',
+        resource: 'order',
+        resourceId: 'order_1',
+        details: { fromStatus: 'in_production', toStatus: 'printed_packed' },
+      })
+    );
+  });
+
+  it('[ABE-03] returns the original response and skips the transaction when a prior Idempotency-Key response exists', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockFindIdempotentResponse.mockResolvedValueOnce({ status: 200, body: { order: { orderNo: 'BP-2026-00001', status: 'printed_packed' } } });
+
+    const response = await POST(makeRequest({ status: 'printed_packed' }, 'Bearer good-token', 'retry-key-1'), {
+      params: Promise.resolve({ orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ order: { orderNo: 'BP-2026-00001', status: 'printed_packed' } });
+    expect(mockFindOrder).not.toHaveBeenCalled();
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] records the response under the Idempotency-Key after a successful advance', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('in_production');
+
+    await POST(makeRequest({ status: 'printed_packed' }, 'Bearer good-token', 'retry-key-2'), {
+      params: Promise.resolve({ orderNo: 'BP-2026-00001' }),
+    });
+
+    expect(mockRecordIdempotentResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      'staff.orders.advance',
+      'retry-key-2',
+      200,
+      expect.objectContaining({ order: expect.objectContaining({ status: 'printed_packed' }) })
+    );
+  });
+
+  it('[ABE-03] does not check or record an Idempotency-Key when the header is absent', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockFindOrder.mockResolvedValueOnce({
+      id: 'order_1',
+      data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
+    });
+    mockOrderSnap('in_production');
+
+    await POST(makeRequest({ status: 'printed_packed' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
+
+    expect(mockFindIdempotentResponse).not.toHaveBeenCalled();
+    expect(mockRecordIdempotentResponse).not.toHaveBeenCalled();
   });
 });

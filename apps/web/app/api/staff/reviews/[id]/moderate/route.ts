@@ -4,6 +4,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
 import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
+import { writeAuditLog } from '../../../../../../lib/audit-log';
+import { logger } from '@bro-pics/shared';
 
 export async function POST(
   request: Request,
@@ -21,6 +23,7 @@ export async function POST(
   if (!permission.ok) {
     return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
+  const staffUserId = permission.uid;
 
   const body = await request.json();
   const action = body?.action;
@@ -42,6 +45,14 @@ export async function POST(
 
   const nextStatus = action === 'approve' ? 'approved' : 'rejected';
   await reviewRef.update({ status: nextStatus });
+
+  await writeAuditLog(db, {
+    actorUid: staffUserId,
+    action: 'review.moderate',
+    resource: 'review',
+    resourceId: id,
+    details: { fromStatus: current.status, toStatus: nextStatus },
+  }).catch((error) => logger.error('Failed to write audit log', { reviewId: id, error: String(error) }));
 
   return NextResponse.json({ id, status: nextStatus }, { status: 200 });
 }

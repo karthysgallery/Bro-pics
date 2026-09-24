@@ -18,6 +18,9 @@ vi.mock('firebase-admin/firestore', () => ({
 }));
 vi.mock('../../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
+
 vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../../../lib/rate-limit')>();
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
@@ -92,5 +95,21 @@ describe('POST /api/staff/reviews/[id]/moderate', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] writes an audit log entry on a successful moderation', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'pending' }) });
+    await POST(makeRequest({ action: 'approve' }), makeContext());
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUid: 'staff_1',
+        action: 'review.moderate',
+        resource: 'review',
+        resourceId: 'review_1',
+        details: { fromStatus: 'pending', toStatus: 'approved' },
+      })
+    );
   });
 });

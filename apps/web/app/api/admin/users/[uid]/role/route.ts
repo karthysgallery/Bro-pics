@@ -4,7 +4,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
 import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
-import { isValidRole, StaffMirrorSchema, ROLES } from '@bro-pics/shared';
+import { writeAuditLog } from '../../../../../../lib/audit-log';
+import { isValidRole, StaffMirrorSchema, ROLES, logger } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ uid: string }>;
@@ -79,6 +80,14 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       await staffRef.update({ active: false, updatedAt: new Date() });
     }
   }
+
+  await writeAuditLog(db, {
+    actorUid: adminUserId,
+    action: 'role.grant',
+    resource: 'user',
+    resourceId: uid,
+    details: { role },
+  }).catch((error) => logger.error('Failed to write audit log', { uid, error: String(error) }));
 
   return NextResponse.json({ uid, role }, { status: 200 });
 }

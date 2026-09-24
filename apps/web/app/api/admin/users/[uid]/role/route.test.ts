@@ -26,6 +26,9 @@ vi.mock('firebase-admin/firestore', () => ({
   })),
 }));
 
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
+
 vi.mock('../../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
@@ -178,5 +181,20 @@ describe('POST /api/admin/users/[uid]/role', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-03] writes an audit log entry on a successful role grant', async () => {
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await POST(makeRequest({ role: 'staff' }), makeParams('user_9'));
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUid: 'admin_1',
+        action: 'role.grant',
+        resource: 'user',
+        resourceId: 'user_9',
+        details: { role: 'staff' },
+      })
+    );
   });
 });

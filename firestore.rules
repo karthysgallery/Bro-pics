@@ -156,5 +156,19 @@ service cloud.firestore {
     match /notificationOutbox/{entryId} {
       allow read, write: if false;
     }
+
+    // [ABE-03] Same admin-SDK-only pattern — the audit trail for every
+    // admin/staff write (lib/audit-log.ts). A client that could write its
+    // own audit entries could forge its own trail, and a client that
+    // could read others' would leak every staff member's action history.
+    match /auditLogs/{entryId} {
+      allow read, write: if false;
+    }
+
+    // [ABE-03] Same admin-SDK-only pattern — cached responses keyed by an
+    // admin write's Idempotency-Key header (lib/admin-idempotency.ts).
+    match /idempotencyKeys/{key} {
+      allow read, write: if false;
+    }
   }
 }
