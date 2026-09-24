@@ -1,0 +1,106 @@
+name: CI
+
+# [BE-37] Runs on every PR and push to main branches. Scoped to what's
+# genuinely runnable without a live account or secret this session
+# doesn't have: typecheck, lint (a no-op today — no package defines a
+# lint script yet; ESLint setup itself is a separate task from wiring
+# the pipeline that will run it), unit/component tests, the Firestore/
+# Storage rules tests (against LOCAL emulators — firebase
+# emulators:exec never calls the real bropics-app project, so this
+# needs no Firebase credentials), an npm audit gate, and secret
+# scanning (gitleaks — scans repo content, no external account needed).
+#
+# NOT included, logged rather than silently dropped: E2E tests against
+# a staging deploy. This needs a real staging environment and Razorpay
+# test-mode fixtures wired into that environment's secrets — neither
+# exists yet (see PROJECT_STATUS.md §6/§7). Once a staging deploy target
+# exists, that job slots in as its own workflow triggered on deploy,
+# not bolted onto this one.
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  rules-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      # The Firestore/Storage emulators need a JRE — firebase-tools
+      # itself is already a devDependency of firestore-rules-tests.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:rules
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # high/critical only — a monorepo this size will always carry some
+      # low/moderate transitive advisories with no available fix; gating
+      # on those would make the check permanently, uninformatively red.
+      - run: pnpm audit --audit-level=high
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
