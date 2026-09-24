@@ -3,47 +3,47 @@ import { getAuth } from 'firebase-admin/auth';
 import { getAdminApp } from './firebase-admin';
 import { isValidRole, roleHasPermission, type PermissionKey, type Role } from '@bro-pics/shared';
 
-export interface PermissionContext {
-  uid: string;
-  role: Role;
-}
+export type AuthResult =
+  | { authenticated: false }
+  | { authenticated: true; uid: string; role: Role | null };
 
 /**
- * [ABE-01] Verifies the bearer token and extracts {uid, role} — returns
- * null if the token is missing/invalid, or the role claim isn't one of
- * the five known roles (packages/shared/src/auth/permissions.ts). Does
- * NOT check any specific permission on its own; see requirePermission
- * below for the check most routes actually want.
+ * [ABE-01/ABE-02] Verifies the bearer token and extracts {uid, role}.
+ * `authenticated: false` means there's no valid identity at all (missing
+ * header, malformed token, or a token that fails verification) — the 401
+ * case. `authenticated: true, role: null` means the token is genuinely
+ * valid but carries no role claim (or an unknown one) — a real customer
+ * account, not a staff/admin one — which requirePermission below treats as
+ * 403, not 401, since the caller IS who they say they are.
  */
-export async function getPermissionContext(request: Request): Promise<PermissionContext | null> {
+export async function getPermissionContext(request: Request): Promise<AuthResult> {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return { authenticated: false };
   const idToken = authHeader.slice('Bearer '.length);
   try {
     const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     const role = (decoded as { role?: unknown }).role;
-    if (!isValidRole(role)) return null;
-    return { uid: decoded.uid, role };
+    return { authenticated: true, uid: decoded.uid, role: isValidRole(role) ? role : null };
   } catch {
-    return null;
+    return { authenticated: false };
   }
 }
 
+export type PermissionResult = { ok: true; uid: string } | { ok: false; status: 401 | 403 };
+
 /**
- * The one function most admin/staff routes actually call: verifies the
- * token AND the specific permission key in one step. Returns the caller's
- * uid on success, or null — the caller responds 403, same "null always
- * means 403 here, never 'proceed as signed out'" contract
- * getStaffUserIdFromAuthHeader/getAdminUserIdFromAuthHeader already use.
- *
- * [ABE-02] Not yet applied to any existing route — this pass built the
- * plumbing (ABE-01); wiring it into every /api/admin/* and /api/staff/*
- * route, replacing the current binary admin/staff checks, is ABE-02's own
- * task, done as its own sweep with a route-enumeration test, not folded
- * into this one.
+ * [ABE-02] The one function every admin/staff route calls: verifies the
+ * token AND the specific permission key in one step, distinguishing WHY a
+ * caller was denied — 401 when there's no valid identity at all, 403 when
+ * the identity is valid but lacks the permission (no role claim, or a role
+ * that doesn't grant `key` — covers both "customer with no role" and
+ * "staff calling an admin-only route"). This distinction is what
+ * route.enumeration.test.ts asserts across every /api/admin/* and
+ * /api/staff/* route.
  */
-export async function requirePermission(request: Request, key: PermissionKey): Promise<string | null> {
+export async function requirePermission(request: Request, key: PermissionKey): Promise<PermissionResult> {
   const ctx = await getPermissionContext(request);
-  if (!ctx) return null;
-  return roleHasPermission(ctx.role, key) ? ctx.uid : null;
+  if (!ctx.authenticated) return { ok: false, status: 401 };
+  if (!ctx.role || !roleHasPermission(ctx.role, key)) return { ok: false, status: 403 };
+  return { ok: true, uid: ctx.uid };
 }

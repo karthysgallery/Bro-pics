@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../lib/require-permission';
 import { findOrderByOrderNo } from '../../../../../lib/order-lookup';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import type { OrderItem } from '@bro-pics/shared';
@@ -19,9 +19,9 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'orders:read');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
 
   const { orderNo } = await params;

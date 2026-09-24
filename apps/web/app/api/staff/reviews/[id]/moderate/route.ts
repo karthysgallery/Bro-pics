@@ -2,7 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 
 export async function POST(
@@ -17,9 +17,9 @@ export async function POST(
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'reviews:moderate');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
 
   const body = await request.json();

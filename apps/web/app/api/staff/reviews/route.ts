@@ -2,7 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { ReviewStatusSchema } from '@bro-pics/shared';
 
@@ -40,9 +40,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'reviews:moderate');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
 
   const url = new URL(request.url);

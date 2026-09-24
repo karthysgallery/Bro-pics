@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
-import { getAdminUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -13,9 +13,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
-  const adminUserId = await getAdminUserIdFromAuthHeader(request);
-  if (!adminUserId) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'team:manage');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: permission.status });
   }
 
   const url = new URL(request.url);

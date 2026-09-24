@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockGet = vi.fn();
@@ -45,33 +45,33 @@ describe('POST /api/staff/reviews/[id]/moderate', () => {
   });
 
   it('returns 403 when the caller is not staff/admin', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await POST(makeRequest({ action: 'approve' }), makeContext());
     expect(response.status).toBe(403);
   });
 
   it('returns 400 on an invalid action', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await POST(makeRequest({ action: 'delete' }), makeContext());
     expect(response.status).toBe(400);
   });
 
   it('returns 404 when the review does not exist', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockGet.mockResolvedValueOnce({ exists: false });
     const response = await POST(makeRequest({ action: 'approve' }), makeContext());
     expect(response.status).toBe(404);
   });
 
   it('returns 409 when the review is not pending', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'approved' }) });
     const response = await POST(makeRequest({ action: 'approve' }), makeContext());
     expect(response.status).toBe(409);
   });
 
   it('approves a pending review', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'pending' }) });
     const response = await POST(makeRequest({ action: 'approve' }), makeContext());
     expect(response.status).toBe(200);
@@ -79,7 +79,7 @@ describe('POST /api/staff/reviews/[id]/moderate', () => {
   });
 
   it('rejects a pending review', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'pending' }) });
     const response = await POST(makeRequest({ action: 'reject' }), makeContext());
     expect(response.status).toBe(200);

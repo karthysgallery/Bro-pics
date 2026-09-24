@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../../lib/require-permission';
 import { findOrderByOrderNo } from '../../../../../../lib/order-lookup';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../../lib/notify';
@@ -49,10 +49,11 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'orders:write');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
+  const staffUserId = permission.uid;
 
   const { orderNo } = await params;
   const db = getFirestore(getAdminApp());

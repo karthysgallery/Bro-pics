@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../../lib/firebase-admin';
-import { getAdminUserIdFromAuthHeader } from '../../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { isValidRole, StaffMirrorSchema, ROLES } from '@bro-pics/shared';
 
@@ -19,10 +19,11 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  const adminUserId = await getAdminUserIdFromAuthHeader(request);
-  if (!adminUserId) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'team:manage');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: permission.status });
   }
+  const adminUserId = permission.uid;
 
   const { uid } = await params;
   const body = await request.json();

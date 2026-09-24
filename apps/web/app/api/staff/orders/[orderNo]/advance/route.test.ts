@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockFindOrder = vi.fn();
@@ -57,20 +57,20 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   }
 
   it('returns 403 when the caller is not staff', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await POST(makeRequest({ status: 'paid' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
     expect(response.status).toBe(403);
   });
 
   it('returns 404 when no order matches the order number', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce(null);
     const response = await POST(makeRequest({ status: 'paid' }), { params: Promise.resolve({ orderNo: 'BP-2026-99999' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 400 when advancing to shipped without courier/awbNumber', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({ id: 'order_1', data: { orderNo: 'BP-2026-00001', status: 'printed_packed' } });
     const response = await POST(makeRequest({ status: 'shipped' }), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
     expect(response.status).toBe(400);
@@ -78,7 +78,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('returns 400 for an invalid status transition', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({ id: 'order_1', data: { orderNo: 'BP-2026-00001', status: 'pending_payment' } });
     const response = await POST(makeRequest({ status: 'shipped', courier: 'BlueDart', awbNumber: 'BD123' }), {
       params: Promise.resolve({ orderNo: 'BP-2026-00001' }),
@@ -88,7 +88,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('advances a valid transition, writes an event, and updates the order', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -112,7 +112,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('writes a notification to the order\'s owner on a status change', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', userId: 'user_1', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -135,7 +135,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('sets courier/awbNumber on the order when advancing to shipped', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -163,7 +163,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('[BE-20] sets shipmentTracking with status shipped and a null trackingUrl (no courier API integrated)', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -191,7 +191,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('[BE-20] merges into the existing shipmentTracking on delivered, preserving provider/awbNumber/shippedAt', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'shipped', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -230,7 +230,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('[BE-20] does not fabricate shipmentTracking on delivered when no prior shipmentTracking exists', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'shipped', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -247,7 +247,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('nulls courier/awbNumber on the written event for a non-shipped transition even if the body includes them', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'in_production', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -267,7 +267,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('returns 409 when the in-transaction read shows the order status changed concurrently', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'printed_packed', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },
@@ -288,7 +288,7 @@ describe('POST /api/staff/orders/[orderNo]/advance', () => {
   });
 
   it('[BE-18] queues one print job per order item when a red-tier order is manually advanced to print_rendering', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({
       id: 'order_1',
       data: { id: 'order_1', orderNo: 'BP-2026-00001', status: 'photo_validation', subtotal: 1000, discount: 0, shipping: 0, total: 1000 },

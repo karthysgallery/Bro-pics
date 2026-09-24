@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
 import { writeNotification } from '../../../../../lib/notify';
@@ -40,10 +40,11 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'returns:write');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
   }
+  const staffUserId = permission.uid;
 
   const body = await request.json();
   const statusParsed = ReturnStatusSchema.safeParse(body?.status);

@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockCreateRazorpayRefund = vi.fn();
@@ -71,26 +71,26 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('returns 403 when the caller is not staff', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await POST(makeRequest({ status: 'approved' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
     expect(response.status).toBe(403);
   });
 
   it('returns 400 for a missing/invalid status', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await POST(makeRequest({}), { params: Promise.resolve({ returnId: 'ret_1' }) });
     expect(response.status).toBe(400);
   });
 
   it('returns 404 for an unknown returnId', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({ exists: false });
     const response = await POST(makeRequest({ status: 'approved' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 400 for an invalid transition', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'requested', orderId: 'order_1', refundAmount: 1000 }) });
     const response = await POST(makeRequest({ status: 'refunded' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
     expect(response.status).toBe(400);
@@ -98,7 +98,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('approves a requested return without touching Razorpay', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({
       exists: true,
       data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
@@ -122,7 +122,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('calls Razorpay and moves the order to refunded when advancing to refunded', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({
       exists: true,
       data: () => ({ status: 'refund_processing', orderId: 'order_1', userId: 'user_1', refundAmount: 105000 }),
@@ -154,7 +154,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('[BE-19] writes a return history event on every status change', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({
       exists: true,
       data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
@@ -174,7 +174,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('returns 400 without calling Razorpay when the order has no payment to refund', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({
       exists: true,
       data: () => ({ status: 'refund_processing', orderId: 'order_1', refundAmount: 105000 }),
@@ -188,7 +188,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
   });
 
   it('returns 409 when the in-transaction read shows the return already advanced concurrently', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({ exists: true, data: () => ({ status: 'requested', orderId: 'order_1', refundAmount: 1000 }) });
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ orderNo: 'BP-2026-00001' }) });
     // A concurrent request already moved it to 'rejected' by the time the transaction's own read runs.

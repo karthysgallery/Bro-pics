@@ -5,8 +5,8 @@ vi.mock('server-only', () => ({}));
 import { GET } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockReviewsGet = vi.fn();
@@ -44,19 +44,19 @@ describe('GET /api/staff/reviews', () => {
   });
 
   it('returns 403 when the caller is not staff/admin', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=pending'));
     expect(response.status).toBe(403);
   });
 
   it('returns 400 when status is missing or invalid', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await GET(makeRequest('https://example.com/api/staff/reviews?status=not_a_status'));
     expect(response.status).toBe(400);
   });
 
   it('returns matching reviews with productTitle populated from a batch product lookup', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReviewsGet.mockResolvedValueOnce({
       docs: [
         {
@@ -85,7 +85,7 @@ describe('GET /api/staff/reviews', () => {
   });
 
   it('deduplicates product lookups when multiple reviews share the same productId', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReviewsGet.mockResolvedValueOnce({
       docs: [
         {
