@@ -11,6 +11,8 @@ const mockItemsGet = vi.fn();
 const mockEventsGet = vi.fn();
 const mockReturnsGet = vi.fn();
 const mockReturnsWhere = vi.fn(() => ({ get: mockReturnsGet }));
+const mockCustomizationsGet = vi.fn();
+const mockCustomizationsWhere = vi.fn(() => ({ get: mockCustomizationsGet }));
 const mockDb = {
   collection: vi.fn((name: string) => {
     if (name === 'orders') {
@@ -28,6 +30,9 @@ const mockDb = {
     }
     if (name === 'returns') {
       return { where: mockReturnsWhere };
+    }
+    if (name === 'customizations') {
+      return { where: mockCustomizationsWhere };
     }
     throw new Error(`unexpected collection: ${name}`);
   }),
@@ -55,9 +60,10 @@ describe('GET /api/admin/orders/[id]', () => {
     resetRateLimitState();
     vi.clearAllMocks();
     mockOrderGet.mockResolvedValue({ exists: true, id: 'order_1', data: () => ({ orderNo: 'BP-2026-00001', status: 'paid', notes: 'Handle with care' }) });
-    mockItemsGet.mockResolvedValue({ docs: [{ data: () => ({ id: 'item_1', title: 'Frame' }) }] });
+    mockItemsGet.mockResolvedValue({ docs: [{ data: () => ({ id: 'item_1', title: 'Frame', personalizationId: 'perso_1' }) }] });
     mockEventsGet.mockResolvedValue({ docs: [{ data: () => ({ id: 'event_1', status: 'paid' }) }] });
     mockReturnsGet.mockResolvedValue({ docs: [] });
+    mockCustomizationsGet.mockResolvedValue({ docs: [] });
   });
 
   it('returns the permission-denied status when requirePermission fails', async () => {
@@ -81,7 +87,7 @@ describe('GET /api/admin/orders/[id]', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.order).toEqual(expect.objectContaining({ id: 'order_1', orderNo: 'BP-2026-00001', notes: 'Handle with care' }));
-    expect(body.items).toEqual([{ id: 'item_1', title: 'Frame' }]);
+    expect(body.items).toEqual([{ id: 'item_1', title: 'Frame', personalizationId: 'perso_1' }]);
     expect(body.events).toEqual([{ id: 'event_1', status: 'paid' }]);
     expect(body.returns).toEqual([{ id: 'ret_1', status: 'refunded', razorpayRefundId: 'rfnd_1' }]);
   });
@@ -90,6 +96,39 @@ describe('GET /api/admin/orders/[id]', () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     await GET(makeRequest(), makeParams());
     expect(mockReturnsWhere).toHaveBeenCalledWith('orderId', '==', 'order_1');
+  });
+
+  it('[ABE-16] queries customizations by the distinct personalizationIds off items', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    await GET(makeRequest(), makeParams());
+    expect(mockCustomizationsWhere).toHaveBeenCalledWith('personalizationId', 'in', ['perso_1']);
+  });
+
+  it('[ABE-16] returns hasRedDpi: true when any customization is red-tier', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockCustomizationsGet.mockResolvedValueOnce({ docs: [{ data: () => ({ id: 'cz_1', dpiBand: 'red' }) }] });
+    const response = await GET(makeRequest(), makeParams());
+    const body = await response.json();
+    expect(body.customizations).toEqual([{ id: 'cz_1', dpiBand: 'red' }]);
+    expect(body.hasRedDpi).toBe(true);
+  });
+
+  it('[ABE-16] returns hasRedDpi: false when no customization is red-tier', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockCustomizationsGet.mockResolvedValueOnce({ docs: [{ data: () => ({ id: 'cz_1', dpiBand: 'green' }) }] });
+    const response = await GET(makeRequest(), makeParams());
+    const body = await response.json();
+    expect(body.hasRedDpi).toBe(false);
+  });
+
+  it('[ABE-16] skips the customizations query when there are no items', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockItemsGet.mockResolvedValueOnce({ docs: [] });
+    const response = await GET(makeRequest(), makeParams());
+    const body = await response.json();
+    expect(mockCustomizationsWhere).not.toHaveBeenCalled();
+    expect(body.customizations).toEqual([]);
+    expect(body.hasRedDpi).toBe(false);
   });
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
