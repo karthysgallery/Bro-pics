@@ -37,6 +37,7 @@ export * from './cart/merge-cart-items';
 export * from './orders/order-number';
 export * from './orders/invoice-number';
 export * from './orders/status-transitions';
+export * from './orders/transition-order';
 export * from './orders/order-status-event';
 export * from './orders/return-status-transitions';
 export * from './editor-geometry';

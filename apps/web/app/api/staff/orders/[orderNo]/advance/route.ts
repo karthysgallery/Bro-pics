@@ -8,7 +8,7 @@ import { writeNotification } from '../../../../../../lib/notify';
 import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../../lib/admin-idempotency';
 import { writeAuditLog } from '../../../../../../lib/audit-log';
 import {
-  OrderEventSchema,
+  buildOrderTransitionEvent,
   isValidStatusTransition,
   ManualShippingProvider,
   logger,
@@ -160,15 +160,20 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       const itemsSnap =
         status === 'print_rendering' ? await transaction.get(orderRef.collection('items')) : null;
 
-      const event = OrderEventSchema.parse({
-        id: eventRef.id,
+      // [ABE-16] Shares its event shape with transitionOrder() via
+      // buildOrderTransitionEvent — this route keeps its own transaction
+      // (rather than calling transitionOrder() itself) because it needs
+      // an extra read — the items subcollection, for print_rendering's
+      // job-queuing below — that must happen before any write in this
+      // same transaction; see buildOrderTransitionEvent's own comment.
+      const event = buildOrderTransitionEvent(
+        eventRef.id,
         status,
+        staffUserId,
         note,
-        courier: status === 'shipped' ? courier : null,
-        awbNumber: status === 'shipped' ? awbNumber : null,
-        createdAt: new Date().toISOString(),
-        createdBy: staffUserId,
-      });
+        status === 'shipped' ? courier : null,
+        status === 'shipped' ? awbNumber : null
+      );
       transaction.set(eventRef, event);
       transaction.update(orderRef, orderUpdate);
 

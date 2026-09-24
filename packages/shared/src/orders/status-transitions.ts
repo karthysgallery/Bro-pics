@@ -37,3 +37,13 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export function isValidStatusTransition(from: OrderStatus, to: OrderStatus): boolean {
   return TRANSITIONS[from].includes(to);
 }
+
+/**
+ * [ABE-16] The legal next statuses from a given status — exposed so a
+ * caller building a 409 response can tell the admin what WOULD have
+ * worked, instead of just "no." Returns a copy, not the internal array,
+ * so a caller can't mutate the shared transition table.
+ */
+export function allowedTransitionsFrom(from: OrderStatus): OrderStatus[] {
+  return [...TRANSITIONS[from]];
+}
