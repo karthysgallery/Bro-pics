@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getShippingSettings } from './firestore-settings';
+import { getShippingSettings, getAnnouncementBarSettings } from './firestore-settings';
 
 const mockGet = vi.fn();
 const mockDoc = vi.fn(() => ({ get: mockGet }));
@@ -41,5 +41,27 @@ describe('getShippingSettings', () => {
 
     const result = await getShippingSettings();
     expect(result).toEqual({ freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+  });
+});
+
+describe('getAnnouncementBarSettings', () => {
+  it('returns text and link when the doc exists and is active', async () => {
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ text: 'Free shipping today', link: '/sale', isActive: true }) });
+    expect(await getAnnouncementBarSettings()).toEqual({ text: 'Free shipping today', link: '/sale' });
+  });
+
+  it('[ABE-20] returns null when isActive is explicitly false', async () => {
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ text: 'Free shipping today', isActive: false }) });
+    expect(await getAnnouncementBarSettings()).toBeNull();
+  });
+
+  it('defaults to active when isActive is absent (pre-ABE-20 doc)', async () => {
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ text: 'Free shipping today' }) });
+    expect(await getAnnouncementBarSettings()).toEqual({ text: 'Free shipping today' });
+  });
+
+  it('returns null when the doc does not exist', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
+    expect(await getAnnouncementBarSettings()).toBeNull();
   });
 });

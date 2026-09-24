@@ -70,6 +70,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // [ABE-20] Schedulable, coupon-linkable promo banners — same
+    // public-read, server-write-only pattern as everything else here.
+    match /banners/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /reviews/{id} {
       allow read: if resource.data.status == 'approved' || isStaffOrAdmin();
       allow write: if false;

@@ -12,6 +12,11 @@ export async function getAnnouncementBarSettings(): Promise<{
 
   const data = doc.data();
   if (!data || typeof data.text !== 'string' || data.text.length === 0) return null;
+  // [ABE-20] `isActive` is honored here now that a write path
+  // (POST /api/admin/settings/announcement-bar) actually sets it —
+  // absent (a doc written before this field existed) still means "on",
+  // same default `UpdateAnnouncementBarBodySchema` uses.
+  if (data.isActive === false) return null;
 
   return {
     text: data.text,
