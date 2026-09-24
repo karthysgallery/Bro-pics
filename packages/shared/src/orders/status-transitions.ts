@@ -19,8 +19,19 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   // reaches 'done' (see completePrintJobAndAdvanceOrder).
   print_rendering: ['print_ready', 'cancelled', 'refunded'],
   print_ready: ['in_production', 'cancelled', 'refunded'],
-  in_production: ['printed_packed', 'cancelled', 'refunded'],
+  // [ABE-16] Two parallel paths from here on purpose, not an oversight:
+  // 'printed_packed' is the LEGACY combined status, kept reachable for
+  // orders already using it and for staff who skip the QC gate entirely.
+  // 'quality_check' -> 'packed'/'rework' is the CANONICAL path going
+  // forward — new staff tooling (the QC endpoint) should always advance
+  // through it, not printed_packed directly.
+  in_production: ['printed_packed', 'quality_check', 'cancelled', 'refunded'],
   printed_packed: ['shipped', 'refunded'],
+  quality_check: ['packed', 'rework', 'cancelled', 'refunded'],
+  // A FAILed QC check goes back to in_production for reprinting/rework,
+  // not to a dead end.
+  rework: ['in_production', 'cancelled', 'refunded'],
+  packed: ['shipped', 'refunded'],
   shipped: ['delivered', 'refunded', 'replacement_issued'],
   delivered: ['refunded', 'replacement_issued'],
   cancelled: [],

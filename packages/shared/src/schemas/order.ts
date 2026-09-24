@@ -35,7 +35,15 @@ export const OrderStatusSchema = z.enum([
   'print_rendering',
   'print_ready',
   'in_production',
+  // [ABE-16] A quality-check gate between production and packing —
+  // 'quality_check' -> 'packed' (PASS) or 'rework' (FAIL, sent back to
+  // 'in_production'). 'printed_packed' is kept as the legacy combined
+  // status (see status-transitions.ts's own comment for which path is
+  // canonical going forward).
   'printed_packed',
+  'quality_check',
+  'packed',
+  'rework',
   'shipped',
   'delivered',
   'cancelled',

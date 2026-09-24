@@ -16,6 +16,11 @@ const STEP_LABELS: Record<OrderStatus, string> = {
   print_ready: 'Ready to print',
   in_production: 'In production',
   printed_packed: 'Printed & packed',
+  // [ABE-16] Same "internal sub-stage, no new customer-facing step"
+  // treatment as the BE-18 payment sub-stages above.
+  quality_check: 'Quality check',
+  packed: 'Packed',
+  rework: 'Reprinting',
   shipped: 'Shipped',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
@@ -35,6 +40,12 @@ const STEPPER_POSITION: Record<OrderStatus, OrderStatus> = {
   print_ready: 'paid',
   in_production: 'in_production',
   printed_packed: 'printed_packed',
+  // quality_check/rework are internal production sub-stages (same
+  // treatment as in_production itself); packed lands at the same
+  // stepper position printed_packed already occupies.
+  quality_check: 'in_production',
+  rework: 'in_production',
+  packed: 'printed_packed',
   shipped: 'shipped',
   delivered: 'delivered',
   cancelled: 'paid',
@@ -53,6 +64,9 @@ export const STATUS_CHIP_STYLES: Record<OrderStatus, string> = {
   print_ready: 'bg-blue-50 text-blue-700',
   in_production: 'bg-blue-50 text-blue-700',
   printed_packed: 'bg-blue-50 text-blue-700',
+  quality_check: 'bg-blue-50 text-blue-700',
+  packed: 'bg-blue-50 text-blue-700',
+  rework: 'bg-amber-50 text-amber-700',
   shipped: 'bg-blue-50 text-blue-700',
   delivered: 'bg-green-50 text-green-700',
   cancelled: 'bg-red-50 text-red-700',

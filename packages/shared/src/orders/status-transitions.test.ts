@@ -80,6 +80,9 @@ describe('isValidStatusTransition — terminal states', () => {
       'print_ready',
       'in_production',
       'printed_packed',
+      'quality_check',
+      'packed',
+      'rework',
       'shipped',
       'delivered',
     ];
@@ -116,5 +119,36 @@ describe('isValidStatusTransition — payment-to-print pipeline [BE-18]', () => 
       expect(isValidStatusTransition(from, 'cancelled')).toBe(true);
       expect(isValidStatusTransition(from, 'refunded')).toBe(true);
     }
+  });
+});
+
+describe('isValidStatusTransition — quality-check gate [ABE-16]', () => {
+  it('allows in_production to advance to either the legacy printed_packed or the canonical quality_check', () => {
+    expect(isValidStatusTransition('in_production', 'printed_packed')).toBe(true);
+    expect(isValidStatusTransition('in_production', 'quality_check')).toBe(true);
+  });
+
+  it('allows a PASS (quality_check -> packed) and a FAIL (quality_check -> rework)', () => {
+    expect(isValidStatusTransition('quality_check', 'packed')).toBe(true);
+    expect(isValidStatusTransition('quality_check', 'rework')).toBe(true);
+  });
+
+  it('sends a failed rework back to in_production rather than a dead end', () => {
+    expect(isValidStatusTransition('rework', 'in_production')).toBe(true);
+  });
+
+  it('allows packed to ship, same as printed_packed', () => {
+    expect(isValidStatusTransition('packed', 'shipped')).toBe(true);
+  });
+
+  it('rejects skipping quality_check straight to packed', () => {
+    expect(isValidStatusTransition('in_production', 'packed')).toBe(false);
+  });
+
+  it('allows cancelled/refunded from quality_check and rework', () => {
+    expect(isValidStatusTransition('quality_check', 'cancelled')).toBe(true);
+    expect(isValidStatusTransition('quality_check', 'refunded')).toBe(true);
+    expect(isValidStatusTransition('rework', 'cancelled')).toBe(true);
+    expect(isValidStatusTransition('rework', 'refunded')).toBe(true);
   });
 });
