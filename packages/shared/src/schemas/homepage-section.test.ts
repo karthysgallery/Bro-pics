@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HomepageSectionSchema } from './homepage-section';
+import { HomepageSectionSchema, HeroSlideSchema } from './homepage-section';
 
 const validSection = {
   id: 'sec_hero',
@@ -53,5 +53,32 @@ describe('HomepageSectionSchema', () => {
     for (const type of types) {
       expect(() => HomepageSectionSchema.parse({ ...validSection, type })).not.toThrow();
     }
+  });
+
+  it('accepts a section with heroSlides and previewToken', () => {
+    const withExtras = {
+      ...validSection,
+      heroSlides: [{ id: 'slide_1', image: '/a.jpg', mobileImage: '/a-m.jpg', title: 'Slide 1', sortOrder: 0 }],
+      previewToken: 'abc123',
+    };
+    expect(HomepageSectionSchema.parse(withExtras)).toEqual(withExtras);
+  });
+
+  it('omits heroSlides and previewToken when not given (no defaulting)', () => {
+    const parsed = HomepageSectionSchema.parse(validSection);
+    expect('heroSlides' in parsed).toBe(false);
+    expect('previewToken' in parsed).toBe(false);
+  });
+});
+
+describe('HeroSlideSchema', () => {
+  it('accepts a slide with only the required fields', () => {
+    const slide = { id: 's1', image: '/a.jpg', mobileImage: '/a-m.jpg', title: 'Slide', sortOrder: 0 };
+    expect(HeroSlideSchema.parse(slide)).toEqual(slide);
+  });
+
+  it('rejects a slide missing a required field', () => {
+    const slide = { id: 's1', image: '/a.jpg', mobileImage: '/a-m.jpg', sortOrder: 0 };
+    expect(() => HeroSlideSchema.parse(slide)).toThrow();
   });
 });
