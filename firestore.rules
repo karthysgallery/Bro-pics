@@ -177,5 +177,14 @@ service cloud.firestore {
     match /idempotencyKeys/{key} {
       allow read, write: if false;
     }
+
+    // [ABE-10] Media library docs — admin-SDK-only, same as auditLogs/
+    // idempotencyKeys above. No client reads this directly: the storefront
+    // never queries the library itself, only the already-public Storage
+    // URLs a media doc points to (storage.rules' own public/ prefix rule
+    // covers that). All library access goes through /api/admin/media.
+    match /media/{id} {
+      allow read, write: if false;
+    }
   }
 }

@@ -10,6 +10,7 @@ export * from './schemas/category';
 export * from './schemas/collection';
 export * from './schemas/review';
 export * from './schemas/product-media';
+export * from './schemas/media-asset';
 export * from './schemas/homepage-section';
 export * from './schemas/upload';
 export * from './schemas/frame-template';
