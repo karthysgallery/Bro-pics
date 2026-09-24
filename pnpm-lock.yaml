@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bro-pics/print-render':
+        specifier: workspace:*
+        version: link:../../services/print-render
       '@bro-pics/shared':
         specifier: workspace:*
         version: link:../../packages/shared

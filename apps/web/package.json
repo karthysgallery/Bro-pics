@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bro-pics/print-render": "workspace:*",
     "@bro-pics/shared": "workspace:*",
     "firebase": "^10.14.0",
     "firebase-admin": "^12.6.0",
