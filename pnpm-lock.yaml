@@ -44,6 +44,9 @@ importers:
       sharp:
         specifier: ^0.35.0
         version: 0.35.4(@types/node@26.4.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@next/bundle-analyzer':
         specifier: ^16.3.4

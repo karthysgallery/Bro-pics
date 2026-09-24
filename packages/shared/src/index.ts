@@ -24,6 +24,7 @@ export * from './search/build-query-plan';
 export * from './search/search-products';
 export * from './search/search-provider';
 export * from './search/parse-search-params';
+export * from './search/product-search-fields';
 export * from './pricing/money';
 export * from './pricing/coupon';
 export * from './pricing/gst';

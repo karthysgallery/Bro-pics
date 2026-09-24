@@ -65,6 +65,28 @@ export const ProductSchema = z.object({
   // sourced from variant-agnostic (variantId === null) image media only.
   primaryImageUrl: z.string(),
   hoverImageUrl: z.string().nullable(),
+
+  // [ABE-04] Editorial workflow status, additive to `isActive` — NOT a
+  // replacement for it. `isActive` stays the single field every storefront
+  // query filters on (firestore.indexes.json's composite indexes are all
+  // built on `isActive + …`, and this environment can't deploy new ones);
+  // `status` is derived-from-and-kept-in-sync-with by the admin write path
+  // (`isActive = status === 'published'`), never independently settable
+  // through the API. Optional (not `.default()`, same pattern as
+  // `salesCount` above) so every pre-existing product — seeded data, and
+  // every test fixture across the app that builds a `Product` object
+  // literal without this field — still typechecks and parses; callers
+  // treat an absent `status` as `'published'`, matching those docs'
+  // actual `isActive: true` state.
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+
+  // [ABE-04] Admin-curated cross-sell lists, max 8 each per the task spec.
+  // Distinct from the storefront's own runtime recommendation logic
+  // (lib/recommendations.ts's getNewArrivals/getTrendingProducts) — those
+  // are computed, these are hand-picked by an admin. Optional, same
+  // reasoning as `status` above.
+  relatedProductIds: z.array(z.string()).max(8).optional(),
+  frequentlyBoughtTogetherIds: z.array(z.string()).max(8).optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;
