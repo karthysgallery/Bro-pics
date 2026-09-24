@@ -199,5 +199,15 @@ service cloud.firestore {
     match /media/{id} {
       allow read, write: if false;
     }
+
+    // [ABE-19] Unlike `media` above (a purely admin-side asset library,
+    // never queried directly by the storefront), `videos` IS meant to be
+    // read by the public site once something wires it up — same
+    // public-read, server-write-only pattern as `homepageSections`/
+    // `pages`/`faqs`/`testimonials`.
+    match /videos/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

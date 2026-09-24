@@ -15,6 +15,7 @@ export * from './schemas/homepage-section';
 export * from './schemas/page';
 export * from './schemas/faq';
 export * from './schemas/testimonial';
+export * from './schemas/video';
 export * from './schemas/upload';
 export * from './schemas/frame-template';
 export * from './schemas/user';
