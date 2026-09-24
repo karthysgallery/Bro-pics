@@ -45,6 +45,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // [ABE-07] Admin-curated product groupings — same public-read,
+    // server-write-only pattern as categories/products.
+    match /collections/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /testimonials/{id} {
       allow read: if true;
       allow write: if false;

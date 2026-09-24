@@ -7,6 +7,7 @@ export * from './schemas/order-item';
 export * from './schemas/customization';
 export * from './schemas/settings';
 export * from './schemas/category';
+export * from './schemas/collection';
 export * from './schemas/review';
 export * from './schemas/product-media';
 export * from './schemas/homepage-section';
