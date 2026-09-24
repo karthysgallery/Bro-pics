@@ -14,6 +14,18 @@ vi.mock('firebase-admin/auth', () => ({
     revokeRefreshTokens: mockRevokeRefreshTokens,
   })),
 }));
+
+const mockStaffGet = vi.fn().mockResolvedValue({ exists: false, data: () => undefined });
+const mockStaffSet = vi.fn().mockResolvedValue(undefined);
+const mockStaffUpdate = vi.fn().mockResolvedValue(undefined);
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: vi.fn(() => ({
+    collection: vi.fn(() => ({
+      doc: vi.fn(() => ({ get: mockStaffGet, set: mockStaffSet, update: mockStaffUpdate })),
+    })),
+  })),
+}));
+
 vi.mock('../../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 vi.mock('../../../../../../lib/rate-limit', async (importOriginal) => {
@@ -107,6 +119,57 @@ describe('POST /api/admin/users/[uid]/role', () => {
     const response = await POST(makeRequest({ role: 'staff' }), makeParams('user_9'));
     expect(response.status).toBe(200);
     expect(mockSetCustomUserClaims).toHaveBeenCalledWith('user_9', { role: 'staff' });
+  });
+
+  it('[ABE-01] accepts every one of the five roles', async () => {
+    for (const role of ['super_admin', 'admin', 'staff', 'content_manager', 'catalogue_manager']) {
+      mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+      const response = await POST(makeRequest({ role }), makeParams('user_9'));
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it('[ABE-01] writes the staff/{uid} mirror doc when granting a role', async () => {
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    const response = await POST(makeRequest({ role: 'catalogue_manager' }), makeParams('user_9'));
+    expect(response.status).toBe(200);
+    expect(mockStaffSet).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: 'user_9', role: 'catalogue_manager', active: true, invitedBy: 'admin_1', lastLoginAt: null })
+    );
+  });
+
+  it('[ABE-01] preserves an existing lastLoginAt when re-granting a role', async () => {
+    const existingTimestamp = { toDate: () => new Date('2026-09-01T00:00:00.000Z') };
+    mockStaffGet.mockResolvedValueOnce({ exists: true, data: () => ({ lastLoginAt: existingTimestamp }) });
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    await POST(makeRequest({ role: 'staff' }), makeParams('user_9'));
+    expect(mockStaffSet).toHaveBeenCalledWith(expect.objectContaining({ lastLoginAt: new Date('2026-09-01T00:00:00.000Z') }));
+  });
+
+  it('[ABE-01] marks the mirror inactive (not deleted) when clearing an existing role', async () => {
+    mockStaffGet.mockResolvedValueOnce({ exists: true, data: () => ({}) });
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    await POST(makeRequest({ role: null }), makeParams('user_9'));
+    expect(mockStaffUpdate).toHaveBeenCalledWith(expect.objectContaining({ active: false }));
+    expect(mockStaffSet).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-01] does nothing to Firestore when clearing a role that never had a mirror doc', async () => {
+    mockStaffGet.mockResolvedValueOnce({ exists: false });
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    await POST(makeRequest({ role: null }), makeParams('user_9'));
+    expect(mockStaffUpdate).not.toHaveBeenCalled();
+    expect(mockStaffSet).not.toHaveBeenCalled();
+  });
+
+  it('[ABE-01] allows a super_admin to demote themselves to admin, but not to staff or null', async () => {
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    const toAdmin = await POST(makeRequest({ role: 'admin' }), makeParams('admin_1'));
+    expect(toAdmin.status).toBe(200);
+
+    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    const toStaff = await POST(makeRequest({ role: 'staff' }), makeParams('admin_1'));
+    expect(toStaff.status).toBe(400);
   });
 
   it('returns 429 and does not touch Firebase Auth when rate-limited', async () => {

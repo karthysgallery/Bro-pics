@@ -1,0 +1,84 @@
+import { describe, it, expect } from 'vitest';
+import { roleHasPermission, isValidRole, ROLES, PERMISSION_KEYS, ROLE_PERMISSIONS, type Role } from './permissions';
+
+describe('ROLE_PERMISSIONS', () => {
+  it('defines a permission list for every role', () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role]).toBeDefined();
+    }
+  });
+
+  it('only ever references known permission keys', () => {
+    for (const role of ROLES) {
+      for (const key of ROLE_PERMISSIONS[role]) {
+        expect(PERMISSION_KEYS).toContain(key);
+      }
+    }
+  });
+});
+
+describe('roleHasPermission', () => {
+  it('grants super_admin every permission', () => {
+    for (const key of PERMISSION_KEYS) {
+      expect(roleHasPermission('super_admin', key)).toBe(true);
+    }
+  });
+
+  it('denies admin team:manage specifically, per ABE-27\'s Super-Admin-only gating', () => {
+    expect(roleHasPermission('admin', 'team:manage')).toBe(false);
+    expect(roleHasPermission('super_admin', 'team:manage')).toBe(true);
+  });
+
+  it('grants admin everything else', () => {
+    const nonTeamKeys = PERMISSION_KEYS.filter((k) => k !== 'team:manage');
+    for (const key of nonTeamKeys) {
+      expect(roleHasPermission('admin', key)).toBe(true);
+    }
+  });
+
+  it('scopes staff to order/return/review operations only', () => {
+    expect(roleHasPermission('staff', 'orders:write')).toBe(true);
+    expect(roleHasPermission('staff', 'returns:write')).toBe(true);
+    expect(roleHasPermission('staff', 'reviews:moderate')).toBe(true);
+    expect(roleHasPermission('staff', 'catalogue:write')).toBe(false);
+    expect(roleHasPermission('staff', 'settings:write')).toBe(false);
+    expect(roleHasPermission('staff', 'team:manage')).toBe(false);
+  });
+
+  it('scopes catalogue_manager to catalogue:write, with read-only content access', () => {
+    expect(roleHasPermission('catalogue_manager', 'catalogue:write')).toBe(true);
+    expect(roleHasPermission('catalogue_manager', 'content:read')).toBe(true);
+    expect(roleHasPermission('catalogue_manager', 'content:write')).toBe(false);
+    expect(roleHasPermission('catalogue_manager', 'orders:write')).toBe(false);
+  });
+
+  it('scopes content_manager to content:write, with read-only catalogue access', () => {
+    expect(roleHasPermission('content_manager', 'content:write')).toBe(true);
+    expect(roleHasPermission('content_manager', 'catalogue:read')).toBe(true);
+    expect(roleHasPermission('content_manager', 'catalogue:write')).toBe(false);
+    expect(roleHasPermission('content_manager', 'orders:write')).toBe(false);
+  });
+});
+
+describe('isValidRole', () => {
+  it('accepts every defined role', () => {
+    for (const role of ROLES) {
+      expect(isValidRole(role)).toBe(true);
+    }
+  });
+
+  it('rejects an unknown string, and non-string values', () => {
+    expect(isValidRole('owner')).toBe(false);
+    expect(isValidRole(null)).toBe(false);
+    expect(isValidRole(undefined)).toBe(false);
+    expect(isValidRole(42)).toBe(false);
+  });
+
+  it('narrows the type on a true result (compile-time check via a Role-typed assignment)', () => {
+    const value: unknown = 'staff';
+    if (isValidRole(value)) {
+      const role: Role = value;
+      expect(role).toBe('staff');
+    }
+  });
+});

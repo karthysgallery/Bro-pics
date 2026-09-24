@@ -134,6 +134,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // [ABE-01] Admin-SDK-only, same pattern as printJobs/notificationOutbox
+    // above — no client ever reads or writes the staff role mirror
+    // directly, always through /api/admin/users/[uid]/role.
+    match /staff/{uid} {
+      allow read, write: if false;
+    }
+
     match /counters/{id} {
       allow read, write: if false;
     }

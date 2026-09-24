@@ -22,9 +22,19 @@ export async function getUserIdFromAuthHeader(request: Request): Promise<string 
 
 /**
  * Like getUserIdFromAuthHeader, but ALSO requires the decoded token's role
- * claim to be 'admin' or 'staff' — mirroring firestore.rules' isStaffOrAdmin()
- * exactly. Unlike getUserIdFromAuthHeader, a null return here is never
- * "proceed as signed out" — it always means the caller must respond 403.
+ * claim to be 'admin', 'staff', or 'super_admin' — mirroring
+ * firestore.rules' isStaffOrAdmin() exactly (a `super_admin` is a
+ * superset of `admin` — see permissions.ts's ROLE_PERMISSIONS, where
+ * super_admin holds every permission admin does plus team:manage; it
+ * must never be locked out of anything a plain admin can already reach).
+ * Unlike getUserIdFromAuthHeader, a null return here is never "proceed as
+ * signed out" — it always means the caller must respond 403.
+ *
+ * [ABE-01] Pre-dates the 5-role permission model in
+ * packages/shared/src/auth/permissions.ts — kept as a lightweight,
+ * unchanged-behavior check for the many existing routes still using it.
+ * requirePermission (./require-permission.ts) is the new, permission-key-
+ * scoped alternative; ABE-02 migrates existing routes to it.
  */
 export async function getStaffUserIdFromAuthHeader(request: Request): Promise<string | null> {
   const authHeader = request.headers.get('Authorization');
@@ -33,7 +43,7 @@ export async function getStaffUserIdFromAuthHeader(request: Request): Promise<st
   try {
     const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     const role = (decoded as { role?: string }).role;
-    if (role !== 'admin' && role !== 'staff') return null;
+    if (role !== 'admin' && role !== 'staff' && role !== 'super_admin') return null;
     return decoded.uid;
   } catch {
     return null;
@@ -41,9 +51,11 @@ export async function getStaffUserIdFromAuthHeader(request: Request): Promise<st
 }
 
 /**
- * Like getStaffUserIdFromAuthHeader, but requires the 'admin' role
+ * Like getStaffUserIdFromAuthHeader, but requires 'admin' or 'super_admin'
  * specifically — 'staff' does not pass. Used for role-management routes,
- * which are more sensitive than order lookup/advance.
+ * which are more sensitive than order lookup/advance. See
+ * getStaffUserIdFromAuthHeader's own doc comment for why super_admin is
+ * included alongside admin.
  */
 export async function getAdminUserIdFromAuthHeader(request: Request): Promise<string | null> {
   const authHeader = request.headers.get('Authorization');
@@ -52,7 +64,7 @@ export async function getAdminUserIdFromAuthHeader(request: Request): Promise<st
   try {
     const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
     const role = (decoded as { role?: string }).role;
-    if (role !== 'admin') return null;
+    if (role !== 'admin' && role !== 'super_admin') return null;
     return decoded.uid;
   } catch {
     return null;
