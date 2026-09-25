@@ -191,6 +191,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // [ABE-25] Admin-SDK-only, same pattern as notificationOutbox above —
+    // no client ever reads or writes a template directly, always through
+    // /api/admin/notification-templates.
+    match /notificationTemplates/{key} {
+      allow read, write: if false;
+    }
+
     // [ABE-03] Same admin-SDK-only pattern — the audit trail for every
     // admin/staff write (lib/audit-log.ts). A client that could write its
     // own audit entries could forge its own trail, and a client that

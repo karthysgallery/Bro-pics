@@ -26,6 +26,7 @@ export * from './schemas/return-event';
 export * from './schemas/refund';
 export * from './schemas/notification';
 export * from './schemas/notification-outbox';
+export * from './schemas/notification-template';
 export * from './schemas/print-job';
 export * from './search/types';
 export * from './search/build-query-plan';
@@ -61,6 +62,7 @@ export * from './print-jobs/backoff';
 // module resolution). Server-only callers import it directly by path:
 // '@bro-pics/shared/src/print-jobs/print-jobs'.
 export * from './notifications/notification-outbox';
+export * from './notifications/render-template';
 export * from './reconciliation/stuck-orders';
 export * from './cleanup/stale-anonymous-docs';
 export * from './logging/logger';
