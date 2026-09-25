@@ -28,9 +28,15 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     );
   }
 
-  const permission = await requirePermission(request, 'content:write');
+  // [ABE-24] Corrected from 'content:write' (this route's original
+  // permission at ABE-20) to the dedicated 'settings:write' key —
+  // defined since ABE-01's role matrix specifically for settings docs,
+  // granted only to admin/super_admin, but this route was its first real
+  // caller and used the wrong, more broadly-granted key (content_manager
+  // also holds 'content:write', which was never meant to reach settings).
+  const permission = await requirePermission(request, 'settings:write');
   if (!permission.ok) {
-    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Content write access required');
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Settings write access required');
   }
 
   const rawBody = await request.json().catch(() => null);
