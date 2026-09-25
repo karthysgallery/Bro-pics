@@ -231,6 +231,117 @@ export async function handlePaymentFailed(
   );
 }
 
+export interface RefundEventTransaction {
+  findRefund(orderId: string, refundId: string): Promise<{ status: string; amount: number } | null>;
+  findOrder(orderId: string): Promise<{ total: number; status: OrderStatus } | null>;
+  sumProcessedRefunds(orderId: string): Promise<number>;
+  markRefundProcessed(orderId: string, refundId: string, razorpayRefundId: string): void;
+  markRefundFailed(orderId: string, refundId: string, razorpayRefundId: string, reason: string): void;
+  setOrderStatus(orderId: string, status: OrderStatus): void;
+}
+
+/**
+ * [ABE-23] Same idempotency/read-before-write discipline as
+ * handlePaymentCaptured. `orderId`/`refundId` come from `notes` Razorpay
+ * echoes back on the refund entity (set when the admin refunds route
+ * created the refund) — not a Firestore lookup by `razorpayRefundId`,
+ * which would need a collection-group index this environment can't
+ * deploy. A refund already `processed` (the admin route's own synchronous
+ * Razorpay response already flipped it) is a no-op here, not an error —
+ * the event still gets marked processed so a redelivery doesn't loop.
+ */
+export async function handleRefundProcessed(
+  webhookTx: WebhookTransaction,
+  refundTx: RefundEventTransaction,
+  params: { eventId: string; orderId: string; refundId: string; razorpayRefundId: string }
+): Promise<void> {
+  const alreadyProcessed = await isDuplicateWebhookEvent(webhookTx, params.eventId);
+  if (alreadyProcessed) return;
+
+  const refund = await refundTx.findRefund(params.orderId, params.refundId);
+  if (!refund) {
+    markWebhookProcessed(webhookTx, params.eventId, params.orderId);
+    return;
+  }
+
+  if (refund.status !== 'processed') {
+    const order = await refundTx.findOrder(params.orderId);
+    const priorProcessed = await refundTx.sumProcessedRefunds(params.orderId);
+
+    refundTx.markRefundProcessed(params.orderId, params.refundId, params.razorpayRefundId);
+
+    // A fully-refunded order (this refund plus any prior processed ones
+    // reaches the order total) moves to 'refunded' — same convention the
+    // admin refunds route's own synchronous path already applies.
+    if (order && order.status !== 'refunded' && priorProcessed + refund.amount >= order.total) {
+      refundTx.setOrderStatus(params.orderId, 'refunded');
+    }
+  }
+
+  markWebhookProcessed(webhookTx, params.eventId, params.orderId);
+}
+
+export async function handleRefundFailed(
+  webhookTx: WebhookTransaction,
+  refundTx: RefundEventTransaction,
+  params: { eventId: string; orderId: string; refundId: string; razorpayRefundId: string; reason: string }
+): Promise<void> {
+  const alreadyProcessed = await isDuplicateWebhookEvent(webhookTx, params.eventId);
+  if (alreadyProcessed) return;
+
+  const refund = await refundTx.findRefund(params.orderId, params.refundId);
+  if (!refund) {
+    markWebhookProcessed(webhookTx, params.eventId, params.orderId);
+    return;
+  }
+
+  if (refund.status !== 'processed') {
+    refundTx.markRefundFailed(params.orderId, params.refundId, params.razorpayRefundId, params.reason);
+  }
+
+  markWebhookProcessed(webhookTx, params.eventId, params.orderId);
+}
+
+function buildRefundTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFirestore.Transaction): RefundEventTransaction {
+  return {
+    async findRefund(orderId, refundId) {
+      const snap = await transaction.get(db.collection('orders').doc(orderId).collection('refunds').doc(refundId));
+      if (!snap.exists) return null;
+      const data = snap.data() as { status: string; amount: number };
+      return { status: data.status, amount: data.amount };
+    },
+    async findOrder(orderId) {
+      const snap = await transaction.get(db.collection('orders').doc(orderId));
+      if (!snap.exists) return null;
+      const data = snap.data() as { total: number; status: OrderStatus };
+      return { total: data.total, status: data.status };
+    },
+    async sumProcessedRefunds(orderId) {
+      const snapshot = await transaction.get(
+        db.collection('orders').doc(orderId).collection('refunds').where('status', '==', 'processed')
+      );
+      return snapshot.docs.reduce((sum, doc) => sum + (doc.data() as { amount: number }).amount, 0);
+    },
+    markRefundProcessed(orderId, refundId, razorpayRefundId) {
+      transaction.update(db.collection('orders').doc(orderId).collection('refunds').doc(refundId), {
+        status: 'processed',
+        razorpayRefundId,
+        processedAt: new Date(),
+      });
+    },
+    markRefundFailed(orderId, refundId, razorpayRefundId, reason) {
+      transaction.update(db.collection('orders').doc(orderId).collection('refunds').doc(refundId), {
+        status: 'failed',
+        razorpayRefundId,
+        failureReason: reason,
+      });
+    },
+    setOrderStatus(orderId, status) {
+      transaction.update(db.collection('orders').doc(orderId), { status });
+    },
+  };
+}
+
 function verifySignature(rawBody: string, signature: string, secret: string): boolean {
   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
   const expectedBuffer = Buffer.from(expected);
@@ -363,7 +474,13 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
 
 interface RazorpayWebhookBody {
   event?: string;
-  payload?: { payment?: { entity?: { id?: string; order_id?: string } } };
+  payload?: {
+    payment?: { entity?: { id?: string; order_id?: string } };
+    // [ABE-23] `notes` echoes back exactly what the admin refunds route
+    // sent when creating the refund — the vehicle for locating the
+    // orders/{id}/refunds/{refundId} doc without a collection-group query.
+    refund?: { entity?: { id?: string; status?: string; notes?: { orderId?: string; refundId?: string } } };
+  };
 }
 
 export const razorpayWebhook = onRequest(async (req, res) => {
@@ -382,13 +499,50 @@ export const razorpayWebhook = onRequest(async (req, res) => {
   }
 
   const body = req.body as RazorpayWebhookBody;
+  const db = getFirestore();
+
+  // [ABE-23] Handled before the payment-entity guard below — a refund
+  // webhook's payload shape is `payload.refund.entity`, not
+  // `payload.payment.entity`, so it would always be "Ignored: no payment
+  // entity" if this ran after that check.
+  if (body.event === 'refund.processed' || body.event === 'refund.failed') {
+    const refundEntity = body.payload?.refund?.entity;
+    const orderId = refundEntity?.notes?.orderId;
+    const refundId = refundEntity?.notes?.refundId;
+    if (!refundEntity?.id || !orderId || !refundId) {
+      res.status(200).send('Ignored: no refund entity/notes');
+      return;
+    }
+
+    await db.runTransaction(async (transaction) => {
+      const webhookTx = buildWebhookTx(db, transaction);
+      const refundTx = buildRefundTx(db, transaction);
+      if (body.event === 'refund.processed') {
+        await handleRefundProcessed(webhookTx, refundTx, {
+          eventId: refundEntity.id!,
+          orderId,
+          refundId,
+          razorpayRefundId: refundEntity.id!,
+        });
+      } else {
+        await handleRefundFailed(webhookTx, refundTx, {
+          eventId: refundEntity.id!,
+          orderId,
+          refundId,
+          razorpayRefundId: refundEntity.id!,
+          reason: 'Razorpay reported refund.failed',
+        });
+      }
+    });
+    res.status(200).send('OK');
+    return;
+  }
+
   const paymentEntity = body.payload?.payment?.entity;
   if (!paymentEntity?.id || !paymentEntity?.order_id) {
     res.status(200).send('Ignored: no payment entity');
     return;
   }
-
-  const db = getFirestore();
 
   if (body.event === 'payment.captured') {
     await db.runTransaction(async (transaction) => {

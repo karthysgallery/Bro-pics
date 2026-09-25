@@ -100,6 +100,13 @@ service cloud.firestore {
         allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
         allow write: if false;
       }
+
+      // [ABE-23] Admin ad-hoc refunds — same owner-or-staff read, admin-
+      // SDK-only write pattern as items/events above.
+      match /refunds/{refundId} {
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow write: if false;
+      }
     }
 
     match /uploads/{uploadId} {

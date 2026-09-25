@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handlePaymentCaptured, handlePaymentFailed } from './razorpay';
-import type { PaymentEventTransaction, CustomizationToLock, OrderItemRef } from './razorpay';
+import { handlePaymentCaptured, handlePaymentFailed, handleRefundProcessed, handleRefundFailed } from './razorpay';
+import type { PaymentEventTransaction, CustomizationToLock, OrderItemRef, RefundEventTransaction } from './razorpay';
 import type { WebhookTransaction } from './idempotency';
 
 function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
@@ -323,5 +323,129 @@ describe('handlePaymentFailed', () => {
     await handlePaymentFailed(paymentTx, { razorpayOrderId: 'order_rzp_1' });
     expect(paymentTx.markPaymentFailed).not.toHaveBeenCalled();
     expect(paymentTx.recordEvent).not.toHaveBeenCalled();
+  });
+});
+
+function makeRefundTx(
+  refund: { status: string; amount: number } | null,
+  order: { total: number; status: string } | null = null,
+  processedSum = 0
+): RefundEventTransaction {
+  return {
+    findRefund: vi.fn().mockResolvedValue(refund),
+    findOrder: vi.fn().mockResolvedValue(order as never),
+    sumProcessedRefunds: vi.fn().mockResolvedValue(processedSum),
+    markRefundProcessed: vi.fn(),
+    markRefundFailed: vi.fn(),
+    setOrderStatus: vi.fn(),
+  };
+}
+
+describe('handleRefundProcessed', () => {
+  it('marks the refund doc processed and the event as handled', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 50000 }, { total: 105000, status: 'delivered' }, 0);
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.markRefundProcessed).toHaveBeenCalledWith('order_1', 'refund_1', 'rfnd_1');
+    expect(webhookTx.set).toHaveBeenCalled();
+  });
+
+  it('flips the order to refunded once this refund plus prior processed ones reach the order total', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 55000 }, { total: 105000, status: 'delivered' }, 50000);
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'refunded');
+  });
+
+  it('does not flip the order when this refund is only a partial amount', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 10000 }, { total: 105000, status: 'delivered' }, 0);
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.setOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not re-flip an order already refunded', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 105000 }, { total: 105000, status: 'refunded' }, 0);
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.setOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op (but still marks the event processed) when the refund doc is not found', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx(null);
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.markRefundProcessed).not.toHaveBeenCalled();
+    expect(webhookTx.set).toHaveBeenCalled();
+  });
+
+  it('does not re-mark an already-processed refund, but still marks the event handled', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'processed', amount: 50000 });
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.markRefundProcessed).not.toHaveBeenCalled();
+    expect(webhookTx.set).toHaveBeenCalled();
+  });
+
+  it('does nothing at all when the event was already processed (idempotent retry)', async () => {
+    const webhookTx = makeWebhookTx(true);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 50000 });
+    await handleRefundProcessed(webhookTx, refundTx, { eventId: 'rfnd_1', orderId: 'order_1', refundId: 'refund_1', razorpayRefundId: 'rfnd_1' });
+    expect(refundTx.findRefund).not.toHaveBeenCalled();
+    expect(refundTx.markRefundProcessed).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleRefundFailed', () => {
+  it('marks the refund doc failed with the given reason', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 50000 });
+    await handleRefundFailed(webhookTx, refundTx, {
+      eventId: 'rfnd_1',
+      orderId: 'order_1',
+      refundId: 'refund_1',
+      razorpayRefundId: 'rfnd_1',
+      reason: 'Razorpay reported refund.failed',
+    });
+    expect(refundTx.markRefundFailed).toHaveBeenCalledWith('order_1', 'refund_1', 'rfnd_1', 'Razorpay reported refund.failed');
+  });
+
+  it('does not overwrite an already-processed refund with a failed status', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx({ status: 'processed', amount: 50000 });
+    await handleRefundFailed(webhookTx, refundTx, {
+      eventId: 'rfnd_1',
+      orderId: 'order_1',
+      refundId: 'refund_1',
+      razorpayRefundId: 'rfnd_1',
+      reason: 'late/out-of-order event',
+    });
+    expect(refundTx.markRefundFailed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the refund doc is not found', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const refundTx = makeRefundTx(null);
+    await handleRefundFailed(webhookTx, refundTx, {
+      eventId: 'rfnd_1',
+      orderId: 'order_1',
+      refundId: 'refund_1',
+      razorpayRefundId: 'rfnd_1',
+      reason: 'x',
+    });
+    expect(refundTx.markRefundFailed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the event was already processed (idempotent retry)', async () => {
+    const webhookTx = makeWebhookTx(true);
+    const refundTx = makeRefundTx({ status: 'pending', amount: 50000 });
+    await handleRefundFailed(webhookTx, refundTx, {
+      eventId: 'rfnd_1',
+      orderId: 'order_1',
+      refundId: 'refund_1',
+      razorpayRefundId: 'rfnd_1',
+      reason: 'x',
+    });
+    expect(refundTx.findRefund).not.toHaveBeenCalled();
   });
 });

@@ -139,6 +139,27 @@ describe('POST /api/staff/returns/[returnId]', () => {
     );
   });
 
+  it('[ABE-23] returns 400 for an invalid resolution value', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    const response = await POST(makeRequest({ status: 'approved', resolution: 'store_credit' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
+    expect(response.status).toBe(400);
+  });
+
+  it('[ABE-23] records the resolution when approving', async () => {
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
+    mockReturnGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'requested', orderId: 'order_1', userId: 'user_1', refundAmount: 1000 }),
+    });
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ orderNo: 'BP-2026-00001' }) });
+    mockTransactionGet.mockResolvedValueOnce({ data: () => ({ status: 'requested' }) });
+
+    const response = await POST(makeRequest({ status: 'approved', resolution: 'replacement' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ resolution: 'replacement' }));
+  });
+
   it('calls Razorpay and moves the order to refunded when advancing to refunded', async () => {
     mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockReturnGet.mockResolvedValueOnce({
@@ -152,7 +173,7 @@ describe('POST /api/staff/returns/[returnId]', () => {
     const response = await POST(makeRequest({ status: 'refunded' }), { params: Promise.resolve({ returnId: 'ret_1' }) });
 
     expect(response.status).toBe(200);
-    expect(mockCreateRazorpayRefund).toHaveBeenCalledWith({ paymentId: 'pay_1', amount: 105000, notes: { returnId: 'ret_1' } });
+    expect(mockCreateRazorpayRefund).toHaveBeenCalledWith({ paymentId: 'pay_1', amount: 105000, notes: { returnId: 'ret_1' }, idempotencyKey: 'ret_1' });
     expect(mockTransactionUpdate).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ status: 'refunded', razorpayRefundId: 'rfnd_1' })

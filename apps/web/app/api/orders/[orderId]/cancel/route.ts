@@ -4,7 +4,7 @@ import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../lib/notify';
-import { OrderEventSchema, logger, type OrderStatus } from '@bro-pics/shared';
+import { OrderEventSchema, RefundSchema, logger, type OrderStatus } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       if (!orderSnap.exists) {
         throw new NotFoundError();
       }
-      const order = orderSnap.data() as { userId: string; status: OrderStatus; orderNo: string };
+      const order = orderSnap.data() as { userId: string; status: OrderStatus; orderNo: string; paymentStatus: string; total: number };
       if (order.userId !== userId) {
         throw new NotFoundError();
       }
@@ -61,6 +61,35 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       });
       transaction.set(eventRef, event);
       transaction.update(orderRef, { status: 'cancelled' });
+
+      // [ABE-23] "A paid-order cancellation should propose a refund
+      // automatically" — a PROPOSAL, not an actual charge: this never
+      // calls Razorpay (an external HTTP call has no place inside a
+      // Firestore transaction anyway, same rule every money-moving route
+      // in this codebase already follows). The doc sits at `pending` with
+      // no `razorpayRefundId` until staff process it via
+      // POST /api/admin/orders/{id}/refunds with this doc's id — the
+      // same "doc written first, Razorpay called after" shape that route
+      // uses for a fresh ad-hoc refund, just with the doc pre-created by
+      // this cancellation instead of by that route itself.
+      if (order.paymentStatus === 'paid') {
+        const refundRef = orderRef.collection('refunds').doc();
+        const refund = RefundSchema.parse({
+          id: refundRef.id,
+          orderId,
+          amount: order.total,
+          reason: 'Order cancelled by customer',
+          status: 'pending',
+          razorpayRefundId: null,
+          returnId: null,
+          createdAt: new Date(),
+          createdBy: null,
+          processedAt: null,
+          failureReason: null,
+        });
+        transaction.set(refundRef, refund);
+      }
+
       return 'cancelled' as const;
     });
 

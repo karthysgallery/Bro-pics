@@ -23,6 +23,7 @@ export * from './schemas/user';
 export * from './schemas/address';
 export * from './schemas/return';
 export * from './schemas/return-event';
+export * from './schemas/refund';
 export * from './schemas/notification';
 export * from './schemas/notification-outbox';
 export * from './schemas/print-job';

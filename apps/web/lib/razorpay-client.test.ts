@@ -113,4 +113,26 @@ describe('createRazorpayRefund', () => {
 
     await expect(createRazorpayRefund({ paymentId: 'pay_1', amount: 100 })).rejects.toThrow(/400/);
   });
+
+  it('[ABE-23] sends the idempotency key as the X-Razorpay-Idempotency-Key header when given', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 'rfnd_1', status: 'processed' }) });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await createRazorpayRefund({ paymentId: 'pay_1', amount: 100, idempotencyKey: 'refund_abc123' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-Razorpay-Idempotency-Key': 'refund_abc123' }) })
+    );
+  });
+
+  it('[ABE-23] omits the idempotency header entirely when not given', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 'rfnd_1', status: 'processed' }) });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await createRazorpayRefund({ paymentId: 'pay_1', amount: 100 });
+
+    const [, options] = mockFetch.mock.calls[0];
+    expect('X-Razorpay-Idempotency-Key' in (options.headers as Record<string, string>)).toBe(false);
+  });
 });

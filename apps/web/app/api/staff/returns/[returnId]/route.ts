@@ -68,6 +68,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   }
   const nextStatus = statusParsed.data;
   const staffNote = typeof body?.staffNote === 'string' ? body.staffNote : null;
+  // [ABE-23] Only meaningful when approving — recorded here rather than
+  // requiring a second call, since staff typically decide refund vs
+  // replacement in the same review action as the approve/reject call.
+  let resolution: 'refund' | 'replacement' | null | undefined;
+  if (body?.resolution !== undefined) {
+    if (body.resolution !== 'refund' && body.resolution !== 'replacement' && body.resolution !== null) {
+      return NextResponse.json({ error: "resolution must be 'refund', 'replacement', or null" }, { status: 400 });
+    }
+    resolution = body.resolution;
+  }
 
   const { returnId } = await params;
   const returnRef = db.collection('returns').doc(returnId);
@@ -92,12 +102,13 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   // inside a Firestore transaction, which can retry on contention — see
   // create-order's own Razorpay-order-creation step for the same rule).
   // [ABE-03] A SEQUENTIAL retry (timeout, double-click) with the same
-  // Idempotency-Key is now caught above, before this call. What remains,
-  // documented as a known gap in razorpay-client.ts: two genuinely
-  // CONCURRENT requests racing between this check and the transaction's
-  // own re-check below could still both call Razorpay — accepted for a
-  // low-concurrency, staff-only action; closing it needs a lock/lease
-  // around the whole handler, not just idempotency-key caching.
+  // Idempotency-Key is now caught above, before this call. [ABE-23] The
+  // genuinely-CONCURRENT-requests gap this comment used to describe is
+  // now closed too: `returnId` is passed as Razorpay's own idempotency
+  // key (a return can only ever reach 'refunded' once, enforced by the
+  // status machine, so it's a safe, stable, unique key per refund
+  // attempt) — two racing requests both calling Razorpay for the same
+  // return now resolve to the SAME refund at Razorpay's end, not two.
   let razorpayRefundId: string | undefined;
   if (nextStatus === 'refunded') {
     if (!order.razorpayPaymentId) {
@@ -107,6 +118,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       paymentId: order.razorpayPaymentId,
       amount: currentReturn.refundAmount,
       notes: { returnId },
+      idempotencyKey: returnId,
     });
     razorpayRefundId = refund.id;
   }
@@ -125,6 +137,9 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       }
       if (razorpayRefundId) {
         returnUpdate.razorpayRefundId = razorpayRefundId;
+      }
+      if (resolution !== undefined) {
+        returnUpdate.resolution = resolution;
       }
       transaction.update(returnRef, returnUpdate);
 

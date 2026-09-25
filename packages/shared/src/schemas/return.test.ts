@@ -61,4 +61,14 @@ describe('ReturnSchema', () => {
     expect(ReturnSchema.safeParse(baseReturn({ evidencePaths: ['returns/ret_1/photo1.jpg'] })).success).toBe(true);
     expect(ReturnSchema.safeParse(baseReturn()).success).toBe(true);
   });
+
+  it('[ABE-23] accepts a resolution of refund or replacement, and omits fine too', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'refund' })).success).toBe(true);
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'replacement' })).success).toBe(true);
+    expect(ReturnSchema.safeParse(baseReturn()).success).toBe(true);
+  });
+
+  it('[ABE-23] rejects an unknown resolution', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'store_credit' })).success).toBe(false);
+  });
 });
