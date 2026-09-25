@@ -38,7 +38,7 @@ export interface OrderItemRef {
 export interface PaymentEventTransaction {
   findOrderByRazorpayOrderId(
     razorpayOrderId: string
-  ): Promise<{ id: string; userId: string; status: string; couponId?: string; orderNo: string } | null>;
+  ): Promise<{ id: string; userId: string; status: string; couponId?: string; orderNo: string; total: number } | null>;
   // [BE-14] Only called when a coupon was actually applied — increments
   // AFTER payment is confirmed, not at order creation, so an order the
   // customer abandons at the Razorpay modal (stays pending_payment
@@ -78,6 +78,11 @@ export interface PaymentEventTransaction {
   // every other "only once payment is real" counter in this file is
   // (an abandoned pending_payment order never should have counted).
   incrementProductSalesCount(productId: string, qty: number): void;
+  // [ABE-26] Same "only once payment is real" convention as
+  // incrementProductSalesCount above — denormalizes totalSpent/orderCount/
+  // lastOrderAt onto users/{uid} so an admin customer-detail view doesn't
+  // need a live aggregation query over every order to show these.
+  incrementUserStats(userId: string, orderTotal: number): void;
   // [BE-18] Writes a queued printJobs/{orderId}_{itemId} doc directly in
   // this same transaction — NOT via print-jobs.ts's createPrintJob, which
   // opens its own db.runTransaction and can't be nested inside this one.
@@ -167,6 +172,8 @@ export async function handlePaymentCaptured(
   for (const item of orderItems) {
     paymentTx.incrementProductSalesCount(item.productId, item.qty);
   }
+  // [ABE-26] Same reasoning — denormalize once payment is real.
+  paymentTx.incrementUserStats(order.userId, order.total);
 
   paymentTx.setOrderStatus(order.id, 'payment_confirmed');
   paymentTx.recordEvent(order.id, orderStatusEvent('payment_confirmed', 'system'));
@@ -370,8 +377,8 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
       );
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
-      const data = doc.data() as { userId: string; status: string; couponId?: string; orderNo: string };
-      return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId, orderNo: data.orderNo };
+      const data = doc.data() as { userId: string; status: string; couponId?: string; orderNo: string; total: number };
+      return { id: doc.id, userId: data.userId, status: data.status, couponId: data.couponId, orderNo: data.orderNo, total: data.total };
     },
     async findCustomizationsToLock(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
@@ -449,6 +456,13 @@ function buildPaymentTx(db: FirebaseFirestore.Firestore, transaction: FirebaseFi
     },
     incrementProductSalesCount(productId, qty) {
       transaction.update(db.collection('products').doc(productId), { salesCount: FieldValue.increment(qty) });
+    },
+    incrementUserStats(userId, orderTotal) {
+      transaction.update(db.collection('users').doc(userId), {
+        totalSpent: FieldValue.increment(orderTotal),
+        orderCount: FieldValue.increment(1),
+        lastOrderAt: new Date().toISOString(),
+      });
     },
     setOrderStatus(orderId, status) {
       transaction.update(db.collection('orders').doc(orderId), { status });

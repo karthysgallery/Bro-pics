@@ -55,6 +55,34 @@ describe('UserSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('[ABE-26] accepts the denormalized stats fields and a disabled flag', () => {
+    const result = UserSchema.safeParse({
+      id: 'user_1',
+      phone: '+919876543210',
+      email: null,
+      displayName: 'Karthik R',
+      createdAt: '2026-09-03T00:00:00.000Z',
+      updatedAt: '2026-09-03T00:00:00.000Z',
+      totalSpent: 250000,
+      orderCount: 3,
+      lastOrderAt: '2026-09-20T00:00:00.000Z',
+      disabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('[ABE-26] parses an existing user doc with none of the stats fields present', () => {
+    const result = UserSchema.safeParse({
+      id: 'user_1',
+      phone: '+919876543210',
+      email: null,
+      displayName: null,
+      createdAt: '2026-09-03T00:00:00.000Z',
+      updatedAt: '2026-09-03T00:00:00.000Z',
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects a missing phone', () => {
     const result = UserSchema.safeParse({
       id: 'user_1',

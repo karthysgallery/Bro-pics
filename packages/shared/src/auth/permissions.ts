@@ -24,6 +24,12 @@ export const PERMISSION_KEYS = [
   'coupons:write',
   'settings:write',
   'customers:read',
+  // [ABE-26] Every other resource in this list has a read/write pair;
+  // customers had only `:read` until this task needed a write action
+  // (disabling an account) — added rather than repurposing `team:manage`,
+  // which governs staff role grants, a different concern from customer
+  // account management.
+  'customers:write',
   'team:manage',
   'analytics:read',
 ] as const;
@@ -63,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'coupons:write',
     'settings:write',
     'customers:read',
+    'customers:write',
     'team:manage',
     'analytics:read',
   ],
@@ -79,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'coupons:write',
     'settings:write',
     'customers:read',
+    'customers:write',
     'analytics:read',
   ],
   staff: ['orders:read', 'orders:write', 'returns:read', 'returns:write', 'reviews:moderate'],

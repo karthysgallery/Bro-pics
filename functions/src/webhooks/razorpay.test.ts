@@ -11,14 +11,14 @@ function makeWebhookTx(alreadyProcessed: boolean): WebhookTransaction {
 }
 
 function makePaymentTx(
-  order: { id: string; userId: string; status: string; couponId?: string; orderNo?: string } | null,
+  order: { id: string; userId: string; status: string; couponId?: string; orderNo?: string; total?: number } | null,
   customizationsToLock: CustomizationToLock[] = [],
   orderItems: OrderItemRef[] = []
 ): PaymentEventTransaction {
   return {
     findOrderByRazorpayOrderId: vi
       .fn()
-      .mockResolvedValue(order ? { orderNo: 'BP-2026-00001', ...order } : null),
+      .mockResolvedValue(order ? { orderNo: 'BP-2026-00001', total: 105000, ...order } : null),
     findCustomizationsToLock: vi.fn().mockResolvedValue(customizationsToLock),
     findOrderItems: vi.fn().mockResolvedValue(orderItems),
     markPaymentCaptured: vi.fn(),
@@ -30,6 +30,7 @@ function makePaymentTx(
     lockCustomizations: vi.fn(),
     incrementCouponUsedCount: vi.fn(),
     incrementProductSalesCount: vi.fn(),
+    incrementUserStats: vi.fn(),
     setOrderStatus: vi.fn(),
     queuePrintJob: vi.fn(),
     queueNotification: vi.fn(),
@@ -131,6 +132,32 @@ describe('handlePaymentCaptured', () => {
 
     expect(paymentTx.incrementProductSalesCount).toHaveBeenCalledWith('prod_1', 1);
     expect(paymentTx.incrementProductSalesCount).toHaveBeenCalledWith('prod_2', 3);
+  });
+
+  it('[ABE-26] denormalizes totalSpent/orderCount/lastOrderAt onto the user', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment', total: 250000 });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.incrementUserStats).toHaveBeenCalledWith('user_1', 250000);
+  });
+
+  it('[ABE-26] does not denormalize user stats when the order was already processed', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'paid' });
+
+    await handlePaymentCaptured(webhookTx, paymentTx, {
+      eventId: 'pay_abc',
+      razorpayOrderId: 'order_rzp_1',
+      razorpayPaymentId: 'pay_abc',
+    });
+
+    expect(paymentTx.incrementUserStats).not.toHaveBeenCalled();
   });
 
   it('does not call lockCustomizations when the order was already processed', async () => {
