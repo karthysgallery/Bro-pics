@@ -175,6 +175,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // [ABE-27] Admin-SDK-only, same pattern as staff above — no client
+    // ever reads or writes an invite directly, always through
+    // /api/admin/staff/invite and /api/staff/invite/accept.
+    match /staffInvites/{token} {
+      allow read, write: if false;
+    }
+
     match /counters/{id} {
       allow read, write: if false;
     }

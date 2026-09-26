@@ -68,3 +68,4 @@ export * from './cleanup/stale-anonymous-docs';
 export * from './logging/logger';
 export * from './auth/permissions';
 export * from './schemas/staff-mirror';
+export * from './schemas/staff-invite';

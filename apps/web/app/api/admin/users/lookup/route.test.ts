@@ -11,6 +11,10 @@ vi.mock('firebase-admin/auth', () => ({
   getAuth: vi.fn(() => ({ getUserByPhoneNumber: mockGetUserByPhoneNumber })),
 }));
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
+vi.mock('firebase-admin/firestore', () => ({ getFirestore: vi.fn(() => ({})) }));
+
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
 
 vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../../lib/rate-limit')>();
@@ -71,6 +75,16 @@ describe('GET /api/admin/users/lookup', () => {
     const response = await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
     const body = await response.json();
     expect(body.role).toBeNull();
+  });
+
+  it('[ABE-27] writes an audit log entry on a successful lookup', async () => {
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockGetUserByPhoneNumber.mockResolvedValueOnce({ uid: 'user_9', phoneNumber: '+911234567890', customClaims: { role: 'staff' } });
+    await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorUid: 'admin_1', action: 'user.lookup', resource: 'user', resourceId: 'user_9' })
+    );
   });
 
   it('returns 429 and does not touch Firebase Auth when rate-limited', async () => {
