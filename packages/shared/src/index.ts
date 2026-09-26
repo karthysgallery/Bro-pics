@@ -69,3 +69,7 @@ export * from './logging/logger';
 export * from './auth/permissions';
 export * from './schemas/staff-mirror';
 export * from './schemas/staff-invite';
+export * from './schemas/analytics-daily';
+export * from './analytics/dashboard';
+export * from './analytics/daily-rollup';
+export * from './analytics/reports';

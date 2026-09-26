@@ -237,5 +237,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // [ABE-29] Daily analytics roll-ups — readable by staff/admin, server-write-only.
+    match /analyticsDaily/{date} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
   }
 }
+
