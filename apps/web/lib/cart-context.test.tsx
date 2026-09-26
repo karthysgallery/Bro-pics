@@ -11,7 +11,7 @@ function TestConsumer() {
       <span data-testid="items-length">{cart.items.length}</span>
       <span data-testid="item-0-qty">{cart.items[0]?.qty ?? ''}</span>
       <span data-testid="item-0-title">{cart.items[0]?.title ?? ''}</span>
-      <span data-testid="item-0-preview">{cart.items[0]?.previewUrl ?? ''}</span>
+      <span data-testid="item-0-preview">{cart.items[0]?.previewPath ?? ''}</span>
       <button
         onClick={() =>
           cart.addItem({ variantId: 'var_1', personalizationId: 'pers_default', title: 'Test Frame', unitPriceSnapshot: 50000, qty: 1 })
@@ -37,7 +37,7 @@ function TestConsumer() {
       </button>
       <button
         onClick={() =>
-          cart.addItem({ variantId: 'v1', personalizationId: 'pers_a', title: 'Frame (updated)', unitPriceSnapshot: 2000, qty: 1, previewUrl: 'new.png' })
+          cart.addItem({ variantId: 'v1', personalizationId: 'pers_a', title: 'Frame (updated)', unitPriceSnapshot: 2000, qty: 1, previewPath: 'new.png' })
         }
       >
         Add pers_a again with new data
@@ -159,10 +159,10 @@ describe('CartProvider / useCart', () => {
     expect(screen.getByTestId('item-0-qty').textContent).toBe('2');
   });
 
-  it('lets the incoming add win on title/previewUrl when merging quantity on a match', () => {
+  it('lets the incoming add win on title/previewPath when merging quantity on a match', () => {
     // Regression test for a Task 6 bug: the merge branch used to spread the
-    // EXISTING line, letting stale title/previewUrl survive a re-add. The
-    // incoming item's title/previewUrl/unitPriceSnapshot must win on a
+    // EXISTING line, letting stale title/previewPath survive a re-add. The
+    // incoming item's title/previewPath/unitPriceSnapshot must win on a
     // match — only qty sums — matching mergeCartItems' documented contract.
     render(
       <CartProvider>
@@ -177,16 +177,16 @@ describe('CartProvider / useCart', () => {
     expect(screen.getByTestId('item-0-preview').textContent).toBe('new.png');
   });
 
-  it('stores previewUrl on an added item and preserves it through updateQuantity', () => {
+  it('stores previewPath on an added item and preserves it through updateQuantity', () => {
     const { result } = renderHook(() => useCart(), { wrapper: CartProvider });
     act(() => {
       result.current.addItem({
-        variantId: 'v1', personalizationId: 'p1', title: 'Frame', unitPriceSnapshot: 1000, qty: 1, previewUrl: 'preview.png',
+        variantId: 'v1', personalizationId: 'p1', title: 'Frame', unitPriceSnapshot: 1000, qty: 1, previewPath: 'preview.png',
       });
     });
-    expect(result.current.items[0].previewUrl).toBe('preview.png');
+    expect(result.current.items[0].previewPath).toBe('preview.png');
     act(() => result.current.updateQuantity('v1', 'p1', 2));
-    expect(result.current.items[0].previewUrl).toBe('preview.png');
+    expect(result.current.items[0].previewPath).toBe('preview.png');
   });
 
   it('throws when useCart is called outside a CartProvider', () => {

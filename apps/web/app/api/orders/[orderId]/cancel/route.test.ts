@@ -100,6 +100,34 @@ describe('POST /api/orders/[orderId]/cancel', () => {
     );
   });
 
+  it('[ABE-23] proposes a refund when cancelling a paid order, without calling Razorpay', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockTransactionGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ userId: 'user_1', status: 'paid', orderNo: 'BP-2026-00001', paymentStatus: 'paid', total: 105000 }),
+    });
+
+    const response = await POST(makeRequest(), { params: Promise.resolve({ orderId: 'order_1' }) });
+
+    expect(response.status).toBe(200);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'order_1', amount: 105000, status: 'pending', razorpayRefundId: null, createdBy: null })
+    );
+  });
+
+  it('[ABE-23] does not propose a refund when cancelling a pending_payment (never-paid) order', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockTransactionGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ userId: 'user_1', status: 'pending_payment', orderNo: 'BP-2026-00001', paymentStatus: 'pending', total: 105000 }),
+    });
+
+    await POST(makeRequest(), { params: Promise.resolve({ orderId: 'order_1' }) });
+
+    expect(mockTransactionSet).toHaveBeenCalledTimes(1); // only the order event, no refund doc
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
     const response = await POST(makeRequest(), { params: Promise.resolve({ orderId: 'order_1' }) });

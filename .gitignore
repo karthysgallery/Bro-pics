@@ -1,6 +1,7 @@
 node_modules/
 dist/
 functions/lib/
+services/print-render/lib/
 .next/
 .firebase/
 firebase-debug.log
@@ -14,4 +15,11 @@ ui-debug.log
 .gstack/
 .claude/
 .vscode/
+
+# Internal planning docs — not for the public repo
+tasks.zip
 tasks/
+BroPics_Production_Implementation_Master_Plan.pdf
+
+# Scratch output from scripts/seed's migration tooling
+migration-exceptions-*.json

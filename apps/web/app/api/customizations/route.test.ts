@@ -234,6 +234,52 @@ describe('POST /api/customizations', () => {
     expect(mockSet).toHaveBeenCalledWith(expect.not.objectContaining({ userId: expect.anything() }));
   });
 
+  it('sets schemaVersion, status draft, and the server-computed dpiBand on every new customization [BE-10]', async () => {
+    const response = await POST(makeRequest(validBody, 'sess_1'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.schemaVersion).toBe(2);
+    expect(body.status).toBe('draft');
+    expect(body.dpiBand).toBe('green'); // validBody's fixture computes exactly 300 DPI
+  });
+
+  it('sets redConfirmedAt when the photo is genuinely red-tier and the client sent confirmedLowDpi [BE-10]', async () => {
+    // A 1x1in crop of a 3000x3000 upload against the 10x10in variant is
+    // absurdly over-cropped -> effectiveDpi collapses to well under 150 (red).
+    const redBody = {
+      ...validBody,
+      transformJson: { ...validBody.transformJson, cropRect: { x: 0, y: 0, width: 100, height: 100 } },
+      confirmedLowDpi: true,
+    };
+    const response = await POST(makeRequest(redBody, 'sess_1'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.dpiBand).toBe('red');
+    expect(body.redConfirmedAt).toBeTruthy();
+  });
+
+  it('does not set redConfirmedAt for a red-tier photo when the client did not send confirmedLowDpi', async () => {
+    const redBody = {
+      ...validBody,
+      transformJson: { ...validBody.transformJson, cropRect: { x: 0, y: 0, width: 100, height: 100 } },
+    };
+    const response = await POST(makeRequest(redBody, 'sess_1'));
+    const body = await response.json();
+
+    expect(body.dpiBand).toBe('red');
+    expect(body.redConfirmedAt).toBeUndefined();
+  });
+
+  it("ignores a client's confirmedLowDpi claim when the server's own dpiBand is not actually red — a client can't fabricate a confirmation for a photo that's fine", async () => {
+    const response = await POST(makeRequest({ ...validBody, confirmedLowDpi: true }, 'sess_1'));
+    const body = await response.json();
+
+    expect(body.dpiBand).toBe('green');
+    expect(body.redConfirmedAt).toBeUndefined();
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     mockSet.mockClear();
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });

@@ -42,6 +42,7 @@ describe('CheckoutPage', () => {
     mockGetDoc.mockReset();
     mockGetDoc.mockResolvedValue({ exists: () => false });
     (global as unknown as { Razorpay?: unknown }).Razorpay = vi.fn().mockImplementation(() => ({ open: vi.fn() }));
+    sessionStorage.clear();
   });
 
   it('offers standard and express delivery, and switching to express updates the shipping/total lines', async () => {
@@ -71,12 +72,15 @@ describe('CheckoutPage', () => {
     fireEvent.click(screen.getByRole('radio', { name: /express/i }));
     fireEvent.click(await screen.findByText('Place order'));
 
-    await waitFor(() =>
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/checkout/create-order',
-        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: undefined, deliveryMethod: 'express' }) })
-      )
-    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/checkout/create-order', expect.anything()));
+    const call = mockFetch.mock.calls.find((c) => c[0] === '/api/checkout/create-order');
+    const body = JSON.parse((call?.[1] as RequestInit).body as string);
+    // idempotencyKey is a random UUID minted client-side [BE-13] — every
+    // other field must match exactly.
+    expect(body).toMatchObject({ addressId: 'addr_1', deliveryMethod: 'express' });
+    expect(body.couponCode).toBeUndefined();
+    expect(typeof body.idempotencyKey).toBe('string');
+    expect(body.idempotencyKey.length).toBeGreaterThan(0);
   });
 
   it('shows a sign-in prompt when signed out', async () => {
@@ -270,11 +274,31 @@ describe('CheckoutPage coupon UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /place order/i }));
 
-    await waitFor(() =>
-      expect(mockFetch).toHaveBeenLastCalledWith(
-        '/api/checkout/create-order',
-        expect.objectContaining({ body: JSON.stringify({ addressId: 'addr_1', couponCode: 'NEW10', deliveryMethod: 'standard' }) })
-      )
-    );
+    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/checkout/create-order', expect.anything()));
+    const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+    const body = JSON.parse((lastCall[1] as RequestInit).body as string);
+    expect(body).toMatchObject({ addressId: 'addr_1', couponCode: 'NEW10', deliveryMethod: 'standard' });
+    expect(typeof body.idempotencyKey).toBe('string');
+  });
+
+  it('reuses the SAME idempotencyKey when the customer retries after a failed payment [BE-13]', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'rzp_1', amount: 1000, keyId: 'key_1' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place order'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    const [, onNext] = mockOnSnapshot.mock.calls[0];
+    onNext({ exists: () => true, data: () => ({ status: 'pending_payment', paymentStatus: 'failed', orderNo: 'BP-2026-00001' }) });
+    fireEvent.click(await screen.findByText('Try again'));
+
+    fireEvent.click(await screen.findByText('Place order'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+
+    const bodies = mockFetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
+    expect(bodies[0].idempotencyKey).toBe(bodies[1].idempotencyKey);
   });
 });

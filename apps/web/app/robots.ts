@@ -7,7 +7,10 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin', '/dashboard', '/staff', '/checkout', '/orders', '/api'],
+      // [BE-40] /account was missing — every page under it needs a signed-in
+      // user and has nothing for a crawler to index, same reasoning as the
+      // other disallowed paths here.
+      disallow: ['/admin', '/dashboard', '/staff', '/checkout', '/orders', '/account', '/api'],
     },
     sitemap: `${baseUrl}/sitemap.xml`,
   };

@@ -71,12 +71,84 @@ describe('isValidStatusTransition — replacement_issued branch', () => {
 describe('isValidStatusTransition — terminal states', () => {
   it('rejects every outbound transition from cancelled, refunded, and replacement_issued', () => {
     const terminal: OrderStatus[] = ['cancelled', 'refunded', 'replacement_issued'];
-    const anyOther: OrderStatus[] = ['pending_payment', 'paid', 'in_production', 'printed_packed', 'shipped', 'delivered'];
+    const anyOther: OrderStatus[] = [
+      'pending_payment',
+      'paid',
+      'payment_confirmed',
+      'photo_validation',
+      'print_rendering',
+      'print_ready',
+      'in_production',
+      'printed_packed',
+      'quality_check',
+      'packed',
+      'rework',
+      'shipped',
+      'delivered',
+    ];
     for (const from of terminal) {
       for (const to of [...anyOther, ...terminal]) {
         if (from === to) continue;
         expect(isValidStatusTransition(from, to)).toBe(false);
       }
     }
+  });
+});
+
+describe('isValidStatusTransition — payment-to-print pipeline [BE-18]', () => {
+  it('allows the fully automatic green/yellow path step by step', () => {
+    expect(isValidStatusTransition('paid', 'payment_confirmed')).toBe(true);
+    expect(isValidStatusTransition('payment_confirmed', 'photo_validation')).toBe(true);
+    expect(isValidStatusTransition('photo_validation', 'print_rendering')).toBe(true);
+    expect(isValidStatusTransition('print_rendering', 'print_ready')).toBe(true);
+    expect(isValidStatusTransition('print_ready', 'in_production')).toBe(true);
+  });
+
+  it('still allows paid straight to in_production, for orders that predate this chain', () => {
+    expect(isValidStatusTransition('paid', 'in_production')).toBe(true);
+  });
+
+  it('rejects skipping photo_validation entirely', () => {
+    expect(isValidStatusTransition('payment_confirmed', 'print_rendering')).toBe(false);
+    expect(isValidStatusTransition('payment_confirmed', 'print_ready')).toBe(false);
+  });
+
+  it('allows cancelled/refunded from every step in the new chain', () => {
+    const steps: OrderStatus[] = ['payment_confirmed', 'photo_validation', 'print_rendering', 'print_ready'];
+    for (const from of steps) {
+      expect(isValidStatusTransition(from, 'cancelled')).toBe(true);
+      expect(isValidStatusTransition(from, 'refunded')).toBe(true);
+    }
+  });
+});
+
+describe('isValidStatusTransition — quality-check gate [ABE-16]', () => {
+  it('allows in_production to advance to either the legacy printed_packed or the canonical quality_check', () => {
+    expect(isValidStatusTransition('in_production', 'printed_packed')).toBe(true);
+    expect(isValidStatusTransition('in_production', 'quality_check')).toBe(true);
+  });
+
+  it('allows a PASS (quality_check -> packed) and a FAIL (quality_check -> rework)', () => {
+    expect(isValidStatusTransition('quality_check', 'packed')).toBe(true);
+    expect(isValidStatusTransition('quality_check', 'rework')).toBe(true);
+  });
+
+  it('sends a failed rework back to in_production rather than a dead end', () => {
+    expect(isValidStatusTransition('rework', 'in_production')).toBe(true);
+  });
+
+  it('allows packed to ship, same as printed_packed', () => {
+    expect(isValidStatusTransition('packed', 'shipped')).toBe(true);
+  });
+
+  it('rejects skipping quality_check straight to packed', () => {
+    expect(isValidStatusTransition('in_production', 'packed')).toBe(false);
+  });
+
+  it('allows cancelled/refunded from quality_check and rework', () => {
+    expect(isValidStatusTransition('quality_check', 'cancelled')).toBe(true);
+    expect(isValidStatusTransition('quality_check', 'refunded')).toBe(true);
+    expect(isValidStatusTransition('rework', 'cancelled')).toBe(true);
+    expect(isValidStatusTransition('rework', 'refunded')).toBe(true);
   });
 });

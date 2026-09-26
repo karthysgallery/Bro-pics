@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockFindOrder = vi.fn();
@@ -34,20 +34,20 @@ describe('GET /api/staff/orders/[orderNo]', () => {
   });
 
   it('returns 403 when the caller is not staff', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await GET(makeRequest(), { params: Promise.resolve({ orderNo: 'BP-2026-00001' }) });
     expect(response.status).toBe(403);
   });
 
   it('returns 404 when no order matches the order number', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce(null);
     const response = await GET(makeRequest(), { params: Promise.resolve({ orderNo: 'BP-2026-99999' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns the order and its items on success', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrder.mockResolvedValueOnce({ id: 'order_1', data: { orderNo: 'BP-2026-00001', status: 'paid' } });
     mockItemsGet.mockResolvedValueOnce({ docs: [{ data: () => ({ id: 'item_1', title: 'Frame' }) }] });
 

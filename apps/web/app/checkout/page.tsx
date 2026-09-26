@@ -11,6 +11,7 @@ import { AddressPicker } from '../../components/checkout/AddressPicker';
 import { loadRazorpayCheckoutScript } from '../../lib/razorpay-checkout-script';
 import { calculateShipping, DELIVERY_METHODS, DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '../../lib/checkout-calc';
 import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
+import { getOrCreateCheckoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../lib/checkout-idempotency-key';
 import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/DeliveryTimeline';
 import type { DeliveryMethod } from '@bro-pics/shared';
 
@@ -89,6 +90,9 @@ export default function CheckoutPage() {
         // is needed.
         const data = snapshot.data() as { status?: string; paymentStatus?: string; orderNo?: string };
         setOrderStatus({ status: data.status, paymentStatus: data.paymentStatus, orderNo: data.orderNo });
+        // This attempt is done — a NEXT, unrelated purchase should mint its
+        // own fresh idempotency key, not keep reusing this completed one.
+        if (data.status === 'paid') clearCheckoutIdempotencyKey();
       },
       (error) => {
         console.error('Order listener failed:', error);
@@ -153,14 +157,25 @@ export default function CheckoutPage() {
     setPlacing(true);
     try {
       const idToken = await user.getIdToken();
+      // Stable across a double-click and across retries of THIS attempt
+      // (a failed/closed Razorpay modal, then "Place Order" again) — see
+      // lib/checkout-idempotency-key.ts. create-order returns the SAME
+      // order/Razorpay order for a repeated key instead of a duplicate.
+      const idempotencyKey = getOrCreateCheckoutIdempotencyKey();
       const response = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod }),
+        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey }),
       });
 
       if (response.status === 409) {
-        setError('Some items in your cart are no longer available. Please review your cart and try again.');
+        const body = await response.json().catch(() => null);
+        setError(
+          body?.code === 'already_paid'
+            ? 'This order has already been paid for.'
+            : 'Some items in your cart are no longer available. Please review your cart and try again.'
+        );
+        if (body?.code === 'already_paid') clearCheckoutIdempotencyKey();
         return;
       }
       if (!response.ok) {

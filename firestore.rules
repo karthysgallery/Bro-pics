@@ -45,7 +45,34 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // [ABE-07] Admin-curated product groupings — same public-read,
+    // server-write-only pattern as categories/products.
+    match /collections/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /testimonials/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // [ABE-18] Static content pages (About, Contact, policies, How It
+    // Works, Picture Quality Guide) and FAQ items — same public-read,
+    // server-write-only pattern as every other CMS-ish collection here.
+    match /pages/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /faqs/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // [ABE-20] Schedulable, coupon-linkable promo banners — same
+    // public-read, server-write-only pattern as everything else here.
+    match /banners/{id} {
       allow read: if true;
       allow write: if false;
     }
@@ -73,6 +100,13 @@ service cloud.firestore {
         allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
         allow write: if false;
       }
+
+      // [ABE-23] Admin ad-hoc refunds — same owner-or-staff read, admin-
+      // SDK-only write pattern as items/events above.
+      match /refunds/{refundId} {
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow write: if false;
+      }
     }
 
     match /uploads/{uploadId} {
@@ -93,6 +127,15 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isStaffOrAdmin();
         allow write: if isOwner(userId);
       }
+
+      // [BE-27] Admin-SDK-only, same as printJobs/webhookEvents — no
+      // client ever reads or writes the denormalized notification
+      // unread counter directly. (Already covered by default-deny even
+      // without this explicit block, same as users/{userId}/notifications
+      // — added for the same documentation-clarity reason printJobs was.)
+      match /private/{docId} {
+        allow read, write: if false;
+      }
     }
 
     match /coupons/{code} {
@@ -100,8 +143,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The client is trusted for display convenience only — every field
+    // here (including unitPriceSnapshot) is re-derived from the variant
+    // server-side at create-order and NEVER trusted for money (see that
+    // route's own comment). Firestore rules has no per-element predicate
+    // over an arbitrary-length list (no .all()/.map() macro — confirmed
+    // against the real emulator, not assumed), so per-item shape/qty
+    // bounds [BE-09] live in create-order's own isMalformedCartLine
+    // instead; this rule is limited to what rules CAN actually express: a
+    // bound on the list itself, so a client can't grow an unbounded array
+    // into a single document.
     match /carts/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) &&
+        request.resource.data.items is list &&
+        request.resource.data.items.size() <= 50;
     }
 
     match /webhookEvents/{eventId} {
@@ -112,8 +168,81 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // [ABE-01] Admin-SDK-only, same pattern as printJobs/notificationOutbox
+    // above — no client ever reads or writes the staff role mirror
+    // directly, always through /api/admin/users/[uid]/role.
+    match /staff/{uid} {
+      allow read, write: if false;
+    }
+
+    // [ABE-27] Admin-SDK-only, same pattern as staff above — no client
+    // ever reads or writes an invite directly, always through
+    // /api/admin/staff/invite and /api/staff/invite/accept.
+    match /staffInvites/{token} {
+      allow read, write: if false;
+    }
+
     match /counters/{id} {
       allow read, write: if false;
     }
+
+    // [BE-17/BE-18] Admin-SDK-only, same as webhookEvents/reconciliations
+    // above — no client ever reads or writes a print job directly.
+    match /printJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    // [BE-27] Same admin-SDK-only pattern — no client ever reads or
+    // writes a queued notification-channel dispatch directly.
+    match /notificationOutbox/{entryId} {
+      allow read, write: if false;
+    }
+
+    // [ABE-25] Admin-SDK-only, same pattern as notificationOutbox above —
+    // no client ever reads or writes a template directly, always through
+    // /api/admin/notification-templates.
+    match /notificationTemplates/{key} {
+      allow read, write: if false;
+    }
+
+    // [ABE-03] Same admin-SDK-only pattern — the audit trail for every
+    // admin/staff write (lib/audit-log.ts). A client that could write its
+    // own audit entries could forge its own trail, and a client that
+    // could read others' would leak every staff member's action history.
+    match /auditLogs/{entryId} {
+      allow read, write: if false;
+    }
+
+    // [ABE-03] Same admin-SDK-only pattern — cached responses keyed by an
+    // admin write's Idempotency-Key header (lib/admin-idempotency.ts).
+    match /idempotencyKeys/{key} {
+      allow read, write: if false;
+    }
+
+    // [ABE-10] Media library docs — admin-SDK-only, same as auditLogs/
+    // idempotencyKeys above. No client reads this directly: the storefront
+    // never queries the library itself, only the already-public Storage
+    // URLs a media doc points to (storage.rules' own public/ prefix rule
+    // covers that). All library access goes through /api/admin/media.
+    match /media/{id} {
+      allow read, write: if false;
+    }
+
+    // [ABE-19] Unlike `media` above (a purely admin-side asset library,
+    // never queried directly by the storefront), `videos` IS meant to be
+    // read by the public site once something wires it up — same
+    // public-read, server-write-only pattern as `homepageSections`/
+    // `pages`/`faqs`/`testimonials`.
+    match /videos/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // [ABE-29] Daily analytics roll-ups — readable by staff/admin, server-write-only.
+    match /analyticsDaily/{date} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
   }
 }
+

@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
-import { ReturnSchema, type Order, type OrderEvent } from '@bro-pics/shared';
+import { ReturnSchema, ReturnReasonCategorySchema, type Order, type OrderEvent } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
@@ -61,6 +61,18 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   if (!reason) {
     return NextResponse.json({ error: 'Missing reason' }, { status: 400 });
   }
+  const reasonCategoryParsed = ReturnReasonCategorySchema.safeParse(body?.reasonCategory);
+  if (!reasonCategoryParsed.success) {
+    return NextResponse.json({ error: 'Missing or invalid reasonCategory' }, { status: 400 });
+  }
+  const reasonCategory = reasonCategoryParsed.data;
+  // Storage object paths only (never URLs — see Upload.originalPath's own
+  // doc comment) — the customer uploads evidence photos via
+  // POST /api/orders/[orderId]/returns/evidence first, then passes the
+  // resulting paths here when actually filing the return.
+  const evidencePaths = Array.isArray(body?.evidencePaths)
+    ? body.evidencePaths.filter((p: unknown): p is string => typeof p === 'string')
+    : [];
 
   const { orderId } = await params;
   const db = getFirestore(getAdminApp());
@@ -100,11 +112,13 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     id: returnRef.id,
     orderId,
     userId,
+    reasonCategory,
     reason,
     status: 'requested',
     requestedAt: new Date().toISOString(),
     resolvedAt: null,
     refundAmount: order.total,
+    ...(evidencePaths.length > 0 && { evidencePaths }),
   });
   await returnRef.set(returnDoc);
 

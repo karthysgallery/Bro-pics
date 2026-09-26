@@ -1,4 +1,4 @@
-import type { Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { NotificationSchema, type NotificationCategory } from '@bro-pics/shared';
 
 /**
@@ -38,4 +38,20 @@ export async function writeNotification(
     createdAt: new Date().toISOString(),
   });
   await ref.set(notification);
+  // [BE-27] Denormalized so GET /api/notifications doesn't have to derive
+  // unreadCount from its own capped-50 slice — which undercounts once a
+  // user has more than 50 notifications, a real (if minor) bug this
+  // closes. Lives at users/{uid}/private/notificationStats, NOT on the
+  // users/{uid} doc itself — that doc is client-writable
+  // (firestore.rules: allow write: if isOwner(userId)), so a denormalized
+  // counter there could be silently clobbered by an unrelated client
+  // write; this subcollection has no client access at all (see
+  // firestore.rules' explicit deny, matching the printJobs/webhookEvents
+  // pattern).
+  await db
+    .collection('users')
+    .doc(userId)
+    .collection('private')
+    .doc('notificationStats')
+    .set({ unreadCount: FieldValue.increment(1) }, { merge: true });
 }

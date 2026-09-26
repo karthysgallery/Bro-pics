@@ -8,7 +8,8 @@ export const OrderItemSchema = z.object({
   title: z.string().min(1),
   unitPrice: z.number().int().nonnegative(),
   qty: z.number().int().positive(),
-  previewUrl: z.string().nullable(),
+  // A Storage object path, never a signed URL — see Upload.originalPath.
+  previewPath: z.string().nullable(),
 });
 
 export type OrderItem = z.infer<typeof OrderItemSchema>;

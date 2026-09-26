@@ -36,14 +36,21 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
-  const snapshot = await db.collection('users').doc(userId).collection('notifications').get();
+  const [snapshot, statsSnap] = await Promise.all([
+    db.collection('users').doc(userId).collection('notifications').get(),
+    db.collection('users').doc(userId).collection('private').doc('notificationStats').get(),
+  ]);
   const notifications = snapshot.docs
     .map((d) => d.data() as Notification)
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, MAX_NOTIFICATIONS);
 
-  return NextResponse.json(
-    { notifications, unreadCount: notifications.filter((n) => !n.isRead).length },
-    { status: 200 }
-  );
+  // [BE-27] The denormalized counter (kept in sync by writeNotification /
+  // the mark-as-read route) is now the source of truth — it doesn't
+  // undercount for a user with more than MAX_NOTIFICATIONS notifications
+  // the way computing it from this capped slice would.
+  const statsUnreadCount = (statsSnap.data() as { unreadCount?: number } | undefined)?.unreadCount;
+  const unreadCount = typeof statsUnreadCount === 'number' ? statsUnreadCount : notifications.filter((n) => !n.isRead).length;
+
+  return NextResponse.json({ notifications, unreadCount }, { status: 200 });
 }

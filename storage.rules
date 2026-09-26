@@ -2,6 +2,40 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function isStaffOrAdmin() {
+      return request.auth != null &&
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'staff');
+    }
+
+    // Product photography and CMS assets — written only by the admin media
+    // pipeline via the Admin SDK (which bypasses these rules entirely), but
+    // world-readable so next/image and public pages can load them directly.
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Customer uploads, their previews, and print-ready render output are
+    // private. This app never reads them through the client Storage SDK —
+    // GET /api/media/url mediates every customer-facing read server-side
+    // (Admin SDK, with its own ownership check against Firestore keyed on
+    // sessionId/userId), specifically because Storage rules alone have no
+    // way to verify that session-based ownership model the way that route
+    // can. Staff/admin get a direct read exception here for fulfillment,
+    // quality-check and returns review.
+    match /uploads/{allPaths=**} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+    match /print-files/{allPaths=**} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+    match /returns/{allPaths=**} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

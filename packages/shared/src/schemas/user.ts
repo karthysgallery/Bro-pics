@@ -26,6 +26,21 @@ export const UserSchema = z.object({
   // by the client, no new API route needed. Transactional categories are
   // never represented here at all (they're always on).
   notificationPreferences: NotificationPreferencesSchema.nullable().optional(),
+  // [ABE-26] Denormalized on `payment.captured` (functions/src/webhooks/
+  // razorpay.ts), the same "only once payment is real" convention every
+  // other post-payment counter in that file already follows (e.g.
+  // Product.salesCount). All optional/nullable, not defaulted, so every
+  // pre-existing User object literal in tests/seed data still typechecks,
+  // and a customer who has never paid simply never gets these fields.
+  totalSpent: z.number().int().nonnegative().optional(),
+  orderCount: z.number().int().nonnegative().optional(),
+  lastOrderAt: z.string().nullable().optional(),
+  // [ABE-26] Set via POST /api/admin/customers/[uid]/disable, mirroring
+  // the Firebase Auth `disabled` flag onto Firestore so it's queryable
+  // (the auth record itself isn't). Absent/false means active, same
+  // "absent means the default" convention every other boolean flag added
+  // to an existing schema this session uses.
+  disabled: z.boolean().optional(),
 });
 
 export type User = z.infer<typeof UserSchema>;

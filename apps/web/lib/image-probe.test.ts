@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -65,5 +66,36 @@ describe('probeAndStripImage', () => {
     expect(outputMetadata.orientation ?? 1).toBe(1);
     expect(outputMetadata.width).toBe(300);
     expect(outputMetadata.height).toBe(400);
+  });
+
+  it('[BE-39] probes and re-encodes a PNG, preserving the PNG format (not silently converted to JPEG)', async () => {
+    const png = await sharp({
+      create: { width: 500, height: 700, channels: 4, background: { r: 10, g: 20, b: 30, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+
+    const result = await probeAndStripImage(png);
+
+    expect(result.widthPx).toBe(500);
+    expect(result.heightPx).toBe(700);
+    expect(result.mime).toBe('image/png');
+    // Re-probing the stripped output confirms it's still a real, valid PNG,
+    // not a mislabeled JPEG.
+    const outputMetadata = await sharp(result.strippedBuffer).metadata();
+    expect(outputMetadata.format).toBe('png');
+  });
+
+  it('rejects a decompression-bomb-sized image (over the 120 MP limit) instead of decoding it', async () => {
+    // 20000x20000 = 400 MP, well over the limit — sharp's own
+    // limitInputPixels throws before doing the expensive full decode.
+    const bomb = await sharp({
+      create: { width: 20000, height: 20000, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      limitInputPixels: false,
+    })
+      .jpeg()
+      .toBuffer();
+
+    await expect(probeAndStripImage(bomb)).rejects.toThrow();
   });
 });

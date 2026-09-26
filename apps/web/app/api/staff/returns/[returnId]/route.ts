@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
-import { getStaffUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
+import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
 import { writeNotification } from '../../../../../lib/notify';
-import { ReturnStatusSchema, isValidReturnStatusTransition, OrderEventSchema, type Return, type ReturnStatus, type Order } from '@bro-pics/shared';
+import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../lib/admin-idempotency';
+import { writeAuditLog } from '../../../../../lib/audit-log';
+import {
+  ReturnStatusSchema,
+  isValidReturnStatusTransition,
+  OrderEventSchema,
+  ReturnEventSchema,
+  logger,
+  type Return,
+  type ReturnStatus,
+  type Order,
+} from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ returnId: string }>;
@@ -31,9 +42,23 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  const staffUserId = await getStaffUserIdFromAuthHeader(request);
-  if (!staffUserId) {
-    return NextResponse.json({ error: 'Staff access required' }, { status: 403 });
+  const permission = await requirePermission(request, 'returns:write');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
+  }
+  const staffUserId = permission.uid;
+  const db = getFirestore(getAdminApp());
+
+  // [ABE-03] Closes the race this route's own comment below has long
+  // documented: a retried advance to 'refunded' (timeout, double-click)
+  // with the same Idempotency-Key returns the ORIGINAL response instead
+  // of calling Razorpay's refund API a second time.
+  const idempotencyKey = getIdempotencyKeyHeader(request);
+  if (idempotencyKey) {
+    const existing = await findIdempotentResponse(db, 'staff.returns.advance', idempotencyKey);
+    if (existing) {
+      return NextResponse.json(existing.body, { status: existing.status });
+    }
   }
 
   const body = await request.json();
@@ -43,9 +68,18 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   }
   const nextStatus = statusParsed.data;
   const staffNote = typeof body?.staffNote === 'string' ? body.staffNote : null;
+  // [ABE-23] Only meaningful when approving — recorded here rather than
+  // requiring a second call, since staff typically decide refund vs
+  // replacement in the same review action as the approve/reject call.
+  let resolution: 'refund' | 'replacement' | null | undefined;
+  if (body?.resolution !== undefined) {
+    if (body.resolution !== 'refund' && body.resolution !== 'replacement' && body.resolution !== null) {
+      return NextResponse.json({ error: "resolution must be 'refund', 'replacement', or null" }, { status: 400 });
+    }
+    resolution = body.resolution;
+  }
 
   const { returnId } = await params;
-  const db = getFirestore(getAdminApp());
   const returnRef = db.collection('returns').doc(returnId);
   const returnSnap = await returnRef.get();
   if (!returnSnap.exists) {
@@ -67,11 +101,14 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   // outside the transaction below (an external HTTP call must never sit
   // inside a Firestore transaction, which can retry on contention — see
   // create-order's own Razorpay-order-creation step for the same rule).
-  // A race where a concurrent request also advances this same return
-  // between this check and the transaction's own re-check below could, in
-  // principle, call Razorpay twice — documented as a known gap in
-  // razorpay-client.ts (no idempotency key on this call yet), acceptable
-  // for a low-concurrency, staff-only action.
+  // [ABE-03] A SEQUENTIAL retry (timeout, double-click) with the same
+  // Idempotency-Key is now caught above, before this call. [ABE-23] The
+  // genuinely-CONCURRENT-requests gap this comment used to describe is
+  // now closed too: `returnId` is passed as Razorpay's own idempotency
+  // key (a return can only ever reach 'refunded' once, enforced by the
+  // status machine, so it's a safe, stable, unique key per refund
+  // attempt) — two racing requests both calling Razorpay for the same
+  // return now resolve to the SAME refund at Razorpay's end, not two.
   let razorpayRefundId: string | undefined;
   if (nextStatus === 'refunded') {
     if (!order.razorpayPaymentId) {
@@ -81,6 +118,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       paymentId: order.razorpayPaymentId,
       amount: currentReturn.refundAmount,
       notes: { returnId },
+      idempotencyKey: returnId,
     });
     razorpayRefundId = refund.id;
   }
@@ -100,7 +138,23 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       if (razorpayRefundId) {
         returnUpdate.razorpayRefundId = razorpayRefundId;
       }
+      if (resolution !== undefined) {
+        returnUpdate.resolution = resolution;
+      }
       transaction.update(returnRef, returnUpdate);
+
+      // [BE-19] History entry for every staff status change, not just the
+      // terminal refunded one — mirrors orders/{id}/events (see
+      // OrderEventSchema's use in the staff-advance route).
+      const returnEventRef = returnRef.collection('events').doc();
+      const returnEvent = ReturnEventSchema.parse({
+        id: returnEventRef.id,
+        status: nextStatus,
+        staffNote,
+        createdAt: new Date().toISOString(),
+        createdBy: staffUserId,
+      });
+      transaction.set(returnEventRef, returnEvent);
 
       // Once a return actually completes, the parent order moves to
       // 'refunded' too — 'delivered' -> 'refunded' is already a legal
@@ -139,10 +193,28 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       notification.title,
       `Return for order ${order.orderNo} ${notification.body}`,
       `/orders/${currentReturn.orderId}`
-    ).catch((error) => console.error('Failed to write notification:', error));
+    ).catch((error) =>
+      logger.error('Failed to write notification', { orderId: currentReturn.orderId, uid: currentReturn.userId, returnId, error: String(error) })
+    );
   }
 
-  return NextResponse.json({ status: nextStatus, razorpayRefundId }, { status: 200 });
+  const responseBody = { status: nextStatus, razorpayRefundId };
+
+  await writeAuditLog(db, {
+    actorUid: staffUserId,
+    action: 'return.advance',
+    resource: 'return',
+    resourceId: returnId,
+    details: { fromStatus: currentReturn.status, toStatus: nextStatus, razorpayRefundId },
+  }).catch((error) => logger.error('Failed to write audit log', { returnId, error: String(error) }));
+
+  if (idempotencyKey) {
+    await recordIdempotentResponse(db, 'staff.returns.advance', idempotencyKey, 200, responseBody).catch((error) =>
+      logger.error('Failed to record idempotent response', { returnId, error: String(error) })
+    );
+  }
+
+  return NextResponse.json(responseBody, { status: 200 });
 }
 
 class StatusConflictError extends Error {}

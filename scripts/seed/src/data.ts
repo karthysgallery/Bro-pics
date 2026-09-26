@@ -321,6 +321,11 @@ export const seedProducts: Product[] = productInputs.map((input) => {
     faq: input.faq,
     primaryImageUrl: `/placeholders/products/${input.id.replace('prod_', '').replace(/_/g, '-')}-1.svg`,
     hoverImageUrl: `/placeholders/products/${input.id.replace('prod_', '').replace(/_/g, '-')}-2.svg`,
+    // [ABE-04] Every seeded product is already live — 'published' matches
+    // its isActive: true above. No seed product has curated cross-sells.
+    status: 'published',
+    relatedProductIds: [],
+    frequentlyBoughtTogetherIds: [],
   };
 });
 

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useCart, type CartItem } from '../../lib/cart-context';
 import { QuantityStepper } from '../ui/QuantityStepper';
 import { formatPaise } from '../../lib/format-price';
 import { addToWishlist } from '../../lib/wishlist';
 import { useToast } from '../ui/Toast';
+import { resolveMediaUrl, getIdTokenSafe } from '../../lib/resolve-media-url';
+import { AuthContext } from '../../lib/auth-context';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -25,9 +27,33 @@ const STOCK_BADGE_LABEL: Record<string, string> = {
 
 export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { items, updateQuantity, removeItem, totalPaise } = useCart();
+  // Same null-safe pattern as CartProvider itself (see its comment): this
+  // drawer must render fine with no AuthProvider ancestor too.
+  const auth = useContext(AuthContext);
   const { showToast } = useToast();
   const [movingKey, setMovingKey] = useState<string | null>(null);
   const [stockByVariant, setStockByVariant] = useState<Map<string, VariantStock>>(new Map());
+  const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(new Map());
+
+  // Cart items only ever carry a Storage path (previewPath), never a URL —
+  // a signed URL persisted at add-to-cart time would be expired for any
+  // cart reopened an hour later. Resolve a fresh one per distinct path
+  // whenever the drawer opens or the set of paths changes.
+  const previewPathsKey = [...new Set(items.map((i) => i.previewPath).filter((p): p is string => !!p))].join(',');
+  useEffect(() => {
+    if (!isOpen || !previewPathsKey) return;
+    let cancelled = false;
+    (async () => {
+      const idToken = await getIdTokenSafe(auth?.user);
+      const paths = previewPathsKey.split(',');
+      const entries = await Promise.all(paths.map(async (path) => [path, await resolveMediaUrl(path, idToken)] as const));
+      if (cancelled) return;
+      setPreviewUrls(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, previewPathsKey, auth?.user]);
 
   // A cart line's own price/title snapshot can go stale after being added —
   // this surfaces a live stock check while browsing the cart, ahead of the
@@ -111,8 +137,8 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 return (
                 <li key={`${item.variantId}-${item.personalizationId}`} className="flex gap-3 py-4">
                   <div className="relative w-16 h-16 shrink-0 rounded-md bg-tint overflow-hidden">
-                    {item.previewUrl && (
-                      <Image src={item.previewUrl} alt={item.title} fill sizes="64px" className="object-cover" />
+                    {item.previewPath && previewUrls.get(item.previewPath) && (
+                      <Image src={previewUrls.get(item.previewPath)!} alt={item.title} fill sizes="64px" className="object-cover" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

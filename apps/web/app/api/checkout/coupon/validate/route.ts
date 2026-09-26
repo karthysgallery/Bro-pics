@@ -5,7 +5,8 @@ import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { findCouponByCode } from '../../../../../lib/coupon-lookup';
 import { findVariantById } from '../../../../../lib/variant-lookup';
-import { priceCartLines, calculateSubtotal, type CartLineInput } from '../../../../../lib/checkout-calc';
+import { priceCartLines, type CartLineInput } from '../../../../../lib/checkout-calc';
+import { computeEligibleSubtotal } from '../../../../../lib/coupon-eligibility';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { calculateCouponDiscount } from '@bro-pics/shared';
 
@@ -44,7 +45,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   );
   const variantsById = new Map(variantEntries.filter(([, variant]) => variant !== null) as [string, NonNullable<(typeof variantEntries)[number][1]>][]);
   const { priced } = priceCartLines(cartItems, variantsById);
-  const subtotal = calculateSubtotal(priced);
 
   if (coupon.perUserLimit) {
     // Query by coupon.code (the normalized, trustworthy value sourced from
@@ -61,7 +61,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  const result = calculateCouponDiscount(subtotal, coupon);
+  // [BE-24] See create-order's own use of computeEligibleSubtotal — same
+  // reasoning, kept in sync so a coupon that's rejected/discounted
+  // differently here vs. at actual checkout would be a real bug.
+  const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
+  const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
   if (!result.valid) {
     return NextResponse.json({ valid: false, reason: result.reason }, { status: 200 });
   }

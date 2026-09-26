@@ -10,7 +10,7 @@ function baseOrderItem(overrides: Record<string, unknown> = {}) {
     title: 'Classic Wooden Frame — 8x12 in',
     unitPrice: 79900,
     qty: 2,
-    previewUrl: 'https://example.com/preview.png',
+    previewPath: 'uploads/sess_1/previews/pers_1/slot-0.png',
     ...overrides,
   };
 }
@@ -20,8 +20,8 @@ describe('OrderItemSchema', () => {
     expect(OrderItemSchema.safeParse(baseOrderItem()).success).toBe(true);
   });
 
-  it('accepts a null previewUrl', () => {
-    expect(OrderItemSchema.safeParse(baseOrderItem({ previewUrl: null })).success).toBe(true);
+  it('accepts a null previewPath', () => {
+    expect(OrderItemSchema.safeParse(baseOrderItem({ previewPath: null })).success).toBe(true);
   });
 
   it('rejects a negative unitPrice', () => {

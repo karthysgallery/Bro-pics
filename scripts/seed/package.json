@@ -7,7 +7,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "write-to-firestore": "tsx src/write-to-firestore.ts",
-    "set-user-role": "tsx src/set-user-role.ts"
+    "set-user-role": "tsx src/set-user-role.ts",
+    "migrate-storage-paths": "tsx src/migrate-storage-paths.ts"
   },
   "dependencies": {
     "@bro-pics/shared": "workspace:*",

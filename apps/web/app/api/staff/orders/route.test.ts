@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockFindOrdersByStatus = vi.fn();
@@ -32,25 +32,25 @@ describe('GET /api/staff/orders', () => {
   });
 
   it('returns 403 when the caller is not staff/admin', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await GET(makeRequest('https://example.com/api/staff/orders?status=paid'));
     expect(response.status).toBe(403);
   });
 
   it('returns 400 when status is missing', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await GET(makeRequest('https://example.com/api/staff/orders'));
     expect(response.status).toBe(400);
   });
 
   it('returns 400 when status is not a valid OrderStatus', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await GET(makeRequest('https://example.com/api/staff/orders?status=not_a_status'));
     expect(response.status).toBe(400);
   });
 
   it('returns the matching orders on a valid status', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockFindOrdersByStatus.mockResolvedValueOnce([
       {
         id: 'order_1',

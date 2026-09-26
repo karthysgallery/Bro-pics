@@ -85,6 +85,12 @@ export default function InvoicePage({ params }: InvoicePageProps) {
           <p className="text-ink/60">Order date</p>
           <p className="text-ink font-medium">{formatPlacedAt(order.placedAt)}</p>
         </div>
+        {order.invoiceNo && (
+          <div>
+            <p className="text-ink/60">Invoice no.</p>
+            <p className="text-ink font-medium">{order.invoiceNo}</p>
+          </div>
+        )}
         <div>
           <p className="text-ink/60">Payment reference</p>
           <p className="text-ink font-medium">{order.razorpayPaymentId ?? order.razorpayOrderId ?? '—'}</p>

@@ -10,7 +10,15 @@ import { PageSkeleton } from '../../../../components/ui/Skeleton';
 import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
-import type { Order, OrderItem, OrderEvent, Return, ReturnStatus } from '@bro-pics/shared';
+import type { Order, OrderItem, OrderEvent, Return, ReturnStatus, ReturnReasonCategory } from '@bro-pics/shared';
+
+const RETURN_REASON_CATEGORY_LABEL: Record<ReturnReasonCategory, string> = {
+  damaged: 'Arrived damaged',
+  wrong_item: 'Wrong item received',
+  quality: 'Quality not as expected',
+  changed_mind: 'Changed my mind',
+  other: 'Other',
+};
 
 const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = {
   requested: 'Return requested',
@@ -61,6 +69,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [existingReturn, setExistingReturn] = useState<Return | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnReasonCategory, setReturnReasonCategory] = useState<ReturnReasonCategory>('damaged');
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
@@ -158,7 +167,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       const response = await fetch(`/api/orders/${orderId}/returns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ reason: returnReason.trim() }),
+        body: JSON.stringify({ reasonCategory: returnReasonCategory, reason: returnReason.trim() }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -186,6 +195,26 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       </div>
 
       <OrderStatusTimeline status={order.status} />
+
+      {order.shipmentTracking && (
+        <div className="text-sm text-accent/80">
+          {order.shipmentTracking.provider} — {order.shipmentTracking.awbNumber}
+          {order.shipmentTracking.trackingUrl && (
+            <>
+              {' '}
+              ·{' '}
+              <a
+                href={order.shipmentTracking.trackingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:text-accent-dark underline"
+              >
+                Track shipment
+              </a>
+            </>
+          )}
+        </div>
+      )}
 
       <ul className="flex flex-col gap-2 text-accent/80">
         {items.map((item, i) => {
@@ -237,8 +266,23 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             </div>
           ) : showReturnForm ? (
             <div className="rounded-md border border-line p-4 flex flex-col gap-3">
+              <label htmlFor="return-reason-category" className="text-sm font-medium text-ink">
+                What's the issue?
+              </label>
+              <select
+                id="return-reason-category"
+                value={returnReasonCategory}
+                onChange={(e) => setReturnReasonCategory(e.target.value as ReturnReasonCategory)}
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink"
+              >
+                {Object.entries(RETURN_REASON_CATEGORY_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
               <label htmlFor="return-reason" className="text-sm font-medium text-ink">
-                Why are you returning this order?
+                Tell us more
               </label>
               <textarea
                 id="return-reason"

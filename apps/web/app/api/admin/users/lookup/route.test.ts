@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
 
 const mockGetAdminUserId = vi.fn();
-vi.mock('../../../../../lib/verify-id-token', () => ({
-  getAdminUserIdFromAuthHeader: (...args: unknown[]) => mockGetAdminUserId(...args),
+vi.mock('../../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetAdminUserId(...args),
 }));
 
 const mockGetUserByPhoneNumber = vi.fn();
@@ -11,6 +11,10 @@ vi.mock('firebase-admin/auth', () => ({
   getAuth: vi.fn(() => ({ getUserByPhoneNumber: mockGetUserByPhoneNumber })),
 }));
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
+vi.mock('firebase-admin/firestore', () => ({ getFirestore: vi.fn(() => ({})) }));
+
+const mockWriteAuditLog = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]) => mockWriteAuditLog(...args) }));
 
 vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../../lib/rate-limit')>();
@@ -30,26 +34,26 @@ describe('GET /api/admin/users/lookup', () => {
   });
 
   it('returns 403 when the caller is not an admin', async () => {
-    mockGetAdminUserId.mockResolvedValueOnce(null);
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
     expect(response.status).toBe(403);
   });
 
   it('returns 400 when phone is missing', async () => {
-    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     const response = await GET(makeRequest('https://example.com/api/admin/users/lookup'));
     expect(response.status).toBe(400);
   });
 
   it('returns 404 when no account has that phone number', async () => {
-    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     mockGetUserByPhoneNumber.mockRejectedValueOnce(new Error('no user'));
     const response = await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
     expect(response.status).toBe(404);
   });
 
   it('returns the account with its current role on a match', async () => {
-    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     mockGetUserByPhoneNumber.mockResolvedValueOnce({
       uid: 'user_9',
       phoneNumber: '+911234567890',
@@ -62,7 +66,7 @@ describe('GET /api/admin/users/lookup', () => {
   });
 
   it('returns role: null when the account has no role claim yet', async () => {
-    mockGetAdminUserId.mockResolvedValueOnce('admin_1');
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     mockGetUserByPhoneNumber.mockResolvedValueOnce({
       uid: 'user_9',
       phoneNumber: '+911234567890',
@@ -71,6 +75,16 @@ describe('GET /api/admin/users/lookup', () => {
     const response = await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
     const body = await response.json();
     expect(body.role).toBeNull();
+  });
+
+  it('[ABE-27] writes an audit log entry on a successful lookup', async () => {
+    mockGetAdminUserId.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockGetUserByPhoneNumber.mockResolvedValueOnce({ uid: 'user_9', phoneNumber: '+911234567890', customClaims: { role: 'staff' } });
+    await GET(makeRequest('https://example.com/api/admin/users/lookup?phone=%2B911234567890'));
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorUid: 'admin_1', action: 'user.lookup', resource: 'user', resourceId: 'user_9' })
+    );
   });
 
   it('returns 429 and does not touch Firebase Auth when rate-limited', async () => {

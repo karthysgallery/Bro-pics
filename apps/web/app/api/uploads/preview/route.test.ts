@@ -46,6 +46,7 @@ describe('POST /api/uploads/preview', () => {
 
     expect(response.status).toBe(200);
     expect(body.previewUrl).toBe('https://signed.example.com/preview.png');
+    expect(body.previewPath).toBe('uploads/sess_test/previews/pers_1/slot-0.png');
     expect(mockSave).toHaveBeenCalled();
   });
 

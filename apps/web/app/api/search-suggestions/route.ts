@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchProductsPage } from '../../../lib/firestore-products';
+import { searchProductsPage, searchCategoriesPage } from '../../../lib/firestore-products';
+import { getPopularSearches } from '../../../lib/firestore-settings';
 import { checkRateLimit } from '../../../lib/rate-limit';
 
 export async function GET(request: NextRequest) {
@@ -13,10 +14,20 @@ export async function GET(request: NextRequest) {
 
   const query = request.nextUrl.searchParams.get('q') ?? '';
   if (query.trim().length === 0) {
-    return NextResponse.json({ products: [] });
+    // [BE-23] Nothing typed yet — offer curated popular searches instead
+    // of an empty box. Empty until an admin curates settings/search
+    // (getPopularSearches' own doc comment).
+    const popularSearches = await getPopularSearches();
+    return NextResponse.json({ products: [], categories: [], popularSearches });
   }
-  const { products } = await searchProductsPage(query, {}, 1);
+
+  const [{ products }, categories] = await Promise.all([
+    searchProductsPage(query, {}, 1),
+    searchCategoriesPage(query),
+  ]);
   return NextResponse.json({
     products: products.slice(0, 6).map((p) => ({ id: p.id, title: p.title, slug: p.slug })),
+    categories: categories.slice(0, 3).map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+    popularSearches: [],
   });
 }

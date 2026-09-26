@@ -6,6 +6,7 @@ function baseReturn(overrides: Record<string, unknown> = {}) {
     id: 'ret_1',
     orderId: 'order_1',
     userId: 'user_1',
+    reasonCategory: 'damaged',
     reason: 'Frame arrived damaged',
     status: 'requested',
     requestedAt: '2026-09-20T00:00:00.000Z',
@@ -39,5 +40,35 @@ describe('ReturnSchema', () => {
       baseReturn({ status: 'refunded', resolvedAt: '2026-09-25T00:00:00.000Z', razorpayRefundId: 'rfnd_1', staffNote: 'Approved, inspected on pickup' })
     );
     expect(result.success).toBe(true);
+  });
+
+  it('[BE-19] accepts every reason category', () => {
+    for (const reasonCategory of ['damaged', 'wrong_item', 'quality', 'changed_mind', 'other']) {
+      expect(ReturnSchema.safeParse(baseReturn({ reasonCategory })).success).toBe(true);
+    }
+  });
+
+  it('[BE-19] rejects an unknown reason category', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ reasonCategory: 'not_a_category' })).success).toBe(false);
+  });
+
+  it('[BE-19] requires a reasonCategory', () => {
+    const { reasonCategory: _omit, ...withoutCategory } = baseReturn();
+    expect(ReturnSchema.safeParse(withoutCategory).success).toBe(false);
+  });
+
+  it('[BE-19] accepts evidencePaths as Storage object paths, and omits fine too', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ evidencePaths: ['returns/ret_1/photo1.jpg'] })).success).toBe(true);
+    expect(ReturnSchema.safeParse(baseReturn()).success).toBe(true);
+  });
+
+  it('[ABE-23] accepts a resolution of refund or replacement, and omits fine too', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'refund' })).success).toBe(true);
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'replacement' })).success).toBe(true);
+    expect(ReturnSchema.safeParse(baseReturn()).success).toBe(true);
+  });
+
+  it('[ABE-23] rejects an unknown resolution', () => {
+    expect(ReturnSchema.safeParse(baseReturn({ resolution: 'store_credit' })).success).toBe(false);
   });
 });

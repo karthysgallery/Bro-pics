@@ -38,6 +38,17 @@ export interface CreateRazorpayRefundParams {
   paymentId: string;
   amount: number;
   notes?: Record<string, string>;
+  // [ABE-23] Closes the gap this doc comment used to describe. Razorpay
+  // accepts a caller-supplied `X-Razorpay-Idempotency-Key` request header
+  // on refund creation (same mechanism most payment APIs use for safe
+  // retries): a second call with the same key against the same payment
+  // returns the original refund instead of creating a new one, at
+  // Razorpay's end — a real safety net for the genuinely-concurrent-
+  // requests race this file's own comment (and the staff returns route's)
+  // already documented as unclosed by app-level Idempotency-Key caching
+  // alone. Every caller should pass one derived from something stable and
+  // unique to the refund attempt (a Firestore refund-doc id is ideal).
+  idempotencyKey?: string;
 }
 
 export interface RazorpayRefund {
@@ -48,17 +59,17 @@ export interface RazorpayRefund {
 /**
  * Real money movement — same pattern as createRazorpayOrder (Basic auth
  * over the REST API, no SDK dependency). Called from the staff returns
- * route when a return is advanced to refund_processing/refunded, never
- * from anywhere client-reachable. Razorpay refunds are themselves
- * idempotent per payment when a caller supplies its own idempotency key,
- * but this app doesn't yet — see the backend notes doc for that gap
- * (a retried request could double-refund; the staff route mitigates this
- * today only by checking the return's current status before calling).
+ * route when a return is advanced to refund_processing/refunded, and from
+ * the admin ad-hoc refunds route, never from anywhere client-reachable.
  */
 export async function createRazorpayRefund(params: CreateRazorpayRefundParams): Promise<RazorpayRefund> {
   const response = await fetch(`https://api.razorpay.com/v1/payments/${params.paymentId}/refund`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: getAuthHeader() },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: getAuthHeader(),
+      ...(params.idempotencyKey && { 'X-Razorpay-Idempotency-Key': params.idempotencyKey }),
+    },
     body: JSON.stringify({ amount: params.amount, ...(params.notes && { notes: params.notes }) }),
   });
 

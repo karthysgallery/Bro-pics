@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
 
 const mockGetStaffUserId = vi.fn();
-vi.mock('../../../../lib/verify-id-token', () => ({
-  getStaffUserIdFromAuthHeader: (...args: unknown[]) => mockGetStaffUserId(...args),
+vi.mock('../../../../lib/require-permission', () => ({
+  requirePermission: (...args: unknown[]) => mockGetStaffUserId(...args),
 }));
 
 const mockWhereGet = vi.fn();
@@ -31,13 +31,13 @@ describe('GET /api/staff/returns', () => {
   });
 
   it('returns 403 when the caller is not staff', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce(null);
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: false, status: 403 });
     const response = await GET(new Request('https://example.com/api/staff/returns'));
     expect(response.status).toBe(403);
   });
 
   it('returns every return when no status filter is given', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockCollectionGet.mockResolvedValueOnce({ docs: [{ data: () => ({ id: 'ret_1' }) }, { data: () => ({ id: 'ret_2' }) }] });
     const response = await GET(new Request('https://example.com/api/staff/returns'));
     expect(response.status).toBe(200);
@@ -46,7 +46,7 @@ describe('GET /api/staff/returns', () => {
   });
 
   it('filters by status when given', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     mockWhereGet.mockResolvedValueOnce({ docs: [{ data: () => ({ id: 'ret_1', status: 'requested' }) }] });
     const response = await GET(new Request('https://example.com/api/staff/returns?status=requested'));
     expect(response.status).toBe(200);
@@ -55,7 +55,7 @@ describe('GET /api/staff/returns', () => {
   });
 
   it('returns 400 for an invalid status filter', async () => {
-    mockGetStaffUserId.mockResolvedValueOnce('staff_1');
+    mockGetStaffUserId.mockResolvedValueOnce({ ok: true, uid: 'staff_1' });
     const response = await GET(new Request('https://example.com/api/staff/returns?status=bogus'));
     expect(response.status).toBe(400);
   });

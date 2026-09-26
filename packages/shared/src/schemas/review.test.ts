@@ -44,4 +44,20 @@ describe('ReviewSchema', () => {
     const { createdAt, ...withoutCreatedAt } = validReview;
     expect(() => ReviewSchema.parse(withoutCreatedAt)).toThrow();
   });
+
+  it('accepts a featured review with a homepage placement and moderation note', () => {
+    const featured = { ...validReview, featured: true, placement: 'homepage' as const, moderationNote: 'Great photo, approved for homepage' };
+    expect(ReviewSchema.parse(featured)).toEqual(featured);
+  });
+
+  it('omits featured/placement/moderationNote when not given (no defaulting)', () => {
+    const parsed = ReviewSchema.parse(validReview);
+    expect('featured' in parsed).toBe(false);
+    expect('placement' in parsed).toBe(false);
+    expect('moderationNote' in parsed).toBe(false);
+  });
+
+  it('rejects an unknown placement', () => {
+    expect(() => ReviewSchema.parse({ ...validReview, placement: 'sidebar' })).toThrow();
+  });
 });

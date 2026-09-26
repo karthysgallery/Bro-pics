@@ -1,12 +1,13 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
-import { getShippingSettings } from '../../../../lib/firestore-settings';
+import { getShippingSettings, getGstSettings } from '../../../../lib/firestore-settings';
 import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { findCouponByCode } from '../../../../lib/coupon-lookup';
+import { computeEligibleSubtotal } from '../../../../lib/coupon-eligibility';
 import { createRazorpayOrder } from '../../../../lib/razorpay-client';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import {
@@ -17,8 +18,16 @@ import {
   AddressSchema,
   DeliveryMethodSchema,
   calculateCouponDiscount,
+  splitGstFromInclusiveTotal,
   type CounterTransaction,
 } from '@bro-pics/shared';
+
+// Matches firestore.rules' carts/{userId} bound exactly [BE-09] — this is
+// the defense-in-depth copy, since the Admin SDK (which this route uses)
+// bypasses Firestore rules entirely. Not a money concern either way
+// (unitPrice is always re-derived from the variant below, never trusted
+// from the cart line), just closing an unbounded-qty/garbage-data path.
+const MAX_LINE_QTY = 20;
 
 function isMalformedCartLine(item: CartLineInput): boolean {
   return (
@@ -31,13 +40,14 @@ function isMalformedCartLine(item: CartLineInput): boolean {
     typeof item.qty !== 'number' ||
     !Number.isInteger(item.qty) ||
     item.qty <= 0 ||
-    // previewUrl is optional (CartLineInput: `previewUrl?: string`) but if
+    item.qty > MAX_LINE_QTY ||
+    // previewPath is optional (CartLineInput: `previewPath?: string`) but if
     // present must actually be a string — this also rejects `null`
-    // deliberately: the app itself never writes previewUrl as null onto a
+    // deliberately: the app itself never writes previewPath as null onto a
     // cart line (it's either a real string or the field is simply absent),
     // so a null here can only come from a hand-crafted write to this
     // owner-writable doc, same threat model as a stray number/object.
-    (item.previewUrl !== undefined && typeof item.previewUrl !== 'string')
+    (item.previewPath !== undefined && typeof item.previewPath !== 'string')
   );
 }
 
@@ -62,6 +72,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const couponCode =
     typeof body?.couponCode === 'string' && body.couponCode.trim().length > 0 ? body.couponCode.trim() : null;
+  const idempotencyKey =
+    typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim().length > 0 ? body.idempotencyKey.trim() : null;
 
   // Absent entirely means 'standard' (backward-compatible with clients that
   // predate this field); an explicitly-supplied-but-invalid value is a real
@@ -76,6 +88,36 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
+
+  // [BE-13] A double-click on "Place Order," a retried request after a
+  // network blip, or the customer closing/failing the Razorpay modal and
+  // clicking "Place Order" again all reuse the SAME idempotencyKey (the
+  // client generates it once per checkout attempt and keeps it stable
+  // across retries of that attempt — see checkout/page.tsx). Finding a
+  // still-pending order under this key returns it as-is: the same
+  // razorpayOrderId is handed back so the customer's retry opens the SAME
+  // Razorpay order rather than minting a new one and abandoning the first.
+  // An already-paid order under this key means the retry arrived after
+  // payment had already gone through — reported distinctly so the client
+  // doesn't show a payment modal for something already completed.
+  if (idempotencyKey) {
+    const existingSnapshot = await db
+      .collection('orders')
+      .where('userId', '==', userId)
+      .where('idempotencyKey', '==', idempotencyKey)
+      .limit(1)
+      .get();
+    if (!existingSnapshot.empty) {
+      const existing = existingSnapshot.docs[0].data() as { id: string; status: string; razorpayOrderId?: string; total: number };
+      if (existing.status === 'paid') {
+        return NextResponse.json({ error: 'This order has already been paid for', code: 'already_paid', orderId: existing.id }, { status: 409 });
+      }
+      return NextResponse.json(
+        { orderId: existing.id, razorpayOrderId: existing.razorpayOrderId, amount: existing.total, keyId: process.env.RAZORPAY_KEY_ID },
+        { status: 200 }
+      );
+    }
+  }
 
   const cartDoc = await db.collection('carts').doc(userId).get();
   const cartItems = (cartDoc.exists ? (cartDoc.data() as { items: CartLineInput[] }).items : []) ?? [];
@@ -123,6 +165,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const subtotal = calculateSubtotal(priced);
   const shippingSettings = await getShippingSettings();
   const shipping = calculateShipping(subtotal, shippingSettings, deliveryMethod);
+  const gstSettings = await getGstSettings();
 
   let discount = 0;
   let appliedCouponId: string | undefined;
@@ -137,15 +180,25 @@ export async function POST(request: Request): Promise<NextResponse> {
         // from doc.id inside findCouponByCode), not the raw couponCode —
         // orders always write couponId as coupon.code, so matching against
         // anything else could under/over-count a customer's prior usage.
+        // [BE-14] paymentStatus == 'paid' only — an order the customer
+        // abandoned at the Razorpay modal (stays pending_payment forever)
+        // must not count against their limit; counting it previously meant
+        // an abandoned attempt could permanently burn a one-time coupon.
         const usedSnapshot = await db
           .collection('orders')
           .where('userId', '==', userId)
           .where('couponId', '==', coupon.code)
+          .where('paymentStatus', '==', 'paid')
           .get();
         perUserOk = usedSnapshot.size < coupon.perUserLimit;
       }
       if (perUserOk) {
-        const result = calculateCouponDiscount(subtotal, coupon);
+        // [BE-24] For an 'all' coupon this is just the order subtotal
+        // (unchanged behavior); for 'category'/'product' it's only the
+        // portion of the cart the coupon actually covers, so the
+        // discount below can never apply against ineligible items.
+        const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
+        const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
         if (result.valid) {
           discount = result.discountPaise;
           // Source from coupon.code (normalized, doc.id-backed), not the
@@ -167,6 +220,23 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const total = subtotal - discount + effectiveShipping;
+
+  // [BE-22] taxLines is a descriptive GST breakdown of the already
+  // GST-inclusive total, for invoice display — never an addition to what
+  // the customer pays (see splitGstFromInclusiveTotal's own doc comment).
+  // Stays empty until an admin actually configures settings/gst
+  // (getGstSettings defaults gstEnabled: false), matching this codebase's
+  // existing "safe default until real settings exist" pattern for
+  // shipping.
+  const taxLines = gstSettings.gstEnabled
+    ? [
+        {
+          ...(gstSettings.gstin && { gstin: gstSettings.gstin }),
+          rate: gstSettings.taxRate,
+          amount: splitGstFromInclusiveTotal(total, gstSettings.taxRate).gstAmountPaise,
+        },
+      ]
+    : [];
 
   // Step 1: generate the order number in its own short transaction — this
   // commits BEFORE the Razorpay HTTP call below. An external API call must
@@ -202,13 +272,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     shipping: effectiveShipping,
     total,
     addressJson: address,
+    // [BE-25a] Denormalized for a future frequently-bought-together query.
+    productIds: [...new Set(priced.map((line) => line.productId))],
     razorpayOrderId: razorpayOrder.id,
     placedAt: new Date(),
     deliveryMethod,
+    // Same Firestore-rejects-undefined rule as couponId below.
+    ...(idempotencyKey && { idempotencyKey }),
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,
-    taxLines: [],
+    taxLines,
     // Firestore's Admin SDK rejects `undefined` field values (this project
     // never sets ignoreUndefinedProperties), so couponId must be omitted
     // entirely — not set to a possibly-undefined value — when no coupon
@@ -218,16 +292,11 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const batch = db.batch();
   batch.set(orderRef, order);
-  if (appliedCouponId) {
-    // Counts this order regardless of eventual payment outcome — an order
-    // that stays `pending_payment` forever (customer abandons the Razorpay
-    // modal) still increments usedCount here, and nothing anywhere ever
-    // decrements it. This is a real, documented gap (see PROJECT_STATUS.md
-    // §5's coupon-application-flow bullet), not an oversight; a real fix
-    // means moving this increment into the webhook's payment-success
-    // handler, out of scope for this plan.
-    batch.update(db.collection('coupons').doc(appliedCouponId), { usedCount: FieldValue.increment(1) });
-  }
+  // [BE-14] usedCount is NOT incremented here — an order that stays
+  // pending_payment forever (customer abandons the Razorpay modal) must
+  // not burn a use of the coupon. razorpayWebhook's payment.captured
+  // handler increments it instead, only once payment is actually
+  // confirmed. See that file for the increment itself.
 
   const eventRef = orderRef.collection('events').doc();
   batch.set(
@@ -247,6 +316,50 @@ export async function POST(request: Request): Promise<NextResponse> {
     const itemRef = orderRef.collection('items').doc();
     batch.set(itemRef, OrderItemSchema.parse({ ...line, id: itemRef.id }));
   }
+
+  // [BE-10/BE-12] draft -> ordered: a customization referenced by this
+  // order can no longer be freely edited via PUT /api/customizations/{id}
+  // (that route 409s on anything but 'draft'). Not yet 'locked' — payment
+  // hasn't been confirmed, and razorpayWebhook's payment.captured handler
+  // is what advances ordered -> locked. One personalizationId can span
+  // multiple Customization docs (one per photo slot), so this queries by
+  // personalizationId rather than assuming a single doc.
+  const uniquePersonalizationIds = [...new Set(priced.map((line) => line.personalizationId))];
+  const customizationSnapshots = await Promise.all(
+    uniquePersonalizationIds.map((pid) => db.collection('customizations').where('personalizationId', '==', pid).get())
+  );
+
+  // [BE-35] A cart line's personalizationId is client-supplied (it lives
+  // in carts/{userId}, itself client-writable) — without this check,
+  // nothing stopped a customer from ordering with a personalizationId
+  // that belongs to someone else's session/account, placing an order
+  // built from another customer's uploaded photo without their consent.
+  // reconcileSessionOnLogin (Phase 4 Plan A) stamps userId onto every
+  // customization at sign-in, so by checkout time an owned customization
+  // always has userId set to its actual owner — any doc still missing it,
+  // or set to someone else's uid, fails this check. Checked BEFORE the
+  // batch commits (nothing has been written yet at this point), so a
+  // rejected order leaves no partial state behind.
+  for (const snapshot of customizationSnapshots) {
+    for (const doc of snapshot.docs) {
+      if (doc.data().userId !== userId) {
+        // Matches this codebase's existing "not yours" convention (see
+        // the returns/order-lookup routes' own 404-not-403 choice) —
+        // never confirms whether the personalizationId exists at all,
+        // just that nothing usable was found for THIS caller.
+        return NextResponse.json({ error: 'One or more items in your cart could not be found' }, { status: 404 });
+      }
+    }
+  }
+
+  for (const snapshot of customizationSnapshots) {
+    for (const doc of snapshot.docs) {
+      if (doc.data().status === 'draft') {
+        batch.update(doc.ref, { status: 'ordered' });
+      }
+    }
+  }
+
   await batch.commit();
 
   return NextResponse.json(

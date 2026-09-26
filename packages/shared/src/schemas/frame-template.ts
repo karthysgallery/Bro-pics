@@ -13,6 +13,19 @@ export const TextZoneSchema = z.object({
   align: z.enum(['left', 'center', 'right']),
   defaultFontFamily: z.string().optional(),
   defaultColor: z.string().optional(),
+  // [ABE-12] Remaining per-zone schema the task asked for. All optional
+  // (not `.default()` — `.default()` would make the field non-optional
+  // in TextZone's inferred output type and break every existing seed/
+  // editor-test object literal that predates it, the same trap ABE-04
+  // hit with Product.status). An absent `allowedFonts`/`allowedColors`
+  // means "no restriction, any font/colour the editor's own picker
+  // offers"; an absent `required` means false (matches every existing
+  // text zone's actual behavior today — none are enforced as required).
+  allowedFonts: z.array(z.string()).optional(),
+  allowedColors: z.array(z.string()).optional(),
+  minFontSizePx: z.number().positive().optional(),
+  maxFontSizePx: z.number().positive().optional(),
+  required: z.boolean().optional(),
 });
 
 export type TextZone = z.infer<typeof TextZoneSchema>;
@@ -43,6 +56,13 @@ export const FrameTemplateSchema = z.object({
         y: fraction,
         width: fraction,
         height: fraction,
+        // [ABE-12] Physical slot size in mm, alongside the existing
+        // fraction-based layout — the fractions position the slot within
+        // the mockup image; these are what a real print job needs to
+        // size the output correctly. Optional, same reasoning as
+        // TextZone's new fields above.
+        widthMm: z.number().positive().optional(),
+        heightMm: z.number().positive().optional(),
       })
     )
     .min(1),

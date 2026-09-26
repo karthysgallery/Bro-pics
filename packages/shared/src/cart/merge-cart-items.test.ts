@@ -17,11 +17,11 @@ describe('mergeCartItems', () => {
     expect(result).toEqual(expect.arrayContaining([existing[0], incoming[0]]));
   });
 
-  it('prefers the incoming line\'s previewUrl and title when merging', () => {
-    const existing = [{ variantId: 'v1', personalizationId: 'p1', title: 'Old Title', unitPriceSnapshot: 1000, qty: 1, previewUrl: 'old.png' }];
-    const incoming = [{ variantId: 'v1', personalizationId: 'p1', title: 'New Title', unitPriceSnapshot: 1000, qty: 1, previewUrl: 'new.png' }];
+  it('prefers the incoming line\'s previewPath and title when merging', () => {
+    const existing = [{ variantId: 'v1', personalizationId: 'p1', title: 'Old Title', unitPriceSnapshot: 1000, qty: 1, previewPath: 'old.png' }];
+    const incoming = [{ variantId: 'v1', personalizationId: 'p1', title: 'New Title', unitPriceSnapshot: 1000, qty: 1, previewPath: 'new.png' }];
     const result = mergeCartItems(existing, incoming);
-    expect(result).toEqual([{ variantId: 'v1', personalizationId: 'p1', title: 'New Title', unitPriceSnapshot: 1000, qty: 2, previewUrl: 'new.png' }]);
+    expect(result).toEqual([{ variantId: 'v1', personalizationId: 'p1', title: 'New Title', unitPriceSnapshot: 1000, qty: 2, previewPath: 'new.png' }]);
   });
 
   it('returns existing unchanged when incoming is empty', () => {

@@ -8,12 +8,23 @@ vi.mock('../../../../../lib/verify-id-token', () => ({
 
 const mockGet = vi.fn();
 const mockUpdate = vi.fn().mockResolvedValue(undefined);
+const mockStatsSet = vi.fn().mockResolvedValue(undefined);
 const mockDb = {
   collection: vi.fn(() => ({
-    doc: vi.fn(() => ({ collection: vi.fn(() => ({ doc: vi.fn(() => ({ get: mockGet, update: mockUpdate })) })) })),
+    doc: vi.fn(() => ({
+      collection: vi.fn((subName: string) => {
+        if (subName === 'private') {
+          return { doc: vi.fn(() => ({ set: mockStatsSet })) };
+        }
+        return { doc: vi.fn(() => ({ get: mockGet, update: mockUpdate })) };
+      }),
+    })),
   })),
 };
-vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: () => mockDb,
+  FieldValue: { increment: (n: number) => ({ __increment: n }) },
+}));
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 vi.mock('../../../../../lib/rate-limit', async (importOriginal) => {
@@ -50,12 +61,21 @@ describe('POST /api/notifications/[id]/read', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it('marks a notification as read', async () => {
+  it('marks a notification as read and decrements the unread counter when it was previously unread', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
-    mockGet.mockResolvedValueOnce({ exists: true });
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ isRead: false }) });
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: 'notif_1' }) });
     expect(response.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith({ isRead: true });
+    expect(mockStatsSet).toHaveBeenCalledWith({ unreadCount: { __increment: -1 } }, { merge: true });
+  });
+
+  it('[BE-27] does not decrement the unread counter for an already-read notification (retried request)', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ isRead: true }) });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: 'notif_1' }) });
+    expect(response.status).toBe(200);
+    expect(mockStatsSet).not.toHaveBeenCalled();
   });
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {

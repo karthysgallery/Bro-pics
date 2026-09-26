@@ -29,4 +29,16 @@ describe('sitemap', () => {
     expect(urls).toContain(`${baseUrl}/product/canvas-print`);
     expect(urls).toContain(`${baseUrl}/category/frames-wall-decor`);
   });
+
+  it('[BE-40] includes the static CMS/content pages', async () => {
+    vi.mocked(getAllActiveProductSlugs).mockResolvedValue([]);
+    vi.mocked(getActiveCategories).mockResolvedValue([]);
+
+    const result = await sitemap();
+    const urls = result.map((entry) => entry.url);
+
+    for (const page of ['about', 'contact', 'faq', 'how-it-works', 'picture-quality-guide', 'privacy', 'return-refund-policy', 'shipping-policy', 'terms']) {
+      expect(urls).toContain(`${baseUrl}/${page}`);
+    }
+  });
 });

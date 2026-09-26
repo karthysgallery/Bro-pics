@@ -1,8 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSearchProductsPage = vi.fn();
+const mockSearchCategoriesPage = vi.fn();
 vi.mock('../../../lib/firestore-products', () => ({
   searchProductsPage: (...args: unknown[]) => mockSearchProductsPage(...args),
+  searchCategoriesPage: (...args: unknown[]) => mockSearchCategoriesPage(...args),
+}));
+
+const mockGetPopularSearches = vi.fn();
+vi.mock('../../../lib/firestore-settings', () => ({
+  getPopularSearches: (...args: unknown[]) => mockGetPopularSearches(...args),
 }));
 
 vi.mock('../../../lib/rate-limit', async (importOriginal) => {
@@ -22,13 +29,17 @@ describe('GET /api/search-suggestions', () => {
   beforeEach(() => {
     resetRateLimitState();
     vi.clearAllMocks();
+    mockSearchCategoriesPage.mockResolvedValue([]);
+    mockGetPopularSearches.mockResolvedValue([]);
   });
 
-  it('returns an empty list when the query is blank', async () => {
+  it('[BE-23] returns popular searches for a blank query, without querying products/categories', async () => {
+    mockGetPopularSearches.mockResolvedValueOnce(['birthday frame', 'wedding gift']);
     const response = await GET(makeRequest(''));
     const body = await response.json();
-    expect(body).toEqual({ products: [] });
+    expect(body).toEqual({ products: [], categories: [], popularSearches: ['birthday frame', 'wedding gift'] });
     expect(mockSearchProductsPage).not.toHaveBeenCalled();
+    expect(mockSearchCategoriesPage).not.toHaveBeenCalled();
   });
 
   it('returns up to 6 matching products', async () => {
@@ -40,12 +51,24 @@ describe('GET /api/search-suggestions', () => {
     });
     const response = await GET(makeRequest('frame'));
     const body = await response.json();
-    expect(body).toEqual({
-      products: [
-        { id: 'p1', title: 'Frame A', slug: 'frame-a' },
-        { id: 'p2', title: 'Frame B', slug: 'frame-b' },
-      ],
-    });
+    expect(body.products).toEqual([
+      { id: 'p1', title: 'Frame A', slug: 'frame-a' },
+      { id: 'p2', title: 'Frame B', slug: 'frame-b' },
+    ]);
+  });
+
+  it('[BE-23] returns up to 3 matching categories alongside products', async () => {
+    mockSearchProductsPage.mockResolvedValueOnce({ products: [] });
+    mockSearchCategoriesPage.mockResolvedValueOnce([
+      { id: 'c1', name: 'Wooden Frames', slug: 'wooden-frames' },
+      { id: 'c2', name: 'Metal Frames', slug: 'metal-frames' },
+    ]);
+    const response = await GET(makeRequest('frame'));
+    const body = await response.json();
+    expect(body.categories).toEqual([
+      { id: 'c1', name: 'Wooden Frames', slug: 'wooden-frames' },
+      { id: 'c2', name: 'Metal Frames', slug: 'metal-frames' },
+    ]);
   });
 
   it('returns 429 and does not query Firestore when rate-limited', async () => {
