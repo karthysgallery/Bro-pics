@@ -194,6 +194,44 @@ describe('ProductDetailClient — inline personalization', () => {
     await waitFor(() => expect(addButton).toBeEnabled());
   });
 
+  it('[FE-10] replacing a photo in a filled slot keeps the same slot, refits the transform, and recomputes DPI for the new photo', async () => {
+    mockUploadFetch({ id: 'up_1', widthPx: 2400, heightPx: 3000 });
+    renderProduct(makeProduct(), [variant], [makeTemplate()]);
+
+    const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'first.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    const slotByIndex0 = () =>
+      (lastEditorCanvasProps?.slots as Array<{ slotIndex: number; scale: number; photoUrl: string }>).find((s) => s.slotIndex === 0)!;
+    await waitFor(() => expect(slotByIndex0()).toBeDefined());
+    const firstScale = slotByIndex0().scale;
+    // This file's `variant` fixture already puts a 2400x3000 upload into
+    // the "lower quality print" (amber) tier — see the "good-quality
+    // photo" test above, which enables Add to Cart at this same DPI.
+    expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
+    expect(screen.queryByText(/too low resolution/i)).not.toBeInTheDocument();
+
+    // A much smaller, lower-resolution replacement into the SAME slot — a
+    // cover-fit refit needs a different scale (the photo's own pixel
+    // dimensions changed), and the DPI badge must drop a further tier to
+    // "too low resolution" (red), not silently keep the first photo's
+    // amber badge.
+    mockUploadFetch({ id: 'up_2', originalUrl: '/replaced.jpg', widthPx: 600, heightPx: 750 });
+    const replaceInput = (await screen.findByLabelText(/replace a photo/i)) as HTMLInputElement;
+    fireEvent.change(replaceInput, { target: { files: [new File(['y'], 'second.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+    await waitFor(() => {
+      const slots = lastEditorCanvasProps?.slots as Array<{ slotIndex: number; photoUrl: string }>;
+      expect(slots).toHaveLength(1);
+      expect(slots[0].slotIndex).toBe(0); // same slot, not a second one
+      expect(slots[0].photoUrl).toBe('/replaced.jpg');
+    });
+    expect(slotByIndex0().scale).not.toBeCloseTo(firstScale, 5);
+    await waitFor(() => expect(screen.getByText(/too low resolution/i)).toBeInTheDocument());
+  });
+
   it('shows an error and leaves the slot empty when the upload fails', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: 'bad' }) } as Response);
 
