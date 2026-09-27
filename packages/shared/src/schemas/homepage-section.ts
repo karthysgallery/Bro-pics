@@ -34,6 +34,19 @@ export const HeroSlideSchema = z.object({
   sortOrder: z.number().int().nonnegative(),
 });
 
+// [FE-26] Same reasoning/precedent as HeroSlideSchema above: `how_it_works`
+// and `why_us` are the two OTHER section types with a concrete, already-
+// evidenced content shape — HowItWorks.tsx and WhyUs.tsx each render a
+// hardcoded local array (numbered steps; trust-point bullets) with no
+// field anywhere to source it from instead. Only these two get a typed
+// field here, for the same reason the other 8 section types still don't:
+// no concrete consumer needing a further shape exists yet, and guessing
+// at one would still be guessing at the inaccessible master plan.
+export const HomepageStepSchema = z.object({
+  label: z.string(),
+  desc: z.string(),
+});
+
 export const HomepageSectionSchema = z.object({
   id: z.string(),
   type: HomepageSectionTypeSchema,
@@ -51,6 +64,17 @@ export const HomepageSectionSchema = z.object({
   // so every pre-existing section object literal built without this field
   // still typechecks as a valid HomepageSection.
   heroSlides: z.array(HeroSlideSchema).optional(),
+  // [FE-26] Only meaningful when type === 'how_it_works'. Optional/not
+  // defaulted for the same reason heroSlides isn't — every pre-existing
+  // section object literal (including every seeded how_it_works doc,
+  // which still has none of these) stays a valid HomepageSection. When
+  // absent, HowItWorks.tsx falls back to its previous hardcoded steps
+  // rather than rendering nothing, matching every other "safe default
+  // until an admin actually configures it" field in this codebase.
+  steps: z.array(HomepageStepSchema).optional(),
+  // [FE-26] Only meaningful when type === 'why_us'. Same optional/
+  // fallback-on-absence treatment as `steps` above.
+  valueProps: z.array(z.string()).optional(),
   // [ABE-17] Set by POST .../preview-token, cleared by rotating it again.
   // Lets a non-staff stakeholder view a draft/inactive/future-dated
   // section via a public token-gated route without a staff account.
@@ -60,3 +84,4 @@ export const HomepageSectionSchema = z.object({
 export type HomepageSection = z.infer<typeof HomepageSectionSchema>;
 export type HomepageSectionType = z.infer<typeof HomepageSectionTypeSchema>;
 export type HeroSlide = z.infer<typeof HeroSlideSchema>;
+export type HomepageStep = z.infer<typeof HomepageStepSchema>;

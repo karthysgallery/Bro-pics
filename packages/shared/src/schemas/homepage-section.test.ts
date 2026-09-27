@@ -69,6 +69,30 @@ describe('HomepageSectionSchema', () => {
     expect('heroSlides' in parsed).toBe(false);
     expect('previewToken' in parsed).toBe(false);
   });
+
+  it('[FE-26] accepts a how_it_works section with typed steps', () => {
+    const withSteps = {
+      ...validSection,
+      type: 'how_it_works' as const,
+      steps: [{ label: 'Upload', desc: 'Pick a photo.' }],
+    };
+    expect(HomepageSectionSchema.parse(withSteps)).toEqual(withSteps);
+  });
+
+  it('[FE-26] accepts a why_us section with typed valueProps', () => {
+    const withValueProps = {
+      ...validSection,
+      type: 'why_us' as const,
+      valueProps: ['Made in India'],
+    };
+    expect(HomepageSectionSchema.parse(withValueProps)).toEqual(withValueProps);
+  });
+
+  it('[FE-26] omits steps and valueProps when not given (no defaulting)', () => {
+    const parsed = HomepageSectionSchema.parse(validSection);
+    expect('steps' in parsed).toBe(false);
+    expect('valueProps' in parsed).toBe(false);
+  });
 });
 
 describe('HeroSlideSchema', () => {

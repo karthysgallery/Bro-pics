@@ -70,7 +70,7 @@ export default async function HomePage() {
       case 'offer_strip':
         return <OfferStrip section={section} />;
       case 'how_it_works':
-        return <HowItWorks title={section.title} subtitle={section.subtitle || undefined} />;
+        return <HowItWorks title={section.title} subtitle={section.subtitle || undefined} steps={section.steps} />;
       case 'featured_collection':
         return (
           <ProductRail
@@ -88,7 +88,14 @@ export default async function HomePage() {
       case 'reviews_testimonials':
         return <HomeReviewsCarousel title={section.title} reviews={featuredReviews} />;
       case 'why_us':
-        return <WhyUs title={section.title} subtitle={section.subtitle || undefined} image={section.image || undefined} />;
+        return (
+          <WhyUs
+            title={section.title}
+            subtitle={section.subtitle || undefined}
+            image={section.image || undefined}
+            valueProps={section.valueProps}
+          />
+        );
       case 'recently_viewed':
         return (
           <Section space="tight">

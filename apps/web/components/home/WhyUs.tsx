@@ -5,9 +5,13 @@ interface WhyUsProps {
   title: string;
   subtitle?: string;
   image?: string;
+  valueProps?: string[];
 }
 
-const TRUST_POINTS = [
+// [FE-26] Fallback for when `section.valueProps` is absent — no seeded/
+// admin-authored why_us doc has one yet, so this keeps the section from
+// rendering with no bullets at all rather than being a source of truth.
+const DEFAULT_VALUE_PROPS = [
   'Handcrafted with premium materials and checked before it ships',
   'Carefully packed to survive the journey, every single time',
   'Dispatched on time, with tracking from the moment it leaves us',
@@ -17,7 +21,8 @@ const TRUST_POINTS = [
 // alongside this content, but no factory video asset exists yet, so this
 // pairs the section's real image (from the sec_why_us homepage doc) with
 // text instead of faking a video player around a still image.
-export function WhyUs({ title, subtitle, image }: WhyUsProps) {
+export function WhyUs({ title, subtitle, image, valueProps }: WhyUsProps) {
+  const points = valueProps && valueProps.length > 0 ? valueProps : DEFAULT_VALUE_PROPS;
   return (
     <Section>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-center">
@@ -30,7 +35,7 @@ export function WhyUs({ title, subtitle, image }: WhyUsProps) {
           <h2 className="text-xl md:text-2xl font-semibold text-ink">{title}</h2>
           {subtitle && <p className="mt-1 text-sm text-ink/60">{subtitle}</p>}
           <ul className="mt-5 flex flex-col gap-3">
-            {TRUST_POINTS.map((point) => (
+            {points.map((point) => (
               <li key={point} className="flex items-start gap-2.5">
                 <svg
                   width="16"

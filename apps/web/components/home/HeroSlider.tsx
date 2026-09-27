@@ -39,6 +39,7 @@ interface HeroSlide {
   title: string;
   subtitle: string;
   image: string;
+  mobileImage?: string;
   link: string;
   cta?: string;
 }
@@ -55,8 +56,37 @@ function toSlide(section: HomepageSection, index: number): HeroSlide {
     title: section.title,
     subtitle: section.subtitle,
     image: hasOwnArt ? section.image : BANNERS[index % BANNERS.length],
+    mobileImage: hasOwnArt && section.mobileImage ? section.mobileImage : undefined,
     link: section.link,
   };
+}
+
+/**
+ * [FE-26] `HeroSlideSchema` (ABE-17) lets ONE hero_slider doc carry several
+ * slides of its own — a concrete, admin-editable alternative to authoring
+ * one doc per slide, which the write API already supports but nothing here
+ * ever read. A doc with a non-empty `heroSlides` array expands into that
+ * many slides instead of the one this doc itself would otherwise produce;
+ * a doc with none keeps rendering as exactly one slide via `toSlide` above
+ * — so every pre-existing seeded/authored hero_slider doc looks identical
+ * to before this change.
+ */
+function sectionToSlides(section: HomepageSection, index: number): HeroSlide[] {
+  if (section.heroSlides && section.heroSlides.length > 0) {
+    return [...section.heroSlides]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((slide) => ({
+        id: slide.id,
+        eyebrow: slide.eyebrow ?? 'More than frames',
+        title: slide.title,
+        subtitle: slide.subtitle ?? '',
+        image: slide.image,
+        mobileImage: slide.mobileImage || undefined,
+        link: slide.ctaLink ?? section.link,
+        cta: slide.ctaLabel,
+      }));
+  }
+  return [toSlide(section, index)];
 }
 
 /**
@@ -66,7 +96,7 @@ function toSlide(section: HomepageSection, index: number): HeroSlide {
  * and a fade loops without ever showing that seam.
  */
 export function HeroSlider({ sections }: HeroSliderProps) {
-  const slides = sections.map(toSlide);
+  const slides = sections.flatMap((section, index) => sectionToSlides(section, index));
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -128,13 +158,28 @@ export function HeroSlider({ sections }: HeroSliderProps) {
               index === activeIndex ? 'opacity-100' : 'opacity-0'
             }`}
           >
+            {/* [FE-26] Art-directed mobile crop when the doc/slide has its
+                own — a wide banner shot for desktop often loses its focal
+                point when simply squeezed narrower on a phone. Falls back
+                to the one image at every width when no mobile-specific art
+                exists. */}
+            {slide.mobileImage && (
+              <Image
+                src={slide.mobileImage}
+                alt=""
+                fill
+                priority={index === 0}
+                sizes="100vw"
+                className="object-cover object-right md:hidden"
+              />
+            )}
             <Image
               src={slide.image}
               alt=""
               fill
               priority={index === 0}
               sizes="(max-width: 1280px) 100vw, 1280px"
-              className="object-cover object-right"
+              className={`object-cover object-right ${slide.mobileImage ? 'hidden md:block' : ''}`}
             />
             {/* Two scrims, because the text sits in different places at the
                 two sizes. On a phone the copy is over the middle of the
