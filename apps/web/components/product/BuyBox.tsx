@@ -68,6 +68,10 @@ interface BuyBoxProps {
   submitting: boolean;
   submitError: string | null;
   onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => void;
+  // [FE-16] Re-editing an existing cart line's personalization updates
+  // that SAME line's price/preview (via updateItem) instead of adding a
+  // new one, and changes the button's own label to match the action.
+  isEditingCartLine?: boolean;
 }
 
 export function BuyBox({
@@ -85,9 +89,10 @@ export function BuyBox({
   submitting,
   submitError,
   onAddToCart,
+  isEditingCartLine,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
-  const { addItem } = useCart();
+  const { addItem, updateItem } = useCart();
 
   // Options are scoped to the current orientation + the other dimension's
   // current selection, so the user can never click into a combination that
@@ -117,6 +122,17 @@ export function BuyBox({
   const handleAddToCart = () => {
     if (!selectedVariant || !onAddToCart) return;
     onAddToCart(quantity, (personalizationId, previewPath) => {
+      if (isEditingCartLine) {
+        // Same personalizationId, same line — only the fields a re-edit
+        // could actually have changed (price, if the variant changed;
+        // the preview thumbnail, always). qty is deliberately untouched.
+        updateItem(selectedVariant.id, personalizationId, {
+          title: `${product.title} — ${selectedVariant.sizeLabel}`,
+          unitPriceSnapshot: selectedVariant.price,
+          previewPath,
+        });
+        return;
+      }
       addItem({
         variantId: selectedVariant.id,
         personalizationId,
@@ -124,6 +140,7 @@ export function BuyBox({
         unitPriceSnapshot: selectedVariant.price,
         qty: quantity,
         previewPath,
+        productSlug: product.slug,
       });
     });
   };
@@ -195,7 +212,7 @@ export function BuyBox({
         disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
         className="w-[calc(100%-5rem)] sm:w-full"
       >
-        {submitting ? 'Adding…' : 'Add to cart'}
+        {isEditingCartLine ? (submitting ? 'Saving…' : 'Save changes') : submitting ? 'Adding…' : 'Add to cart'}
       </Button>
 
       <HelpCallout

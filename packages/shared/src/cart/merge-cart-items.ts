@@ -7,6 +7,11 @@ export interface CartLine {
   // A Storage object path, never a signed URL — see Upload.originalPath in
   // packages/shared/src/schemas/upload.ts for why.
   previewPath?: string;
+  // [FE-16] Lets the cart drawer link back to the product page to re-edit
+  // this line's personalization — optional so every pre-existing CartLine
+  // object literal in tests/seed data still typechecks; a line added
+  // before this field existed just never gets an Edit link.
+  productSlug?: string;
 }
 
 function lineKey(line: CartLine): string {

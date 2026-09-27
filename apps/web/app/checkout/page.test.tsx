@@ -99,6 +99,7 @@ describe('CheckoutPage', () => {
       addItem: vi.fn(),
       removeItem: vi.fn(),
       updateQuantity: vi.fn(),
+      updateItem: vi.fn(),
     });
     render(<CheckoutPage />);
     expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();

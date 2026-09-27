@@ -19,6 +19,11 @@ export const revalidate = 60;
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
+  // [FE-16] ?edit={personalizationId} from the cart drawer's Edit link —
+  // reading searchParams makes this one request dynamic (not served from
+  // the static/ISR cache) without opting the whole route out of
+  // generateStaticParams/revalidate for every other visit.
+  searchParams: Promise<{ edit?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -47,8 +52,9 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   };
 }
 
-export default async function ProductPage({ params }: ProductPageProps) {
+export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const { slug } = await params;
+  const { edit: editPersonalizationId } = await searchParams;
   const detail = await getProductBySlug(slug);
   if (!detail) notFound();
 
@@ -104,6 +110,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         variants={variants}
         media={media}
         initialTemplatesByVariant={templatesByVariant}
+        editPersonalizationId={editPersonalizationId}
       />
 
       <ProductTabs product={product} variants={variants} />

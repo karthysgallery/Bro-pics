@@ -23,6 +23,8 @@ const mockCollectionGroupGet = vi.fn().mockResolvedValue({ empty: false, docs: [
 // testing text-zone enforcement, so this must resolve to "no matching
 // template" (an empty docs array) rather than throwing on an unmocked call.
 const mockFrameTemplatesGet = vi.fn().mockResolvedValue({ docs: [] });
+// [FE-16] GET /api/customizations?personalizationId= — collection('customizations').where(...).get()
+const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
 
 vi.mock('../../../lib/firebase-admin', () => ({
   getAdminApp: vi.fn(),
@@ -37,6 +39,12 @@ vi.mock('firebase-admin/firestore', () => ({
     collection: (name: string) => {
       if (name === 'uploads') {
         return { doc: () => ({ get: mockUploadGet }) };
+      }
+      if (name === 'customizations') {
+        return {
+          doc: () => ({ id: 'cust_test123', set: mockSet }),
+          where: () => ({ get: mockCustomizationsWhereGet }),
+        };
       }
       return { doc: () => ({ id: 'cust_test123', set: mockSet }) };
     },
@@ -58,7 +66,7 @@ vi.mock('../../../lib/rate-limit', async (importOriginal) => {
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
 });
 
-import { POST } from './route';
+import { POST, GET } from './route';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { checkRateLimit, resetRateLimitState } from '../../../lib/rate-limit';
 
@@ -377,6 +385,66 @@ describe('POST /api/customizations [FE-12] text-zone server-side enforcement', (
   it('does not enforce anything when the template has no textZones at all', async () => {
     mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => ({ version: 1, textZones: [] }) }] });
     const response = await POST(makeRequest({ ...validBody, templateVersion: 1 }, 'sess_1'));
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('GET /api/customizations [FE-16/FE-24] fetch by personalizationId', () => {
+  beforeEach(() => {
+    resetRateLimitState();
+    mockCustomizationsWhereGet.mockReset();
+    vi.mocked(getUserIdFromAuthHeader).mockReset().mockResolvedValue(null);
+  });
+
+  function makeGetRequest(personalizationId: string | null, sessionId?: string, authHeader?: string): Request {
+    const url = new URL('http://localhost/api/customizations');
+    if (personalizationId) url.searchParams.set('personalizationId', personalizationId);
+    return new Request(url, {
+      headers: { ...(sessionId ? { 'X-Session-Id': sessionId } : {}), ...(authHeader ? { Authorization: authHeader } : {}) },
+    });
+  }
+
+  it('rejects a missing personalizationId', async () => {
+    const response = await GET(makeGetRequest(null));
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 404 for an unknown personalizationId', async () => {
+    mockCustomizationsWhereGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    const response = await GET(makeGetRequest('pers_unknown', 'sess_1'));
+    expect(response.status).toBe(404);
+  });
+
+  it("returns every slot's customization, sorted by slotIndex, for the owning session", async () => {
+    mockCustomizationsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        { data: () => ({ personalizationId: 'pers_1', slotIndex: 1, sessionId: 'sess_1' }) },
+        { data: () => ({ personalizationId: 'pers_1', slotIndex: 0, sessionId: 'sess_1' }) },
+      ],
+    });
+    const response = await GET(makeGetRequest('pers_1', 'sess_1'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.customizations.map((c: { slotIndex: number }) => c.slotIndex)).toEqual([0, 1]);
+  });
+
+  it('rejects a session that does not own every returned customization', async () => {
+    mockCustomizationsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ personalizationId: 'pers_1', slotIndex: 0, sessionId: 'sess_someone_else' }) }],
+    });
+    const response = await GET(makeGetRequest('pers_1', 'sess_1'));
+    expect(response.status).toBe(403);
+  });
+
+  it('allows the owning signed-in user by uid, with no session match', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce('user_1');
+    mockCustomizationsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ personalizationId: 'pers_1', slotIndex: 0, sessionId: 'sess_other', userId: 'user_1' }) }],
+    });
+    const response = await GET(makeGetRequest('pers_1', undefined, 'Bearer good-token'));
     expect(response.status).toBe(200);
   });
 });

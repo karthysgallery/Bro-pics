@@ -38,6 +38,11 @@ export interface CartContextValue {
   addItem: (item: CartItem) => void;
   removeItem: (variantId: string, personalizationId: string) => void;
   updateQuantity: (variantId: string, personalizationId: string, qty: number) => void;
+  updateItem: (
+    variantId: string,
+    personalizationId: string,
+    updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath'>>
+  ) => void;
   totalCount: number;
   totalPaise: number;
 }
@@ -287,10 +292,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // [FE-16] Re-editing a cart line's personalization changes its price
+    // and preview thumbnail but keeps the SAME personalizationId and qty
+    // — unlike addItem's merge, which is for a genuinely new/matching
+    // line and adds quantities together, this replaces exactly the
+    // fields that could have changed on one already-identified line.
+    const updateItem = (
+      variantId: string,
+      personalizationId: string,
+      updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath'>>
+    ) => {
+      const applyUpdate = (current: CartItem[]) =>
+        current.map((i) =>
+          i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, ...updates } : i
+        );
+      if (user) {
+        runFirestoreOp(applyUpdate);
+      } else {
+        setLocalItems(applyUpdate);
+      }
+    };
+
     const totalCount = items.reduce((sum, i) => sum + i.qty, 0);
     const totalPaise = items.reduce((sum, i) => sum + i.qty * i.unitPriceSnapshot, 0);
 
-    return { items, addItem, removeItem, updateQuantity, totalCount, totalPaise };
+    return { items, addItem, removeItem, updateQuantity, updateItem, totalCount, totalPaise };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, user]);
 

@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useCart, type CartItem } from '../../lib/cart-context';
 import { QuantityStepper } from '../ui/QuantityStepper';
 import { formatPaise } from '../../lib/format-price';
@@ -155,6 +156,15 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         label={`Quantity for ${item.title}`}
                       />
                       <div className="flex items-center gap-2 shrink-0">
+                        {item.productSlug && (
+                          <Link
+                            href={`/product/${item.productSlug}?edit=${item.personalizationId}&variantId=${item.variantId}`}
+                            onClick={onClose}
+                            className="text-2xs text-ink/50 hover:text-accent underline underline-offset-2"
+                          >
+                            Edit
+                          </Link>
+                        )}
                         <button
                           onClick={() => handleMoveToWishlist(item)}
                           disabled={movingKey === `${item.variantId}-${item.personalizationId}`}

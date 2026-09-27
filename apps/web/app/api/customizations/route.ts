@@ -6,7 +6,7 @@ import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../lib/rate-limit';
 import { CustomizationSchema, CURRENT_SCHEMA_VERSION } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
-import type { Upload, FrameTemplate } from '@bro-pics/shared';
+import type { Upload, FrameTemplate, Customization } from '@bro-pics/shared';
 import { fontFamilyForKey } from '../../../lib/text-personalization-options';
 
 // [FE-12] The client only ever sends the RESOLVED CSS font-family string
@@ -54,6 +54,46 @@ function validateTextFieldsAgainstTemplate(
     }
   }
   return null;
+}
+
+/**
+ * [FE-16/FE-24] Fetches every Customization doc sharing a personalizationId
+ * (one per slot for a multi-slot collage) — the read side "re-edit from
+ * cart" and "reorder" both need, to rehydrate the editor or rebuild a
+ * fresh cart line from a previously-saved personalization. Session/owner
+ * scoped the same way GET /api/uploads/{id} is: a session-id header match,
+ * or the caller's own uid on every returned doc.
+ */
+export async function GET(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'read');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly', code: 'rate_limited' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const personalizationId = searchParams.get('personalizationId');
+  if (!personalizationId) {
+    return NextResponse.json({ error: 'Missing personalizationId', code: 'missing_personalization_id' }, { status: 400 });
+  }
+
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('customizations').where('personalizationId', '==', personalizationId).get();
+  if (snapshot.empty) {
+    return NextResponse.json({ error: `Unknown personalizationId: ${personalizationId}`, code: 'not_found' }, { status: 404 });
+  }
+
+  const docs = snapshot.docs.map((d) => d.data() as Customization);
+  const sessionId = request.headers.get('X-Session-Id');
+  const userId = await getUserIdFromAuthHeader(request);
+  const authorized = docs.every((c) => (sessionId && c.sessionId === sessionId) || (userId && c.userId === userId));
+  if (!authorized) {
+    return NextResponse.json({ error: 'Not authorized to access this personalization', code: 'forbidden' }, { status: 403 });
+  }
+
+  return NextResponse.json({ customizations: docs.sort((a, b) => a.slotIndex - b.slotIndex) }, { status: 200 });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

@@ -130,7 +130,12 @@ const media: ProductMedia[] = [
   { id: 'm_generic', productId: 'prod_1', variantId: null, type: 'image', url: '/generic.svg', alt: '', sortOrder: 0 },
 ];
 
-function renderProduct(product: Product, variants: Variant[] = [variant], templates: FrameTemplate[] = []) {
+function renderProduct(
+  product: Product,
+  variants: Variant[] = [variant],
+  templates: FrameTemplate[] = [],
+  editPersonalizationId?: string
+) {
   return render(
     <Providers>
       <ProductDetailClient
@@ -138,6 +143,7 @@ function renderProduct(product: Product, variants: Variant[] = [variant], templa
         variants={variants}
         media={media}
         initialTemplatesByVariant={templatesByVariantProp(templates)}
+        editPersonalizationId={editPersonalizationId}
       />
     </Providers>
   );
@@ -567,6 +573,60 @@ describe('ProductDetailClient — inline personalization', () => {
     expect(screen.getByLabelText(/replace a photo/i)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /add to cart/i })).toBeEnabled();
     expect((lastEditorCanvasProps?.slots as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  describe('[FE-16] re-edit from cart', () => {
+    it('rehydrates the editor from an existing personalization and saves via PUT to the same doc', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          customizations: [
+            {
+              id: 'cust_existing_1',
+              slotIndex: 0,
+              uploadId: 'up_existing',
+              transformJson: { scale: 1.4, offsetX: 5, offsetY: -3, rotationDeg: 90 },
+              effectiveDpi: 250,
+            },
+          ],
+        }),
+      } as Response); // GET /api/customizations?personalizationId=
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'up_existing', status: 'ready', widthPx: 2400, heightPx: 3000, previewUrl: '/rehydrated.jpg' }),
+      } as Response); // GET /api/uploads/up_existing
+
+      renderProduct(makeProduct(), [variant], [makeTemplate()], 'pers_existing');
+
+      await waitFor(() => {
+        const slots = lastEditorCanvasProps?.slots as Array<{ slotIndex: number; photoUrl: string; scale: number; rotationDeg: number }>;
+        expect(slots).toHaveLength(1);
+        expect(slots[0].photoUrl).toBe('/rehydrated.jpg');
+        expect(slots[0].scale).toBe(1.4);
+        expect(slots[0].rotationDeg).toBe(90);
+      });
+
+      const saveButton = await screen.findByRole('button', { name: /save changes/i });
+      // /api/uploads/preview then PUT /api/customizations/cust_existing_1
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ previewPath: 'uploads/sess/previews/p1/slot-0.png' }) } as Response);
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response);
+      fireEvent.click(saveButton);
+
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+      const [putUrl, putInit] = vi.mocked(fetch).mock.calls[3];
+      expect(putUrl).toBe('/api/customizations/cust_existing_1');
+      expect(putInit?.method).toBe('PUT');
+    });
+
+    it('leaves the editor blank (no crash) when the personalizationId cannot be found', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as Response);
+
+      renderProduct(makeProduct(), [variant], [makeTemplate()], 'pers_gone');
+
+      const input = await screen.findByLabelText(/upload a photo/i);
+      expect(input).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    });
   });
 
   describe('[FE-11] draft autosave/restore', () => {

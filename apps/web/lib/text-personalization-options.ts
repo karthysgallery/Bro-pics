@@ -26,6 +26,16 @@ export function fontFamilyForKey(key: string): string {
   return `var(${option.cssVariable})`;
 }
 
+// [FE-16] The inverse of fontFamilyForKey — recovers the picker's own
+// selected-font state (a key) from a stored Customization's
+// textFieldsJson, which only ever persists the resolved fontFamily
+// string, never the key. Falls back to the default key for a value this
+// list no longer recognizes (a font retired since the customization was
+// saved) rather than leaving the picker with no selection at all.
+export function fontKeyForFamily(fontFamily: string): string {
+  return TEXT_FONT_OPTIONS.find((f) => `var(${f.cssVariable})` === fontFamily)?.key ?? DEFAULT_TEXT_FONT_KEY;
+}
+
 // Canvas 2D's `font` property does not understand CSS custom properties
 // like `var(--x)` — it needs the actual resolved font-family name.
 // next/font/google writes that

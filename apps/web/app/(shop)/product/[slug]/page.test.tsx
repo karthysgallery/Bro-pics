@@ -29,7 +29,7 @@ describe('generateMetadata', () => {
       product: mockProduct, variants: [], media: [], reviews: [],
     });
 
-    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }) });
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
 
     expect(metadata.title).toBe('Test Frame | BroPics');
     expect(metadata.description).toBe('Shop the test frame.');
@@ -38,7 +38,7 @@ describe('generateMetadata', () => {
 
   it('returns fallback metadata when the product does not exist', async () => {
     vi.mocked(getProductBySlug).mockResolvedValue(null);
-    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'missing' }) });
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'missing' }), searchParams: Promise.resolve({}) });
     expect(metadata.title).toBe('Product Not Found | BroPics');
   });
 });

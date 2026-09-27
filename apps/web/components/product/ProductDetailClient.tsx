@@ -21,7 +21,7 @@ import { orientationFromDimensions, type Orientation } from '../../lib/orientati
 import { recordProductView } from '../../lib/recently-viewed';
 import { getOrCreateSessionId } from '../../lib/session-id';
 import { validateSlotsComplete, validateTextFieldsComplete } from '../../lib/editor-validation';
-import { fontFamilyForKey } from '../../lib/text-personalization-options';
+import { fontFamilyForKey, fontKeyForFamily } from '../../lib/text-personalization-options';
 import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../../lib/personalization-draft';
 import { useToast } from '../ui/Toast';
 import { Gallery } from './Gallery';
@@ -39,6 +39,11 @@ interface ProductDetailClientProps {
   // page showing the plain Gallery for ~1s before swapping to the editor
   // once the fetch resolved.
   initialTemplatesByVariant: Record<string, FrameTemplate>;
+  // [FE-16] Set from the cart drawer's Edit link (?edit=). Rehydrates the
+  // editor from the existing personalization instead of starting blank,
+  // and switches Add to Cart's save path to update the SAME
+  // personalizationId/cart line rather than creating a new one.
+  editPersonalizationId?: string;
 }
 
 function orientationOf(v: Variant): Orientation {
@@ -85,7 +90,7 @@ const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
   unknown_variant: "We couldn't set up this photo slot — please close and reopen the editor.",
 };
 
-export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant }: ProductDetailClientProps) {
+export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant, editPersonalizationId }: ProductDetailClientProps) {
   const { showToast } = useToast();
   const firstInStock = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
@@ -372,6 +377,94 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     setPendingDraft(null);
   };
 
+  // [FE-16] Re-edit from cart — rehydrates the editor from an existing
+  // personalization's Customization docs (?edit={personalizationId}) via
+  // GET /api/customizations (FE-16/FE-24's shared read endpoint), re-
+  // resolving each slot's photo to a fresh URL via GET /api/uploads/{id}
+  // (BE-08) rather than trusting any stored one. `editingDocIdsRef` maps
+  // slotIndex -> the EXISTING customization doc id, so the save path
+  // below can PUT-update those in place instead of creating new ones —
+  // a slot with no entry here (added during this edit) still POSTs, same
+  // as a first-time personalization.
+  const [isEditingCartLine, setIsEditingCartLine] = useState(false);
+  const editingDocIdsRef = useRef<Map<number, string>>(new Map());
+  const editCheckedRef = useRef(false);
+
+  useEffect(() => {
+    if (editCheckedRef.current || !editPersonalizationId || !selectedVariant || !template) return;
+    editCheckedRef.current = true;
+    (async () => {
+      try {
+        const sessionId = ensureSessionId();
+        const res = await fetch(`/api/customizations?personalizationId=${encodeURIComponent(editPersonalizationId)}`, {
+          headers: { 'X-Session-Id': sessionId },
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        const customizations: Array<{
+          id: string;
+          slotIndex: number;
+          uploadId: string;
+          transformJson: { scale: number; offsetX: number; offsetY: number; rotationDeg: RotationDeg };
+          effectiveDpi: number;
+          redConfirmedAt?: unknown;
+          clipartId?: string;
+          textFieldsJson?: Record<string, { value: string; fontFamily: string; color: string }>;
+        }> = body.customizations ?? [];
+        if (customizations.length === 0) return;
+
+        const restoredEntries = await Promise.all(
+          customizations.map(async (c) => {
+            try {
+              const uploadRes = await fetch(`/api/uploads/${c.uploadId}`, { headers: { 'X-Session-Id': sessionId } });
+              if (!uploadRes.ok) return null;
+              const upload = await uploadRes.json();
+              if (upload.status !== 'ready' || !upload.previewUrl) return null;
+              const restored: SlotState = {
+                uploadId: c.uploadId,
+                originalUrl: upload.previewUrl,
+                widthPx: upload.widthPx,
+                heightPx: upload.heightPx,
+                scale: c.transformJson.scale,
+                offsetX: c.transformJson.offsetX,
+                offsetY: c.transformJson.offsetY,
+                rotationDeg: c.transformJson.rotationDeg,
+                effectiveDpi: c.effectiveDpi,
+                confirmedLowDpi: !!c.redConfirmedAt,
+              };
+              return { slotIndex: c.slotIndex, slot: restored, docId: c.id };
+            } catch {
+              return null;
+            }
+          })
+        );
+        const restored = restoredEntries.filter((e): e is NonNullable<typeof e> => e !== null);
+        if (restored.length === 0) return;
+
+        setSlots(new Map(restored.map((r) => [r.slotIndex, r.slot])));
+        editingDocIdsRef.current = new Map(restored.map((r) => [r.slotIndex, r.docId]));
+
+        const withText = customizations.find((c) => c.textFieldsJson);
+        if (withText?.textFieldsJson) {
+          setTextFields(
+            new Map(
+              Object.entries(withText.textFieldsJson).map(([key, v]) => [
+                key,
+                { value: v.value, fontKey: fontKeyForFamily(v.fontFamily), color: v.color },
+              ])
+            )
+          );
+        }
+        const withClipart = customizations.find((c) => c.clipartId);
+        setSelectedClipartId(withClipart?.clipartId ?? null);
+        setIsEditingCartLine(true);
+      } catch {
+        // Best-effort — a failed rehydrate just leaves the editor blank,
+        // same as a customer visiting this product fresh.
+      }
+    })();
+  }, [editPersonalizationId, selectedVariant, template]);
+
   // Lazily resolved on first actual use (upload or add-to-cart), not on
   // every mount — a product page that's never personalized shouldn't touch
   // localStorage at all. Once resolved it's stable for the lifetime of this
@@ -625,7 +718,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     setSubmitting(true);
     setSubmitError(null);
 
-    const personalizationId = crypto.randomUUID();
+    const personalizationId = isEditingCartLine && editPersonalizationId ? editPersonalizationId : crypto.randomUUID();
     const sessionId = ensureSessionId();
 
     // One shared preview for the whole personalization (every slot now
@@ -671,23 +764,43 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
             })()
           : { x: 0, y: 0, width: slot.widthPx / slot.scale, height: slot.heightPx / slot.scale };
 
-        const res = await fetch('/api/customizations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
-          body: JSON.stringify({
-            sessionId,
-            personalizationId,
-            uploadId: slot.uploadId,
-            variantId: selectedVariant.id,
-            slotIndex,
-            transformJson: { scale: slot.scale, offsetX: slot.offsetX, offsetY: slot.offsetY, rotationDeg: slot.rotationDeg, cropRect },
-            templateVersion: template.version,
-            ...(selectedClipartId && { clipartId: selectedClipartId }),
-            previewPath: sharedPreviewPath,
-            renderStatus: 'pending',
-            ...(textFieldsJson && Object.keys(textFieldsJson).length > 0 && { textFieldsJson }),
-          }),
-        });
+        // [FE-16] An existing doc for this slot (from rehydration) gets
+        // PUT-updated in place — same personalizationId, same doc, so the
+        // order this personalization eventually becomes part of still
+        // points at one stable set of docs. A slot with no existing doc
+        // (added during this edit, on a multi-slot template) still POSTs
+        // a new one, exactly like a first-time personalization.
+        const existingDocId = isEditingCartLine ? editingDocIdsRef.current.get(slotIndex) : undefined;
+        const transformJson = { scale: slot.scale, offsetX: slot.offsetX, offsetY: slot.offsetY, rotationDeg: slot.rotationDeg, cropRect };
+        const res = existingDocId
+          ? await fetch(`/api/customizations/${existingDocId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+              body: JSON.stringify({
+                transformJson,
+                previewPath: sharedPreviewPath,
+                renderStatus: 'pending',
+                ...(selectedClipartId && { clipartId: selectedClipartId }),
+                ...(textFieldsJson && Object.keys(textFieldsJson).length > 0 && { textFieldsJson }),
+              }),
+            })
+          : await fetch('/api/customizations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+              body: JSON.stringify({
+                sessionId,
+                personalizationId,
+                uploadId: slot.uploadId,
+                variantId: selectedVariant.id,
+                slotIndex,
+                transformJson,
+                templateVersion: template.version,
+                ...(selectedClipartId && { clipartId: selectedClipartId }),
+                previewPath: sharedPreviewPath,
+                renderStatus: 'pending',
+                ...(textFieldsJson && Object.keys(textFieldsJson).length > 0 && { textFieldsJson }),
+              }),
+            });
         if (!res.ok) throw new Error(`Failed to save slot ${slotIndex + 1}`);
       }
 
@@ -700,6 +813,11 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
       setTextFields(new Map());
       setSelectedClipartId(null);
       setPreviewDataUrl(null);
+      // A continued session on this same page load (a fresh upload right
+      // after saving an edit) starts a genuinely new personalization, not
+      // another edit of the one just saved.
+      setIsEditingCartLine(false);
+      editingDocIdsRef.current = new Map();
     } catch {
       setSubmitError("We couldn't save your personalization — please try again.");
     } finally {
@@ -807,6 +925,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         submitting={submitting}
         submitError={submitError}
         onAddToCart={showInlineEditor ? handleAddToCart : undefined}
+        isEditingCartLine={isEditingCartLine}
       />
     </div>
     </div>
