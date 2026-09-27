@@ -549,6 +549,26 @@ describe('ProductDetailClient — inline personalization', () => {
     expect(body.variantId).toBe('var_1');
   });
 
+  it('[FE-14] a failed Add to Cart submission never loses the uploaded photo/slot state — the customer can just retry', async () => {
+    mockUploadFetch();
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('offline')); // /api/uploads/preview
+
+    renderProduct(makeProduct(), [variant], [makeTemplate()]);
+    const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+
+    const addButton = await screen.findByRole('button', { name: /add to cart/i });
+    await waitFor(() => expect(addButton).toBeEnabled());
+    fireEvent.click(addButton);
+
+    expect(await screen.findByText(/couldn't save your personalization/i)).toBeInTheDocument();
+    // The slot still shows a photo (not reset to the empty "Upload a
+    // photo" state) and Add to Cart is enabled again for a retry.
+    expect(screen.getByLabelText(/replace a photo/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /add to cart/i })).toBeEnabled();
+    expect((lastEditorCanvasProps?.slots as unknown[]).length).toBeGreaterThan(0);
+  });
+
   describe('[FE-11] draft autosave/restore', () => {
     // Every test here that calls saveDraft under prod_1/var_1 overwrites
     // its own fixture at start, but a test that only ever CHECKS for the

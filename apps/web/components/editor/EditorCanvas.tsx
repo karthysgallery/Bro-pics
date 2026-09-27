@@ -15,6 +15,15 @@ export interface SlotDrawState {
   offsetX: number;
   offsetY: number;
   rotationDeg: RotationDeg;
+  // [FE-15] The photo's own full-resolution pixel dimensions — used as
+  // drawImage's explicit destination size so a capped/downscaled cached
+  // bitmap (see useImageCache below) still renders at exactly the size
+  // every existing scale/offset value was computed against. Optional so
+  // this is additive for any other caller of SlotDrawState; drawSlotPhoto
+  // falls back to the image's own natural size when absent (unchanged
+  // pre-FE-15 behavior).
+  widthPx?: number;
+  heightPx?: number;
 }
 
 export interface CanvasTextField {
@@ -121,18 +130,65 @@ function useHtmlImage(src: string | null | undefined): HTMLImageElement | null {
   return image;
 }
 
+// [FE-15] A phone-camera photo (a 12MP+ iPhone shot is already 4032px on
+// its long side) decoded and redrawn every animation frame during a drag
+// or pinch is real, measurable work on a low-powered device — and on
+// iOS Safari specifically, a canvas backing store above ~16.7 megapixels
+// can fail to allocate at all. Bitmaps above this cap get redrawn ONCE
+// into a smaller offscreen canvas at cache-fill time; drawSlotPhoto above
+// stretches that back to the original apparent size via an explicit
+// destination width/height, so this is invisible to the customer.
+export const MOBILE_BITMAP_CAP_PX = 2048;
+const MOBILE_VIEWPORT_MAX_PX = 768;
+
+export function isMobileViewport(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth <= MOBILE_VIEWPORT_MAX_PX;
+}
+
+// Pure — the actual canvas redraw in capBitmapForMobile below is not
+// unit-testable in this environment (jsdom's getContext('2d') returns
+// null without the optional `canvas` npm package, same reason no
+// EditorCanvas drawing code has direct tests), but the decision of
+// WHETHER and HOW MUCH to downscale is ordinary arithmetic.
+export function capBitmapDimensions(
+  width: number,
+  height: number,
+  isMobile: boolean,
+  cap: number = MOBILE_BITMAP_CAP_PX
+): { width: number; height: number } | null {
+  if (!isMobile || (width <= cap && height <= cap)) return null;
+  const scale = cap / Math.max(width, height);
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
+function capBitmapForMobile(image: HTMLImageElement): HTMLImageElement | HTMLCanvasElement {
+  const capped = capBitmapDimensions(image.naturalWidth, image.naturalHeight, isMobileViewport());
+  if (!capped) return image;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = capped.width;
+  canvas.height = capped.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return image;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 // A handful of images across all slots + mockup + overlay + clipart — a
 // small fixed-size cache keyed by URL is simpler and cheaper than a hook
 // per possible image, and means switching slots doesn't reload an image
 // that's already loaded.
-function useImageCache(urls: (string | null | undefined)[]): { cache: Map<string, HTMLImageElement>; version: number } {
+function useImageCache(urls: (string | null | undefined)[]): {
+  cache: Map<string, HTMLImageElement | HTMLCanvasElement>;
+  version: number;
+} {
   // `version` is the piece that actually belongs in a consuming effect's
   // dependency array — `cacheRef.current` is the same Map instance on every
   // render (mutated in place), so a dependency array that lists the Map
   // itself never sees it as "changed" once an image finishes loading async,
   // and the draw effect would silently skip repainting the newly loaded photo.
   const [version, setVersion] = useState(0);
-  const cacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const cacheRef = useRef<Map<string, HTMLImageElement | HTMLCanvasElement>>(new Map());
   const key = urls.filter(Boolean).join('|');
 
   useEffect(() => {
@@ -144,7 +200,7 @@ function useImageCache(urls: (string | null | undefined)[]): { cache: Map<string
       anonymousImg.crossOrigin = 'anonymous';
       anonymousImg.onload = () => {
         if (cancelled) return;
-        cacheRef.current.set(url, anonymousImg);
+        cacheRef.current.set(url, capBitmapForMobile(anonymousImg));
         setVersion((n) => n + 1);
       };
       anonymousImg.onerror = () => {
@@ -152,7 +208,7 @@ function useImageCache(urls: (string | null | undefined)[]): { cache: Map<string
         const fallbackImg = new Image();
         fallbackImg.onload = () => {
           if (cancelled) return;
-          cacheRef.current.set(url, fallbackImg);
+          cacheRef.current.set(url, capBitmapForMobile(fallbackImg));
           setVersion((n) => n + 1);
         };
         fallbackImg.src = url;
@@ -220,10 +276,21 @@ function drawSlotPhoto(
   ctx: CanvasRenderingContext2D,
   slot: SlotDrawState,
   canvasRect: GeometryRect,
-  photoImage: HTMLImageElement | null,
-  maskImage: HTMLImageElement | null
+  photoImage: (CanvasImageSource & { width: number; height: number }) | null,
+  maskImage: (CanvasImageSource & { width: number; height: number }) | null
 ) {
   if (!photoImage) return;
+
+  // [FE-15] Explicit destination size, not drawImage's bare 2-arg native
+  // draw — `photoImage` may be a downscaled cache entry (mobile bitmap
+  // cap, below), and slot.scale/offsetX/offsetY were all computed
+  // against the photo's REAL full-resolution dimensions. Drawing at an
+  // explicit widthPx/heightPx (falling back to the bitmap's own size
+  // when the caller has none, e.g. a pre-FE-15 SlotDrawState) makes a
+  // capped bitmap stretch back to the exact same apparent size instead
+  // of rendering smaller/mispositioned.
+  const drawWidth = slot.widthPx ?? photoImage.width;
+  const drawHeight = slot.heightPx ?? photoImage.height;
 
   if (slot.maskUrl && maskImage) {
     const offscreen = document.createElement('canvas');
@@ -236,7 +303,7 @@ function drawSlotPhoto(
     offCtx.translate(slot.offsetX, slot.offsetY);
     offCtx.rotate((slot.rotationDeg * Math.PI) / 180);
     offCtx.scale(slot.scale, slot.scale);
-    offCtx.drawImage(photoImage, 0, 0);
+    offCtx.drawImage(photoImage, 0, 0, drawWidth, drawHeight);
     offCtx.restore();
 
     offCtx.globalCompositeOperation = 'destination-in';
@@ -253,7 +320,7 @@ function drawSlotPhoto(
   ctx.translate(canvasRect.x + slot.offsetX, canvasRect.y + slot.offsetY);
   ctx.rotate((slot.rotationDeg * Math.PI) / 180);
   ctx.scale(slot.scale, slot.scale);
-  ctx.drawImage(photoImage, 0, 0);
+  ctx.drawImage(photoImage, 0, 0, drawWidth, drawHeight);
   ctx.restore();
 }
 
@@ -332,6 +399,10 @@ export function EditorCanvas({
   // exclusive per gesture, never blended into one transform.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{ startDistance: number; startAngleDeg: number } | null>(null);
+  // [FE-15] Which pointerId is driving the single-finger drag — needed by
+  // the rAF-deferred flush below, which no longer has the triggering
+  // PointerEvent itself to read a position from.
+  const dragPointerIdRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const activeSlot = slots.find((s) => s.slotIndex === activeSlotIndex);
@@ -445,6 +516,7 @@ export function EditorCanvas({
 
     if (pointersRef.current.size === 1) {
       dragRef.current = { startX: point.x, startY: point.y, startOffsetX: activeSlot.offsetX, startOffsetY: activeSlot.offsetY };
+      dragPointerIdRef.current = event.pointerId;
       setIsDragging(true);
       return;
     }
@@ -453,6 +525,7 @@ export function EditorCanvas({
       // A second finger arriving mid-drag ends the drag outright — the two
       // gestures never blend into one transform.
       dragRef.current = null;
+      dragPointerIdRef.current = null;
       setIsDragging(false);
       const [p1, p2] = [...pointersRef.current.values()];
       pinchRef.current = { startDistance: distanceBetween(p1, p2), startAngleDeg: angleBetweenDeg(p1, p2) };
@@ -461,38 +534,70 @@ export function EditorCanvas({
     // pinch) but never changes which two points drive the gesture.
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (pointersRef.current.has(event.pointerId)) {
-      pointersRef.current.set(event.pointerId, canvasPointFromEvent(event));
-    }
+  // [FE-15] `latestRef` always holds this render's callbacks/activeSlot —
+  // updated below on every render via a plain (deps-free) effect — so the
+  // rAF-deferred flush always acts on current data even though it can run
+  // one or more renders after the pointermove event that scheduled it.
+  const latestRef = useRef({ activeSlot, onTransformChange, onPinchZoom, onPinchRotate });
+  useEffect(() => {
+    latestRef.current = { activeSlot, onTransformChange, onPinchZoom, onPinchRotate };
+  });
+  const rafScheduledRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, []);
 
-    if (pinchRef.current && pointersRef.current.size >= 2 && activeSlot) {
+  // Raw pointer positions (pointersRef) are updated immediately, every
+  // event — a pinch/drag needs the true latest position when it DOES
+  // flush. Only the actual onTransformChange/onPinchZoom/onPinchRotate
+  // calls (each one a state update → a full redraw) are coalesced to at
+  // most once per animation frame — a touchmove stream can fire far more
+  // often than the display refreshes, and every extra call in between is
+  // pure waste.
+  const flushPointerMove = () => {
+    rafScheduledRef.current = false;
+    const { activeSlot: slot, onTransformChange: onTransform, onPinchZoom: onZoom, onPinchRotate: onRotate } = latestRef.current;
+
+    if (pinchRef.current && pointersRef.current.size >= 2 && slot) {
       const [p1, p2] = [...pointersRef.current.values()];
       const distance = distanceBetween(p1, p2);
       const angleDeg = angleBetweenDeg(p1, p2);
       const pinch = pinchRef.current;
 
-      if (pinch.startDistance > 0 && onPinchZoom) {
-        onPinchZoom(distance / pinch.startDistance);
+      if (pinch.startDistance > 0 && onZoom) {
+        onZoom(distance / pinch.startDistance);
       }
       pinch.startDistance = distance;
 
       const angleDelta = normalizeAngleDeltaDeg(angleDeg - pinch.startAngleDeg);
       if (Math.abs(angleDelta) >= ROTATE_STEP_THRESHOLD_DEG) {
-        onPinchRotate?.();
+        onRotate?.();
         pinch.startAngleDeg = angleDeg;
       }
       return;
     }
 
     const drag = dragRef.current;
-    if (!drag || !activeSlot) return;
-    const point = canvasPointFromEvent(event);
-    onTransformChange(activeSlot.slotIndex, {
-      scale: activeSlot.scale,
+    const point = pointersRef.current.get(dragPointerIdRef.current ?? -1);
+    if (!drag || !slot || !point) return;
+    onTransform(slot.slotIndex, {
+      scale: slot.scale,
       offsetX: drag.startOffsetX + (point.x - drag.startX),
       offsetY: drag.startOffsetY + (point.y - drag.startY),
     });
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, canvasPointFromEvent(event));
+    }
+    if (!rafScheduledRef.current) {
+      rafScheduledRef.current = true;
+      rafIdRef.current = requestAnimationFrame(flushPointerMove);
+    }
   };
 
   const endDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -502,6 +607,7 @@ export function EditorCanvas({
     }
     if (dragRef.current) {
       dragRef.current = null;
+      dragPointerIdRef.current = null;
       setIsDragging(false);
     }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {

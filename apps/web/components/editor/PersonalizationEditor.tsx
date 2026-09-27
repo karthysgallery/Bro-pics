@@ -144,6 +144,8 @@ export function PersonalizationEditor({
       offsetX: slot?.offsetX ?? 0,
       offsetY: slot?.offsetY ?? 0,
       rotationDeg: slot?.rotationDeg ?? 0,
+      widthPx: slot?.widthPx,
+      heightPx: slot?.heightPx,
     };
   });
 
