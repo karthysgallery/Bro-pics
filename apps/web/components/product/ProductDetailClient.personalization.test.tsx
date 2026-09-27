@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useEffect } from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { Product, Variant, ProductMedia, FrameTemplate } from '@bro-pics/shared';
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
+import { saveDraft, loadDraft, clearDraft } from '../../lib/personalization-draft';
 
 // The inline editor now lives inside ProductDetailClient (canvas + upload +
 // text/clipart controls), with BuyBox's Add-to-Cart button reading the same
@@ -545,6 +546,93 @@ describe('ProductDetailClient — inline personalization', () => {
     const body = JSON.parse((init?.body as string) ?? '{}');
     expect(body.templateVersion).toBe(3);
     expect(body.variantId).toBe('var_1');
+  });
+
+  describe('[FE-11] draft autosave/restore', () => {
+    // Every test here that calls saveDraft under prod_1/var_1 overwrites
+    // its own fixture at start, but a test that only ever CHECKS for the
+    // banner (never restores or discards) would otherwise leave that
+    // draft in localStorage for whichever unrelated test in this file
+    // renders prod_1/var_1 next — this file's other ~25 tests all use
+    // exactly that product/variant and don't expect a banner.
+    afterEach(() => clearDraft('prod_1', 'var_1'));
+
+    it('shows a restore banner on mount when a saved draft exists for the default product/variant', async () => {
+      saveDraft('prod_1', 'var_1', {
+        activeSlotIndex: 0,
+        selectedClipartId: null,
+        slots: [{ slotIndex: 0, uploadId: 'up_saved', scale: 1, offsetX: 0, offsetY: 0, rotationDeg: 0, confirmedLowDpi: false }],
+        textFields: [],
+      });
+
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+
+      expect(await screen.findByText(/continue where you left off/i)).toBeInTheDocument();
+    });
+
+    it('does not show a restore banner when no draft was ever saved', async () => {
+      renderProduct(makeProduct({ id: 'prod_never_saved' }), [{ ...variant, productId: 'prod_never_saved' }], [makeTemplate()]);
+      await screen.findByLabelText(/upload a photo/i);
+      expect(screen.queryByText(/continue where you left off/i)).not.toBeInTheDocument();
+    });
+
+    it('"Start fresh" dismisses the banner and clears the saved draft', async () => {
+      saveDraft('prod_1', 'var_1', {
+        activeSlotIndex: 0,
+        selectedClipartId: null,
+        slots: [{ slotIndex: 0, uploadId: 'up_saved', scale: 1, offsetX: 0, offsetY: 0, rotationDeg: 0, confirmedLowDpi: false }],
+        textFields: [],
+      });
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      fireEvent.click(await screen.findByText('Start fresh'));
+
+      await waitFor(() => expect(screen.queryByText(/continue where you left off/i)).not.toBeInTheDocument());
+      expect(loadDraft('prod_1', 'var_1')).toBeNull();
+    });
+
+    it('"Restore my design" re-fetches each upload by id and rebuilds the slot with a fresh preview URL', async () => {
+      saveDraft('prod_1', 'var_1', {
+        activeSlotIndex: 0,
+        selectedClipartId: null,
+        slots: [{ slotIndex: 0, uploadId: 'up_saved', scale: 1.5, offsetX: 3, offsetY: -2, rotationDeg: 90, confirmedLowDpi: true }],
+        textFields: [],
+      });
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'up_saved', status: 'ready', widthPx: 2400, heightPx: 3000, previewUrl: '/restored-fresh-url.jpg' }),
+      } as Response);
+
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      fireEvent.click(await screen.findByText('Restore my design'));
+
+      await waitFor(() => {
+        const slots = lastEditorCanvasProps?.slots as Array<{ slotIndex: number; photoUrl: string; scale: number; rotationDeg: number }>;
+        expect(slots).toHaveLength(1);
+        expect(slots[0].photoUrl).toBe('/restored-fresh-url.jpg');
+        expect(slots[0].scale).toBe(1.5);
+        expect(slots[0].rotationDeg).toBe(90);
+      });
+      const [restoreUrl, restoreInit] = vi.mocked(fetch).mock.calls[0];
+      expect(restoreUrl).toBe('/api/uploads/up_saved');
+      expect((restoreInit?.headers as Record<string, string>)['X-Session-Id']).toBeTruthy();
+      expect(screen.queryByText(/continue where you left off/i)).not.toBeInTheDocument();
+    });
+
+    it('shows an error and clears the stale draft when the saved upload has expired/is gone', async () => {
+      saveDraft('prod_1', 'var_1', {
+        activeSlotIndex: 0,
+        selectedClipartId: null,
+        slots: [{ slotIndex: 0, uploadId: 'up_gone', scale: 1, offsetX: 0, offsetY: 0, rotationDeg: 0, confirmedLowDpi: false }],
+        textFields: [],
+      });
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as Response);
+
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      fireEvent.click(await screen.findByText('Restore my design'));
+
+      expect(await screen.findByText(/couldn't restore your saved design/i)).toBeInTheDocument();
+      expect(loadDraft('prod_1', 'var_1')).toBeNull();
+    });
   });
 
   describe('preview lightbox', () => {

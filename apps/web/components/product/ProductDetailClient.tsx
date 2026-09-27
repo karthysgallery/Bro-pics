@@ -22,9 +22,11 @@ import { recordProductView } from '../../lib/recently-viewed';
 import { getOrCreateSessionId } from '../../lib/session-id';
 import { validateSlotsComplete } from '../../lib/editor-validation';
 import { fontFamilyForKey } from '../../lib/text-personalization-options';
+import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../../lib/personalization-draft';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
 import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
+import type { TextFieldValue } from '../editor/TextFieldEditor';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -259,6 +261,114 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     return () => window.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // [FE-11] Draft autosave — localStorage only (BE-12's server-side
+  // PUT /api/customizations/{id} draft endpoint exists, but a real
+  // Customization doc is only ever created at Add-to-Cart time in this
+  // file today; wiring an early draft doc into that lifecycle is a bigger
+  // restructuring than autosave itself, deliberately deferred, not
+  // silently skipped — see PROJECT_STATUS.md). Debounced the same way
+  // the undo/redo history watcher above is, coalescing a whole
+  // drag/typing burst into one save rather than one per keystroke/pixel.
+  const [pendingDraft, setPendingDraft] = useState<PersonalizationDraft | null>(null);
+  const [restoringDraft, setRestoringDraft] = useState(false);
+  const draftCheckedRef = useRef(false);
+  const draftSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (draftCheckedRef.current || !selectedVariant || slots.size > 0) return;
+    draftCheckedRef.current = true;
+    const draft = loadDraft(product.id, selectedVariant.id);
+    if (draft) setPendingDraft(draft);
+  }, [selectedVariant, product.id, slots.size]);
+
+  useEffect(() => {
+    if (!selectedVariant || slots.size === 0) return;
+    if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
+    draftSaveDebounceRef.current = setTimeout(() => {
+      saveDraft(product.id, selectedVariant.id, {
+        activeSlotIndex,
+        selectedClipartId,
+        slots: [...slots.entries()].map(([slotIndex, s]) => ({
+          slotIndex,
+          uploadId: s.uploadId,
+          scale: s.scale,
+          offsetX: s.offsetX,
+          offsetY: s.offsetY,
+          rotationDeg: s.rotationDeg,
+          confirmedLowDpi: s.confirmedLowDpi,
+        })),
+        textFields: [...textFields.entries()].map(([key, value]) => ({ key, value })),
+      });
+    }, 400);
+    return () => {
+      if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
+    };
+  }, [slots, textFields, selectedClipartId, activeSlotIndex, selectedVariant, product.id]);
+
+  const handleRestoreDraft = async () => {
+    if (!pendingDraft || !selectedVariant || !template) return;
+    setRestoringDraft(true);
+    try {
+      const sessionId = ensureSessionId();
+      const restoredEntries = await Promise.all(
+        pendingDraft.slots.map(async (draftSlot) => {
+          try {
+            const res = await fetch(`/api/uploads/${draftSlot.uploadId}`, { headers: { 'X-Session-Id': sessionId } });
+            if (!res.ok) return null;
+            const upload = await res.json();
+            if (upload.status !== 'ready' || !upload.previewUrl) return null;
+            const slotRect = template.printableRects.find((r) => r.slotIndex === draftSlot.slotIndex);
+            if (!slotRect) return null;
+            const effectiveDpi = computeEffectiveDpi(
+              slotRect,
+              upload.widthPx,
+              upload.heightPx,
+              draftSlot.scale,
+              draftSlot.offsetX,
+              draftSlot.offsetY,
+              draftSlot.rotationDeg,
+              selectedVariant
+            );
+            const restored: SlotState = {
+              uploadId: draftSlot.uploadId,
+              originalUrl: upload.previewUrl,
+              widthPx: upload.widthPx,
+              heightPx: upload.heightPx,
+              scale: draftSlot.scale,
+              offsetX: draftSlot.offsetX,
+              offsetY: draftSlot.offsetY,
+              rotationDeg: draftSlot.rotationDeg,
+              effectiveDpi,
+              confirmedLowDpi: draftSlot.confirmedLowDpi,
+            };
+            return [draftSlot.slotIndex, restored] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const restoredSlots = new Map(restoredEntries.filter((e): e is readonly [number, SlotState] => e !== null));
+      if (restoredSlots.size === 0) {
+        setUploadError("We couldn't restore your saved design — the photo may have expired. Please start again.");
+        clearDraft(product.id, selectedVariant.id);
+        setPendingDraft(null);
+        return;
+      }
+      setSlots(restoredSlots);
+      setActiveSlotIndex(pendingDraft.activeSlotIndex);
+      setSelectedClipartId(pendingDraft.selectedClipartId);
+      setTextFields(new Map(pendingDraft.textFields.map((f) => [f.key, f.value as TextFieldValue])));
+      setPendingDraft(null);
+    } finally {
+      setRestoringDraft(false);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    if (selectedVariant) clearDraft(product.id, selectedVariant.id);
+    setPendingDraft(null);
+  };
 
   // Lazily resolved on first actual use (upload or add-to-cart), not on
   // every mount — a product page that's never personalized shouldn't touch
@@ -556,6 +666,10 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
       }
 
       onDone(personalizationId, sharedPreviewPath);
+      // [FE-11] Cart now owns this personalization — the draft would
+      // otherwise dangle and, worse, offer to "restore" a design the
+      // customer already added, on a return visit before checkout.
+      if (selectedVariant) clearDraft(product.id, selectedVariant.id);
       setSlots(new Map());
       setTextFields(new Map());
       setSelectedClipartId(null);
@@ -580,6 +694,30 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   // stacking the controls under a tall canvas column. The Gallery
   // fallback (no template yet) stays a plain 2-column layout.
   return (
+    <div className="flex flex-col gap-3">
+      {showInlineEditor && pendingDraft && (
+        <div className="rounded-2xl border border-line bg-tint px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-ink">Continue where you left off? We saved your last design for this product.</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              disabled={restoringDraft}
+              className="px-3 h-8 rounded-full border border-line text-ink text-sm hover:border-accent transition-colors disabled:opacity-50"
+            >
+              Start fresh
+            </button>
+            <button
+              type="button"
+              onClick={handleRestoreDraft}
+              disabled={restoringDraft}
+              className="px-4 h-8 rounded-full bg-gold text-ink text-sm font-semibold hover:bg-gold-deep transition-colors disabled:opacity-50"
+            >
+              {restoringDraft ? 'Restoring…' : 'Restore my design'}
+            </button>
+          </div>
+        </div>
+      )}
     <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_350px] gap-4 lg:gap-4' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
       {showInlineEditor && selectedVariant ? (
         <PersonalizationEditor
@@ -644,6 +782,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         submitError={submitError}
         onAddToCart={showInlineEditor ? handleAddToCart : undefined}
       />
+    </div>
     </div>
   );
 }
