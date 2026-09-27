@@ -153,9 +153,23 @@ export default function InvoicePage({ params }: InvoicePageProps) {
           <span className="text-ink">{formatPaise(order.shipping)}</span>
         </div>
         {order.taxLines.map((tax, i) => (
-          <div key={i} className="flex justify-between w-48">
-            <span className="text-ink/60">Tax{tax.gstin ? ` (${tax.gstin})` : ''}</span>
-            <span className="text-ink">{formatPaise(tax.amount)}</span>
+          // [FE-25] taxLines' `amount` is the GST portion of the already
+          // GST-inclusive total/subtotal (see splitGstFromInclusiveTotal's
+          // own doc comment) — the taxable value is simply what's left,
+          // never re-derived by re-running the split against `rate` (that
+          // would risk a rounding mismatch against the exact amount
+          // already persisted on the order).
+          <div key={i} className="flex flex-col gap-1 w-48">
+            <div className="flex justify-between">
+              <span className="text-ink/60">Taxable value</span>
+              <span className="text-ink">{formatPaise(order.total - tax.amount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink/60">
+                GST @ {tax.rate}%{tax.gstin ? ` (${tax.gstin})` : ''}
+              </span>
+              <span className="text-ink">{formatPaise(tax.amount)}</span>
+            </div>
           </div>
         ))}
         <div className="flex justify-between w-48 font-semibold pt-1 border-t border-line">
