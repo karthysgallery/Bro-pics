@@ -71,6 +71,18 @@ describe('GET /api/search-suggestions', () => {
     ]);
   });
 
+  it('[FE-31] includes each category thumbnail image when present', async () => {
+    mockSearchProductsPage.mockResolvedValueOnce({ products: [] });
+    mockSearchCategoriesPage.mockResolvedValueOnce([
+      { id: 'c1', name: 'Wooden Frames', slug: 'wooden-frames', image: '/categories/wooden.jpg' },
+    ]);
+    const response = await GET(makeRequest('frame'));
+    const body = await response.json();
+    expect(body.categories).toEqual([
+      { id: 'c1', name: 'Wooden Frames', slug: 'wooden-frames', image: '/categories/wooden.jpg' },
+    ]);
+  });
+
   it('returns 429 and does not query Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });
     const response = await GET(makeRequest('frame'));

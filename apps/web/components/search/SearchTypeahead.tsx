@@ -3,12 +3,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import type { Category } from '@bro-pics/shared';
 
 interface Suggestion {
   id: string;
   title: string;
   slug: string;
+}
+
+interface CategorySuggestion {
+  id: string;
+  name: string;
+  slug: string;
+  image?: string;
 }
 
 interface SearchTypeaheadProps {
@@ -38,20 +46,33 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // [FE-31] getPopularSearches/settings/search (BE-23) already had a
+  // working read path via GET /api/search-suggestions?q= (empty) — this
+  // component just never called it or rendered the result, so it sat
+  // unused end to end.
+  const [popularSearches, setPopularSearches] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
+    // Fetched once on mount, not re-fetched per keystroke — popular
+    // searches are curated (settings/search), not a live search result.
+    fetch('/api/search-suggestions?q=')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setPopularSearches(data?.popularSearches ?? []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (query.trim().length === 0) {
       setSuggestions([]);
+      setCategorySuggestions([]);
       return;
     }
     debounceRef.current = setTimeout(async () => {
@@ -59,6 +80,7 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.products ?? []);
+        setCategorySuggestions(data.categories ?? []);
       }
     }, DEBOUNCE_MS);
     return () => {
@@ -84,11 +106,18 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
   };
 
   // Keyboard-navigable list is either the recent-searches list (query
-  // empty) or the fetched suggestions (query non-empty) — never both at
-  // once, matching what's actually rendered below.
+  // empty, at least one exists), popular searches (query empty, no
+  // recent searches yet), or the fetched product suggestions (query
+  // non-empty) — never more than one at once, matching what's actually
+  // rendered below. Category suggestions are shown alongside product
+  // suggestions but deliberately excluded from arrow-key navigation —
+  // they're plain links to a category page, not a "pick one" list the
+  // other three groups are.
   const showRecent = isFocused && query.trim().length === 0 && recentSearches.length > 0;
-  const navigableCount = showRecent ? recentSearches.length : suggestions.length;
-  const optionId = (index: number) => `search-option-${showRecent ? 'recent' : 'suggestion'}-${index}`;
+  const showPopular = isFocused && query.trim().length === 0 && recentSearches.length === 0 && popularSearches.length > 0;
+  const navigableCount = showRecent ? recentSearches.length : showPopular ? popularSearches.length : suggestions.length;
+  const optionId = (index: number) =>
+    `search-option-${showRecent ? 'recent' : showPopular ? 'popular' : 'suggestion'}-${index}`;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -103,6 +132,8 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
       e.preventDefault();
       if (showRecent) {
         setQuery(recentSearches[highlightedIndex]);
+      } else if (showPopular) {
+        setQuery(popularSearches[highlightedIndex]);
       } else {
         const suggestion = suggestions[highlightedIndex];
         setIsFocused(false);
@@ -209,6 +240,45 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
                 >
                   {recent}
                 </button>
+              ))}
+            </div>
+          )}
+          {showPopular && (
+            <div className="pb-1">
+              <p className="px-4 pb-1 text-2xs text-ink/50">Popular searches</p>
+              {popularSearches.map((popular, index) => (
+                <button
+                  key={popular}
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={index === highlightedIndex}
+                  type="button"
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => setQuery(popular)}
+                  className={`block w-full px-4 py-2 text-left text-sm text-ink/80 ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
+                >
+                  {popular}
+                </button>
+              ))}
+            </div>
+          )}
+          {categorySuggestions.length > 0 && (
+            <div className="pb-1 border-b border-line">
+              {categorySuggestions.map((category) => (
+                <Link
+                  key={category.id}
+                  href={`/category/${category.slug}`}
+                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-tint"
+                >
+                  <span className="relative w-6 h-6 rounded-full overflow-hidden bg-tint shrink-0">
+                    {category.image && (
+                      <Image src={category.image} alt="" fill sizes="24px" className="object-cover" />
+                    )}
+                  </span>
+                  <span>
+                    {category.name} <span className="text-ink/45">— category</span>
+                  </span>
+                </Link>
               ))}
             </div>
           )}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { CategoryFilters } from './CategoryFilters';
+import { ProductFilters } from './ProductFilters';
 
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -8,10 +8,10 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/category/frames-wall-decor',
 }));
 
-describe('CategoryFilters', () => {
+describe('ProductFilters', () => {
   it('[FE-30] opens a bottom sheet on mobile when Filters is clicked, and closes it on Done', () => {
     render(
-      <CategoryFilters
+      <ProductFilters
         availableSizes={['8x12 in']}
         availableColours={['Black']}
         availableOrientations={['portrait']}
@@ -29,7 +29,7 @@ describe('CategoryFilters', () => {
 
   it('[FE-30] navigates with a minRating param when a rating chip is clicked', () => {
     render(
-      <CategoryFilters
+      <ProductFilters
         availableSizes={[]}
         availableColours={[]}
         availableOrientations={[]}
@@ -43,7 +43,7 @@ describe('CategoryFilters', () => {
 
   it('[FE-30] navigates with an inStockOnly param when the availability checkbox is toggled', () => {
     render(
-      <CategoryFilters
+      <ProductFilters
         availableSizes={[]}
         availableColours={[]}
         availableOrientations={[]}
@@ -57,7 +57,7 @@ describe('CategoryFilters', () => {
 
   it('[FE-30] navigates with a sort param when the sort select changes', () => {
     render(
-      <CategoryFilters
+      <ProductFilters
         availableSizes={[]}
         availableColours={[]}
         availableOrientations={[]}

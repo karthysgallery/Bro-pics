@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { getCategoryBySlug, searchProductsPage } from '../../../../lib/firestore-products';
 import { ProductCard } from '../../../../components/product/ProductCard';
-import { CategoryFilters } from './CategoryFilters';
+import { ProductFilters } from '../../../../components/filters/ProductFilters';
 import { parseSearchFilters, PAGE_SIZE } from '@bro-pics/shared';
 import { orientationFromSizeLabel } from '../../../../lib/orientation';
 
@@ -111,7 +111,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       <p className="mt-1 mb-5 text-sm text-ink/60">{totalCount} products</p>
 
       <div className="grid md:grid-cols-[220px_1fr] md:gap-8">
-        <CategoryFilters
+        <ProductFilters
           availableSizes={availableSizes}
           availableColours={availableColours}
           availableOrientations={availableOrientations}

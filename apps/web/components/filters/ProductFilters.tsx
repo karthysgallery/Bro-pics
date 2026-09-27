@@ -2,23 +2,29 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useProductFilters } from '../../../../components/filters/use-product-filters';
-import { FilterPanel } from '../../../../components/filters/FilterPanel';
-import { SortSelect } from '../../../../components/filters/SortSelect';
+import { useProductFilters } from './use-product-filters';
+import { FilterPanel } from './FilterPanel';
+import { SortSelect } from './SortSelect';
 
-interface CategoryFiltersProps {
+interface ProductFiltersProps {
   availableSizes: string[];
   availableColours: string[];
   availableOrientations: string[];
   initialSearch: string;
 }
 
-export function CategoryFilters({
+// [FE-30/FE-31] Originally category-page-only (CategoryFilters); moved
+// here and renamed once the search page needed the exact same rating/
+// availability/sort/size/colour/orientation controls over ITS OWN result
+// set — nothing about this component's logic was ever category-specific
+// (it navigates via usePathname(), so it works from whatever route
+// renders it).
+export function ProductFilters({
   availableSizes,
   availableColours,
   availableOrientations,
   initialSearch,
-}: CategoryFiltersProps) {
+}: ProductFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = new URLSearchParams(initialSearch);

@@ -5,6 +5,10 @@ vi.mock('../../../lib/firestore-products', () => ({
   searchCategoriesPage: vi.fn(),
 }));
 
+vi.mock('../../../lib/firestore-homepage', () => ({
+  getBestSellingProducts: vi.fn(),
+}));
+
 vi.mock('../../../components/product/ProductCard', () => ({
   ProductCard: vi.fn(),
 }));

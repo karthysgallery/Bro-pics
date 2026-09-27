@@ -64,4 +64,53 @@ describe('SearchTypeahead', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByText('Classic Wooden Frame')).not.toBeInTheDocument();
   });
+
+  it('[FE-31] shows popular searches on focus when there are no recent searches yet', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ products: [], categories: [], popularSearches: ['birthday frame', 'wedding gift'] }),
+      })
+    );
+    render(<SearchTypeahead />);
+    fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
+    await waitFor(() => expect(screen.getByText('birthday frame')).toBeInTheDocument());
+    expect(screen.getByText('Popular searches')).toBeInTheDocument();
+  });
+
+  it('[FE-31] prefers recent searches over popular searches when both exist', async () => {
+    localStorage.setItem('bropics_recent_searches', JSON.stringify(['photo frame']));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ products: [], categories: [], popularSearches: ['birthday frame'] }),
+      })
+    );
+    render(<SearchTypeahead />);
+    fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
+    await waitFor(() => expect(screen.getByText('photo frame')).toBeInTheDocument());
+    expect(screen.queryByText('Popular searches')).not.toBeInTheDocument();
+  });
+
+  it('[FE-31] shows a category suggestion with a thumbnail alongside product suggestions', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          products: [{ id: 'p1', title: 'Classic Wooden Frame', slug: 'classic-wooden-frame' }],
+          categories: [{ id: 'c1', name: 'Wooden Frames', slug: 'wooden-frames', image: '/categories/wooden.jpg' }],
+          popularSearches: [],
+        }),
+      })
+    );
+    render(<SearchTypeahead />);
+    fireEvent.change(screen.getByPlaceholderText('Search for frames, gifts and more...'), { target: { value: 'wood' } });
+    await waitFor(() => expect(screen.getByText('Classic Wooden Frame')).toBeInTheDocument());
+    const categoryLink = screen.getByRole('link', { name: /Wooden Frames/ });
+    expect(categoryLink).toHaveAttribute('href', '/category/wooden-frames');
+    expect(categoryLink.querySelector('img')).toBeInTheDocument();
+  });
 });
