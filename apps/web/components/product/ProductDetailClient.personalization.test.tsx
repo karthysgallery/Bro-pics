@@ -206,6 +206,31 @@ describe('ProductDetailClient — inline personalization', () => {
     expect(screen.getByRole('button', { name: /add to cart/i })).toBeDisabled();
   });
 
+  it('[FE-06] maps a specific server error code to a specific message, and offers a "Try again" retry', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 408,
+      json: async () => ({ error: 'timed out', code: 'decode_timeout' }),
+    } as Response);
+
+    renderProduct(makeProduct(), [variant], [makeTemplate()]);
+
+    const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'slow.jpg', { type: 'image/jpeg' })] } });
+
+    expect(await screen.findByText(/took too long to process/i)).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+  });
+
+  it('[FE-05] accepts an explicit .heic/.heif file extension, not just image/* MIME types', async () => {
+    const input = (await (async () => {
+      renderProduct(makeProduct(), [variant], [makeTemplate()]);
+      return screen.findByLabelText(/upload a photo/i);
+    })()) as HTMLInputElement;
+    expect(input.accept).toContain('.heic');
+    expect(input.accept).toContain('.heif');
+  });
+
   it('a low-resolution photo is still accepted — quality is surfaced later via the DPI badge, not an upload-time rejection', async () => {
     mockUploadFetch({ originalUrl: '/tiny-photo.jpg', widthPx: 300, heightPx: 300 });
 

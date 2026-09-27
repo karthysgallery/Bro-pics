@@ -71,6 +71,17 @@ function computeEffectiveDpi(
 const MAX_ZOOM_MULTIPLE = 4;
 const ZOOM_STEP_FACTOR = 1.25;
 
+// [FE-06] Keyed by the `code` field POST /api/uploads returns (route.ts's
+// own errorResponse) — a decode timeout and an oversized file need
+// different customer-facing advice, not one generic "try again" line.
+const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
+  file_too_large: 'This photo is too large — please use a file under 25 MB.',
+  decode_timeout: 'This photo took too long to process — please try a smaller file.',
+  decode_failed: "We couldn't read this photo — it may be corrupted or in an unsupported format.",
+  rate_limited: 'Too many uploads in a row — please wait a moment and try again.',
+  unknown_variant: "We couldn't set up this photo slot — please close and reopen the editor.",
+};
+
 export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant }: ProductDetailClientProps) {
   const firstInStock = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
@@ -257,9 +268,18 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
       // POST /api/uploads returns the persisted Upload doc (originalPath)
       // plus a freshly-signed, never-persisted originalUrl for immediate
       // canvas display — see that route for why the two are kept separate.
-      const upload: Upload & { originalUrl: string } = await res.json();
+      const body = await res.json();
 
-      if (!res.ok || upload.status === 'rejected') {
+      if (!res.ok) {
+        // [FE-06] Map the server's own error `code` (route.ts's
+        // errorResponse) to a message specific enough to act on, instead
+        // of one generic "try a different file" line for every failure —
+        // a decode timeout and a 25MB-over file need different advice.
+        setUploadError(UPLOAD_ERROR_MESSAGES[body.code] ?? "We couldn't process this photo — please try a different file.");
+        return;
+      }
+      const upload: Upload & { originalUrl: string } = body;
+      if (upload.status === 'rejected') {
         setUploadError("We couldn't process this photo — please try a different file.");
         return;
       }

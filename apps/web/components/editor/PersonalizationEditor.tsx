@@ -290,7 +290,11 @@ export function PersonalizationEditor({
           <input
             id="photo-upload-input"
             type="file"
-            accept="image/*"
+            // [FE-05] Some pickers (notably older Android/desktop file
+            // dialogs) don't reliably map a .heic/.heif file to the
+            // image/* MIME filter, so it never shows up as selectable
+            // without the extensions listed explicitly.
+            accept="image/*,.heic,.heif"
             /* The visible trigger reads "Choose a photo", which is the right
                words on a button but too vague as the control's name once a
                frame has several slots — so the accessible name says which. */
@@ -304,9 +308,19 @@ export function PersonalizationEditor({
             }}
           />
 
-          <p className="text-2xs text-ink/50">or drag and drop it here &middot; JPG or PNG, max 25 MB</p>
+          <p className="text-2xs text-ink/50">or drag and drop it here &middot; JPG, PNG or iPhone HEIC, max 25 MB</p>
           {uploadingSlot === activeSlotIndex && <p className="text-xs text-accent font-medium">Uploading&hellip;</p>}
-          {uploadError && <p className="text-xs text-alert mt-1">{uploadError}</p>}
+          {uploadError && (
+            <div className="flex flex-col items-center gap-1.5 mt-1">
+              <p className="text-xs text-alert">{uploadError}</p>
+              <label
+                htmlFor="photo-upload-input"
+                className="cursor-pointer text-xs font-semibold text-accent hover:text-accent-dark underline"
+              >
+                Try again
+              </label>
+            </div>
+          )}
         </div>
 
         {activeSlot && (
