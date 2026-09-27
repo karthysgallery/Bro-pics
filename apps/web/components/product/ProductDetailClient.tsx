@@ -20,7 +20,7 @@ import { selectGalleryMedia } from '../../lib/gallery-media';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { recordProductView } from '../../lib/recently-viewed';
 import { getOrCreateSessionId } from '../../lib/session-id';
-import { validateSlotsComplete } from '../../lib/editor-validation';
+import { validateSlotsComplete, validateTextFieldsComplete } from '../../lib/editor-validation';
 import { fontFamilyForKey } from '../../lib/text-personalization-options';
 import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../../lib/personalization-draft';
 import { Gallery } from './Gallery';
@@ -427,10 +427,17 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   const activeRect = template?.printableRects.find((r) => r.slotIndex === activeSlotIndex);
   const activeSlotIsRed = activeSlot !== undefined && dpiTier(activeSlot.effectiveDpi) === 'red';
 
-  const completion = validateSlotsComplete(
+  const photoCompletion = validateSlotsComplete(
     product.photoSlots,
     new Map(Array.from(slots.entries()).map(([i, s]) => [i, { effectiveDpi: s.effectiveDpi, confirmedLowDpi: s.confirmedLowDpi }]))
   );
+  // [FE-12] A required text zone blocks Add to Cart the same way an
+  // empty photo slot already does — checked after photo completion so
+  // the more fundamental "no photo yet" reason still wins when both are
+  // true.
+  const completion = !photoCompletion.complete
+    ? photoCompletion
+    : validateTextFieldsComplete(template?.textZones ?? [], textFields);
 
   const handleFileChange = async (file: File, slotIndex: number) => {
     if (!selectedVariant || !template) return;

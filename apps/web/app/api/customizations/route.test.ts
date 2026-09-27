@@ -18,6 +18,11 @@ const variantDoc = { id: 'var_1', widthIn: 10, heightIn: 10 };
 
 const mockUploadGet = vi.fn().mockResolvedValue({ exists: true, data: () => uploadDoc });
 const mockCollectionGroupGet = vi.fn().mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
+// [FE-12] No template by default — every pre-existing test in this file
+// sends a `templateVersion` (matching the real client) but none is
+// testing text-zone enforcement, so this must resolve to "no matching
+// template" (an empty docs array) rather than throwing on an unmocked call.
+const mockFrameTemplatesGet = vi.fn().mockResolvedValue({ docs: [] });
 
 vi.mock('../../../lib/firebase-admin', () => ({
   getAdminApp: vi.fn(),
@@ -35,11 +40,16 @@ vi.mock('firebase-admin/firestore', () => ({
       }
       return { doc: () => ({ id: 'cust_test123', set: mockSet }) };
     },
-    collectionGroup: () => ({
-      where: () => ({
-        limit: () => ({ get: mockCollectionGroupGet }),
-      }),
-    }),
+    collectionGroup: (name: string) => {
+      if (name === 'frameTemplates') {
+        return { where: () => ({ get: mockFrameTemplatesGet }) };
+      }
+      return {
+        where: () => ({
+          limit: () => ({ get: mockCollectionGroupGet }),
+        }),
+      };
+    },
   }),
 }));
 
@@ -91,6 +101,8 @@ describe('POST /api/customizations', () => {
     mockUploadGet.mockResolvedValue({ exists: true, data: () => uploadDoc });
     mockCollectionGroupGet.mockClear();
     mockCollectionGroupGet.mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
+    mockFrameTemplatesGet.mockClear();
+    mockFrameTemplatesGet.mockResolvedValue({ docs: [] });
     vi.mocked(getUserIdFromAuthHeader).mockClear();
     vi.mocked(getUserIdFromAuthHeader).mockResolvedValue(null);
   });
@@ -287,5 +299,84 @@ describe('POST /api/customizations', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('42');
     expect(mockSet).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/customizations [FE-12] text-zone server-side enforcement', () => {
+  beforeEach(() => {
+    resetRateLimitState();
+    mockSet.mockClear();
+    mockUploadGet.mockResolvedValue({ exists: true, data: () => uploadDoc });
+    mockCollectionGroupGet.mockResolvedValue({ empty: false, docs: [{ data: () => variantDoc }] });
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValue(null);
+  });
+
+  const templateWithNameZone = {
+    version: 1,
+    textZones: [
+      { fieldKey: 'name', label: 'Name', maxLength: 10, align: 'center', required: true, allowedFonts: ['dancing-script'], allowedColors: ['#2b2420'] },
+    ],
+  };
+
+  it('rejects a missing value for a required text zone', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => templateWithNameZone }] });
+    const response = await POST(makeRequest({ ...validBody, templateVersion: 1 }, 'sess_1'));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.code).toBe('invalid_text_field');
+    expect(body.error).toMatch(/Name.*required/i);
+  });
+
+  it('rejects a value longer than the zone\'s maxLength', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => templateWithNameZone }] });
+    const response = await POST(
+      makeRequest(
+        { ...validBody, templateVersion: 1, textFieldsJson: { name: { value: 'way too long a name', fontFamily: 'var(--font-dancing-script)', color: '#2b2420' } } },
+        'sess_1'
+      )
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/exceeds/i);
+  });
+
+  it('rejects a font not in the zone\'s allowedFonts', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => templateWithNameZone }] });
+    const response = await POST(
+      makeRequest(
+        { ...validBody, templateVersion: 1, textFieldsJson: { name: { value: 'Amit', fontFamily: 'var(--font-cinzel)', color: '#2b2420' } } },
+        'sess_1'
+      )
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/font not allowed/i);
+  });
+
+  it('rejects a colour not in the zone\'s allowedColors', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => templateWithNameZone }] });
+    const response = await POST(
+      makeRequest(
+        { ...validBody, templateVersion: 1, textFieldsJson: { name: { value: 'Amit', fontFamily: 'var(--font-dancing-script)', color: '#ffffff' } } },
+        'sess_1'
+      )
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/colour not allowed/i);
+  });
+
+  it('accepts a valid submission matching every zone constraint', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => templateWithNameZone }] });
+    const response = await POST(
+      makeRequest(
+        { ...validBody, templateVersion: 1, textFieldsJson: { name: { value: 'Amit', fontFamily: 'var(--font-dancing-script)', color: '#2b2420' } } },
+        'sess_1'
+      )
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('does not enforce anything when the template has no textZones at all', async () => {
+    mockFrameTemplatesGet.mockResolvedValueOnce({ docs: [{ data: () => ({ version: 1, textZones: [] }) }] });
+    const response = await POST(makeRequest({ ...validBody, templateVersion: 1 }, 'sess_1'));
+    expect(response.status).toBe(200);
   });
 });

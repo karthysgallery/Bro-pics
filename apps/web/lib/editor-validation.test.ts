@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSlotsComplete } from './editor-validation';
+import { validateSlotsComplete, validateTextFieldsComplete } from './editor-validation';
 
 describe('validateSlotsComplete', () => {
   it('is incomplete when a slot has no customization at all', () => {
@@ -40,5 +40,34 @@ describe('validateSlotsComplete', () => {
     );
     expect(result.complete).toBe(false);
     expect(result.reason).toMatch(/slot 2/i);
+  });
+});
+
+describe('validateTextFieldsComplete [FE-12]', () => {
+  it('is incomplete when a required zone has no value', () => {
+    const result = validateTextFieldsComplete([{ fieldKey: 'name', label: 'Name', required: true }], new Map());
+    expect(result.complete).toBe(false);
+    expect(result.reason).toMatch(/name.*required/i);
+  });
+
+  it('is incomplete when a required zone has only whitespace', () => {
+    const result = validateTextFieldsComplete(
+      [{ fieldKey: 'name', label: 'Name', required: true }],
+      new Map([['name', { value: '   ' }]])
+    );
+    expect(result.complete).toBe(false);
+  });
+
+  it('is complete when a required zone has a real value', () => {
+    const result = validateTextFieldsComplete(
+      [{ fieldKey: 'name', label: 'Name', required: true }],
+      new Map([['name', { value: 'Amit' }]])
+    );
+    expect(result.complete).toBe(true);
+  });
+
+  it('is complete when no zone is required, regardless of values', () => {
+    const result = validateTextFieldsComplete([{ fieldKey: 'name', label: 'Name' }], new Map());
+    expect(result.complete).toBe(true);
   });
 });

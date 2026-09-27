@@ -157,6 +157,8 @@ export function PersonalizationEditor({
           fontFamily: field?.fontKey ? resolveFontFamilyForCanvas(field.fontKey) : 'serif',
           zoneRect: zone,
           align: zone.align,
+          minFontSizePx: zone.minFontSizePx,
+          maxFontSizePx: zone.maxFontSizePx,
         };
       })
     : undefined;
@@ -394,6 +396,9 @@ export function PersonalizationEditor({
                 label={zone.label}
                 field={field}
                 maxLength={zone.maxLength}
+                required={zone.required}
+                allowedFontKeys={zone.allowedFonts}
+                allowedColorValues={zone.allowedColors}
                 onChange={(next) => onTextFieldChange(zone.fieldKey, next)}
               />
             );

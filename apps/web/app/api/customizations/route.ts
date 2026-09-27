@@ -6,7 +6,55 @@ import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../lib/rate-limit';
 import { CustomizationSchema, CURRENT_SCHEMA_VERSION } from '@bro-pics/shared';
 import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
-import type { Upload } from '@bro-pics/shared';
+import type { Upload, FrameTemplate } from '@bro-pics/shared';
+import { fontFamilyForKey } from '../../../lib/text-personalization-options';
+
+// [FE-12] The client only ever sends the RESOLVED CSS font-family string
+// (fontFamilyForKey's output), never the raw key — this maps a template
+// zone's admin-facing allowedFonts (font keys, the same identifiers
+// TEXT_FONT_OPTIONS uses) to the resolved strings a submission could
+// actually match, so a template author never has to know or type a CSS
+// var() string.
+function resolvedAllowedFontFamilies(allowedFonts: string[]): Set<string> {
+  return new Set(allowedFonts.map((key) => fontFamilyForKey(key)));
+}
+
+/**
+ * [FE-12] Validates submitted textFieldsJson against the pinned template
+ * version's own textZones — required/maxLength/allowedFonts/allowedColors
+ * were previously enforced only client-side (the input's own maxLength
+ * attribute, the picker only ever offering allowed choices), so a direct
+ * API call bypassing the UI could submit an empty required field, an
+ * over-length string, or an arbitrary font/colour. minFontSizePx/
+ * maxFontSizePx are deliberately NOT checked here — nothing in this
+ * payload represents a rendered font size at all (the canvas auto-fits
+ * one from the zone's own pixel dimensions); those two fields are a
+ * rendering-time constraint on EditorCanvas, not a submission shape.
+ */
+function validateTextFieldsAgainstTemplate(
+  template: FrameTemplate,
+  textFieldsJson: Record<string, { value: string; fontFamily: string; color: string }> | undefined
+): string | null {
+  for (const zone of template.textZones) {
+    const field = textFieldsJson?.[zone.fieldKey];
+    if (zone.required && !field?.value.trim()) {
+      return `"${zone.label}" is required`;
+    }
+    if (!field) continue;
+    if (field.value.length > zone.maxLength) {
+      return `"${zone.label}" exceeds its ${zone.maxLength}-character limit`;
+    }
+    if (zone.allowedFonts && zone.allowedFonts.length > 0) {
+      if (!resolvedAllowedFontFamilies(zone.allowedFonts).has(field.fontFamily)) {
+        return `"${zone.label}" was given a font not allowed for this template`;
+      }
+    }
+    if (zone.allowedColors && zone.allowedColors.length > 0 && !zone.allowedColors.includes(field.color)) {
+      return `"${zone.label}" was given a colour not allowed for this template`;
+    }
+  }
+  return null;
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
@@ -66,6 +114,30 @@ export async function POST(request: Request): Promise<NextResponse> {
   const variant = await findVariantById(db, variantId);
   if (!variant) {
     return NextResponse.json({ error: `Unknown variantId: ${variantId}` }, { status: 400 });
+  }
+
+  // [FE-12] Only fetched when there's something to check against — a
+  // product with no text personalization at all never has textZones,
+  // and a submission with no textFieldsJson still needs this to catch a
+  // MISSING required field, so this can't be skipped just because
+  // textFieldsJson is absent.
+  const { templateVersion } = body as Record<string, unknown>;
+  if (typeof templateVersion === 'number') {
+    // A single-field `variantId` equality query, filtered by version in
+    // memory — matching GET /api/frame-templates/[variantId]'s own
+    // established reasoning: a second `.where('version','==',...)` would
+    // need a composite index this environment can't deploy.
+    const templateSnapshot = await db.collectionGroup('frameTemplates').where('variantId', '==', variantId).get();
+    const template = templateSnapshot.docs.map((d) => d.data() as FrameTemplate).find((t) => t.version === templateVersion);
+    if (template && template.textZones.length > 0) {
+      const textFieldsJson = (body as Record<string, unknown>).textFieldsJson as
+        | Record<string, { value: string; fontFamily: string; color: string }>
+        | undefined;
+      const validationError = validateTextFieldsAgainstTemplate(template, textFieldsJson);
+      if (validationError) {
+        return NextResponse.json({ error: validationError, code: 'invalid_text_field' }, { status: 400 });
+      }
+    }
   }
 
   // effectiveDpi is ALWAYS server-recomputed from the server-trusted

@@ -6,6 +6,23 @@ export interface SlotCompletionResult {
 }
 
 /**
+ * [FE-12] A required text zone with no value yet blocks Add to Cart, the
+ * same way an empty photo slot already does — checked separately from
+ * `validateSlotsComplete` since it has nothing to do with photos/DPI.
+ */
+export function validateTextFieldsComplete(
+  zones: Array<{ fieldKey: string; label: string; required?: boolean }>,
+  textFields: Map<string, { value: string }>
+): SlotCompletionResult {
+  for (const zone of zones) {
+    if (zone.required && !(textFields.get(zone.fieldKey)?.value ?? '').trim()) {
+      return { complete: false, reason: `"${zone.label}" is required` };
+    }
+  }
+  return { complete: true };
+}
+
+/**
  * A personalization is ready to add to cart when every slot has an
  * uploaded, positioned photo, and every slot's DPI is at least amber —
  * unless the customer has explicitly confirmed proceeding with THAT

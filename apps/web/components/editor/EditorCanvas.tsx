@@ -24,6 +24,12 @@ export interface CanvasTextField {
   fontFamily: string;
   zoneRect: GeometryRect;
   align: 'left' | 'center' | 'right';
+  // [FE-12] FrameTemplate.textZones[].minFontSizePx/maxFontSizePx — canvas
+  // px (this component's own unit, same as CANVAS_SIZE), clamping the
+  // auto-fit loop below. Absent means the pre-existing unclamped 8-32px
+  // auto-fit range.
+  minFontSizePx?: number;
+  maxFontSizePx?: number;
 }
 
 export interface CanvasClipart {
@@ -169,15 +175,22 @@ function drawTextField(ctx: CanvasRenderingContext2D, field: CanvasTextField) {
   // Auto-shrink: step the font size down until the text fits both the
   // zone's width and its height, rather than squishing glyphs with
   // fillText's maxWidth argument (which distorts rather than resizes).
-  let fontSize = Math.max(10, Math.min(32, zoneRect.height));
+  // [FE-12] minFontSizePx/maxFontSizePx (when set) narrow this range —
+  // a template author's chosen bounds always win over the auto-fit
+  // default, even if that means text overflowing the zone at the floor
+  // rather than shrinking below the template's own minimum.
+  const floor = Math.max(8, field.minFontSizePx ?? 8);
+  const ceiling = Math.max(floor, Math.min(field.maxFontSizePx ?? 32, 32));
+  let fontSize = Math.max(floor, Math.min(ceiling, zoneRect.height));
   ctx.save();
   ctx.fillStyle = field.color;
   ctx.textBaseline = 'middle';
-  for (; fontSize > 8; fontSize -= 1) {
+  for (; fontSize > floor; fontSize -= 1) {
     ctx.font = `${fontSize}px ${field.fontFamily}`;
     const width = ctx.measureText(field.value).width;
     if (width <= zoneRect.width && fontSize <= zoneRect.height) break;
   }
+  ctx.font = `${fontSize}px ${field.fontFamily}`;
 
   let x: number;
   if (field.align === 'left') {
