@@ -48,6 +48,19 @@ interface EditorCanvasProps {
   textFields?: CanvasTextField[];
   clipart?: CanvasClipart | null;
   onTransformChange: (slotIndex: number, transform: { scale: number; offsetX: number; offsetY: number }) => void;
+  // [FE-08] A two-finger pinch reports a per-move scale FACTOR (current
+  // distance / distance at the last reported move), not an absolute
+  // scale — the same shape the existing zoom buttons' onZoomStep already
+  // uses, so both go through the parent's one clamped scale calculation
+  // (coverScaleForRotation..MAX_ZOOM_MULTIPLE) instead of this component
+  // computing and potentially exceeding those bounds itself.
+  onPinchZoom?: (factor: number) => void;
+  // A two-finger twist past the rotate threshold — rotationDeg only ever
+  // takes the four 90° values (packages/shared/src/editor-geometry.ts),
+  // so this reuses the existing discrete rotate action rather than
+  // introducing continuous rotation the rest of the geometry model can't
+  // represent.
+  onPinchRotate?: () => void;
   // Fires with a fresh canvas.toDataURL() PNG data URL of the WHOLE
   // composed canvas (mockup + every slot + overlay + text + clipart)
   // whenever it changes — one shared preview for the entire
@@ -231,6 +244,33 @@ function drawSlotPhoto(
   ctx.restore();
 }
 
+type CanvasPoint = { x: number; y: number };
+
+// [FE-08] Pure so the pinch/rotate math is unit-testable without mounting
+// a real <canvas> (jsdom has no 2D context) or simulating touch events.
+export function distanceBetween(a: CanvasPoint, b: CanvasPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+export function angleBetweenDeg(a: CanvasPoint, b: CanvasPoint): number {
+  return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+}
+
+// Signed shortest angular distance, e.g. 350deg -> 10deg is +20, not -340.
+export function normalizeAngleDeltaDeg(deltaDeg: number): number {
+  let d = deltaDeg % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+// A full 90deg swing shouldn't need a full 90deg of finger movement to
+// register — this is a per-registered-step threshold (see handlePointerMove
+// below, which re-bases startAngleDeg after each trigger), not a
+// cumulative-gesture one, so a continued twist keeps stepping every
+// ROTATE_STEP_THRESHOLD_DEG rather than firing once and going silent.
+export const ROTATE_STEP_THRESHOLD_DEG = 30;
+
 export function EditorCanvas({
   mockupUrl,
   overlayUrl,
@@ -240,6 +280,8 @@ export function EditorCanvas({
   clipart,
   onTransformChange,
   onCanvasUpdate,
+  onPinchZoom,
+  onPinchRotate,
 }: EditorCanvasProps) {
   const mockupImage = useHtmlImage(mockupUrl);
   const overlayImage = useHtmlImage(overlayUrl);
@@ -271,6 +313,12 @@ export function EditorCanvas({
   // Live drag state — kept in a ref (not React state) so pointermove can
   // read/update it synchronously every frame without waiting on a render.
   const dragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
+  // [FE-08] Every currently-down pointer, canvas-space. A single entry is
+  // an ordinary one-finger drag (dragRef, below); two entries switch to
+  // pinch-zoom/two-finger-rotate — the two concerns are mutually
+  // exclusive per gesture, never blended into one transform.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ startDistance: number; startAngleDeg: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const activeSlot = slots.find((s) => s.slotIndex === activeSlotIndex);
@@ -374,13 +422,56 @@ export function EditorCanvas({
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!activeSlot?.photoUrl) return;
     const point = canvasPointFromEvent(event);
-    if (!pointInActiveRect(point)) return;
-    dragRef.current = { startX: point.x, startY: point.y, startOffsetX: activeSlot.offsetX, startOffsetY: activeSlot.offsetY };
-    setIsDragging(true);
+    // The FIRST finger must land on the photo (unchanged single-finger
+    // intent) — a second finger completing a pinch can land anywhere on
+    // the canvas, matching how every native pinch-zoom gesture works.
+    if (pointersRef.current.size === 0 && !pointInActiveRect(point)) return;
+
+    pointersRef.current.set(event.pointerId, point);
     event.currentTarget.setPointerCapture(event.pointerId);
+
+    if (pointersRef.current.size === 1) {
+      dragRef.current = { startX: point.x, startY: point.y, startOffsetX: activeSlot.offsetX, startOffsetY: activeSlot.offsetY };
+      setIsDragging(true);
+      return;
+    }
+
+    if (pointersRef.current.size === 2) {
+      // A second finger arriving mid-drag ends the drag outright — the two
+      // gestures never blend into one transform.
+      dragRef.current = null;
+      setIsDragging(false);
+      const [p1, p2] = [...pointersRef.current.values()];
+      pinchRef.current = { startDistance: distanceBetween(p1, p2), startAngleDeg: angleBetweenDeg(p1, p2) };
+    }
+    // A third+ pointer is tracked (so releasing it doesn't wrongly end the
+    // pinch) but never changes which two points drive the gesture.
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, canvasPointFromEvent(event));
+    }
+
+    if (pinchRef.current && pointersRef.current.size >= 2 && activeSlot) {
+      const [p1, p2] = [...pointersRef.current.values()];
+      const distance = distanceBetween(p1, p2);
+      const angleDeg = angleBetweenDeg(p1, p2);
+      const pinch = pinchRef.current;
+
+      if (pinch.startDistance > 0 && onPinchZoom) {
+        onPinchZoom(distance / pinch.startDistance);
+      }
+      pinch.startDistance = distance;
+
+      const angleDelta = normalizeAngleDeltaDeg(angleDeg - pinch.startAngleDeg);
+      if (Math.abs(angleDelta) >= ROTATE_STEP_THRESHOLD_DEG) {
+        onPinchRotate?.();
+        pinch.startAngleDeg = angleDeg;
+      }
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag || !activeSlot) return;
     const point = canvasPointFromEvent(event);
@@ -392,9 +483,14 @@ export function EditorCanvas({
   };
 
   const endDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    setIsDragging(false);
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size < 2) {
+      pinchRef.current = null;
+    }
+    if (dragRef.current) {
+      dragRef.current = null;
+      setIsDragging(false);
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -416,6 +512,7 @@ export function EditorCanvas({
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}
       onPointerLeave={endDrag}
+      onPointerCancel={endDrag}
     />
   );
 }

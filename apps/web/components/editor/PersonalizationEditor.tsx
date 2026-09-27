@@ -184,6 +184,13 @@ export function PersonalizationEditor({
             }
             onTransformChange={onTransformChange}
             onCanvasUpdate={onCanvasUpdate}
+            // [FE-08] Reuses the exact same clamped zoom-step/rotate
+            // handlers the +/- buttons and rotate button already call —
+            // a pinch/twist gesture gets the identical cover-fit/max-zoom
+            // bounds and 90-degree-step rotation, not a second
+            // implementation of either.
+            onPinchZoom={onZoomStep}
+            onPinchRotate={onRotate}
           />
         </EditorCanvasErrorBoundary>
 
