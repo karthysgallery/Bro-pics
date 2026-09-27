@@ -10,7 +10,9 @@ import { PageSkeleton } from '../../../../components/ui/Skeleton';
 import { EmptyState } from '../../../../components/ui/EmptyState';
 import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../../lib/auth-context';
+import { useCart } from '../../../../lib/cart-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
+import { getOrCreateSessionId } from '../../../../lib/session-id';
 import type { Order, OrderItem, OrderEvent, Return, ReturnStatus, ReturnReasonCategory } from '@bro-pics/shared';
 
 const RETURN_REASON_CATEGORY_LABEL: Record<ReturnReasonCategory, string> = {
@@ -59,7 +61,9 @@ function formatPlacedAt(value: unknown): string {
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { addItem } = useCart();
   const uid = user?.uid;
+  const [reorderingKey, setReorderingKey] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -205,6 +209,47 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     }
   };
 
+  // [FE-24] Copies the item's stored personalization into a fresh draft
+  // (see POST /api/customizations/reorder for why it can't just reuse the
+  // original personalizationId — that one is locked to the order it was
+  // actually placed under) and adds it as a new cart line, so "reorder"
+  // never means re-uploading or re-personalizing anything.
+  const handleReorder = async (item: OrderItem, index: number) => {
+    if (!orderId || !user) return;
+    const key = `${item.personalizationId}-${index}`;
+    setReorderingKey(key);
+    try {
+      const idToken = await user.getIdToken();
+      const sessionId = getOrCreateSessionId();
+      const response = await fetch('/api/customizations/reorder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'X-Session-Id': sessionId,
+        },
+        body: JSON.stringify({ personalizationId: item.personalizationId }),
+      });
+      if (!response.ok) {
+        showToast('Could not reorder this item. Try again.', 'error');
+        return;
+      }
+      const body = await response.json();
+      addItem({
+        variantId: item.variantId,
+        personalizationId: body.personalizationId,
+        title: item.title,
+        unitPriceSnapshot: item.unitPrice,
+        qty: item.qty,
+        ...(item.previewPath && { previewPath: item.previewPath }),
+        ...(productSlugs.get(item.productId) && { productSlug: productSlugs.get(item.productId) }),
+      });
+      showToast('Added to cart', 'success');
+    } finally {
+      setReorderingKey(null);
+    }
+  };
+
   const handleRequestReturn = async () => {
     if (!orderId || !user || !returnReason.trim()) return;
     // [FE-23] A damage claim needs at least one evidence photo — matches
@@ -300,16 +345,29 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       <ul className="flex flex-col gap-2 text-accent/80">
         {items.map((item, i) => {
           const slug = productSlugs.get(item.productId);
+          const key = `${item.personalizationId}-${i}`;
           return (
             <li key={i} className="flex items-center justify-between gap-3">
               <span>
                 <span>{item.title}</span> × {item.qty}
               </span>
-              {slug && (
-                <Link href={`/product/${slug}`} className="text-sm text-accent hover:text-accent-dark whitespace-nowrap">
-                  Personalize again
-                </Link>
-              )}
+              <span className="flex items-center gap-3 whitespace-nowrap">
+                {order.status === 'delivered' && (
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(item, i)}
+                    disabled={reorderingKey === key}
+                    className="text-sm text-accent hover:text-accent-dark disabled:opacity-50"
+                  >
+                    {reorderingKey === key ? 'Adding…' : 'Reorder'}
+                  </button>
+                )}
+                {slug && (
+                  <Link href={`/product/${slug}`} className="text-sm text-accent hover:text-accent-dark">
+                    Personalize again
+                  </Link>
+                )}
+              </span>
             </li>
           );
         })}

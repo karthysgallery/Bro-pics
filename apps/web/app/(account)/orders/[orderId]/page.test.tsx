@@ -19,6 +19,14 @@ vi.mock('firebase/firestore', () => ({
 }));
 vi.mock('../../../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
 
+const mockAddItem = vi.fn();
+vi.mock('../../../../lib/cart-context', () => ({
+  useCart: vi.fn(() => ({ addItem: mockAddItem })),
+}));
+vi.mock('../../../../lib/session-id', () => ({
+  getOrCreateSessionId: vi.fn(() => 'session_1'),
+}));
+
 describe('OrderDetailPage', () => {
   it('[FE-01] shows "Order not found" instead of an infinite skeleton for a missing/foreign order id', async () => {
     mockGetDoc.mockResolvedValueOnce({ exists: () => false });
@@ -200,5 +208,65 @@ describe('OrderDetailPage', () => {
     expect(evidenceCall).toBeDefined();
     expect(returnCall).toBeDefined();
     expect(JSON.parse(returnCall![1]!.body as string).evidencePaths).toEqual(['returns/order_4/ev1/evidence.jpg']);
+  });
+
+  it('[FE-24] reorders a delivered item by copying its personalization into a new cart line', async () => {
+    const mockFetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/api/customizations/reorder') {
+        return { ok: true, json: async () => ({ personalizationId: 'personalization_new' }) };
+      }
+      return { ok: true, json: async () => ({ returns: [] }) };
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    mockGetDoc
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ orderNo: 'BP-2026-00005', status: 'delivered', total: 50000 }),
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ slug: 'classic-wooden-frame' }),
+      });
+    mockGetDocs
+      .mockResolvedValueOnce({
+        docs: [
+          {
+            data: () => ({
+              productId: 'product_1',
+              variantId: 'variant_1',
+              personalizationId: 'personalization_old',
+              title: 'Classic Wooden Frame',
+              unitPrice: 50000,
+              qty: 2,
+              previewPath: 'previews/order_5/item_1.jpg',
+            }),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_5' })} />);
+
+    const reorderButton = await screen.findByText('Reorder');
+    fireEvent.click(reorderButton);
+
+    await screen.findByText('Reorder');
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/customizations/reorder',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ personalizationId: 'personalization_old' }),
+      })
+    );
+    expect(mockAddItem).toHaveBeenCalledWith({
+      variantId: 'variant_1',
+      personalizationId: 'personalization_new',
+      title: 'Classic Wooden Frame',
+      unitPriceSnapshot: 50000,
+      qty: 2,
+      previewPath: 'previews/order_5/item_1.jpg',
+      productSlug: 'classic-wooden-frame',
+    });
   });
 });
