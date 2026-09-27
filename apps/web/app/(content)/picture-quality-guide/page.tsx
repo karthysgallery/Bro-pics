@@ -2,13 +2,37 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
 import { PictureQualityGuide } from '../../../components/product/PictureQualityGuide';
+import { getPageBySlug } from '../../../lib/firestore-content';
+import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
-export const metadata: Metadata = {
+const FALLBACK_METADATA: Metadata = {
   title: 'Picture quality guide — BroPics',
   description: 'What makes a photo print sharply, what the quality reading in the editor means, and how to fix a low reading.',
 };
 
-export default function PictureQualityGuidePage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPageBySlug('picture-quality-guide').catch(() => null);
+  return contentPageMetadata(page, FALLBACK_METADATA);
+}
+
+export default async function PictureQualityGuidePage() {
+  // [FE-28] Unlike the other 6 fully-CMS-able pages, `<PictureQualityGuide
+  // />` always renders regardless of CMS content — it's a shared React
+  // component (also used on the product page's own tab, deliberately
+  // "stated once" so the two can never drift), not markup a CMS bodyHtml
+  // field could ever represent. A CMS `picture-quality-guide` doc
+  // replaces the surrounding prose only.
+  const page = await getPageBySlug('picture-quality-guide').catch(() => null);
+  if (page) {
+    return (
+      <>
+        <PageIntro title={page.title} />
+        <PictureQualityGuide />
+        <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
+      </>
+    );
+  }
+
   return (
     <>
       <PageIntro

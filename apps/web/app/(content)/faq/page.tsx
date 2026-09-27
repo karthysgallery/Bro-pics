@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { getActiveFaqs } from '../../../lib/firestore-content';
 
 export const metadata: Metadata = {
   title: 'FAQ — BroPics',
@@ -109,7 +110,23 @@ const FAQS: { section: string; items: { q: string; a: React.ReactNode }[] }[] = 
   },
 ];
 
-export default function FaqPage() {
+// [FE-28] Groups the flat, sortOrder-sorted list into sections in
+// first-seen order — whichever section its lowest-sortOrder item belongs
+// to comes first, same effect as the hardcoded FAQS array's own grouping.
+function groupBySection(faqs: { section: string; question: string; answerHtml: string }[]) {
+  const bySection = new Map<string, { section: string; question: string; answerHtml: string }[]>();
+  for (const faq of faqs) {
+    const group = bySection.get(faq.section);
+    if (group) group.push(faq);
+    else bySection.set(faq.section, [faq]);
+  }
+  return [...bySection.entries()].map(([section, items]) => ({ section, items }));
+}
+
+export default async function FaqPage() {
+  const faqs = await getActiveFaqs().catch(() => []);
+  const cmsGroups = groupBySection(faqs);
+
   return (
     <>
       <PageIntro
@@ -117,17 +134,29 @@ export default function FaqPage() {
         standfirst="If your question is not here, message us — we answer on WhatsApp."
       />
 
-      {FAQS.map((group) => (
-        <section key={group.section}>
-          <h2>{group.section}</h2>
-          {group.items.map((item) => (
-            <div key={item.q} className="mb-5">
-              <h3>{item.q}</h3>
-              <p>{item.a}</p>
-            </div>
+      {cmsGroups.length > 0
+        ? cmsGroups.map((group) => (
+            <section key={group.section}>
+              <h2>{group.section}</h2>
+              {group.items.map((item) => (
+                <div key={item.question} className="mb-5">
+                  <h3>{item.question}</h3>
+                  <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} />
+                </div>
+              ))}
+            </section>
+          ))
+        : FAQS.map((group) => (
+            <section key={group.section}>
+              <h2>{group.section}</h2>
+              {group.items.map((item) => (
+                <div key={item.q} className="mb-5">
+                  <h3>{item.q}</h3>
+                  <p>{item.a}</p>
+                </div>
+              ))}
+            </section>
           ))}
-        </section>
-      ))}
 
       <h2>Still stuck?</h2>
       <p>

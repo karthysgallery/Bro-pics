@@ -2,19 +2,36 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
 import { SUPPORT_EMAIL } from '../../../lib/support-contact';
+import { getPageBySlug } from '../../../lib/firestore-content';
+import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
-export const metadata: Metadata = {
+const FALLBACK_METADATA: Metadata = {
   title: 'Contact — BroPics',
   description: 'Reach BroPics about an order, a photo, or a question before you buy.',
 };
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
 
-export default function ContactPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPageBySlug('contact').catch(() => null);
+  return contentPageMetadata(page, FALLBACK_METADATA);
+}
+
+export default async function ContactPage() {
+  // [FE-28] Unlike the other 7 static pages, this one is deliberately
+  // NOT fully replaced by CMS content when a `pages/contact` doc exists —
+  // the WhatsApp link and support email below are already env-driven
+  // (WHATSAPP_NUMBER, SUPPORT_EMAIL), not hardcoded copy an admin should
+  // be rewriting; a CMS author has no way to inject those values into
+  // bodyHtml. A CMS `contact` doc instead only overrides the page's
+  // TITLE (and via generateMetadata above, its SEO title/description) —
+  // the actual contact channels below always render from real config.
+  const page = await getPageBySlug('contact').catch(() => null);
+
   return (
     <>
       <PageIntro
-        title="Contact us"
+        title={page?.title ?? 'Contact us'}
         standfirst="Fastest on WhatsApp. Have your order number ready if you have one."
       />
 

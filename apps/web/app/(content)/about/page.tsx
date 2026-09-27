@@ -1,13 +1,30 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { getPageBySlug } from '../../../lib/firestore-content';
+import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
-export const metadata: Metadata = {
+const FALLBACK_METADATA: Metadata = {
   title: 'About us — BroPics',
   description: 'Who we are, how BroPics frames are made, and what we promise about the print on your wall.',
 };
 
-export default function AboutPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPageBySlug('about').catch(() => null);
+  return contentPageMetadata(page, FALLBACK_METADATA);
+}
+
+export default async function AboutPage() {
+  const page = await getPageBySlug('about').catch(() => null);
+  if (page) {
+    return (
+      <>
+        <PageIntro title={page.title} />
+        <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
+      </>
+    );
+  }
+
   return (
     <>
       <PageIntro

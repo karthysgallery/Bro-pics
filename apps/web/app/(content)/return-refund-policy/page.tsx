@@ -1,13 +1,30 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { getPageBySlug } from '../../../lib/firestore-content';
+import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
-export const metadata: Metadata = {
+const FALLBACK_METADATA: Metadata = {
   title: 'Return & refund policy — BroPics',
   description: 'When a personalized frame can be returned, how replacements work, and how refunds are paid.',
 };
 
-export default function ReturnRefundPolicyPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPageBySlug('return-refund-policy').catch(() => null);
+  return contentPageMetadata(page, FALLBACK_METADATA);
+}
+
+export default async function ReturnRefundPolicyPage() {
+  const page = await getPageBySlug('return-refund-policy').catch(() => null);
+  if (page) {
+    return (
+      <>
+        <PageIntro title={page.title} />
+        <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
+      </>
+    );
+  }
+
   return (
     <>
       <PageIntro

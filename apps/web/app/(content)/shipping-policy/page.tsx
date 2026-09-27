@@ -1,13 +1,30 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageIntro } from '../../../components/content/PageIntro';
+import { getPageBySlug } from '../../../lib/firestore-content';
+import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
-export const metadata: Metadata = {
+const FALLBACK_METADATA: Metadata = {
   title: 'Shipping policy — BroPics',
   description: 'Dispatch times, delivery estimates, charges and what happens if a parcel goes missing.',
 };
 
-export default function ShippingPolicyPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPageBySlug('shipping-policy').catch(() => null);
+  return contentPageMetadata(page, FALLBACK_METADATA);
+}
+
+export default async function ShippingPolicyPage() {
+  const page = await getPageBySlug('shipping-policy').catch(() => null);
+  if (page) {
+    return (
+      <>
+        <PageIntro title={page.title} />
+        <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
+      </>
+    );
+  }
+
   return (
     <>
       <PageIntro
