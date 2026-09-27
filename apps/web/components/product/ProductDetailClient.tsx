@@ -173,6 +173,93 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   const [selectedClipartId, setSelectedClipartId] = useState<string | null>(null);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
 
+  // [FE-09] Undo/redo — snapshot-based, not a per-action command pattern:
+  // capturing {slots, textFields, selectedClipartId} as a whole is much
+  // simpler and safer than modeling a reverse operation for every action
+  // type, and every SlotState/TextFieldValue object is already replaced
+  // (never mutated in place) by every setSlots/setTextFields call in this
+  // file, so a shallow Map clone is a genuine, independent snapshot. The
+  // debounced watcher below coalesces a whole drag/zoom-slider/typing
+  // gesture into ONE history entry (an undo step per keystroke or per
+  // pixel dragged would be useless), without needing a "gesture end"
+  // callback threaded through EditorCanvas/PersonalizationEditor.
+  const HISTORY_LIMIT = 50;
+  const HISTORY_DEBOUNCE_MS = 400;
+  const historyRef = useRef<Array<{ slots: Map<number, SlotState>; textFields: TextFieldValueMap; selectedClipartId: string | null }>>([]);
+  const historyIndexRef = useRef(-1);
+  const isRestoringHistoryRef = useRef(false);
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  useEffect(() => {
+    if (isRestoringHistoryRef.current) {
+      isRestoringHistoryRef.current = false;
+      return;
+    }
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(() => {
+      const snapshot = { slots: new Map(slots), textFields: new Map(textFields), selectedClipartId };
+      const truncated = historyRef.current.slice(0, historyIndexRef.current + 1);
+      truncated.push(snapshot);
+      historyRef.current = truncated.length > HISTORY_LIMIT ? truncated.slice(truncated.length - HISTORY_LIMIT) : truncated;
+      historyIndexRef.current = historyRef.current.length - 1;
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(false);
+    }, HISTORY_DEBOUNCE_MS);
+    return () => {
+      if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slots, textFields, selectedClipartId]);
+
+  const restoreHistorySnapshot = (index: number) => {
+    const snapshot = historyRef.current[index];
+    if (!snapshot) return;
+    historyIndexRef.current = index;
+    isRestoringHistoryRef.current = true;
+    setSlots(new Map(snapshot.slots));
+    setTextFields(new Map(snapshot.textFields));
+    setSelectedClipartId(snapshot.selectedClipartId);
+    setCanUndo(index > 0);
+    setCanRedo(index < historyRef.current.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndexRef.current <= 0) return;
+    restoreHistorySnapshot(historyIndexRef.current - 1);
+  };
+
+  const handleRedo = () => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    restoreHistorySnapshot(historyIndexRef.current + 1);
+  };
+
+  // Desktop keyboard shortcuts only (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or
+  // Ctrl+Y) — skipped while focus is inside a text input/textarea (the
+  // Name/Date personalization fields) so this never hijacks a browser's
+  // own native text-undo inside those fields.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (event.key.toLowerCase() === 'z' && event.shiftKey) {
+        event.preventDefault();
+        handleRedo();
+      } else if (event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        handleUndo();
+      } else if (event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Lazily resolved on first actual use (upload or add-to-cart), not on
   // every mount — a product page that's never personalized shouldn't touch
   // localStorage at all. Once resolved it's stable for the lifetime of this
@@ -531,6 +618,10 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
           onConfirmLowDpi={handleConfirmLowDpi}
           onTextFieldChange={handleTextFieldChange}
           onSelectClipart={setSelectedClipartId}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={canUndo}
+          canRedo={canRedo}
         />
       ) : (
         <div className="rounded-2xl bg-paper border border-line p-4 md:p-5">

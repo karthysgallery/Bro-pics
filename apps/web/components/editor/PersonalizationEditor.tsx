@@ -62,6 +62,11 @@ interface PersonalizationEditorProps {
   onConfirmLowDpi: (checked: boolean) => void;
   onTextFieldChange: (fieldKey: string, value: TextFieldValue) => void;
   onSelectClipart: (id: string | null) => void;
+  // [FE-09]
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const ZOOM_STEP_FACTOR = 1.25;
@@ -111,6 +116,10 @@ export function PersonalizationEditor({
   onConfirmLowDpi,
   onTextFieldChange,
   onSelectClipart,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: PersonalizationEditorProps) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -237,6 +246,29 @@ export function PersonalizationEditor({
               className="px-3 h-8 rounded-md border border-line text-ink text-sm shrink-0 hover:border-accent transition-colors"
             >
               Reset
+            </button>
+          </div>
+        )}
+
+        {(canUndo || canRedo) && (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Undo"
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors disabled:opacity-40 disabled:hover:border-line"
+            >
+              ↶
+            </button>
+            <button
+              type="button"
+              aria-label="Redo"
+              onClick={onRedo}
+              disabled={!canRedo}
+              className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors disabled:opacity-40 disabled:hover:border-line"
+            >
+              ↷
             </button>
           </div>
         )}

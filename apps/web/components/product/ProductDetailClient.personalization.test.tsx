@@ -340,6 +340,50 @@ describe('ProductDetailClient — inline personalization', () => {
       await waitFor(() => expect(activeSlot().rotationDeg).toBe(0));
     });
 
+    it('[FE-09] Undo reverts the last settled change (a rotate) and Redo brings it back', async () => {
+      await renderWithOnePhoto();
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+      // Let the post-upload state settle into its own history entry BEFORE
+      // rotating — two actions inside the same 400ms debounce window
+      // collapse into one entry by design (see the history-watcher's own
+      // comment in ProductDetailClient.tsx), so back-to-back fireEvents
+      // with no real gap would otherwise leave only one entry to undo to.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      fireEvent.click(screen.getByRole('button', { name: /rotate/i }));
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(90));
+      // The history watcher debounces 400ms after the change settles —
+      // this is a real timer, not a mocked one, since fake timers would
+      // also have to fake every findBy/waitFor call this file already
+      // relies on throughout.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const undoButton = await screen.findByRole('button', { name: 'Undo' });
+      expect(undoButton).toBeEnabled();
+      fireEvent.click(undoButton);
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(0));
+
+      const redoButton = screen.getByRole('button', { name: 'Redo' });
+      expect(redoButton).toBeEnabled();
+      fireEvent.click(redoButton);
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(90));
+    });
+
+    it('[FE-09] Ctrl+Z undoes and Ctrl+Shift+Z redoes', async () => {
+      await renderWithOnePhoto();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      fireEvent.click(screen.getByRole('button', { name: /rotate/i }));
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(90));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(0));
+
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true });
+      await waitFor(() => expect(activeSlot().rotationDeg).toBe(90));
+    });
+
     it('reset restores the cover-fit centered transform and clears any rotation', async () => {
       await renderWithOnePhoto();
       fireEvent.click(screen.getByRole('button', { name: /rotate/i }));
