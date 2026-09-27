@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { formatPaise } from '../../lib/format-price';
 import { SignedOutNotice } from '../../components/account/SignedOutNotice';
+import { EmptyState } from '../../components/ui/EmptyState';
+import Link from 'next/link';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import { getFirebaseApp } from '../../lib/firebase-client';
 import { useAuth } from '../../lib/auth-context';
@@ -106,6 +108,25 @@ export default function CheckoutPage() {
     return <SignedOutNotice action="check out" />;
   }
 
+  // [FE-01] Direct navigation to /checkout with an empty cart (a stale
+  // bookmark, or the back button after the webhook clears the cart on a
+  // successful order) used to render the full address/payment form with a
+  // zero-item, zero-total order. `!orderId` keeps this from also firing
+  // right after a real order is placed, when the cart legitimately empties.
+  if (items.length === 0 && !orderId) {
+    return (
+      <EmptyState
+        title="Your cart is empty"
+        message="Add something to your cart before checking out."
+        action={
+          <Link href="/" className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors">
+            Continue shopping
+          </Link>
+        }
+      />
+    );
+  }
+
   const handleApplyCoupon = async () => {
     setCouponMessage(null);
     const idToken = await user.getIdToken();
@@ -202,6 +223,13 @@ export default function CheckoutPage() {
         },
       });
       razorpay.open();
+    } catch {
+      // [FE-01] A thrown fetch (offline/DNS/CORS) or a rejected
+      // loadRazorpayCheckoutScript() used to propagate as an unhandled
+      // rejection — the button re-enabled with zero explanation. Every
+      // other failure path above already sets `error` before returning;
+      // this is the same message for the one path that previously set none.
+      setError('Could not place your order. Please check your connection and try again.');
     } finally {
       setPlacing(false);
     }

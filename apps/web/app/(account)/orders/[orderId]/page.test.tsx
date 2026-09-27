@@ -20,6 +20,25 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('../../../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
 
 describe('OrderDetailPage', () => {
+  it('[FE-01] shows "Order not found" instead of an infinite skeleton for a missing/foreign order id', async () => {
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false });
+    mockGetDocs.mockResolvedValue({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'does-not-exist' })} />);
+
+    expect(await screen.findByText('Order not found')).toBeInTheDocument();
+  });
+
+  it('[FE-01] shows a retryable error instead of an infinite skeleton when the order read fails', async () => {
+    mockGetDoc.mockRejectedValueOnce(new Error('offline'));
+    mockGetDocs.mockResolvedValue({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_1' })} />);
+
+    expect(await screen.findByText('Could not load this order')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+  });
+
   it('renders line items and the event timeline in chronological order', async () => {
     mockGetDoc.mockResolvedValueOnce({
       exists: () => true,

@@ -21,6 +21,9 @@ export default function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Array<{ id: string; data: Order }> | null>(null);
   const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
+  // [FE-01] A failed list query used to leave `orders` at null forever —
+  // an infinite skeleton with no error and no way to retry.
+  const [loadError, setLoadError] = useState(false);
 
   const uid = user?.uid;
 
@@ -28,34 +31,53 @@ export default function OrdersPage() {
     if (!uid) return;
     const db = getFirestore(getFirebaseApp());
     const q = query(collection(db, 'orders'), where('userId', '==', uid), orderBy('placedAt', 'desc'));
-    getDocs(q).then(async (snapshot) => {
-      const loaded = snapshot.docs.map((d) => ({ id: d.id, data: d.data() as Order }));
-      setOrders(loaded);
+    getDocs(q)
+      .then(async (snapshot) => {
+        const loaded = snapshot.docs.map((d) => ({ id: d.id, data: d.data() as Order }));
+        setOrders(loaded);
 
-      // One preview per order (its first line item's previewPath, resolved
-      // to a fresh signed URL) — a best-effort thumbnail, so any failure
-      // here just leaves that order without one rather than blocking the
-      // list itself from rendering. previewPath is a Storage object path,
-      // never a signed URL — a URL minted at order-placement time and
-      // reused here would be expired for any order older than an hour.
-      const idToken = await getIdTokenSafe(user);
-      const entries = await Promise.all(
-        loaded.map(async ({ id }) => {
-          try {
-            const itemsSnapshot = await getDocs(collection(db, 'orders', id, 'items'));
-            const firstItem = itemsSnapshot.docs[0]?.data() as OrderItem | undefined;
-            if (!firstItem?.previewPath) return [id, null] as const;
-            return [id, await resolveMediaUrl(firstItem.previewPath, idToken)] as const;
-          } catch {
-            return [id, null] as const;
-          }
-        })
-      );
-      setThumbnails(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
-    });
+        // One preview per order (its first line item's previewPath, resolved
+        // to a fresh signed URL) — a best-effort thumbnail, so any failure
+        // here just leaves that order without one rather than blocking the
+        // list itself from rendering. previewPath is a Storage object path,
+        // never a signed URL — a URL minted at order-placement time and
+        // reused here would be expired for any order older than an hour.
+        const idToken = await getIdTokenSafe(user);
+        const entries = await Promise.all(
+          loaded.map(async ({ id }) => {
+            try {
+              const itemsSnapshot = await getDocs(collection(db, 'orders', id, 'items'));
+              const firstItem = itemsSnapshot.docs[0]?.data() as OrderItem | undefined;
+              if (!firstItem?.previewPath) return [id, null] as const;
+              return [id, await resolveMediaUrl(firstItem.previewPath, idToken)] as const;
+            } catch {
+              return [id, null] as const;
+            }
+          })
+        );
+        setThumbnails(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
+      })
+      .catch(() => setLoadError(true));
   }, [uid]);
 
   if (!user) return <SignedOutNotice action="see your orders" />;
+  if (loadError) {
+    return (
+      <EmptyState
+        title="Could not load your orders"
+        message="Check your connection and try again."
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors"
+          >
+            Try again
+          </button>
+        }
+      />
+    );
+  }
   if (orders === null) return <PageSkeleton rows={3} />;
 
   return (

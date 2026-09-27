@@ -77,4 +77,28 @@ describe('ProfilePage', () => {
     await screen.findByLabelText('Phone number');
     expect(screen.getByText('Verified')).toBeInTheDocument();
   });
+
+  it('[FE-04] resolves a stored photoPath to a display URL rather than rendering it as a URL directly', async () => {
+    mockGetDoc.mockResolvedValueOnce({ data: () => ({ firstName: 'Karthik', photoPath: 'profile-pictures/user_1/photo.jpg' }) });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: 'https://signed.example.com/fresh.jpg' }) });
+    render(<ProfilePage />);
+
+    const img = await screen.findByRole('img');
+    expect(img).toHaveAttribute('src', 'https://signed.example.com/fresh.jpg');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/media/url?path=profile-pictures%2Fuser_1%2Fphoto.jpg'),
+      expect.anything()
+    );
+  });
+
+  it('[FE-01] recovers from a failed profile fetch instead of hanging on the loading skeleton forever', async () => {
+    mockGetDoc.mockRejectedValueOnce(new Error('offline'));
+    render(<ProfilePage />);
+
+    // The page has no visible loading marker to assert "not stuck" against
+    // directly — the real signal is that `loaded` flips true and the actual
+    // form (a field only the loaded view renders) appears, not a fetch
+    // failure leaving `loaded` false forever behind the skeleton.
+    expect(await screen.findByLabelText('First name')).toBeInTheDocument();
+  });
 });

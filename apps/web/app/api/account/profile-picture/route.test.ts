@@ -2,8 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSave = vi.fn().mockResolvedValue(undefined);
-const mockGetSignedUrl = vi.fn().mockResolvedValue(['https://signed.example.com/photo.jpg']);
-const mockFile = vi.fn(() => ({ save: mockSave, getSignedUrl: mockGetSignedUrl }));
+const mockFile = vi.fn(() => ({ save: mockSave }));
 
 const mockGetUserId = vi.fn();
 vi.mock('../../../../lib/verify-id-token', () => ({
@@ -49,7 +48,6 @@ describe('POST /api/account/profile-picture', () => {
     resetRateLimitState();
     vi.clearAllMocks();
     mockSave.mockResolvedValue(undefined);
-    mockGetSignedUrl.mockResolvedValue(['https://signed.example.com/photo.jpg']);
   });
 
   it('returns 401 when signed out', async () => {
@@ -64,14 +62,14 @@ describe('POST /api/account/profile-picture', () => {
     expect(response.status).toBe(400);
   });
 
-  it('stores the photo at a per-user fixed path and returns a signed URL', async () => {
+  it('stores the photo at a per-user fixed path and returns that path, not a signed URL', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     const response = await POST(makeRequest());
     expect(response.status).toBe(200);
     expect(mockFile).toHaveBeenCalledWith('profile-pictures/user_1/photo.jpg');
     expect(mockSave).toHaveBeenCalled();
     const body = await response.json();
-    expect(body.photoUrl).toBe('https://signed.example.com/photo.jpg');
+    expect(body.photoPath).toBe('profile-pictures/user_1/photo.jpg');
   });
 
   it('returns 429 and skips the upload entirely when rate-limited', async () => {

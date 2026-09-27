@@ -36,7 +36,7 @@ describe('UserSchema', () => {
       updatedAt: '2026-09-03T00:00:00.000Z',
       firstName: 'Karthik',
       lastName: 'R',
-      photoUrl: 'https://example.com/photo.jpg',
+      photoPath: 'profile-pictures/user_1/photo.jpg',
       dob: '1990-05-14',
       gender: 'male',
     });

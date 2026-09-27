@@ -100,9 +100,26 @@ describe('GET /api/media/url', () => {
     expect(response.status).toBe(400);
   });
 
-  it('rejects a path outside the uploads/ prefix', async () => {
+  it('rejects a path outside the uploads/ and profile-pictures/ prefixes', async () => {
     const response = await GET(makeRequest('print-files/order_1/item_1/print.png', { sessionId: 'sess_1' }));
     expect(response.status).toBe(400);
+  });
+
+  it('[FE-04] allows a signed-in user to resolve their own profile picture', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce('user_1');
+    const response = await GET(makeRequest('profile-pictures/user_1/photo.jpg', { authHeader: 'Bearer good-token' }));
+    expect(response.status).toBe(200);
+  });
+
+  it('[FE-04] rejects a signed-in user resolving a different user\'s profile picture', async () => {
+    vi.mocked(getUserIdFromAuthHeader).mockResolvedValueOnce('user_2');
+    const response = await GET(makeRequest('profile-pictures/user_1/photo.jpg', { authHeader: 'Bearer good-token' }));
+    expect(response.status).toBe(403);
+  });
+
+  it('[FE-04] rejects an anonymous caller for a profile picture even with a matching X-Session-Id', async () => {
+    const response = await GET(makeRequest('profile-pictures/user_1/photo.jpg', { sessionId: 'user_1' }));
+    expect(response.status).toBe(403);
   });
 
   it('rejects a path containing ..', async () => {

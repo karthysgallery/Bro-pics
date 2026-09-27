@@ -8,6 +8,7 @@ import { useAuth } from '../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
 import { useToast } from '../../../../components/ui/Toast';
 import { PageSkeleton } from '../../../../components/ui/Skeleton';
+import { resolveMediaUrl, getIdTokenSafe } from '../../../../lib/resolve-media-url';
 import type { Gender } from '@bro-pics/shared';
 
 const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
@@ -35,26 +36,33 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     const db = getFirestore(getFirebaseApp());
-    getDoc(doc(db, 'users', user.uid)).then((snapshot) => {
-      const data = snapshot.data() as
-        | { firstName?: string; lastName?: string; displayName?: string; email?: string; dob?: string; gender?: Gender; photoUrl?: string }
-        | undefined;
-      // Older accounts only have displayName (no first/last split yet) —
-      // fall back to splitting it on the first save rather than losing it.
-      if (data?.firstName || data?.lastName) {
-        setFirstName(data.firstName ?? '');
-        setLastName(data.lastName ?? '');
-      } else if (data?.displayName) {
-        const [first, ...rest] = data.displayName.split(' ');
-        setFirstName(first ?? '');
-        setLastName(rest.join(' '));
-      }
-      setEmail(data?.email ?? '');
-      setDob(data?.dob ?? '');
-      setGender(data?.gender ?? '');
-      setPhotoUrl(data?.photoUrl ?? null);
-      setLoaded(true);
-    });
+    getDoc(doc(db, 'users', user.uid))
+      .then(async (snapshot) => {
+        const data = snapshot.data() as
+          | { firstName?: string; lastName?: string; displayName?: string; email?: string; dob?: string; gender?: Gender; photoPath?: string }
+          | undefined;
+        // Older accounts only have displayName (no first/last split yet) —
+        // fall back to splitting it on the first save rather than losing it.
+        if (data?.firstName || data?.lastName) {
+          setFirstName(data.firstName ?? '');
+          setLastName(data.lastName ?? '');
+        } else if (data?.displayName) {
+          const [first, ...rest] = data.displayName.split(' ');
+          setFirstName(first ?? '');
+          setLastName(rest.join(' '));
+        }
+        setEmail(data?.email ?? '');
+        setDob(data?.dob ?? '');
+        setGender(data?.gender ?? '');
+        if (data?.photoPath) {
+          const idToken = await getIdTokenSafe(user);
+          setPhotoUrl(await resolveMediaUrl(data.photoPath, idToken));
+        }
+      })
+      .catch(() => {
+        showToast('Could not load your profile. Try refreshing.', 'error');
+      })
+      .finally(() => setLoaded(true));
   }, [user]);
 
   if (!user) return <SignedOutNotice action="edit your profile" />;
@@ -118,9 +126,9 @@ export default function ProfilePage() {
         return;
       }
       const body = await response.json();
-      setPhotoUrl(body.photoUrl);
+      setPhotoUrl(await resolveMediaUrl(body.photoPath, idToken));
       const db = getFirestore(getFirebaseApp());
-      await setDoc(doc(db, 'users', user.uid), { photoUrl: body.photoUrl, updatedAt: new Date() }, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), { photoPath: body.photoPath, updatedAt: new Date() }, { merge: true });
       showToast('Photo updated', 'success');
     } finally {
       setUploadingPhoto(false);
@@ -138,7 +146,7 @@ export default function ProfilePage() {
         <div className="w-16 h-16 rounded-full bg-tint overflow-hidden shrink-0 flex items-center justify-center text-ink/40 text-xs">
           {photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt="" className="w-full h-full object-cover" />
+            <img src={photoUrl} alt="Profile photo" className="w-full h-full object-cover" />
           ) : (
             <span>No photo</span>
           )}

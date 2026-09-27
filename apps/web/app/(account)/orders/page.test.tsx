@@ -36,4 +36,11 @@ describe('OrdersPage (customer order list)', () => {
     const link = await screen.findByText('BP-2026-00001');
     expect(link.closest('a')).toHaveAttribute('href', '/orders/order_1');
   });
+
+  it('[FE-01] shows a retryable error instead of an infinite skeleton when the list query fails', async () => {
+    mockGetDocs.mockRejectedValueOnce(new Error('offline'));
+    render(<OrdersPage />);
+    expect(await screen.findByText('Could not load your orders')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+  });
 });

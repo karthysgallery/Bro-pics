@@ -7,6 +7,7 @@ import { OrderStatusTimeline } from '../../../../components/orders/OrderStatusTi
 import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
 import { useToast } from '../../../../components/ui/Toast';
 import { PageSkeleton } from '../../../../components/ui/Skeleton';
+import { EmptyState } from '../../../../components/ui/EmptyState';
 import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
@@ -73,6 +74,12 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
+  // [FE-01] Distinct from "still loading" — a genuinely missing order (a
+  // stale/mistyped link) or a failed read (offline, permission-denied)
+  // both used to leave `order` at null forever, showing an infinite
+  // skeleton with no way out.
+  const [orderNotFound, setOrderNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     params.then((p) => setOrderId(p.orderId));
@@ -82,9 +89,15 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     if (!uid || !orderId) return;
     const db = getFirestore(getFirebaseApp());
 
-    getDoc(doc(db, 'orders', orderId)).then((snapshot) => {
-      if (snapshot.exists()) setOrder(snapshot.data() as Order);
-    });
+    getDoc(doc(db, 'orders', orderId))
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          setOrder(snapshot.data() as Order);
+        } else {
+          setOrderNotFound(true);
+        }
+      })
+      .catch(() => setLoadError(true));
     getDocs(collection(db, 'orders', orderId, 'items')).then(async (snapshot) => {
       const loadedItems = snapshot.docs.map((d) => d.data() as OrderItem);
       setItems(loadedItems);
@@ -130,6 +143,36 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   }, [uid, orderId, order?.status]);
 
   if (!user) return <SignedOutNotice action="see this order" />;
+  if (orderNotFound) {
+    return (
+      <EmptyState
+        title="Order not found"
+        message="This order doesn't exist, or isn't linked to your account."
+        action={
+          <Link href="/orders" className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors">
+            Back to orders
+          </Link>
+        }
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <EmptyState
+        title="Could not load this order"
+        message="Check your connection and try again."
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors"
+          >
+            Try again
+          </button>
+        }
+      />
+    );
+  }
   if (!order) return <PageSkeleton rows={2} />;
 
   const hasPendingPaymentEvent = events.some((event) => event.status === 'pending_payment');

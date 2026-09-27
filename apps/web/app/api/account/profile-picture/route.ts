@@ -5,12 +5,11 @@ import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
 import { probeAndStripImage } from '../../../../lib/image-probe';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 
-// Same signed-URL-expiry limitation as every other uploaded image in this
-// app (order preview thumbnails, personalization uploads) — GCS V4 signed
-// URLs cap at 7 days, so this can't be made "permanent" the way a public
-// bucket URL would be. Matches existing behavior rather than being a new
-// gap; a real fix (public read for this one path, or re-signing on every
-// read) is a Storage-rules change, out of scope here.
+// [FE-04] Returns the Storage object path only, never a signed URL — this
+// used to mint a 7-day signed URL and persist it directly onto the user
+// doc, which silently broke a week after every upload. The client now
+// resolves a fresh display URL from this path via GET /api/media/url,
+// same *Path convention as Upload/Customization (BE-03/04).
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'upload');
   if (!rateLimit.allowed) {
@@ -48,10 +47,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   const storagePath = `profile-pictures/${userId}/photo.jpg`;
   const storageFile = bucket.file(storagePath);
   await storageFile.save(probed.strippedBuffer, { contentType: probed.mime });
-  const [signedUrl] = await storageFile.getSignedUrl({
-    action: 'read',
-    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
-  });
 
-  return NextResponse.json({ photoUrl: signedUrl }, { status: 200 });
+  return NextResponse.json({ photoPath: storagePath }, { status: 200 });
 }

@@ -46,16 +46,23 @@ export default function MyReviewsPage() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/reviews/mine', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      if (!response.ok) {
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/reviews/mine', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!response.ok) {
+          setError('Could not load your reviews.');
+          return;
+        }
+        const body = await response.json();
+        setReviews(body.reviews ?? []);
+      } catch {
+        // [FE-01] A thrown fetch (offline, DNS) used to leave `reviews` at
+        // null and `error` at null forever — an infinite skeleton, same
+        // class of bug as the response.ok branch above already handles.
         setError('Could not load your reviews.');
-        return;
       }
-      const body = await response.json();
-      setReviews(body.reviews ?? []);
     })();
   }, [user]);
 

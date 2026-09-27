@@ -5,15 +5,21 @@ import { getUserIdFromAuthHeader, getStaffUserIdFromAuthHeader } from '../../../
 import { getSignedReadUrl } from '../../../../lib/storage-url';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 
-// Only `uploads/{sessionId}/...` objects (originals and their previews) are
-// ever resolved through this route — print-files/returns are staff/server
+// `uploads/{sessionId}/...` (originals and their previews) and
+// `profile-pictures/{userId}/...` [FE-04] are the only prefixes ever
+// resolved through this route — print-files/returns are staff/server
 // concerns with their own access paths, never exposed to arbitrary client
 // requests here.
-const ALLOWED_PATH_PATTERN = /^uploads\/[^/]+\/.+$/;
+const ALLOWED_PATH_PATTERN = /^(uploads|profile-pictures)\/[^/]+\/.+$/;
 
 async function canAccessPath(request: Request, path: string): Promise<boolean> {
   const segments = path.split('/');
   const pathSessionId = segments[1];
+
+  if (segments[0] === 'profile-pictures') {
+    const userId = await getUserIdFromAuthHeader(request);
+    return !!userId && userId === pathSessionId;
+  }
 
   const sessionId = request.headers.get('X-Session-Id');
   if (sessionId && sessionId === pathSessionId) return true;

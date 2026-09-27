@@ -16,7 +16,13 @@ export const UserSchema = z.object({
   // unchanged); the profile UI derives displayName from them on save.
   firstName: z.string().nullable().optional(),
   lastName: z.string().nullable().optional(),
-  photoUrl: z.string().nullable().optional(),
+  // A Storage object path, never a URL — same *Path convention as
+  // Upload/Customization (BE-03/04). Renamed from `photoUrl` (FE-04): the
+  // profile-picture route used to mint and persist a 7-day signed URL
+  // directly onto this field, which silently broke after a week. A stale
+  // pre-existing `photoUrl`-shaped value on an old doc is simply never
+  // read again under this field name, not actively migrated.
+  photoPath: z.string().nullable().optional(),
   // ISO date string (e.g. '1990-05-14'), not a Firestore Timestamp — a
   // date of birth has no time-of-day or timezone component to carry.
   dob: z.string().nullable().optional(),

@@ -90,6 +90,31 @@ describe('CheckoutPage', () => {
     expect(screen.getByRole('heading', { name: /sign in to check out/i })).toBeInTheDocument();
   });
 
+  it('[FE-01] shows an empty-cart state instead of the payment form when the cart is empty', async () => {
+    const { useCart } = await import('../../lib/cart-context');
+    vi.mocked(useCart).mockReturnValueOnce({
+      items: [],
+      totalPaise: 0,
+      totalCount: 0,
+      addItem: vi.fn(),
+      removeItem: vi.fn(),
+      updateQuantity: vi.fn(),
+    });
+    render(<CheckoutPage />);
+    expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
+    expect(screen.queryByText('Place order')).not.toBeInTheDocument();
+  });
+
+  it('[FE-01] shows an error instead of silently re-enabling the button when create-order throws', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('network down'));
+    render(<CheckoutPage />);
+
+    fireEvent.click(await screen.findByText('Place order'));
+
+    expect(await screen.findByText('Could not place your order. Please check your connection and try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Place order')).toBeInTheDocument();
+  });
+
   it('calls create-order and opens Razorpay Checkout on "Place order"', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

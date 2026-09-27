@@ -12,6 +12,10 @@ import { EmptyState } from '../../../../components/ui/EmptyState';
 
 export default function WishlistPage() {
   const [products, setProducts] = useState<Product[] | null>(null);
+  // [FE-01] A failed Firestore read used to leave `products` at null
+  // forever — the skeleton never resolved to either the list or an empty
+  // state, with no way for the customer to retry.
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -21,14 +25,33 @@ export default function WishlistPage() {
         return;
       }
       const db = getFirestore(getFirebaseApp());
-      Promise.all(ids.map((id) => getDoc(doc(db, 'products', id)))).then((snapshots) => {
-        setProducts(snapshots.filter((s) => s.exists()).map((s) => s.data() as Product));
-      });
+      Promise.all(ids.map((id) => getDoc(doc(db, 'products', id))))
+        .then((snapshots) => {
+          setProducts(snapshots.filter((s) => s.exists()).map((s) => s.data() as Product));
+        })
+        .catch(() => setLoadError(true));
     };
     load();
     return subscribeToWishlist(load);
   }, []);
 
+  if (loadError) {
+    return (
+      <EmptyState
+        title="Could not load your wishlist"
+        message="Check your connection and try again."
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors"
+          >
+            Try again
+          </button>
+        }
+      />
+    );
+  }
   if (products === null) return <PageSkeleton />;
 
   return (
