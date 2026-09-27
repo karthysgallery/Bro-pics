@@ -313,6 +313,23 @@ export default function CheckoutPage() {
               <span>Shipping</span>
               <span>{shippingCost === 0 ? 'Free' : formatPaise(shippingCost)}</span>
             </div>
+            {/* [FE-19] A discount was previously only mentioned in the
+                coupon-success message below, never as its own line in
+                this breakdown — the one place a customer actually checks
+                the math against the total. */}
+            {appliedCoupon && (appliedCoupon.discountPaise > 0 || appliedCoupon.freeShipping) && (
+              <div className="flex justify-between text-accent">
+                <span>Discount ({appliedCoupon.code})</span>
+                <span>
+                  {appliedCoupon.discountPaise > 0 && `-${formatPaise(appliedCoupon.discountPaise)}`}
+                  {appliedCoupon.discountPaise > 0 && appliedCoupon.freeShipping && ' + '}
+                  {appliedCoupon.freeShipping && 'free shipping'}
+                </span>
+              </div>
+            )}
+            {/* No tax/GST line — matches this project's own locked-in
+                decision (PROJECT_STATUS.md §2): GST is not enabled at
+                launch, and order.taxLines stays empty until it is. */}
             <div className="flex justify-between font-semibold text-ink">
               <span>Total</span>
               <span>{formatPaise(grandTotal)}</span>

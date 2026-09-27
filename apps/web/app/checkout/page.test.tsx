@@ -221,6 +221,33 @@ describe('CheckoutPage', () => {
     expect(screen.queryByText(/payment failed/i)).not.toBeInTheDocument();
   });
 
+  it('[FE-18] retrying after a failed payment reuses the SAME idempotency key, not a fresh one — create-order resolves it to the same order', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place order'));
+    await waitFor(() => expect(mockOnSnapshot).toHaveBeenCalled());
+    const firstCall = mockFetch.mock.calls.find((c) => c[0] === '/api/checkout/create-order')!;
+    const firstKey = JSON.parse(firstCall[1].body as string).idempotencyKey;
+    expect(firstKey).toBeTruthy();
+
+    const [, onNext] = mockOnSnapshot.mock.calls[0];
+    onNext({ exists: () => true, data: () => ({ status: 'pending_payment', paymentStatus: 'failed', orderNo: 'BP-2026-00001' }) });
+    fireEvent.click(await screen.findByText('Try again'));
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+    });
+    fireEvent.click(await screen.findByText('Place order'));
+
+    await waitFor(() => expect(mockFetch.mock.calls.filter((c) => c[0] === '/api/checkout/create-order')).toHaveLength(2));
+    const secondCall = mockFetch.mock.calls.filter((c) => c[0] === '/api/checkout/create-order')[1];
+    expect(JSON.parse(secondCall[1].body as string).idempotencyKey).toBe(firstKey);
+  });
+
   it('unsubscribes the order listener on unmount', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -279,6 +306,26 @@ describe('CheckoutPage coupon UI', () => {
     fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'NEW10' } });
     fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     expect(await findCouponAppliedMessage('NEW10')).toBeInTheDocument();
+  });
+
+  it('[FE-19] shows the discount as its own line in the price breakdown, not just the coupon-success message', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ valid: true, discountPaise: 10000, freeShipping: false }) });
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'NEW10' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await findCouponAppliedMessage('NEW10');
+    expect(screen.getByText((_, el) => el?.textContent === 'Discount (NEW10)')).toBeInTheDocument();
+    expect(screen.getByText('-₹100')).toBeInTheDocument();
+  });
+
+  it('[FE-19] shows "free shipping" in the discount line for a free-shipping coupon', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ valid: true, discountPaise: 0, freeShipping: true }) });
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByLabelText(/coupon code/i), { target: { value: 'FREESHIP' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    await findCouponAppliedMessage('FREESHIP');
+    expect(screen.getByText((_, el) => el?.textContent === 'Discount (FREESHIP)')).toBeInTheDocument();
+    expect(screen.getByText('free shipping')).toBeInTheDocument();
   });
 
   it('shows a human-readable message for an invalid coupon', async () => {

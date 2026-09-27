@@ -10,6 +10,7 @@ import { addToWishlist } from '../../lib/wishlist';
 import { useToast } from '../ui/Toast';
 import { resolveMediaUrl, getIdTokenSafe } from '../../lib/resolve-media-url';
 import { AuthContext } from '../../lib/auth-context';
+import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -35,6 +36,14 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const [movingKey, setMovingKey] = useState<string | null>(null);
   const [stockByVariant, setStockByVariant] = useState<Map<string, VariantStock>>(new Map());
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(new Map());
+  // [FE-20] Fetched once per drawer open (not on every keystroke/qty
+  // change) — settings.freeShippingThreshold rarely changes, and this
+  // avoids a network round trip on every cart mutation.
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    getShippingSettingsClient().then((settings) => setFreeShippingThreshold(settings.freeShippingThreshold));
+  }, [isOpen]);
 
   // Cart items only ever carry a Storage path (previewPath), never a URL —
   // a signed URL persisted at add-to-cart time would be expired for any
@@ -191,6 +200,26 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         </div>
 
         <div className="border-t border-line p-4 shrink-0">
+          {/* [FE-20] Only meaningful once there's a real threshold to
+              compare against, and hidden once already qualified — a
+              "you already have free shipping" bar with nothing left to
+              close is just noise. */}
+          {items.length > 0 && freeShippingThreshold !== null && freeShippingThreshold > 0 && totalPaise < freeShippingThreshold && (
+            <div className="mb-3">
+              <p className="text-2xs text-ink/70 mb-1">
+                Add <strong>{formatPaise(freeShippingThreshold - totalPaise)}</strong> more for free shipping
+              </p>
+              <div className="h-1.5 rounded-full bg-tint overflow-hidden" role="progressbar" aria-valuenow={Math.round((totalPaise / freeShippingThreshold) * 100)} aria-valuemin={0} aria-valuemax={100}>
+                <div
+                  className="h-full bg-gold rounded-full transition-[width]"
+                  style={{ width: `${Math.min(100, (totalPaise / freeShippingThreshold) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {items.length > 0 && freeShippingThreshold !== null && totalPaise >= freeShippingThreshold && (
+            <p className="mb-3 text-2xs font-medium text-accent">You&apos;ve unlocked free shipping</p>
+          )}
           <div className="flex items-center justify-between text-sm">
             <span className="text-ink/70">Subtotal</span>
             <span data-testid="cart-subtotal" className="text-base font-semibold text-ink">

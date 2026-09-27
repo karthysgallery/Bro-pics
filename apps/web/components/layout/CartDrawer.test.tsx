@@ -4,6 +4,21 @@ import { CartDrawer } from './CartDrawer';
 import { CartProvider, useCart } from '../../lib/cart-context';
 import { useEffect } from 'react';
 
+vi.mock('../../lib/shipping-settings-client', () => ({
+  getShippingSettingsClient: vi.fn(),
+}));
+import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
+
+// A high default threshold no pre-existing test's cart total reaches —
+// keeps every test written before FE-20 unaffected (the progress bar
+// stays hidden for an unmet-threshold cart only because none of those
+// tests assert on it, not because this mock is a no-op).
+vi.mocked(getShippingSettingsClient).mockResolvedValue({
+  freeShippingThreshold: 999999999,
+  flatShippingCharge: 5000,
+  expressShippingCharge: 15000,
+});
+
 // CartProvider no longer hard-requires an AuthProvider ancestor â€” it reads
 // auth state via AuthContext directly with a null-safe fallback, treating
 // "no AuthProvider" the same as "signed out". No auth mocking needed here.
@@ -186,5 +201,56 @@ describe('CartDrawer', () => {
     const link = screen.getByText('Checkout');
     expect(link).toBeInTheDocument();
     expect(link.closest('a')).toHaveAttribute('href', '/checkout');
+  });
+});
+
+describe('[FE-20] free-shipping progress bar', () => {
+  it('shows how much more is needed when the cart is below the threshold', async () => {
+    vi.mocked(getShippingSettingsClient).mockResolvedValue({
+      freeShippingThreshold: 200000,
+      flatShippingCharge: 5000,
+      expressShippingCharge: 15000,
+    });
+    render(
+      <Providers>
+        <SeedCart />
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </Providers>
+    );
+    // SeedCart: 79900 * 2 = 159800 paise subtotal, 200000 threshold -> 40200 (₹402) short.
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent === 'Add ₹402 more for free shipping')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '80');
+  });
+
+  it('shows "unlocked free shipping" and no progress bar once the threshold is met', async () => {
+    vi.mocked(getShippingSettingsClient).mockResolvedValue({
+      freeShippingThreshold: 100000, // below SeedCart's 159800
+      flatShippingCharge: 5000,
+      expressShippingCharge: 15000,
+    });
+    render(
+      <Providers>
+        <SeedCart />
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </Providers>
+    );
+    expect(await screen.findByText("You've unlocked free shipping")).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('shows neither state for an empty cart', async () => {
+    vi.mocked(getShippingSettingsClient).mockResolvedValue({
+      freeShippingThreshold: 200000,
+      flatShippingCharge: 5000,
+      expressShippingCharge: 15000,
+    });
+    render(
+      <Providers>
+        <CartDrawer isOpen={true} onClose={() => {}} />
+      </Providers>
+    );
+    await Promise.resolve();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText("You've unlocked free shipping")).not.toBeInTheDocument();
   });
 });
