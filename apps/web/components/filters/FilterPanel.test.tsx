@@ -63,6 +63,71 @@ describe('FilterPanel', () => {
     expect(onToggleColour).toHaveBeenCalledWith('Black');
   });
 
+  it('[FE-30] renders rating and availability filters only when their handlers are given', () => {
+    render(
+      <FilterPanel
+        availableSizes={[]}
+        availableColours={[]}
+        availableOrientations={[]}
+        selectedSizes={[]}
+        selectedColours={[]}
+        selectedOrientations={[]}
+        onToggleSize={vi.fn()}
+        onToggleColour={vi.fn()}
+        onToggleOrientation={vi.fn()}
+        onClearAll={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Rating')).not.toBeInTheDocument();
+    expect(screen.queryByText('Availability')).not.toBeInTheDocument();
+  });
+
+  it('[FE-30] calls onSetMinRating with the clicked rating, and clears it on a second click', () => {
+    const onSetMinRating = vi.fn();
+    render(
+      <FilterPanel
+        availableSizes={[]}
+        availableColours={[]}
+        availableOrientations={[]}
+        selectedSizes={[]}
+        selectedColours={[]}
+        selectedOrientations={[]}
+        onToggleSize={vi.fn()}
+        onToggleColour={vi.fn()}
+        onToggleOrientation={vi.fn()}
+        onClearAll={vi.fn()}
+        minRating={4}
+        onSetMinRating={onSetMinRating}
+      />
+    );
+    fireEvent.click(screen.getByText('3★ & up'));
+    expect(onSetMinRating).toHaveBeenCalledWith(3);
+    fireEvent.click(screen.getByText('4★ & up'));
+    expect(onSetMinRating).toHaveBeenCalledWith(null);
+  });
+
+  it('[FE-30] calls onToggleInStockOnly when the availability checkbox is toggled', () => {
+    const onToggleInStockOnly = vi.fn();
+    render(
+      <FilterPanel
+        availableSizes={[]}
+        availableColours={[]}
+        availableOrientations={[]}
+        selectedSizes={[]}
+        selectedColours={[]}
+        selectedOrientations={[]}
+        onToggleSize={vi.fn()}
+        onToggleColour={vi.fn()}
+        onToggleOrientation={vi.fn()}
+        onClearAll={vi.fn()}
+        inStockOnly={false}
+        onToggleInStockOnly={onToggleInStockOnly}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('In stock only'));
+    expect(onToggleInStockOnly).toHaveBeenCalledOnce();
+  });
+
   it('calls onClearAll when Clear All is clicked', () => {
     const onClearAll = vi.fn();
     render(

@@ -21,7 +21,11 @@ export interface ProductQueryPlan {
   offset: number;
 }
 
-const PAGE_SIZE = 20;
+// [FE-30] Exported so a page rendering pagination controls (total pages =
+// ceil(totalCount / PAGE_SIZE)) uses the exact same page size this plan
+// actually queries with, rather than a second hardcoded copy that could
+// drift from it.
+export const PAGE_SIZE = 20;
 
 const SORT_MAP: Record<
   NonNullable<SearchFilters['sort']>,

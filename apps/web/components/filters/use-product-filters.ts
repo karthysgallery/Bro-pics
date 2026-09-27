@@ -13,9 +13,19 @@ export interface ProductFiltersController {
   toggleMaterial: (material: string) => URLSearchParams;
   toggleOrientation: (orientation: string) => URLSearchParams;
   setPriceRange: (minPrice: number, maxPrice: number) => URLSearchParams;
+  // [FE-30] minRating/inStockOnly/sort were already parsed by
+  // parseSearchFilters (and already understood by the backend's own
+  // buildProductQueryPlan) — nothing here exposed a way to actually SET
+  // them from the UI until now.
+  setMinRating: (minRating: number | null) => URLSearchParams;
+  toggleInStockOnly: () => URLSearchParams;
+  setSort: (sort: SearchFilters['sort']) => URLSearchParams;
   clearAll: () => URLSearchParams;
 }
 
+// [FE-30] Every filter change resets to page 1 — without this, toggling a
+// filter while on page 3 of the OLD result set could land the visitor on a
+// page number that no longer exists for the new, smaller result set.
 function toggleListParam(params: URLSearchParams, key: string, value: string): URLSearchParams {
   const next = new URLSearchParams(params);
   const current = next.getAll(key);
@@ -26,6 +36,7 @@ function toggleListParam(params: URLSearchParams, key: string, value: string): U
     for (const v of current) next.append(key, v);
     next.append(key, value);
   }
+  next.delete('page');
   return next;
 }
 
@@ -43,6 +54,28 @@ export function useProductFilters(params: URLSearchParams): ProductFiltersContro
       const next = new URLSearchParams(params);
       next.set('minPrice', String(minPrice));
       next.set('maxPrice', String(maxPrice));
+      next.delete('page');
+      return next;
+    },
+    setMinRating: (minRating) => {
+      const next = new URLSearchParams(params);
+      if (minRating === null) next.delete('minRating');
+      else next.set('minRating', String(minRating));
+      next.delete('page');
+      return next;
+    },
+    toggleInStockOnly: () => {
+      const next = new URLSearchParams(params);
+      if (next.get('inStockOnly') === 'true') next.delete('inStockOnly');
+      else next.set('inStockOnly', 'true');
+      next.delete('page');
+      return next;
+    },
+    setSort: (sort) => {
+      const next = new URLSearchParams(params);
+      if (!sort || sort === 'relevance') next.delete('sort');
+      else next.set('sort', sort);
+      next.delete('page');
       return next;
     },
     clearAll: () => new URLSearchParams(),

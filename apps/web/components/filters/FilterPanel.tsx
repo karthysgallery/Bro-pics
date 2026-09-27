@@ -12,7 +12,19 @@ interface FilterPanelProps {
   onToggleColour: (colour: string) => void;
   onToggleOrientation: (orientation: string) => void;
   onClearAll: () => void;
+  // [FE-30] minRating/inStockOnly were already understood end to end by
+  // parseSearchFilters and the backend's own buildProductQueryPlan —
+  // nothing here ever exposed a way to actually set them, so both are
+  // optional and default to "not shown"/off rather than becoming a
+  // required prop every existing FilterPanel caller/test would need to
+  // update just to keep building.
+  minRating?: number | null;
+  onSetMinRating?: (minRating: number | null) => void;
+  inStockOnly?: boolean;
+  onToggleInStockOnly?: () => void;
 }
+
+const RATING_OPTIONS = [4, 3];
 
 const ORIENTATION_LABELS: Record<string, string> = {
   portrait: 'Portrait',
@@ -31,6 +43,10 @@ export function FilterPanel({
   onToggleColour,
   onToggleOrientation,
   onClearAll,
+  minRating = null,
+  onSetMinRating,
+  inStockOnly = false,
+  onToggleInStockOnly,
 }: FilterPanelProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +97,32 @@ export function FilterPanel({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {onSetMinRating && (
+        <div>
+          <h4 className="text-xs font-semibold text-ink/70 mb-2">Rating</h4>
+          <div className="flex flex-wrap gap-2">
+            {RATING_OPTIONS.map((rating) => (
+              <Chip
+                key={rating}
+                label={`${rating}★ & up`}
+                active={minRating === rating}
+                onClick={() => onSetMinRating(minRating === rating ? null : rating)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {onToggleInStockOnly && (
+        <div>
+          <h4 className="text-xs font-semibold text-ink/70 mb-2">Availability</h4>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={inStockOnly} onChange={onToggleInStockOnly} />
+            In stock only
+          </label>
         </div>
       )}
     </div>
