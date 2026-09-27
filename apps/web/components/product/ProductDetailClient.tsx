@@ -23,6 +23,7 @@ import { getOrCreateSessionId } from '../../lib/session-id';
 import { validateSlotsComplete, validateTextFieldsComplete } from '../../lib/editor-validation';
 import { fontFamilyForKey } from '../../lib/text-personalization-options';
 import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../../lib/personalization-draft';
+import { useToast } from '../ui/Toast';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
 import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
@@ -85,6 +86,7 @@ const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant }: ProductDetailClientProps) {
+  const { showToast } = useToast();
   const firstInStock = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
   const [selectedColour, setSelectedColour] = useState(firstInStock?.frameColour ?? '');
@@ -394,32 +396,49 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   useEffect(() => {
     if (!template || templateIdRef.current === template.id) return;
     templateIdRef.current = template.id;
-    setSlots((prev) => {
-      if (prev.size === 0) return prev;
-      const next = new Map<number, SlotState>();
-      for (const [slotIndex, slot] of prev.entries()) {
-        const rect = template.printableRects.find((r) => r.slotIndex === slotIndex);
-        if (!rect) {
-          next.set(slotIndex, slot);
-          continue;
-        }
-        const canvasRect = fractionRectToCanvasRect(rect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
-        const scale = coverScaleForRotation(canvasRect.width, canvasRect.height, slot.widthPx, slot.heightPx, slot.rotationDeg);
-        const { offsetX, offsetY } = centeredOffsetForRotation(
-          canvasRect.width,
-          canvasRect.height,
-          slot.widthPx,
-          slot.heightPx,
-          scale,
-          slot.rotationDeg
-        );
-        const effectiveDpi = selectedVariant
-          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
-          : slot.effectiveDpi;
-        next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi });
+    if (slots.size === 0) return;
+    // [FE-13] Built directly off the `slots` state this effect already
+    // closes over (not inside setSlots's own updater function) — a
+    // functional setState updater is not guaranteed to run synchronously
+    // before the code after the setSlots(...) call, so anything that
+    // needs to be observable right after (like deciding whether to toast)
+    // has to be computed here, not mutated from inside the updater.
+    const worsenedSlots: number[] = [];
+    const next = new Map<number, SlotState>();
+    for (const [slotIndex, slot] of slots.entries()) {
+      const rect = template.printableRects.find((r) => r.slotIndex === slotIndex);
+      if (!rect) {
+        next.set(slotIndex, slot);
+        continue;
       }
-      return next;
-    });
+      const canvasRect = fractionRectToCanvasRect(rect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+      const scale = coverScaleForRotation(canvasRect.width, canvasRect.height, slot.widthPx, slot.heightPx, slot.rotationDeg);
+      const { offsetX, offsetY } = centeredOffsetForRotation(
+        canvasRect.width,
+        canvasRect.height,
+        slot.widthPx,
+        slot.heightPx,
+        scale,
+        slot.rotationDeg
+      );
+      const effectiveDpi = selectedVariant
+        ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
+        : slot.effectiveDpi;
+      const tierOrder = { green: 0, amber: 1, red: 2 } as const;
+      if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
+        worsenedSlots.push(slotIndex);
+      }
+      next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi, confirmedLowDpi: false });
+    }
+    setSlots(next);
+    if (worsenedSlots.length > 0) {
+      showToast(
+        worsenedSlots.length === 1
+          ? `Photo quality for slot ${worsenedSlots[0] + 1} is lower on this size/colour — check before adding to cart.`
+          : `Photo quality for ${worsenedSlots.length} slots is lower on this size/colour — check before adding to cart.`,
+        'info'
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template?.id]);
 

@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import type { Product, Variant, ProductMedia, FrameTemplate } from '@bro-pics/shared';
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
+import { ToastProvider } from '../ui/Toast';
 import { saveDraft, loadDraft, clearDraft } from '../../lib/personalization-draft';
 
 // The inline editor now lives inside ProductDetailClient (canvas + upload +
@@ -632,6 +633,74 @@ describe('ProductDetailClient — inline personalization', () => {
 
       expect(await screen.findByText(/couldn't restore your saved design/i)).toBeInTheDocument();
       expect(loadDraft('prod_1', 'var_1')).toBeNull();
+    });
+  });
+
+  describe('[FE-13] variant switching refits the transform and warns on a DPI regression', () => {
+    // Deliberately extreme, aspect-matched print sizes (both exactly the
+    // upload's own 0.8 aspect ratio, so cover-fit never crops and the DPI
+    // math reduces to a plain widthPx/printWidthIn division) — this
+    // removes any ambiguity about which tier either variant actually
+    // lands in, rather than relying on a hand-derived DPI for the
+    // shared `variant` fixture's specific 8x10in size.
+    const tinyPrintVariant: Variant = { ...variant, id: 'var_tiny', frameColour: 'black', widthIn: 1, heightIn: 1.25 };
+    const hugePrintVariant: Variant = { ...variant, id: 'var_huge', frameColour: 'white', widthIn: 100, heightIn: 125 };
+
+    it('refits the transform and shows a toast when switching variant makes the DPI tier worse', async () => {
+      mockUploadFetch({ widthPx: 2400, heightPx: 3000 });
+      render(
+        <CartProvider>
+          <ToastProvider>
+            <ProductDetailClient
+              product={makeProduct()}
+              variants={[tinyPrintVariant, hugePrintVariant]}
+              media={media}
+              initialTemplatesByVariant={templatesByVariantProp([
+                makeTemplate({ variantId: 'var_tiny' }),
+                makeTemplate({ id: 'ft_2', variantId: 'var_huge' }),
+              ])}
+            />
+          </ToastProvider>
+        </CartProvider>
+      );
+
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByText(/lower quality print|too low resolution/i)).not.toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole('button', { name: 'white' }));
+
+      await waitFor(() => expect(screen.getByText('Too low resolution for a sharp print')).toBeInTheDocument());
+      expect(await screen.findByText(/photo quality for slot 1 is lower on this size\/colour/i)).toBeInTheDocument();
+    });
+
+    it('does not show a warning when the switch does not make the DPI tier worse', async () => {
+      mockUploadFetch({ widthPx: 2400, heightPx: 3000 });
+      render(
+        <CartProvider>
+          <ToastProvider>
+            <ProductDetailClient
+              product={makeProduct()}
+              variants={[tinyPrintVariant, { ...tinyPrintVariant, id: 'var_tiny_2', frameColour: 'white' }]}
+              media={media}
+              initialTemplatesByVariant={templatesByVariantProp([
+                makeTemplate({ variantId: 'var_tiny' }),
+                makeTemplate({ id: 'ft_tiny_2', variantId: 'var_tiny_2' }), // same geometry, different doc id
+              ])}
+            />
+          </ToastProvider>
+        </CartProvider>
+      );
+
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      await screen.findByRole('button', { name: /add to cart/i });
+
+      fireEvent.click(screen.getByRole('button', { name: 'white' }));
+
+      expect(screen.queryByText(/photo quality.*is lower on this size\/colour/i)).not.toBeInTheDocument();
     });
   });
 
