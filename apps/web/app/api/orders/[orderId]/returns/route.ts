@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
@@ -73,6 +74,18 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const evidencePaths = Array.isArray(body?.evidencePaths)
     ? body.evidencePaths.filter((p: unknown): p is string => typeof p === 'string')
     : [];
+  // [FE-23] A damage claim with no photo is nothing staff can act on
+  // beyond taking the customer's word for it — required specifically for
+  // 'damaged', not every category (a "changed my mind" return has
+  // nothing to photograph).
+  if (reasonCategory === 'damaged' && evidencePaths.length === 0) {
+    return NextResponse.json({ error: 'At least one evidence photo is required for a damage claim' }, { status: 400 });
+  }
+  const preferredResolutionParsed = z.enum(['refund', 'replacement']).nullable().optional().safeParse(body?.preferredResolution);
+  if (!preferredResolutionParsed.success) {
+    return NextResponse.json({ error: 'Invalid preferredResolution' }, { status: 400 });
+  }
+  const preferredResolution = preferredResolutionParsed.data;
 
   const { orderId } = await params;
   const db = getFirestore(getAdminApp());
@@ -119,6 +132,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     resolvedAt: null,
     refundAmount: order.total,
     ...(evidencePaths.length > 0 && { evidencePaths }),
+    ...(preferredResolution && { preferredResolution }),
   });
   await returnRef.set(returnDoc);
 

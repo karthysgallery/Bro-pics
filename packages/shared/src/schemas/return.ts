@@ -57,6 +57,14 @@ export const ReturnSchema = z.object({
   // here, logged rather than silently narrowed, same treatment as every
   // other master-plan-gated item this session.
   resolution: z.enum(['refund', 'replacement']).nullable().optional(),
+  // [FE-23] The CUSTOMER's stated preference at request time — distinct
+  // from `resolution` above, which is staff's own later DECISION and
+  // stays authoritative regardless of what the customer asked for (a
+  // preference for "replacement" doesn't obligate staff to grant one,
+  // same as any other e-commerce return flow). Optional: a return filed
+  // before this field existed, or one where the customer left it
+  // unset, simply carries no stated preference.
+  preferredResolution: z.enum(['refund', 'replacement']).nullable().optional(),
 });
 
 export type ReturnStatus = z.infer<typeof ReturnStatusSchema>;

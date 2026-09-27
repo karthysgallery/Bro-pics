@@ -46,6 +46,7 @@ export * from './orders/invoice-number';
 export * from './orders/status-transitions';
 export * from './orders/transition-order';
 export * from './orders/order-status-event';
+export * from './orders/order-status-labels';
 export * from './orders/return-status-transitions';
 export * from './editor-geometry';
 export * from './shipping/shipping-provider';

@@ -145,6 +145,9 @@ describe('OrderDetailPage', () => {
     const returnButton = await screen.findByText('Return product');
     fireEvent.click(returnButton);
 
+    // [FE-23] Not testing the evidence-upload flow here — a non-damage
+    // category keeps this test focused on the general submit flow.
+    fireEvent.change(screen.getByLabelText(/what's the issue/i), { target: { value: 'other' } });
     fireEvent.change(await screen.findByLabelText(/tell us more/i), { target: { value: 'Frame arrived damaged' } });
     fireEvent.click(screen.getByText('Submit return request'));
 
@@ -153,8 +156,49 @@ describe('OrderDetailPage', () => {
       '/api/orders/order_4/returns',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ reasonCategory: 'damaged', reason: 'Frame arrived damaged' }),
+        body: JSON.stringify({ reasonCategory: 'other', reason: 'Frame arrived damaged', preferredResolution: 'refund' }),
       })
     );
+  });
+
+  it('[FE-23] blocks a damage claim with no evidence photo, then uploads one and submits it with the return', async () => {
+    const mockFetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/returns/evidence')) {
+        return { ok: true, json: async () => ({ path: 'returns/order_4/ev1/evidence.jpg' }) };
+      }
+      if (options?.method === 'POST') {
+        return { ok: true, json: async () => ({ return: { status: 'requested', reason: 'Cracked frame' } }) };
+      }
+      return { ok: true, json: async () => ({ returns: [] }) };
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ orderNo: 'BP-2026-00004', status: 'delivered', total: 50000 }),
+    });
+    mockGetDocs.mockResolvedValueOnce({ docs: [] }).mockResolvedValueOnce({ docs: [] });
+
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_4' })} />);
+    fireEvent.click(await screen.findByText('Return product'));
+    // Default category is 'damaged' — the evidence field should already
+    // be showing without switching anything.
+    fireEvent.change(await screen.findByLabelText(/tell us more/i), { target: { value: 'Cracked frame' } });
+    fireEvent.click(screen.getByText('Submit return request'));
+
+    expect(await screen.findByText('Please attach at least one photo of the damage.')).toBeInTheDocument();
+    expect(mockFetch.mock.calls.some((c) => c[1]?.method === 'POST')).toBe(false);
+
+    const fileInput = screen.getByLabelText(/photo of the damage/i) as HTMLInputElement;
+    const file = new File(['x'], 'damage.jpg', { type: 'image/jpeg' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByText('Submit return request'));
+
+    expect(await screen.findByText('Return requested')).toBeInTheDocument();
+    const evidenceCall = mockFetch.mock.calls.find((c) => c[0] === '/api/orders/order_4/returns/evidence');
+    const returnCall = mockFetch.mock.calls.find((c) => c[0] === '/api/orders/order_4/returns' && c[1]?.method === 'POST');
+    expect(evidenceCall).toBeDefined();
+    expect(returnCall).toBeDefined();
+    expect(JSON.parse(returnCall![1]!.body as string).evidencePaths).toEqual(['returns/order_4/ev1/evidence.jpg']);
   });
 });

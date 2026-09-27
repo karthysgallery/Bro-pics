@@ -74,6 +74,10 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
+  // [FE-23]
+  const [returnPreferredResolution, setReturnPreferredResolution] = useState<'refund' | 'replacement'>('refund');
+  const [returnEvidenceFile, setReturnEvidenceFile] = useState<File | null>(null);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   // [FE-01] Distinct from "still loading" — a genuinely missing order (a
   // stale/mistyped link) or a failed read (offline, permission-denied)
   // both used to leave `order` at null forever, showing an infinite
@@ -203,14 +207,48 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
   const handleRequestReturn = async () => {
     if (!orderId || !user || !returnReason.trim()) return;
+    // [FE-23] A damage claim needs at least one evidence photo — matches
+    // the server's own requirement (POST /api/orders/[orderId]/returns),
+    // checked here too so the customer sees why before submitting, not
+    // just a generic 400 back.
+    if (returnReasonCategory === 'damaged' && !returnEvidenceFile) {
+      setReturnError('Please attach at least one photo of the damage.');
+      return;
+    }
     setIsSubmittingReturn(true);
     setReturnError(null);
     try {
       const idToken = await user.getIdToken();
+      let evidencePaths: string[] = [];
+      if (returnEvidenceFile) {
+        setIsUploadingEvidence(true);
+        try {
+          const formData = new FormData();
+          formData.set('file', returnEvidenceFile);
+          const evidenceRes = await fetch(`/api/orders/${orderId}/returns/evidence`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${idToken}` },
+            body: formData,
+          });
+          if (!evidenceRes.ok) {
+            setReturnError('Could not upload the evidence photo — please try again.');
+            return;
+          }
+          const evidenceBody = await evidenceRes.json();
+          evidencePaths = [evidenceBody.path];
+        } finally {
+          setIsUploadingEvidence(false);
+        }
+      }
       const response = await fetch(`/api/orders/${orderId}/returns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ reasonCategory: returnReasonCategory, reason: returnReason.trim() }),
+        body: JSON.stringify({
+          reasonCategory: returnReasonCategory,
+          reason: returnReason.trim(),
+          preferredResolution: returnPreferredResolution,
+          ...(evidencePaths.length > 0 && { evidencePaths }),
+        }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -334,6 +372,45 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                 rows={3}
                 className="rounded-md border border-line px-3 py-2 text-sm text-ink"
               />
+
+              {returnReasonCategory === 'damaged' && (
+                <>
+                  <label htmlFor="return-evidence" className="text-sm font-medium text-ink">
+                    Photo of the damage (required)
+                  </label>
+                  <input
+                    id="return-evidence"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setReturnEvidenceFile(e.target.files?.[0] ?? null)}
+                    className="text-sm text-ink"
+                  />
+                  {returnEvidenceFile && <p className="text-xs text-ink/60">Selected: {returnEvidenceFile.name}</p>}
+                </>
+              )}
+
+              <span className="text-sm font-medium text-ink">Preferred resolution</span>
+              <div className="flex gap-4" role="radiogroup" aria-label="Preferred resolution">
+                <label className="flex items-center gap-1.5 text-sm text-ink">
+                  <input
+                    type="radio"
+                    name="preferred-resolution"
+                    checked={returnPreferredResolution === 'refund'}
+                    onChange={() => setReturnPreferredResolution('refund')}
+                  />
+                  Refund
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-ink">
+                  <input
+                    type="radio"
+                    name="preferred-resolution"
+                    checked={returnPreferredResolution === 'replacement'}
+                    onChange={() => setReturnPreferredResolution('replacement')}
+                  />
+                  Replacement
+                </label>
+              </div>
+
               {returnError && <p className="text-sm text-alert">{returnError}</p>}
               <div className="flex gap-2">
                 <button
@@ -341,7 +418,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   disabled={isSubmittingReturn || !returnReason.trim()}
                   className="rounded-md bg-alert text-paper px-4 py-2 text-sm font-semibold disabled:opacity-50"
                 >
-                  {isSubmittingReturn ? 'Submitting…' : 'Submit return request'}
+                  {isUploadingEvidence ? 'Uploading photo…' : isSubmittingReturn ? 'Submitting…' : 'Submit return request'}
                 </button>
                 <button
                   onClick={() => setShowReturnForm(false)}

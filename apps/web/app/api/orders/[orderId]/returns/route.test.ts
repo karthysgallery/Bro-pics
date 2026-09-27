@@ -62,7 +62,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
 
   it('returns 401 when signed out', async () => {
     mockGetUserId.mockResolvedValueOnce(null);
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(401);
   });
 
@@ -103,24 +103,79 @@ describe('POST /api/orders/[orderId]/returns', () => {
     );
   });
 
+  it('[FE-23] rejects a damage claim with no evidence photos', async () => {
+    // Short-circuits before any Firestore read at all (a pure body-shape
+    // check, same as the reason/reasonCategory checks above it) — no
+    // mockOrderGet/mockEventsWhereGet queued here, since queuing an
+    // unconsumed mockResolvedValueOnce would leak into the NEXT test
+    // (vi.clearAllMocks() clears call history, not queued once-values).
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    const response = await POST(
+      makeRequest({ reasonCategory: 'damaged', reason: 'Frame arrived damaged' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(400);
+    expect(mockReturnSet).not.toHaveBeenCalled();
+  });
+
+  it('[FE-23] does not require evidence for a non-damage category', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+    const response = await POST(
+      makeRequest({ reasonCategory: 'changed_mind', reason: 'Changed my mind' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('[FE-23] stores the customer\'s preferredResolution on the return doc', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+    const response = await POST(
+      makeRequest({ reasonCategory: 'quality', reason: 'Not as expected', preferredResolution: 'replacement' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(200);
+    expect(mockReturnSet).toHaveBeenCalledWith(expect.objectContaining({ preferredResolution: 'replacement' }));
+  });
+
+  it('[FE-23] rejects an invalid preferredResolution value', async () => {
+    // Same short-circuit-before-any-Firestore-read reasoning as the
+    // no-evidence test above.
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    const response = await POST(
+      makeRequest({ reasonCategory: 'quality', reason: 'Not as expected', preferredResolution: 'store_credit' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(400);
+  });
+
   it('returns 404 when the order does not exist', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: false });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 404 when the order belongs to someone else', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...DELIVERED_ORDER, userId: 'someone_else' }) });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(404);
   });
 
   it('returns 400 when the order is not delivered', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => ({ ...DELIVERED_ORDER, status: 'shipped' }) });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(400);
   });
 
@@ -128,7 +183,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
     mockReturnsWhereGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({}) }] });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(409);
   });
 
@@ -139,7 +194,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
       empty: false,
       docs: [{ data: () => ({ status: 'delivered', createdAt: '2020-01-01T00:00:00.000Z' }) }],
     });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(400);
     expect(mockReturnSet).not.toHaveBeenCalled();
   });
@@ -152,7 +207,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
       docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
     });
 
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'Frame arrived damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'Frame arrived damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
 
     expect(response.status).toBe(200);
     expect(mockReturnSet).toHaveBeenCalledWith(
@@ -162,7 +217,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
 
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 5 });
-    const response = await POST(makeRequest({ reasonCategory: 'damaged', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
     expect(response.status).toBe(429);
     expect(mockGetUserId).not.toHaveBeenCalled();
   });
