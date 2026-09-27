@@ -72,4 +72,26 @@ describe('ProductDetailClient', () => {
     expect(screen.getByText('₹999')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'White' })).not.toBeInTheDocument();
   });
+
+  it('[FE-32] distinguishes a backorder variant from a truly out-of-stock one, rather than showing "Out of stock" for both', () => {
+    const backorderVariants: Variant[] = [{ ...variants[0], stockStatus: 'backorder' }];
+    render(
+      <Providers>
+        <ProductDetailClient product={product} variants={backorderVariants} media={media} initialTemplatesByVariant={{}} />
+      </Providers>
+    );
+    expect(screen.getByText(/On backorder/)).toBeInTheDocument();
+    expect(screen.queryByText('Out of stock')).not.toBeInTheDocument();
+  });
+
+  it('[FE-32] still shows "Out of stock" (not backorder wording) for a genuinely out-of-stock variant', () => {
+    const outOfStockVariants: Variant[] = [{ ...variants[0], stockStatus: 'out_of_stock' }];
+    render(
+      <Providers>
+        <ProductDetailClient product={product} variants={outOfStockVariants} media={media} initialTemplatesByVariant={{}} />
+      </Providers>
+    );
+    expect(screen.getByText('Out of stock')).toBeInTheDocument();
+    expect(screen.queryByText(/On backorder/)).not.toBeInTheDocument();
+  });
 });

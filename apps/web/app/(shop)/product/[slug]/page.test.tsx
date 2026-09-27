@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../../../lib/firestore-product-detail', () => ({
   getProductBySlug: vi.fn(),
   getRelatedProducts: vi.fn(),
+  getFrequentlyBoughtTogether: vi.fn(),
   getAllActiveProductSlugs: vi.fn(),
   getCategoryById: vi.fn(),
 }));

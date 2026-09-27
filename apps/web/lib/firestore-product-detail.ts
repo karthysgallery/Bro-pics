@@ -62,6 +62,24 @@ export async function getRelatedProducts(
     .slice(0, limit);
 }
 
+// [FE-32] Product.frequentlyBoughtTogetherIds (ABE-04) is an admin-curated
+// list — sidesteps the collectionGroup-query-over-every-order's-items
+// problem lib/recommendations.ts's own doc comment already logged as a
+// real backend gap (no collectionGroup index for `items` exists, and this
+// environment can't deploy one). A curated list needs no such query: just
+// fetch each referenced product by id. Ignores an id that no longer
+// resolves to an active product (deleted/archived since it was curated)
+// rather than erroring the whole page over it.
+export async function getFrequentlyBoughtTogether(product: Product): Promise<Product[]> {
+  const ids = product.frequentlyBoughtTogetherIds ?? [];
+  if (ids.length === 0) return [];
+  const db = getFirestore(getAdminApp());
+  const docs = await Promise.all(ids.map((id) => db.collection('products').doc(id).get()));
+  return docs
+    .filter((d) => d.exists && (d.data() as Product).isActive)
+    .map((d) => serializeDoc(d.data() as Product));
+}
+
 export async function getAllActiveProductSlugs(): Promise<string[]> {
   const db = getFirestore(getAdminApp());
   const snapshot = await db.collection('products').where('isActive', '==', true).get();

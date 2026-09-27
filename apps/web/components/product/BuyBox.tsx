@@ -117,7 +117,21 @@ export function BuyBox({
   ];
   const price = selectedVariant?.price ?? product.minPrice;
   const compareAtPrice = selectedVariant?.compareAtPrice;
-  const inStock = selectedVariant ? selectedVariant.stockStatus === 'in_stock' : product.inStock;
+  // [FE-32] `inStock` gates purchasability (Add to cart, the delivery
+  // timeline) — unchanged: 'backorder' stays non-purchasable here, same
+  // as 'out_of_stock', since deciding backorder items ARE orderable is a
+  // real business-rule call this task's own text doesn't make, only asks
+  // for the messaging to reflect the variant's actual stockStatus. The
+  // MESSAGE below is what previously collapsed 'backorder' and
+  // 'out_of_stock' into the identical "Out of stock" text.
+  const stockStatus = selectedVariant ? selectedVariant.stockStatus : product.inStock ? 'in_stock' : 'out_of_stock';
+  const inStock = stockStatus === 'in_stock';
+  const stockMessage =
+    stockStatus === 'in_stock'
+      ? `Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} days`
+      : stockStatus === 'backorder'
+        ? 'On backorder — dispatch will take longer than usual'
+        : 'Out of stock';
 
   const handleAddToCart = () => {
     if (!selectedVariant || !onAddToCart) return;
@@ -181,9 +195,7 @@ export function BuyBox({
       <VariantSelector label="Size" options={sizes} selected={selectedSize} onSelect={onSelectSize} />
       <VariantSelector label="Frame design" options={colours} selected={selectedColour} onSelect={onSelectColour} display="swatch" />
 
-      <p className={`text-sm mb-3 ${inStock ? 'text-accent font-medium' : 'text-ink/50'}`}>
-        {inStock ? `Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} days` : 'Out of stock'}
-      </p>
+      <p className={`text-sm mb-3 ${inStock ? 'text-accent font-medium' : 'text-ink/50'}`}>{stockMessage}</p>
 
       {inStock && (
         <DeliveryTimeline dispatchDaysMin={product.dispatchDaysMin} dispatchDaysMax={product.dispatchDaysMax} />

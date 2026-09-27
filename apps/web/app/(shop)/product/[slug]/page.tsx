@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import {
   getProductBySlug,
   getRelatedProducts,
+  getFrequentlyBoughtTogether,
   getAllActiveProductSlugs,
   getCategoryById,
   getFrameTemplatesByProductId,
@@ -59,8 +60,9 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   if (!detail) notFound();
 
   const { product, variants, media, reviews } = detail;
-  const [relatedProducts, category, templatesByVariant] = await Promise.all([
+  const [relatedProducts, frequentlyBoughtTogether, category, templatesByVariant] = await Promise.all([
     getRelatedProducts(product.categoryId, product.id, 8),
+    getFrequentlyBoughtTogether(product),
     getCategoryById(product.categoryId),
     getFrameTemplatesByProductId(product.id),
   ]);
@@ -116,6 +118,9 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
       <ProductTabs product={product} variants={variants} />
       <VideoRail media={media} />
       <ReviewsSection product={product} reviews={reviews} />
+      {frequentlyBoughtTogether.length > 0 && (
+        <RelatedProducts products={frequentlyBoughtTogether} title="Frequently Bought Together" />
+      )}
       <RelatedProducts products={relatedProducts} />
       <RecentlyViewedRail excludeProductId={product.id} />
     </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ReviewsSection } from './ReviewsSection';
 import type { Product, Review } from '@bro-pics/shared';
 
@@ -40,5 +40,35 @@ describe('ReviewsSection', () => {
   it('shows an empty state when there are no reviews', () => {
     render(<ReviewsSection product={{ ...product, ratingCount: 0 }} reviews={[]} />);
     expect(screen.getByText(/no reviews yet/i)).toBeInTheDocument();
+  });
+
+  it('[FE-32] shows no "with photos" filter when no review has a photo', () => {
+    render(<ReviewsSection product={product} reviews={reviews} />);
+    expect(screen.queryByText(/With photos only/)).not.toBeInTheDocument();
+  });
+
+  it('[FE-32] filters to only reviews with photos when the checkbox is checked, and shows a thumbnail', () => {
+    const reviewsWithPhoto: Review[] = [
+      ...reviews,
+      {
+        id: 'r3',
+        productId: 'p1',
+        userId: 'u3',
+        rating: 5,
+        title: 'With a photo',
+        body: 'See attached',
+        media: ['reviews/p1/r3/photo.jpg'],
+        isVerified: false,
+        status: 'approved',
+        createdAt: new Date('2026-03-01'),
+      },
+    ];
+    render(<ReviewsSection product={product} reviews={reviewsWithPhoto} />);
+    expect(screen.getByText('With photos only (1)')).toBeInTheDocument();
+    expect(screen.getAllByTestId('review-title')).toHaveLength(3);
+
+    fireEvent.click(screen.getByLabelText(/With photos only/));
+    expect(screen.getAllByTestId('review-title')).toHaveLength(1);
+    expect(screen.getByTestId('review-title').textContent).toBe('With a photo');
   });
 });

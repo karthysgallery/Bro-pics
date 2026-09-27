@@ -45,4 +45,11 @@ describe('ProductTabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Size Chart' }));
     expect(screen.getByText('8 × 10 in')).toBeInTheDocument();
   });
+
+  it('[FE-32] switches to the Shipping & Returns tab and shows the real dispatch estimate', () => {
+    render(<ProductTabs product={product} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Shipping & Returns' }));
+    expect(screen.getByText(/dispatches in 3-5 days/i)).toBeInTheDocument();
+    expect(screen.getByText('Read the full shipping policy')).toBeInTheDocument();
+  });
 });

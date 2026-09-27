@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Product, Variant } from '@bro-pics/shared';
 import { PictureQualityGuide } from './PictureQualityGuide';
 import { SizeChart } from './SizeChart';
+import { ShippingReturnsAccordion } from './ShippingReturnsAccordion';
 
 const TAB_LABELS = [
   'Description',
@@ -13,6 +14,7 @@ const TAB_LABELS = [
   'Picture Quality Guide',
   'Care',
   'FAQ',
+  'Shipping & Returns',
 ] as const;
 type Tab = (typeof TAB_LABELS)[number];
 
@@ -66,6 +68,10 @@ export function ProductTabs({ product, variants = [] }: { product: Product; vari
             </div>
           ))}
         </div>
+      )}
+
+      {activeTab === 'Shipping & Returns' && (
+        <ShippingReturnsAccordion dispatchDaysMin={product.dispatchDaysMin} dispatchDaysMax={product.dispatchDaysMax} />
       )}
     </div>
   );
