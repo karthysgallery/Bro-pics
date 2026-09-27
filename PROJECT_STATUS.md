@@ -459,4 +459,36 @@ Separately, the live-verification loose ends below remain open (none block furth
 - Razorpay's live test-mode verification (deferred since Phase 4 Plan B) — free signup, no KYC needed.
 - The role-claim script's live bootstrap run (deferred since Phase 4 Plan C, still relevant after Phase 5 Plan B) — grant a real account `admin` and confirm the staff order-tracking/production-queue flow works end to end against real data. This also unblocks live verification of Phase 6 Plan A's review moderation and Plan B's coupon-at-checkout flows (see §5), both of which need a real customer + staff account, not new code.
 - ~~The dev-mode-only Personalization Editor crash found in the 2026-09-05 verification pass~~ — first worked around 2026-09-13 via an error boundary (masking the crash, not fixing it), then **actually fixed 2026-09-15** by removing `react-konva`/`konva`/`use-image`/`react-reconciler` entirely and replacing `EditorCanvas` with a plain `<canvas>` 2D-context implementation (native `Image()` loading with the same anonymous/fallback CORS dance, pointer events for drag, manual transform math kept in lockstep with the existing `lib/editor-geometry.ts` derivations). No reconciler, so the whole crash class is now structurally impossible — verified live in `next dev` (upload, zoom, rotate all work, no console errors, no error-boundary fallback). `EditorCanvasErrorBoundary` is kept as a generic safety net, not a crash-specific workaround.
+
+---
+
+## 8. Backend items still PENDING — need a human/manual step, not agent-buildable
+
+Every backend task list (`BACKEND_TASKS.md`, `ADMIN_BACKEND_TASKS.md`) is otherwise fully exhausted. What's below is the complete remaining set, consolidated from the per-task notes above so it doesn't need re-deriving from 450+ lines of history. Nothing in this list needs new code from an agent session — each needs one of: a real external account/credential, live GCP/Firebase console access, or a client/business decision this session has no authority to make.
+
+**A. Needs a real external provider account (code is ready, nothing to build until the account exists):**
+- **BE-26/28/29/30** — Email/SMS/WhatsApp notification adapters + wiring every lifecycle event to them. Needs: an email provider (+ SPF/DKIM/DMARC domain verification), an SMS/WhatsApp provider with India DLT registration and WhatsApp template approval. The `notificationOutbox` state machine (BE-27/27a) and `notificationTemplates` API (ABE-25) are both already built and proven end-to-end — only the actual send adapter is missing.
+- **BE-31** — GA4 + BigQuery analytics stack, server-side `payment_success`/`payment_failed` events. Needs a live GA4 property in the client's name. (Distinct from ABE-28/29/30's own-Firestore analytics, which are done — see §7.)
+- **BE-33** — Distributed rate limiting. Needs a real Redis-class shared store; the current in-memory per-instance limiter is a real but proportionate gap at this project's target traffic, not urgent.
+- **Razorpay live-mode payments** — blocked on Razorpay KYC in the client's name. Test-mode checkout is fully built; only *live* payments are blocked.
+
+**B. Needs live Firebase/GCP console access this session doesn't have (one-time operational steps against the real `bropics-app` project, not code):**
+- Enable the Phone auth provider in the `bropics-app` Console + register a test number (blocks live phone-OTP verification, and transitively Razorpay/staff/review/coupon live verification below).
+- Razorpay test-mode live round-trip verification (free signup, no KYC) — checkout code is built and unit-tested, never run against a real Razorpay sandbox.
+- Bootstrap the first real `admin`/`super_admin` account (`pnpm --filter @bro-pics/seed set-user-role`) — unblocks live verification of staff order-tracking, the production queue, review moderation, and coupon-at-checkout.
+- Deploy the `onReviewWritten` Cloud Function trigger to the live project (built, unit-tested, never deployed).
+- A handful of Firestore composite indexes that only matter at real data volume were declared but this environment cannot run `firebase deploy --only firestore:indexes` to confirm live build state (e.g. cross-product SKU uniqueness, `status`+`userId`+`placedAt` combined order filtering) — logged per-task above (ABE-06, ABE-15) where they came up; each has a working narrower query in the meantime.
+- **BE-38** — actual daily managed backups / PITR / weekly export / bucket soft-delete configuration on the live project, plus a real restore drill into a staging project (no staging Firebase project exists yet). The runbook itself (`docs/ops/restore-runbook.md`) is written.
+- **BE-37** — the CI pipeline is wired and running, but its `npm audit` gate will fail on first real run (9 high + 1 critical advisories in the current dependency tree) — needs a human to triage/update/accept each one; not something to silently patch over.
+- **BE-41** — full live verification/launch rehearsal (every sub-step above, plus a real deploy+rollback rehearsal) — the one item on `BACKEND_TASKS.md` still fully open, entirely because it's a checklist of the console/account steps above, not a code task.
+
+**C. Needs a client/business decision (schema is ready or deliberately left open; a wrong guess here would need re-work later):**
+- Full product catalogue (sizes/colours/materials/prices/photo-slot counts), frame mockup/mask images per variant, text-personalization limits (fonts/character counts), exact shipping rules (free-shipping threshold, flat charge, zone variance), and HSN code(s) for printed photo frames — all still the original spec's own open items (§6).
+- Whether `orientation` becomes an independently priced/stocked SKU dimension, and the fate of `Variant.material` as a schema field (ABE-06) — both explicitly left for the client, not guessed at.
+- The `on_hold` order status's transitions, and the master-plan PDF's own missing homepage-section content types (ABE-16 slice 2, ABE-17) — blocked on the inaccessible 58-page master-plan PDF/`tasks.zip`, not a technical gap.
+- Account-deletion data-retention policy (cascade vs. anonymize vs. retain) — flagged in this codebase's own notes as "a business/legal decision, not a technical one" (BE-35).
+- Return-after-rejection policy (can a customer retry a rejected return?) and item-level (vs. whole-order) return refunds/replacement-shipment workflow — both flagged, not fixed speculatively (BE-19/BE-23).
+- `products`/`categories`/`settings` Firestore rules are world-readable regardless of status/content — fine while catalogue data is placeholder-only, but **must be revisited before real GSTIN or draft-product data goes live** — a go-live gate, not a bug.
+
+None of the above blocks starting frontend work — they're either external-account/console steps against the live project, or client decisions that don't change any API shape already built.
 - Once a live Google Analytics property exists (client-pending), the one remaining Phase 6 item (analytics) can be built.
