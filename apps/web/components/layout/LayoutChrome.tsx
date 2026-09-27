@@ -11,10 +11,23 @@ import { AnnouncementBar } from './AnnouncementBar';
 interface LayoutChromeProps {
   categories: Category[];
   announcementBar?: { text: string; link?: string } | null;
+  headerSettings?: { navLinks: { label: string; href: string }[] } | null;
+  footerSettings?: {
+    columns: { title: string; links: { label: string; href: string }[] }[];
+    socialLinks: { platform: string; url: string }[];
+  } | null;
+  storeSettings?: { name: string; supportPhone: string } | null;
   children: ReactNode;
 }
 
-export function LayoutChrome({ categories, announcementBar = null, children }: LayoutChromeProps) {
+export function LayoutChrome({
+  categories,
+  announcementBar = null,
+  headerSettings = null,
+  footerSettings = null,
+  storeSettings = null,
+  children,
+}: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   return (
@@ -22,9 +35,9 @@ export function LayoutChrome({ categories, announcementBar = null, children }: L
       {announcementBar && (
         <AnnouncementBar text={announcementBar.text} link={announcementBar.link} />
       )}
-      <Header categories={categories} onCartClick={() => setIsCartOpen(true)} />
+      <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
       <main>{children}</main>
-      <Footer />
+      <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
       <WhatsAppButton
         phoneNumber={process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}

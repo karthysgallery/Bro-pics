@@ -8,7 +8,7 @@ import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
-import { getAnnouncementBarSettings } from '../lib/firestore-settings';
+import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings } from '../lib/firestore-settings';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
 // One UI typeface for the whole interface. Manrope holds up at the 11–14px
@@ -77,6 +77,35 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     console.error('Failed to load announcement bar settings:', error);
   }
 
+  // [FE-27] Header nav extras, footer columns/social links, and the
+  // support-phone contact line all fall back to null on either an
+  // absent doc or a read error — Header.tsx/Footer.tsx already treat
+  // null as "use my own hardcoded defaults", same as announcementBar
+  // above.
+  let headerSettings: { navLinks: { label: string; href: string }[] } | null = null;
+  try {
+    headerSettings = await getHeaderSettings();
+  } catch (error) {
+    console.error('Failed to load header settings:', error);
+  }
+
+  let footerSettings: {
+    columns: { title: string; links: { label: string; href: string }[] }[];
+    socialLinks: { platform: string; url: string }[];
+  } | null = null;
+  try {
+    footerSettings = await getFooterSettings();
+  } catch (error) {
+    console.error('Failed to load footer settings:', error);
+  }
+
+  let storeSettings: { name: string; supportPhone: string } | null = null;
+  try {
+    storeSettings = await getStoreSettings();
+  } catch (error) {
+    console.error('Failed to load store settings:', error);
+  }
+
   return (
     <html lang="en" className={`${sansFont.variable} ${displayFont.variable} ${textFieldFontVariables}`}>
       <body className="bg-field text-ink font-sans antialiased">
@@ -85,7 +114,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <WishlistSync />
             <NotificationsSync />
             <CartProvider>
-              <LayoutChrome categories={categories} announcementBar={announcementBar}>
+              <LayoutChrome
+                categories={categories}
+                announcementBar={announcementBar}
+                headerSettings={headerSettings}
+                footerSettings={footerSettings}
+                storeSettings={storeSettings}
+              >
                 {children}
               </LayoutChrome>
             </CartProvider>

@@ -1,5 +1,18 @@
 import Link from 'next/link';
 
+interface FooterProps {
+  // [FE-27] From settings/footer (ABE-24's write API had no reader until
+  // now). Replaces the four hardcoded FooterColumn defs below AND the
+  // hardcoded social-links row when an admin has actually configured it.
+  settings?: {
+    columns: { title: string; links: { label: string; href: string }[] }[];
+    socialLinks: { platform: string; url: string }[];
+  } | null;
+  // [FE-27] From settings/store — shown as a contact line in the brand
+  // column when an admin has set one.
+  supportPhone?: string;
+}
+
 const categoryLinks = [
   { label: 'Shop all', href: '/category' },
   { label: 'Frames & Wall Décor', href: '/category/frames-wall-decor' },
@@ -50,7 +63,25 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
   );
 }
 
-export function Footer() {
+export function Footer({ settings = null, supportPhone }: FooterProps = {}) {
+  const columns =
+    settings && settings.columns.length > 0
+      ? settings.columns
+      : [
+          { title: 'Shop', links: categoryLinks },
+          { title: 'Help', links: helpLinks },
+          { title: 'Account', links: accountLinks },
+          { title: 'Legal', links: legalLinks },
+        ];
+  const socialLinks =
+    settings && settings.socialLinks.length > 0
+      ? settings.socialLinks
+      : [
+          { platform: 'Instagram', url: '#' },
+          { platform: 'Facebook', url: '#' },
+          { platform: 'WhatsApp', url: '#' },
+        ];
+
   return (
     <footer className="bg-ink text-paper mt-12">
       <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-10 grid grid-cols-2 md:grid-cols-5 gap-8">
@@ -59,6 +90,7 @@ export function Footer() {
           <p className="text-sm text-paper/65 mb-4">
             Personalized photo frames, printed and delivered across India.
           </p>
+          {supportPhone && <p className="text-sm text-paper/65 mb-4">Call us: {supportPhone}</p>}
           <form className="text-sm">
             <label htmlFor="newsletter-email" className="block mb-2 text-paper/70">
               Get new arrivals and offers
@@ -80,10 +112,9 @@ export function Footer() {
           </form>
         </div>
 
-        <FooterColumn title="Shop" links={categoryLinks} />
-        <FooterColumn title="Help" links={helpLinks} />
-        <FooterColumn title="Account" links={accountLinks} />
-        <FooterColumn title="Legal" links={legalLinks} />
+        {columns.map((column) => (
+          <FooterColumn key={column.title} title={column.title} links={column.links} />
+        ))}
       </div>
 
       <div className="border-t border-paper/15">
@@ -104,9 +135,11 @@ export function Footer() {
         <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-2xs text-paper/50">
           <span>© {new Date().getFullYear()} BroPics. All rights reserved.</span>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-gold transition-colors">Instagram</a>
-            <a href="#" className="hover:text-gold transition-colors">Facebook</a>
-            <a href="#" className="hover:text-gold transition-colors">WhatsApp</a>
+            {socialLinks.map((social) => (
+              <a key={social.platform} href={social.url} className="hover:text-gold transition-colors">
+                {social.platform}
+              </a>
+            ))}
           </div>
         </div>
       </div>

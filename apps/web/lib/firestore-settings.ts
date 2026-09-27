@@ -75,6 +75,57 @@ export async function getGstSettings(): Promise<{ gstEnabled: boolean; taxRate: 
   return { gstEnabled, taxRate, ...(gstin && { gstin }) };
 }
 
+// [FE-27] Same per-key settings/{key} convention as the others above.
+// Defaults to null — no admin UI wrote settings/header before ABE-24, so
+// the header keeps its own hardcoded extra menu items (see Header.tsx)
+// until an admin deliberately configures this.
+export async function getHeaderSettings(): Promise<{ navLinks: { label: string; href: string }[] } | null> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('header').get();
+  if (!doc.exists) return null;
+
+  const data = doc.data();
+  const navLinks = data?.navLinks;
+  if (!Array.isArray(navLinks)) return null;
+  return {
+    navLinks: navLinks.filter(
+      (l): l is { label: string; href: string } =>
+        l && typeof l.label === 'string' && l.label.length > 0 && typeof l.href === 'string' && l.href.length > 0
+    ),
+  };
+}
+
+// [FE-27] Same convention. Defaults to null — the footer keeps its own
+// hardcoded columns/social links (see Footer.tsx) until an admin
+// deliberately configures settings/footer.
+export async function getFooterSettings(): Promise<{
+  columns: { title: string; links: { label: string; href: string }[] }[];
+  socialLinks: { platform: string; url: string }[];
+} | null> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('footer').get();
+  if (!doc.exists) return null;
+
+  const data = doc.data();
+  const columns = Array.isArray(data?.columns) ? data.columns : [];
+  const socialLinks = Array.isArray(data?.socialLinks) ? data.socialLinks : [];
+  if (columns.length === 0 && socialLinks.length === 0) return null;
+  return { columns, socialLinks };
+}
+
+// [FE-27] Same convention, for the footer's/contact page's "contact us"
+// phone number. Defaults to null — no admin UI wrote settings/store
+// before ABE-24.
+export async function getStoreSettings(): Promise<{ name: string; supportPhone: string } | null> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('store').get();
+  if (!doc.exists) return null;
+
+  const data = doc.data();
+  if (typeof data?.name !== 'string' || typeof data?.supportPhone !== 'string') return null;
+  return { name: data.name, supportPhone: data.supportPhone };
+}
+
 // [BE-23] Same per-key settings/{key} convention as the others above.
 // Defaults to [] — no admin UI exists yet to curate this list, so
 // search-suggestions simply shows nothing extra for a blank query until

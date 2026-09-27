@@ -13,6 +13,12 @@ import { AccountModal } from './AccountModal';
 interface HeaderProps {
   categories: Category[];
   onCartClick: () => void;
+  // [FE-27] From settings/header (ABE-24's write API had no reader until
+  // now). Replaces the hardcoded 'Best sellers'/'How it works' tail below
+  // when an admin has actually configured it — the category-derived links
+  // ahead of them stay untouched either way, since those are already real
+  // per-category data, not hardcoded copy.
+  extraNavLinks?: { label: string; href: string }[];
 }
 
 // Fixed tier heights (80 + 48). Deterministic rather than content-driven so
@@ -40,7 +46,7 @@ function ActionItem({
   );
 }
 
-export function Header({ categories, onCartClick }: HeaderProps) {
+export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) {
   const { totalCount } = useCart();
   const { user } = useAuth();
   const pathname = usePathname();
@@ -63,8 +69,12 @@ export function Header({ categories, onCartClick }: HeaderProps) {
   const navLinks = [
     { href: '/category', label: 'Shop all' },
     ...topLevel.map((c) => ({ href: `/category/${c.slug}`, label: c.name })),
-    { href: '/#best-sellers', label: 'Best sellers' },
-    { href: '/how-it-works', label: 'How it works' },
+    ...(extraNavLinks && extraNavLinks.length > 0
+      ? extraNavLinks
+      : [
+          { href: '/#best-sellers', label: 'Best sellers' },
+          { href: '/how-it-works', label: 'How it works' },
+        ]),
   ];
 
   const isActive = (href: string) =>

@@ -122,4 +122,34 @@ describe('Header', () => {
 
     vi.doUnmock('../../lib/auth-context');
   });
+
+  it('[FE-27] replaces the hardcoded "Best sellers"/"How it works" tail with settings-driven extra nav links, keeping the category links', () => {
+    render(
+      <AuthProvider>
+        <CartProvider>
+          <Header
+            categories={categories}
+            onCartClick={() => {}}
+            extraNavLinks={[{ label: 'Gift ideas', href: '/category/gifts' }]}
+          />
+        </CartProvider>
+      </AuthProvider>
+    );
+    expect(screen.getAllByText('Gift ideas').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Frames & Wall Décor').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Best sellers')).not.toBeInTheDocument();
+    expect(screen.queryByText('How it works')).not.toBeInTheDocument();
+  });
+
+  it('[FE-27] falls back to the hardcoded tail when no extraNavLinks are given', () => {
+    render(
+      <AuthProvider>
+        <CartProvider>
+          <Header categories={categories} onCartClick={() => {}} />
+        </CartProvider>
+      </AuthProvider>
+    );
+    expect(screen.getAllByText('Best sellers').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('How it works').length).toBeGreaterThan(0);
+  });
 });
