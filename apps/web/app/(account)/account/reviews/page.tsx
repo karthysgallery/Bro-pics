@@ -38,9 +38,17 @@ const STATUS_LABELS: Record<ReviewStatus, string> = {
   rejected: 'Not published',
 };
 
+interface PendingReviewItem {
+  productId: string;
+  title: string;
+  orderId: string;
+  slug: string;
+}
+
 export default function MyReviewsPage() {
   const { user } = useAuth();
   const [reviews, setReviews] = useState<Review[] | null>(null);
+  const [pendingItems, setPendingItems] = useState<PendingReviewItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +74,28 @@ export default function MyReviewsPage() {
     })();
   }, [user]);
 
+  // [FE-38] "Pending review" prompts — every delivered order's items,
+  // minus anything already reviewed. Kept as a separate, best-effort
+  // fetch: a failure here shouldn't block the existing "Your reviews"
+  // list from loading, so it fails silently (an empty prompt list) rather
+  // than sharing `error` with the fetch above.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/reviews/pending', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!response.ok) return;
+        const body = await response.json();
+        setPendingItems(body.pending ?? []);
+      } catch {
+        // Best-effort — see comment above.
+      }
+    })();
+  }, [user]);
+
   if (!user) return <SignedOutNotice action="see your reviews" />;
 
   return (
@@ -74,6 +104,25 @@ export default function MyReviewsPage() {
         ← Back to account
       </Link>
       <h1 className="text-2xl font-semibold text-ink">Your reviews</h1>
+
+      {pendingItems.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-ink">Pending reviews</h2>
+          <ul className="flex flex-col gap-3">
+            {pendingItems.map((item) => (
+              <Card key={item.productId} as="li" className="flex items-center justify-between gap-3">
+                <span className="text-sm text-ink">{item.title}</span>
+                <Link
+                  href={`/product/${item.slug}#reviews`}
+                  className="rounded-full bg-gold text-ink px-3.5 py-1.5 text-sm font-semibold hover:bg-gold-deep transition-colors whitespace-nowrap"
+                >
+                  Write a review
+                </Link>
+              </Card>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {error && <p className="text-sm text-alert">{error}</p>}
 
