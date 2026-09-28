@@ -90,7 +90,18 @@ export function VideoRail({ media, title = 'In motion' }: VideoRailProps) {
             muted
             loop
             playsInline
-            preload="auto"
+            // [FE-45] Was `preload="auto"` — every clip on the rail
+            // eagerly buffered its full video, including every one below
+            // the fold that the IntersectionObserver above wouldn't even
+            // play yet. `"metadata"` fetches just enough to decode
+            // dimensions/a first frame (the browser then shows that frame
+            // natively, the same visual role a `poster` image would play)
+            // without downloading the rest until visibility triggers
+            // `.play()`. A real `poster` attribute would be better still,
+            // but needs its own thumbnail asset — `ProductMedia` has no
+            // such field today (no admin path populates one), so this is
+            // the change achievable without inventing that data.
+            preload="metadata"
             controls={prefersReducedMotion}
             disablePictureInPicture
             aria-label="Product clip"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { FrameTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
 import {
   coverScale,
@@ -26,8 +27,17 @@ import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../
 import { useToast } from '../ui/Toast';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
-import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
+import type { SlotState, TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
+
+// [FE-45] PersonalizationEditor (TextFieldEditor, SlotPicker, ClipartPicker,
+// and their own dependencies — EditorCanvas is already its own dynamic
+// import inside PersonalizationEditor itself) was a static import here,
+// so its JS shipped in the main PDP bundle even before `showInlineEditor`
+// ever becomes true. A type-only import above keeps SlotState/
+// TextFieldValueMap available at zero runtime cost (types are erased);
+// only the component itself is deferred.
+const PersonalizationEditor = dynamic(() => import('../editor/PersonalizationEditor').then((mod) => mod.PersonalizationEditor));
 
 interface ProductDetailClientProps {
   product: Product;

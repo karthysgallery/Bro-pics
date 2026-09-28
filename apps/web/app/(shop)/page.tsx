@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import type { HomepageSection } from '@bro-pics/shared';
 import {
   getActiveHomepageSections,
@@ -16,9 +17,19 @@ import { OfferStrip } from '../../components/home/OfferStrip';
 import { HowItWorks } from '../../components/home/HowItWorks';
 import { WhyUs } from '../../components/home/WhyUs';
 import { HomeReviewsCarousel } from '../../components/home/HomeReviewsCarousel';
-import { VideoRail } from '../../components/product/VideoRail';
-import { RecentlyViewedRail } from '../../components/product/RecentlyViewedRail';
 import { Section } from '../../components/ui/Section';
+
+// [FE-45] Both are 'use client' components rendered only below the fold
+// (Products in Motion, and the very last section on the page) — dynamic()
+// defers their JS to a separate chunk instead of shipping it in the
+// initial page bundle every visitor downloads whether or not they ever
+// scroll that far. HeroSlider is deliberately NOT deferred this way — it's
+// the page's own LCP element, so it needs to be ready immediately, not
+// lazy.
+const VideoRail = dynamic(() => import('../../components/product/VideoRail').then((mod) => mod.VideoRail));
+const RecentlyViewedRail = dynamic(() =>
+  import('../../components/product/RecentlyViewedRail').then((mod) => mod.RecentlyViewedRail)
+);
 
 export const revalidate = 60;
 
