@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { formatPaise } from '../../lib/format-price';
 import { HelpCallout } from './HelpCallout';
+import { PincodeChecker } from '../checkout/PincodeChecker';
 
 const ORIENTATION_LABELS: Record<Orientation, string> = {
   portrait: 'Portrait',
@@ -200,6 +201,11 @@ export function BuyBox({
       {inStock && (
         <DeliveryTimeline dispatchDaysMin={product.dispatchDaysMin} dispatchDaysMax={product.dispatchDaysMax} />
       )}
+
+      {/* [FE-33] BE-21's delivery-estimate endpoint existed but nothing
+          called it — a customer had no way to check delivery to their
+          own pincode before adding to cart. */}
+      <PincodeChecker className="mb-4" />
 
       <div className="flex items-center gap-3 mb-4">
         <span className="text-sm text-ink/70">Qty</span>

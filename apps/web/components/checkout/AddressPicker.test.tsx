@@ -35,6 +35,18 @@ describe('AddressPicker', () => {
     expect(await screen.findByText('Save address')).toBeInTheDocument();
   });
 
+  it('[FE-33] calls onSelectAddress with the full address (including pincode) alongside onSelect', async () => {
+    mockGetDocs.mockResolvedValueOnce(
+      makeSnapshot([
+        { id: 'addr_1', label: 'Home', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', line2: null, isDefault: true },
+      ])
+    );
+    const onSelectAddress = vi.fn();
+    render(<AddressPicker userId="user_1" onSelect={vi.fn()} onSelectAddress={onSelectAddress} />);
+    await screen.findByText(/Home/);
+    expect(onSelectAddress).toHaveBeenCalledWith(expect.objectContaining({ id: 'addr_1', pincode: '600001' }));
+  });
+
   it('calls onSelect when a different saved address is chosen', async () => {
     mockGetDocs.mockResolvedValueOnce(
       makeSnapshot([

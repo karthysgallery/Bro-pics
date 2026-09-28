@@ -12,9 +12,13 @@ const TYPE_LABEL: Record<string, string> = { home: 'Home', work: 'Work', other: 
 interface AddressPickerProps {
   userId: string;
   onSelect: (addressId: string) => void;
+  // [FE-33] Optional — lets a caller (checkout) react to the full selected
+  // Address (its pincode, for the delivery-estimate check) without every
+  // existing caller/test that only wants the id needing to change.
+  onSelectAddress?: (address: Address) => void;
 }
 
-export function AddressPicker({ userId, onSelect }: AddressPickerProps) {
+export function AddressPicker({ userId, onSelect, onSelectAddress }: AddressPickerProps) {
   const [addresses, setAddresses] = useState<Address[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -28,6 +32,7 @@ export function AddressPicker({ userId, onSelect }: AddressPickerProps) {
       if (preferred) {
         setSelectedId(preferred.id);
         onSelect(preferred.id);
+        onSelectAddress?.(preferred);
       } else {
         setShowForm(true);
       }
@@ -38,12 +43,16 @@ export function AddressPicker({ userId, onSelect }: AddressPickerProps) {
   const handleSelect = (id: string) => {
     setSelectedId(id);
     onSelect(id);
+    const address = addresses?.find((a) => a.id === id);
+    if (address) onSelectAddress?.(address);
   };
 
   const handleNewAddressSaved = (address: Address) => {
     setAddresses((prev) => [...(prev ?? []), address]);
     setShowForm(false);
-    handleSelect(address.id);
+    setSelectedId(address.id);
+    onSelect(address.id);
+    onSelectAddress?.(address);
   };
 
   if (addresses === null) {

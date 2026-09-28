@@ -10,6 +10,8 @@ import { getFirebaseApp } from '../../lib/firebase-client';
 import { useAuth } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
 import { AddressPicker } from '../../components/checkout/AddressPicker';
+import { PincodeChecker } from '../../components/checkout/PincodeChecker';
+import type { Address } from '@bro-pics/shared';
 import { loadRazorpayCheckoutScript } from '../../lib/razorpay-checkout-script';
 import { calculateShipping, DELIVERY_METHODS, DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '../../lib/checkout-calc';
 import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
@@ -44,6 +46,7 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const { items, totalPaise } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
+  const [selectedAddressPincode, setSelectedAddressPincode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -259,7 +262,18 @@ export default function CheckoutPage() {
         </p>
       ) : (
         <>
-          <AddressPicker userId={user.uid} onSelect={setAddressId} />
+          <AddressPicker
+            userId={user.uid}
+            onSelect={setAddressId}
+            onSelectAddress={(address: Address) => setSelectedAddressPincode(address.pincode)}
+          />
+
+          {/* [FE-33] BE-21's delivery-estimate endpoint existed but nothing
+              called it — auto-checked against the selected address's own
+              pincode, rather than asking the customer to retype it. */}
+          {selectedAddressPincode && (
+            <PincodeChecker initialPincode={selectedAddressPincode} autoCheck className="-mt-2" />
+          )}
 
           <div className="flex flex-col gap-1">
             {items.map((item) => (
