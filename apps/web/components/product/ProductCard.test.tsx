@@ -75,14 +75,17 @@ describe('ProductCard', () => {
   });
 
   it('renders no hover image element when hoverImageUrl is null', () => {
-    render(<ProductCard product={{ ...product, hoverImageUrl: null }} />);
-    const images = screen.getAllByRole('img');
-    expect(images).toHaveLength(1);
+    // [FE-44] Queries actual <img> elements directly rather than
+    // getAllByRole('img') — RatingStars' rating widget also correctly
+    // exposes role="img" (its own accessible-name fix), which would
+    // otherwise be miscounted as a product image here.
+    const { container } = render(<ProductCard product={{ ...product, hoverImageUrl: null }} />);
+    expect(container.querySelectorAll('img')).toHaveLength(1);
   });
 
   it('renders a placeholder box instead of an <img> when primaryImageUrl is empty', () => {
-    render(<ProductCard product={{ ...product, primaryImageUrl: '', hoverImageUrl: null }} />);
-    expect(screen.queryAllByRole('img')).toHaveLength(0);
+    const { container } = render(<ProductCard product={{ ...product, primaryImageUrl: '', hoverImageUrl: null }} />);
+    expect(container.querySelectorAll('img')).toHaveLength(0);
     expect(screen.queryByAltText('Classic Wooden Photo Frame')).not.toBeInTheDocument();
   });
 });

@@ -219,49 +219,14 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
       </div>
 
       {(isFocused || suggestions.length > 0) && (
-        <div
-          id="search-listbox"
-          role="listbox"
-          className="absolute top-full left-0 right-0 bg-paper border border-line rounded-2xl mt-2 py-2 z-50 shadow-lg shadow-ink/5"
-        >
-          {showRecent && (
-            <div className="pb-1">
-              <p className="px-4 pb-1 text-2xs text-ink/50">Recent searches</p>
-              {recentSearches.map((recent, index) => (
-                <button
-                  key={recent}
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={index === highlightedIndex}
-                  type="button"
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => setQuery(recent)}
-                  className={`block w-full px-4 py-2 text-left text-sm text-ink/80 ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
-                >
-                  {recent}
-                </button>
-              ))}
-            </div>
-          )}
-          {showPopular && (
-            <div className="pb-1">
-              <p className="px-4 pb-1 text-2xs text-ink/50">Popular searches</p>
-              {popularSearches.map((popular, index) => (
-                <button
-                  key={popular}
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={index === highlightedIndex}
-                  type="button"
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => setQuery(popular)}
-                  className={`block w-full px-4 py-2 text-left text-sm text-ink/80 ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
-                >
-                  {popular}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="absolute top-full left-0 right-0 bg-paper border border-line rounded-2xl mt-2 py-2 z-50 shadow-lg shadow-ink/5">
+          {/* [FE-44] A role="listbox" element's own children must all be
+              role="option"/"group" (axe's aria-required-children rule) —
+              category suggestions are deliberately plain links, excluded
+              from arrow-key navigation (see the comment on `showRecent`
+              above), so they render in their OWN sibling container,
+              outside the listbox, rather than as non-option children
+              inside it. */}
           {categorySuggestions.length > 0 && (
             <div className="pb-1 border-b border-line">
               {categorySuggestions.map((category) => (
@@ -282,19 +247,59 @@ export function SearchTypeahead({ categories = [] }: SearchTypeaheadProps) {
               ))}
             </div>
           )}
-          {suggestions.map((suggestion, index) => (
-            <Link
-              key={suggestion.id}
-              id={optionId(index)}
-              role="option"
-              aria-selected={index === highlightedIndex}
-              href={`/product/${suggestion.slug}`}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              className={`block px-4 py-2 text-sm text-ink ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
-            >
-              {suggestion.title}
-            </Link>
-          ))}
+          <div id="search-listbox" role="listbox">
+            {showRecent && (
+              <div className="pb-1">
+                <p className="px-4 pb-1 text-2xs text-ink/50">Recent searches</p>
+                {recentSearches.map((recent, index) => (
+                  <button
+                    key={recent}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === highlightedIndex}
+                    type="button"
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onClick={() => setQuery(recent)}
+                    className={`block w-full px-4 py-2 text-left text-sm text-ink/80 ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
+                  >
+                    {recent}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showPopular && (
+              <div className="pb-1">
+                <p className="px-4 pb-1 text-2xs text-ink/50">Popular searches</p>
+                {popularSearches.map((popular, index) => (
+                  <button
+                    key={popular}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === highlightedIndex}
+                    type="button"
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onClick={() => setQuery(popular)}
+                    className={`block w-full px-4 py-2 text-left text-sm text-ink/80 ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
+                  >
+                    {popular}
+                  </button>
+                ))}
+              </div>
+            )}
+            {suggestions.map((suggestion, index) => (
+              <Link
+                key={suggestion.id}
+                id={optionId(index)}
+                role="option"
+                aria-selected={index === highlightedIndex}
+                href={`/product/${suggestion.slug}`}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                className={`block px-4 py-2 text-sm text-ink ${index === highlightedIndex ? 'bg-tint' : 'hover:bg-tint'}`}
+              >
+                {suggestion.title}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </form>

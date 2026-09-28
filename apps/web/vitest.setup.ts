@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterEach, expect } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { toHaveNoViolations } from 'jest-axe';
+
+// [FE-44] jest-axe's matcher is jest-shaped but works with vitest's
+// expect.extend unchanged — this is the one place it's registered, so
+// every *.test.tsx file in this project can call
+// `expect(await axe(container)).toHaveNoViolations()` without its own
+// setup.
+expect.extend(toHaveNoViolations);
 
 // Node 22+ ships its own global `localStorage` (the `--experimental-webstorage`
 // feature), on by default in the Node version this repo currently runs.

@@ -121,9 +121,12 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end" data-testid="cart-drawer">
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <div className="relative bg-paper w-full max-w-sm h-full flex flex-col">
+      {/* [FE-44] role="dialog"/aria-modal/aria-labelledby were missing —
+          a screen reader user got no indication this overlay is a modal
+          dialog, unlike ConfirmDialog's own already-correct pattern. */}
+      <div role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title" className="relative bg-paper w-full max-w-sm h-full flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-line shrink-0">
-          <h2 className="text-base font-semibold text-ink">
+          <h2 id="cart-drawer-title" className="text-base font-semibold text-ink">
             Your cart {items.length > 0 ? <span className="text-ink/50 font-normal">({items.length})</span> : null}
           </h2>
           <button aria-label="Close cart" onClick={onClose} className="text-ink/60 hover:text-ink text-lg leading-none">

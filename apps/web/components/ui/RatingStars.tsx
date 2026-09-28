@@ -16,7 +16,14 @@ interface RatingStarsProps {
 export function RatingStars({ rating, size = 13 }: RatingStarsProps) {
   const stars = [1, 2, 3, 4, 5];
   return (
-    <span className="inline-flex items-center gap-px" aria-label={`${rating} out of 5 stars`}>
+    // [FE-44] `aria-label` on a bare `<span>` (role="generic") is an ARIA-
+    // in-HTML violation — a generic element doesn't accept a name from
+    // aria-label at all (axe's aria-prohibited-attr rule), so this label
+    // was silently dropped by conformant assistive tech everywhere this
+    // widget is used (product cards, reviews, the PDP). `role="img"` is
+    // the standard fix for a small decorative graphic conveying exactly
+    // one piece of information via its own accessible name.
+    <span className="inline-flex items-center gap-px" role="img" aria-label={`${rating} out of 5 stars`}>
       {stars.map((star) => (
         <svg
           key={star}
