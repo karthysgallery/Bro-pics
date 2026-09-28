@@ -75,6 +75,26 @@ export async function getGstSettings(): Promise<{ gstEnabled: boolean; taxRate: 
   return { gstEnabled, taxRate, ...(gstin && { gstin }) };
 }
 
+// [FE-42] Same per-key settings/{key} convention as the others above.
+// Defaults to null — no admin UI wrote settings/seo before ABE-24.
+// `ogImagePath` is a Storage object path (never a URL, same convention
+// as every other `*Path` field in this codebase), resolved by the
+// caller via `buildPublicMediaUrl` — this function stays a plain data
+// reader, not an image-URL builder.
+export async function getSeoSettings(): Promise<{ defaultTitle: string; defaultDescription: string; ogImagePath?: string } | null> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('seo').get();
+  if (!doc.exists) return null;
+
+  const data = doc.data();
+  if (typeof data?.defaultTitle !== 'string' || typeof data?.defaultDescription !== 'string') return null;
+  return {
+    defaultTitle: data.defaultTitle,
+    defaultDescription: data.defaultDescription,
+    ...(typeof data.ogImagePath === 'string' && data.ogImagePath.length > 0 && { ogImagePath: data.ogImagePath }),
+  };
+}
+
 // [FE-27] Same per-key settings/{key} convention as the others above.
 // Defaults to null — no admin UI wrote settings/header before ABE-24, so
 // the header keeps its own hardcoded extra menu items (see Header.tsx)

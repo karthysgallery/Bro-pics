@@ -7,7 +7,8 @@ import { ProductCard } from '../../../../components/product/ProductCard';
 import { ProductFilters } from '../../../../components/filters/ProductFilters';
 import { parseSearchFilters, PAGE_SIZE } from '@bro-pics/shared';
 import { orientationFromSizeLabel } from '../../../../lib/orientation';
-import { buildBreadcrumbList } from '../../../../lib/structured-data';
+import { buildBreadcrumbList, resolveOgImage } from '../../../../lib/structured-data';
+import { getSeoSettings } from '../../../../lib/firestore-settings';
 
 export const revalidate = 60;
 
@@ -28,7 +29,23 @@ function toSearchParams(raw: Record<string, string | string[] | undefined>): URL
   return params;
 }
 
-export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+// [FE-42] A URL stacking two or more facets (size+colour, size+page-2,
+// etc.) has no independent SEO value of its own — it's the same listing
+// as the bare category URL, just pre-filtered for one visitor's own
+// session. `alternates.canonical` (below, unconditional) already points
+// every such URL back at the bare category page; `noindex` is a second,
+// stronger layer for exactly the cases a canonical hint alone might not
+// stop a crawler from indexing anyway. `follow: true` throughout — a
+// filtered page's product links are still real, crawlable products.
+function shouldNoindexFacetedUrl(urlParams: URLSearchParams): boolean {
+  const page = Number(urlParams.get('page') ?? '1');
+  if (Number.isInteger(page) && page > 1) return true;
+  const facetKeys = ['size', 'colour', 'material', 'orientation', 'minRating', 'inStockOnly', 'sort', 'minPrice', 'maxPrice'];
+  const activeFacetCount = facetKeys.filter((key) => urlParams.has(key)).length;
+  return activeFacetCount >= 2;
+}
+
+export async function generateMetadata({ params, searchParams }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
 
@@ -36,15 +53,21 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
     return { title: 'Category Not Found | BroPics' };
   }
 
+  const urlParams = toSearchParams(await searchParams);
   const fallbackDescription = `Shop ${category.name} at BroPics.`;
+  // [FE-42] Falls back to settings/seo.ogImagePath only when this
+  // category has no image of its own — never overrides a real one.
+  const seoSettings = await getSeoSettings().catch(() => null);
+  const ogImage = resolveOgImage(category.image, seoSettings);
   return {
     title: category.seo.title ?? `${category.name} | BroPics`,
     description: category.seo.description ?? fallbackDescription,
     alternates: { canonical: `/category/${category.slug}` },
+    ...(shouldNoindexFacetedUrl(urlParams) && { robots: { index: false, follow: true } }),
     openGraph: {
       title: category.seo.title ?? category.name,
       description: category.seo.description ?? fallbackDescription,
-      images: [category.image],
+      ...(ogImage && { images: [ogImage] }),
     },
   };
 }

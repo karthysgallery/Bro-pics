@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { buildBreadcrumbList, buildOrganizationJsonLd, buildProductReviewsJsonLd } from './structured-data';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('./media-public-url', () => ({
+  buildPublicMediaUrl: vi.fn((path: string) => `https://storage.example.com/${path}`),
+}));
+
+import { buildBreadcrumbList, buildOrganizationJsonLd, buildProductReviewsJsonLd, resolveOgImage } from './structured-data';
 import type { Review } from '@bro-pics/shared';
 
 describe('buildBreadcrumbList', () => {
@@ -50,5 +55,20 @@ describe('buildProductReviewsJsonLd', () => {
 
   it('[FE-41] returns an empty array when there are no approved reviews', () => {
     expect(buildProductReviewsJsonLd([{ ...baseReview, status: 'pending' }])).toEqual([]);
+  });
+});
+
+describe('[FE-42] resolveOgImage', () => {
+  it("never overrides a real own image with the settings fallback", () => {
+    expect(resolveOgImage('/products/frame.jpg', { ogImagePath: 'seo/og.jpg' })).toBe('/products/frame.jpg');
+  });
+
+  it('falls back to the resolved settings ogImagePath when there is no own image', () => {
+    expect(resolveOgImage('', { ogImagePath: 'seo/og.jpg' })).toBe('https://storage.example.com/seo/og.jpg');
+  });
+
+  it('returns undefined when there is neither an own image nor a settings fallback', () => {
+    expect(resolveOgImage('', null)).toBeUndefined();
+    expect(resolveOgImage('', {})).toBeUndefined();
   });
 });

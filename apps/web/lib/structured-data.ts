@@ -1,5 +1,6 @@
 import type { Review } from '@bro-pics/shared';
 import { SUPPORT_EMAIL } from './support-contact';
+import { buildPublicMediaUrl } from './media-public-url';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com';
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
@@ -38,6 +39,20 @@ export function buildOrganizationJsonLd() {
     email: SUPPORT_EMAIL,
     sameAs: [`https://wa.me/${WHATSAPP_NUMBER}`],
   };
+}
+
+/**
+ * [FE-42] `settings/seo.ogImagePath` (ABE-24, no reader anywhere until
+ * now) as the OG-image fallback for a product/category with no image of
+ * its own — never overrides a REAL image, only fills the gap when the
+ * page's own field is empty. `ogImagePath` is a Storage object path
+ * (never a URL, matching every other `*Path` field in this codebase),
+ * resolved here via `buildPublicMediaUrl` — the one caller-facing seam
+ * a page's `generateMetadata` needs.
+ */
+export function resolveOgImage(ownImageUrl: string, seoSettings: { ogImagePath?: string } | null): string | undefined {
+  if (ownImageUrl) return ownImageUrl;
+  return seoSettings?.ogImagePath ? buildPublicMediaUrl(seoSettings.ogImagePath) : undefined;
 }
 
 /**

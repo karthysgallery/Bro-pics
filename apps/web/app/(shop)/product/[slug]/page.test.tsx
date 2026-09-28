@@ -8,7 +8,16 @@ vi.mock('../../../../lib/firestore-product-detail', () => ({
   getCategoryById: vi.fn(),
 }));
 
+vi.mock('../../../../lib/firestore-settings', () => ({
+  getSeoSettings: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../../../lib/media-public-url', () => ({
+  buildPublicMediaUrl: vi.fn((path: string) => `https://storage.example.com/${path}`),
+}));
+
 import { getProductBySlug } from '../../../../lib/firestore-product-detail';
+import { getSeoSettings } from '../../../../lib/firestore-settings';
 import { generateMetadata } from './page';
 
 const mockProduct = {
@@ -41,5 +50,33 @@ describe('generateMetadata', () => {
     vi.mocked(getProductBySlug).mockResolvedValue(null);
     const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'missing' }), searchParams: Promise.resolve({}) });
     expect(metadata.title).toBe('Product Not Found | BroPics');
+  });
+
+  it('[FE-42] falls back to settings/seo.ogImagePath only when the product has no primaryImageUrl of its own', async () => {
+    vi.mocked(getSeoSettings).mockResolvedValueOnce({
+      defaultTitle: 'BroPics',
+      defaultDescription: 'Personalized photo frames.',
+      ogImagePath: 'seo/default-og.jpg',
+    });
+    vi.mocked(getProductBySlug).mockResolvedValueOnce({
+      product: { ...mockProduct, primaryImageUrl: '' }, variants: [], media: [], reviews: [],
+    });
+
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
+    expect(metadata.openGraph?.images).toEqual(['https://storage.example.com/seo/default-og.jpg']);
+  });
+
+  it('[FE-42] never overrides a product\'s own real image with the settings fallback', async () => {
+    vi.mocked(getSeoSettings).mockResolvedValueOnce({
+      defaultTitle: 'BroPics',
+      defaultDescription: 'Personalized photo frames.',
+      ogImagePath: 'seo/default-og.jpg',
+    });
+    vi.mocked(getProductBySlug).mockResolvedValueOnce({
+      product: mockProduct, variants: [], media: [], reviews: [],
+    });
+
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
+    expect(metadata.openGraph?.images).toEqual(['/placeholders/products/test-1.svg']);
   });
 });

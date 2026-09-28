@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getShippingSettings, getAnnouncementBarSettings } from './firestore-settings';
+import { getShippingSettings, getAnnouncementBarSettings, getSeoSettings } from './firestore-settings';
 
 const mockGet = vi.fn();
 const mockDoc = vi.fn(() => ({ get: mockGet }));
@@ -63,5 +63,34 @@ describe('getAnnouncementBarSettings', () => {
   it('returns null when the doc does not exist', async () => {
     mockGet.mockResolvedValueOnce({ exists: false });
     expect(await getAnnouncementBarSettings()).toBeNull();
+  });
+});
+
+describe('[FE-42] getSeoSettings', () => {
+  it('returns null when settings/seo does not exist', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
+    expect(await getSeoSettings()).toBeNull();
+  });
+
+  it('returns the stored defaultTitle/defaultDescription/ogImagePath', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.', ogImagePath: 'seo/og.jpg' }),
+    });
+    expect(await getSeoSettings()).toEqual({
+      defaultTitle: 'BroPics',
+      defaultDescription: 'Personalized photo frames.',
+      ogImagePath: 'seo/og.jpg',
+    });
+  });
+
+  it('omits ogImagePath when not set, rather than including an empty string', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.' }),
+    });
+    const result = await getSeoSettings();
+    expect(result).toEqual({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.' });
+    expect('ogImagePath' in (result ?? {})).toBe(false);
   });
 });

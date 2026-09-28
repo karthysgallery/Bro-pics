@@ -15,7 +15,8 @@ import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
-import { buildBreadcrumbList, buildProductReviewsJsonLd } from '../../../../lib/structured-data';
+import { buildBreadcrumbList, buildProductReviewsJsonLd, resolveOgImage } from '../../../../lib/structured-data';
+import { getSeoSettings } from '../../../../lib/firestore-settings';
 
 export const revalidate = 60;
 
@@ -42,6 +43,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   }
 
   const { product } = detail;
+  // [FE-42] Falls back to settings/seo.ogImagePath only when this
+  // product has no primaryImageUrl of its own — never overrides a real
+  // product photo.
+  const seoSettings = await getSeoSettings().catch(() => null);
+  const ogImage = resolveOgImage(product.primaryImageUrl, seoSettings);
   return {
     title: product.seo.title ?? `${product.title} | BroPics`,
     description: product.seo.description ?? product.shortDesc,
@@ -49,7 +55,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     openGraph: {
       title: product.seo.title ?? product.title,
       description: product.seo.description ?? product.shortDesc,
-      images: [product.primaryImageUrl],
+      ...(ogImage && { images: [ogImage] }),
     },
   };
 }
