@@ -38,4 +38,42 @@ describe('AddressForm', () => {
     expect(mockSetDoc).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it("[FE-35] rejects a pincode starting with 9 (reserved for army postal service, never a real deliverable address)", async () => {
+    const onSaved = vi.fn();
+    render(<AddressForm userId="user_1" onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
+    fireEvent.change(screen.getByLabelText('Pincode'), { target: { value: '900001' } });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+919876543210' } });
+    fireEvent.click(screen.getByText('Save address'));
+
+    expect(await screen.findByText('Enter a valid 6-digit pincode.')).toBeInTheDocument();
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  it('[FE-35] makes the first address a customer ever saves the default automatically', async () => {
+    const onSaved = vi.fn();
+    render(<AddressForm userId="user_1" onSaved={onSaved} isFirstAddress />);
+    fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
+    fireEvent.change(screen.getByLabelText('Pincode'), { target: { value: '600001' } });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+919876543210' } });
+    fireEvent.click(screen.getByText('Save address'));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ isDefault: true })));
+  });
+
+  it('[FE-35] does not make a second address default just because isFirstAddress was passed by mistake for an edit', async () => {
+    const existingAddress = {
+      id: 'addr_1', label: null, line1: '12 MG Road', line2: null, city: 'Chennai', state: 'Tamil Nadu',
+      pincode: '600001', phone: '+919876543210', isDefault: false, type: null, country: 'India', deliveryInstructions: null,
+    };
+    const onSaved = vi.fn();
+    render(<AddressForm userId="user_1" onSaved={onSaved} existingAddress={existingAddress} isFirstAddress />);
+    fireEvent.click(screen.getByText('Save address'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ isDefault: false })));
+  });
 });

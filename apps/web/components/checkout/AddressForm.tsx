@@ -10,6 +10,12 @@ interface AddressFormProps {
   onSaved: (address: Address) => void;
   onCancel?: () => void;
   existingAddress?: Address;
+  // [FE-35] Set by the caller when this form is creating the user's very
+  // first address — that address should become the default immediately,
+  // rather than requiring a separate "Set as default" click on the only
+  // address that exists. Ignored when editing an existing address (its
+  // own isDefault, below, is preserved as-is).
+  isFirstAddress?: boolean;
 }
 
 const TYPE_OPTIONS: Array<{ value: AddressType; label: string }> = [
@@ -18,7 +24,7 @@ const TYPE_OPTIONS: Array<{ value: AddressType; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
-export function AddressForm({ userId, onSaved, onCancel, existingAddress }: AddressFormProps) {
+export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirstAddress = false }: AddressFormProps) {
   const [line1, setLine1] = useState(existingAddress?.line1 ?? '');
   const [line2, setLine2] = useState(existingAddress?.line2 ?? '');
   const [city, setCity] = useState(existingAddress?.city ?? '');
@@ -50,7 +56,7 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress }: Addr
       state,
       pincode,
       phone,
-      isDefault: existingAddress?.isDefault ?? false,
+      isDefault: existingAddress?.isDefault ?? isFirstAddress,
       type: type || null,
       country: country || null,
       deliveryInstructions: deliveryInstructions || null,

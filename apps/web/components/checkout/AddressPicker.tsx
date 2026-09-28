@@ -89,7 +89,14 @@ export function AddressPicker({ userId, onSelect, onSelectAddress }: AddressPick
           Add a new address
         </button>
       )}
-      {showForm && <AddressForm userId={userId} onSaved={handleNewAddressSaved} onCancel={() => setShowForm(false)} />}
+      {showForm && (
+        <AddressForm
+          userId={userId}
+          onSaved={handleNewAddressSaved}
+          onCancel={() => setShowForm(false)}
+          isFirstAddress={(addresses?.length ?? 0) === 0}
+        />
+      )}
     </div>
   );
 }

@@ -45,12 +45,27 @@ export default function AddressesPage() {
   if (!user) return <SignedOutNotice action="manage your addresses" />;
 
   const handleConfirmDelete = async () => {
-    if (!pendingDeleteId) return;
+    if (!pendingDeleteId || !addresses) return;
     setIsDeleting(true);
     try {
       const db = getFirestore(getFirebaseApp());
+      const deletedWasDefault = addresses.find((a) => a.id === pendingDeleteId)?.isDefault ?? false;
       await deleteDoc(doc(db, 'users', user.uid, 'addresses', pendingDeleteId));
-      setAddresses((prev) => (prev ? prev.filter((a) => a.id !== pendingDeleteId) : prev));
+      const remaining = addresses.filter((a) => a.id !== pendingDeleteId);
+
+      // [FE-35] Deleting the default address used to leave NO address
+      // marked default — checkout's own AddressPicker falls back to
+      // `loaded[0]` so it kept working either way, but this page then
+      // showed no "(Default)" badge on anything until the customer
+      // noticed and picked one manually. The first remaining address is
+      // promoted automatically instead.
+      if (deletedWasDefault && remaining.length > 0) {
+        const promoted = remaining[0];
+        await setDoc(doc(db, 'users', user.uid, 'addresses', promoted.id), { ...promoted, isDefault: true });
+        setAddresses(remaining.map((a) => (a.id === promoted.id ? { ...a, isDefault: true } : a)));
+      } else {
+        setAddresses(remaining);
+      }
       showToast('Address deleted', 'success');
     } finally {
       setIsDeleting(false);
@@ -149,6 +164,7 @@ export default function AddressesPage() {
               showToast('Address saved', 'success');
             }}
             onCancel={() => setShowNewForm(false)}
+            isFirstAddress={addresses.length === 0}
           />
         </Card>
       ) : (

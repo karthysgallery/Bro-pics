@@ -8,13 +8,14 @@ vi.mock('../../../../lib/auth-context', () => ({
 
 const mockGetDocs = vi.fn();
 const mockDeleteDoc = vi.fn().mockResolvedValue(undefined);
+const mockSetDoc = vi.fn().mockResolvedValue(undefined);
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
   collection: vi.fn(() => ({})),
   getDocs: (...args: unknown[]) => mockGetDocs(...args),
   deleteDoc: (...args: unknown[]) => mockDeleteDoc(...args),
-  doc: vi.fn(() => ({})),
-  setDoc: vi.fn().mockResolvedValue(undefined),
+  doc: vi.fn((_db, ...segments: string[]) => ({ path: segments.join('/') })),
+  setDoc: (...args: unknown[]) => mockSetDoc(...args),
 }));
 vi.mock('../../../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
 
@@ -26,6 +27,7 @@ describe('AddressesPage', () => {
   beforeEach(() => {
     mockGetDocs.mockReset();
     mockDeleteDoc.mockClear();
+    mockSetDoc.mockClear();
   });
 
   it('shows an empty state with no saved addresses', async () => {
@@ -60,5 +62,42 @@ describe('AddressesPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockDeleteDoc).toHaveBeenCalled());
+  });
+
+  it('[FE-35] promotes the first remaining address to default when the deleted address was the default', async () => {
+    mockGetDocs.mockResolvedValueOnce(
+      makeSnapshot([
+        { id: 'addr_1', label: 'Home', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', line2: null, isDefault: true },
+        { id: 'addr_2', label: 'Work', line1: '5 Anna Salai', city: 'Chennai', state: 'TN', pincode: '600002', phone: '+91124', line2: null, isDefault: false },
+      ])
+    );
+    render(<AddressesPage />);
+
+    const homeCard = (await screen.findByText('Home')).closest('li')!;
+    fireEvent.click(within(homeCard).getByText('Delete'));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(mockDeleteDoc).toHaveBeenCalled());
+    expect(mockSetDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 'addr_2', isDefault: true }));
+    expect(await screen.findByText('(Default)')).toBeInTheDocument();
+  });
+
+  it('[FE-35] does not touch any address when the deleted one was not the default', async () => {
+    mockGetDocs.mockResolvedValueOnce(
+      makeSnapshot([
+        { id: 'addr_1', label: 'Home', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', line2: null, isDefault: true },
+        { id: 'addr_2', label: 'Work', line1: '5 Anna Salai', city: 'Chennai', state: 'TN', pincode: '600002', phone: '+91124', line2: null, isDefault: false },
+      ])
+    );
+    render(<AddressesPage />);
+
+    const workCard = (await screen.findByText('Work')).closest('li')!;
+    fireEvent.click(within(workCard).getByText('Delete'));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(mockDeleteDoc).toHaveBeenCalled());
+    expect(mockSetDoc).not.toHaveBeenCalled();
   });
 });

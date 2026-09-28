@@ -50,6 +50,21 @@ describe('AddressSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('[FE-35] rejects a pincode starting with 9 (reserved for army postal service, never a real deliverable address)', () => {
+    const result = AddressSchema.safeParse({
+      id: 'addr_1',
+      label: null,
+      line1: '12 MG Road',
+      line2: null,
+      city: 'Chennai',
+      state: 'Tamil Nadu',
+      pincode: '900001',
+      phone: '+919876543210',
+      isDefault: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a missing pincode', () => {
     const result = AddressSchema.safeParse({
       id: 'addr_1',
