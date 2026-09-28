@@ -29,7 +29,7 @@ export function Gallery({ media, productTitle }: GalleryProps) {
     <div>
       <div className="aspect-square bg-tint rounded-2xl overflow-hidden relative">
         {active.type === 'video' ? (
-          <video src={active.url} controls className="w-full h-full object-cover" />
+          <video src={active.url} controls preload="none" className="w-full h-full object-cover" />
         ) : (
           <Image
             src={active.url}
