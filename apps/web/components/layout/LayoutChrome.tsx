@@ -7,6 +7,7 @@ import { Footer } from './Footer';
 import { CartDrawer } from './CartDrawer';
 import { WhatsAppButton } from './WhatsAppButton';
 import { AnnouncementBar } from './AnnouncementBar';
+import { ConsentBanner } from './ConsentBanner';
 
 interface LayoutChromeProps {
   categories: Category[];
@@ -43,6 +44,7 @@ export function LayoutChrome({
         phoneNumber={process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}
         message="Hi, I have a question about a BroPics order."
       />
+      <ConsentBanner />
     </>
   );
 }
