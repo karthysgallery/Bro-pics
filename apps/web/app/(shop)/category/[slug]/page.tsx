@@ -7,6 +7,7 @@ import { ProductCard } from '../../../../components/product/ProductCard';
 import { ProductFilters } from '../../../../components/filters/ProductFilters';
 import { parseSearchFilters, PAGE_SIZE } from '@bro-pics/shared';
 import { orientationFromSizeLabel } from '../../../../lib/orientation';
+import { buildBreadcrumbList } from '../../../../lib/structured-data';
 
 export const revalidate = 60;
 
@@ -87,8 +88,17 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           })
         );
 
+  // [FE-41] Mirrors the visible breadcrumb `<nav>` below exactly.
+  const breadcrumbJsonLd = buildBreadcrumbList([
+    { name: 'Home', path: '/' },
+    { name: 'Shop all', path: '/category' },
+    { name: category.name, path: `/category/${category.slug}` },
+  ]);
+
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+
       <nav aria-label="Breadcrumb" className="text-2xs text-ink/50 mb-2">
         <a href="/" className="hover:text-accent">Home</a>
         <span className="mx-1" aria-hidden="true">/</span>

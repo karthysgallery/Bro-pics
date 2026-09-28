@@ -9,6 +9,7 @@ import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
 import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings } from '../lib/firestore-settings';
+import { buildOrganizationJsonLd } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
 // One UI typeface for the whole interface. Manrope holds up at the 11–14px
@@ -106,9 +107,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     console.error('Failed to load store settings:', error);
   }
 
+  // [FE-41] One Organization entity for the whole site, rendered once
+  // here rather than duplicated per page.
+  const organizationJsonLd = buildOrganizationJsonLd();
+
   return (
     <html lang="en" className={`${sansFont.variable} ${displayFont.variable} ${textFieldFontVariables}`}>
       <body className="bg-field text-ink font-sans antialiased">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         <ToastProvider>
           <AuthProvider>
             <WishlistSync />

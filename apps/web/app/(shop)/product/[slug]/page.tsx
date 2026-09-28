@@ -15,6 +15,7 @@ import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
+import { buildBreadcrumbList, buildProductReviewsJsonLd } from '../../../../lib/structured-data';
 
 export const revalidate = 60;
 
@@ -68,6 +69,11 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   ]);
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
+  // [FE-41] `review` was the one field this Product JSON-LD didn't
+  // already carry despite `reviews` being right here — an omission, not
+  // a deliberate choice (aggregateRating already summarized the same
+  // data these individual entries source from).
+  const productReviews = buildProductReviewsJsonLd(reviews);
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -78,6 +84,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
       product.ratingCount > 0
         ? { '@type': 'AggregateRating', ratingValue: product.ratingAverage, reviewCount: product.ratingCount }
         : undefined,
+    review: productReviews.length > 0 ? productReviews : undefined,
     offers: defaultVariant
       ? {
           '@type': 'Offer',
@@ -91,9 +98,19 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
       : undefined,
   };
 
+  // [FE-41] Mirrors the visible breadcrumb `<nav>` below exactly — same
+  // trail, same labels, same hrefs — so the two can never show a
+  // different path to the same page.
+  const breadcrumbJsonLd = buildBreadcrumbList([
+    { name: 'Home', path: '/' },
+    ...(category ? [{ name: category.name, path: `/category/${category.slug}` }] : []),
+    { name: product.title, path: `/product/${product.slug}` },
+  ]);
+
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       <nav aria-label="Breadcrumb" className="text-2xs text-ink/50 mb-4">
         <Link href="/" className="hover:text-accent">Home</Link>
