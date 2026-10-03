@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import type { Category } from '@bro-pics/shared';
 import { Header } from './Header';
 import { Footer } from './Footer';
@@ -30,21 +31,32 @@ export function LayoutChrome({
   children,
 }: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Admin routes use their own AdminShell layout — skip storefront chrome entirely.
+  if (pathname?.startsWith('/admin')) {
+    return <>{children}</>;
+  }
 
   return (
     <>
-      {announcementBar && (
-        <AnnouncementBar text={announcementBar.text} link={announcementBar.link} />
-      )}
+      <AnnouncementBar
+        text={
+          announcementBar?.text ??
+          'Made for your memories ✦ Free shipping on orders above ₹1,999 ✦ Use code FIRST15 for 15% OFF'
+        }
+        link={announcementBar?.link}
+      />
       <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
       <main>{children}</main>
       <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
       <WhatsAppButton
         phoneNumber={process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}
-        message="Hi, I have a question about a BroPics order."
+        message="Hi, I have a question about a KarthysGallery order."
       />
       <ConsentBanner />
     </>
   );
 }
+

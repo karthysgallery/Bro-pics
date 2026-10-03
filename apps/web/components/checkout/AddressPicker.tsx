@@ -67,20 +67,23 @@ export function AddressPicker({ userId, onSelect, onSelectAddress }: AddressPick
   return (
     <div className="flex flex-col gap-3">
       {addresses.map((address) => (
-        <label key={address.id} className="flex items-center gap-2">
+        <label key={address.id} className="flex items-start gap-2.5 text-xs text-ink/80 cursor-pointer p-2 rounded-xl hover:bg-field transition-colors">
           <input
             type="radio"
             name="address"
             checked={selectedId === address.id}
             onChange={() => handleSelect(address.id)}
+            className="mt-0.5 shrink-0"
           />
-          {address.type && (
-            <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
-              {TYPE_LABEL[address.type]}
-            </span>
-          )}
-          {address.label ? `${address.label} — ` : ''}
-          {address.line1}, {address.city}, {address.state} {address.pincode}
+          <span className="flex-1 leading-relaxed">
+            {address.type && (
+              <span className="inline-block text-2xs font-semibold px-2 py-0.5 rounded-full bg-accent/10 text-accent mr-1.5 align-middle">
+                {TYPE_LABEL[address.type]}
+              </span>
+            )}
+            {address.label ? <strong className="font-semibold text-ink">{address.label} — </strong> : ''}
+            {address.line1}, {address.city}, {address.state} {address.pincode}
+          </span>
         </label>
       ))}
 

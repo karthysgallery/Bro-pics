@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   const seoSettings = await getSeoSettings().catch(() => null);
   const ogImage = resolveOgImage(product.primaryImageUrl, seoSettings);
   return {
-    title: product.seo.title ?? `${product.title} | BroPics`,
+    title: product.seo.title ?? `${product.title} | KarthysGallery`,
     description: product.seo.description ?? product.shortDesc,
     alternates: { canonical: `/product/${product.slug}` },
     openGraph: {
@@ -118,16 +118,18 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
-      <nav aria-label="Breadcrumb" className="text-2xs text-ink/50 mb-4">
-        <Link href="/" className="hover:text-accent">Home</Link>
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/60 mb-5 flex items-center gap-1.5 font-sans">
+        <Link href="/" className="hover:text-ink transition-colors">Home</Link>
         {category && (
           <>
-            {' / '}
-            <Link href={`/category/${category.slug}`} className="hover:text-accent">{category.name}</Link>
+            <span className="text-ink/40">/</span>
+            <Link href={`/category/${category.slug}`} className="font-semibold text-ink hover:underline">
+              {category.name}
+            </Link>
           </>
         )}
-        {' / '}
-        <span className="text-ink/70">{product.title}</span>
+        <span className="text-ink/40">/</span>
+        <span className="text-ink/60">{product.title}</span>
       </nav>
 
       <ProductDetailClient
@@ -137,6 +139,40 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
         initialTemplatesByVariant={templatesByVariant}
         editPersonalizationId={editPersonalizationId}
       />
+
+      {/* Figma 4-item Trust Reassurance Bar */}
+      <div className="my-12 py-6 border-y border-line grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 text-ink/80 text-xs md:text-sm font-medium">
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <span>Archival-quality prints</span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+          <span>Handcrafted in India</span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
+            <rect x="1" y="3" width="15" height="13" rx="2" />
+            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+            <circle cx="5.5" cy="18.5" r="2.5" />
+            <circle cx="18.5" cy="18.5" r="2.5" />
+          </svg>
+          <span>Safe, tracked delivery</span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+          <span>Happiness guaranteed</span>
+        </div>
+      </div>
 
       <ProductTabs product={product} variants={variants} />
       <VideoRail media={media} />

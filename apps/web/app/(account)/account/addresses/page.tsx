@@ -86,95 +86,138 @@ export default function AddressesPage() {
   if (addresses === null) return <PageSkeleton rows={3} />;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-4">
-      <Link href="/account" className="text-sm text-accent/60 hover:text-accent-dark w-fit">
-        ← Back to account
-      </Link>
-      <h1 className="text-2xl font-semibold text-ink">Addresses</h1>
+    <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/account" className="hover:text-ink">Account</Link>
+        {' · '}
+        <span className="text-ink font-medium">Addresses</span>
+      </nav>
 
-      {addresses.length === 0 && !showNewForm ? (
-        <EmptyState
-          title="No saved addresses yet"
-          message="Add an address so checkout only takes a couple of taps."
-        />
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {addresses.map((address) =>
-            editingId === address.id ? (
-              <Card as="li" key={address.id}>
-                <AddressForm
-                  userId={user.uid}
-                  existingAddress={address}
-                  onSaved={() => {
-                    setEditingId(null);
-                    load();
-                    showToast('Address saved', 'success');
-                  }}
-                  onCancel={() => setEditingId(null)}
-                />
-              </Card>
-            ) : (
-              <Card as="li" key={address.id} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  {address.type && (
-                    <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-accent/10 text-accent">
-                      {ADDRESS_TYPE_LABEL[address.type]}
-                    </span>
-                  )}
-                  <span className="font-medium text-accent-dark">
-                    {address.label ? `${address.label} ` : ''}
-                    {address.isDefault && <span className="text-xs text-accent-dark">(Default)</span>}
-                  </span>
-                </div>
-                <p className="text-sm text-accent/80">
-                  {address.line1}
-                  {address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} {address.pincode}
-                  {address.country ? `, ${address.country}` : ''}
-                </p>
-                <p className="text-sm text-accent/60">{address.phone}</p>
-                {address.deliveryInstructions && (
-                  <p className="text-sm text-accent/60 italic">&ldquo;{address.deliveryInstructions}&rdquo;</p>
-                )}
-                <div className="flex gap-3 text-sm">
-                  <button onClick={() => setEditingId(address.id)} className="underline text-accent">
-                    Edit
-                  </button>
-                  <button onClick={() => setPendingDeleteId(address.id)} className="underline text-accent">
-                    Delete
-                  </button>
-                  {!address.isDefault && (
-                    <button onClick={() => handleSetDefault(address.id)} className="underline text-accent">
-                      Set as default
+      <div className="mb-6">
+        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink mb-2">Your delivery addresses.</h1>
+        <p className="text-sm text-ink/70">Keep your favourite places ready for your next frame.</p>
+      </div>
+
+      {/* Navigation tabs */}
+      <div className="flex items-center gap-2 mb-8">
+        <Link href="/account" className="px-4 py-2 rounded-full border border-line bg-surface text-xs font-semibold text-ink hover:bg-tint/40 transition-colors">
+          Overview & profile
+        </Link>
+        <Link href="/orders" className="px-4 py-2 rounded-full border border-line bg-surface text-xs font-semibold text-ink hover:bg-tint/40 transition-colors">
+          Orders
+        </Link>
+        <span className="px-4 py-2 rounded-full bg-ink text-surface text-xs font-semibold">
+          Addresses
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Addresses List */}
+        <div className={showNewForm || editingId ? 'lg:col-span-6 space-y-4' : 'lg:col-span-12 space-y-6'}>
+          {addresses.length === 0 && !showNewForm ? (
+            <EmptyState
+              title="No saved addresses yet"
+              message="Add an address so checkout only takes a couple of taps."
+            />
+          ) : (
+            <ul className={showNewForm || editingId ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
+              {addresses.map((address) => (
+                <li key={address.id} className="rounded-3xl border border-line bg-surface p-6 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <h2 className="font-display text-base font-bold text-ink">
+                        {address.label || ADDRESS_TYPE_LABEL[address.type ?? ''] || 'Address'}
+                      </h2>
+                      {address.isDefault && (
+                        <span className="px-3 py-1 rounded-full text-2xs font-semibold border border-line bg-tint/60 text-ink">
+                          Default address <span className="sr-only">(Default)</span>
+                        </span>
+                      )}
+                    </div>
+                    {address.label && address.type && (
+                      <span className="inline-block text-2xs font-semibold px-2.5 py-0.5 rounded-full bg-accent/10 text-accent mb-2">
+                        {ADDRESS_TYPE_LABEL[address.type]}
+                      </span>
+                    )}
+                    <p className="text-xs text-ink/80 font-medium mb-1">
+                      {address.line1}{address.line2 ? `, ${address.line2}` : ''}
+                    </p>
+                    <p className="text-xs text-ink/70 mb-2">
+                      {address.city}, {address.state} {address.pincode}
+                      {address.country ? `, ${address.country}` : ''}
+                    </p>
+                    <p className="text-xs text-ink/60 mb-2">{address.phone}</p>
+                    {address.deliveryInstructions && (
+                      <p className="text-xs text-ink/50 italic mb-2">&ldquo;{address.deliveryInstructions}&rdquo;</p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-4 mt-2 border-t border-line">
+                    <button
+                      onClick={() => {
+                        setShowNewForm(false);
+                        setEditingId(address.id);
+                      }}
+                      className="px-4 py-1.5 rounded-full border border-line bg-surface hover:bg-tint/40 text-xs font-semibold text-ink transition-colors"
+                    >
+                      Edit address
                     </button>
-                  )}
-                </div>
-              </Card>
-            )
+                    <button
+                      onClick={() => setPendingDeleteId(address.id)}
+                      className="px-4 py-1.5 rounded-full border border-line bg-surface hover:bg-tint/40 text-xs font-semibold text-ink transition-colors"
+                    >
+                      Delete
+                    </button>
+                    {!address.isDefault && (
+                      <button
+                        onClick={() => handleSetDefault(address.id)}
+                        className="px-4 py-1.5 rounded-full border border-line bg-surface hover:bg-tint/40 text-xs font-semibold text-ink transition-colors"
+                      >
+                        Set as default
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </ul>
-      )}
 
-      {showNewForm ? (
-        <Card>
-          <AddressForm
-            userId={user.uid}
-            onSaved={() => {
-              setShowNewForm(false);
-              load();
-              showToast('Address saved', 'success');
-            }}
-            onCancel={() => setShowNewForm(false)}
-            isFirstAddress={addresses.length === 0}
-          />
-        </Card>
-      ) : (
-        <button
-          onClick={() => setShowNewForm(true)}
-          className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors w-fit"
-        >
-          Add a new address
-        </button>
-      )}
+          {!showNewForm && !editingId && (
+            <button
+              onClick={() => setShowNewForm(true)}
+              className="rounded-full bg-gold text-ink px-6 py-3 text-xs font-semibold hover:bg-gold-deep transition-colors shadow-sm"
+            >
+              + Add a new address
+            </button>
+          )}
+        </div>
+
+        {/* Right Column: Add / Edit Address Card */}
+        {(showNewForm || editingId) && (
+          <div className="lg:col-span-6">
+            <div className="rounded-3xl border border-line bg-surface p-6 shadow-sm">
+              <h2 className="font-display text-base font-bold text-ink mb-4">
+                {editingId ? 'Edit address' : 'Add an address'}
+              </h2>
+              <AddressForm
+                userId={user.uid}
+                existingAddress={editingId ? addresses.find((a) => a.id === editingId) : undefined}
+                onSaved={() => {
+                  setEditingId(null);
+                  setShowNewForm(false);
+                  load();
+                  showToast(editingId ? 'Address updated' : 'Address saved', 'success');
+                }}
+                onCancel={() => {
+                  setEditingId(null);
+                  setShowNewForm(false);
+                }}
+                isFirstAddress={addresses.length === 0}
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
       <ConfirmDialog
         isOpen={pendingDeleteId !== null}

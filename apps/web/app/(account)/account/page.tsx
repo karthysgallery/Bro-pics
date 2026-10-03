@@ -80,78 +80,196 @@ export default function AccountPage() {
   const recentOrders = orders.slice(0, 3);
 
   return (
-    <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-8 flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">{firstName ? `Welcome back, ${firstName}` : 'My account'}</h1>
-        <p className="text-sm text-ink/60 mt-1">{user.phoneNumber}</p>
+    <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumbs */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">Account · Overview & profile</span>
+      </nav>
+
+      <div className="mb-6">
+        <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">
+          {firstName ? `Welcome back, ${firstName}` : 'My account'}
+        </h1>
+        <p className="text-xs text-ink/60">
+          A home for your details, addresses and framed memories.
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Link href="/orders" className="rounded-2xl border border-line bg-paper p-4 hover:border-accent transition-colors">
-          <span className="text-2xl font-semibold text-ink">{orders.length}</span>
-          <p className="text-sm text-ink/60">Orders</p>
+      {/* Account Tabs */}
+      <div className="flex gap-2 mb-6">
+        <Link
+          href="/account"
+          className="px-4 py-2 rounded-full text-xs font-semibold bg-ink text-paper transition-colors"
+        >
+          Overview & profile
         </Link>
-        <Link href="/account/wishlist" className="rounded-2xl border border-line bg-paper p-4 hover:border-accent transition-colors">
-          <span className="text-2xl font-semibold text-ink">{wishlistIds.length}</span>
-          <p className="text-sm text-ink/60">Wishlist</p>
+        <Link
+          href="/orders"
+          className="px-4 py-2 rounded-full text-xs font-semibold bg-tint/70 text-ink/70 hover:bg-tint transition-colors"
+        >
+          Orders
         </Link>
-        <Link href="/account/addresses" className="rounded-2xl border border-line bg-paper p-4 hover:border-accent transition-colors">
-          <span className="text-2xl font-semibold text-ink">{addressCount}</span>
-          <p className="text-sm text-ink/60">Addresses</p>
+        <Link
+          href="/account/addresses"
+          className="px-4 py-2 rounded-full text-xs font-semibold bg-tint/70 text-ink/70 hover:bg-tint transition-colors"
+        >
+          Addresses
         </Link>
-        <div className="rounded-2xl border border-line bg-paper p-4">
-          <span className="text-2xl font-semibold text-ink">{pendingDeliveries.length}</span>
-          <p className="text-sm text-ink/60">On the way</p>
+      </div>
+
+      {/* Quick stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div className="p-5 rounded-2xl bg-paper border border-line shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">{orders.length}</p>
+          <p className="text-xs text-ink/60 mt-1">Orders</p>
+        </div>
+        <div className="p-5 rounded-2xl bg-paper border border-line shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">{pendingDeliveries.length}</p>
+          <p className="text-xs text-ink/60 mt-1">On the way</p>
+        </div>
+        <div className="p-5 rounded-2xl bg-paper border border-line shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">{wishlistIds.length}</p>
+          <p className="text-xs text-ink/60 mt-1">Wishlist</p>
+        </div>
+        <div className="p-5 rounded-2xl bg-paper border border-line shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">{addressCount}</p>
+          <p className="text-xs text-ink/60 mt-1">Saved addresses</p>
         </div>
       </div>
 
-      {recentOrders.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-ink">Recent orders</h2>
-            <Link href="/orders" className="text-sm text-accent hover:text-accent-dark">View all</Link>
-          </div>
-          <ul className="flex flex-col gap-2">
-            {recentOrders.map((order) => (
-              <li key={order.id}>
-                <Link
-                  href={`/orders/${order.id}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper p-4 hover:border-accent transition-colors"
-                >
-                  <span className="font-medium text-ink">{order.orderNo}</span>
-                  <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_CHIP_STYLES[order.status]}`}>
-                    {statusLabel(order.status)}
-                  </span>
-                  <span className="text-ink/70 whitespace-nowrap">{formatPaise(order.total)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <div className="grid lg:grid-cols-[1fr_380px] gap-8 items-start mb-12">
+        {/* Left: Profile Information */}
+        <div className="rounded-3xl bg-paper border border-line p-6 md:p-8 shadow-sm">
+          <h2 className="font-display text-xl font-bold text-ink mb-6">Your profile</h2>
+          
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-2xs font-semibold text-ink/60 mb-1">First name</label>
+                <input
+                  type="text"
+                  defaultValue={firstName || ''}
+                  className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-2xs font-semibold text-ink/60 mb-1">Last name</label>
+                <input
+                  type="text"
+                  defaultValue=""
+                  placeholder="Last name"
+                  className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none focus:border-accent"
+                />
+              </div>
+            </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {LINKS.map((link) => (
+            <div>
+              <label className="block text-2xs font-semibold text-ink/60 mb-1">Email</label>
+              <input
+                type="email"
+                defaultValue={user.email || ''}
+                readOnly
+                className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-2xs font-semibold text-ink/60 mb-1">Mobile</label>
+              <input
+                type="tel"
+                defaultValue={user.phoneNumber || ''}
+                className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none focus:border-accent"
+              />
+              <p className="text-2xs text-ink/50 mt-1">Verified with a one-time code</p>
+            </div>
+
+            <div className="pt-2">
+              <label className="flex items-center gap-2 text-xs text-ink/80 cursor-pointer">
+                <input type="checkbox" defaultChecked className="rounded border-line" />
+                <span>Send me occasional framing inspiration and offers</span>
+              </label>
+            </div>
+
+            <div className="pt-4">
+              <button
+                type="button"
+                className="px-6 py-2.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm"
+              >
+                Save profile
+              </button>
+            </div>
+          </div>
+
+          <p className="text-2xs text-ink/40 mt-6 pt-4 border-t border-line">
+            Your photos are private. We only use them to create your frames.
+          </p>
+        </div>
+
+        {/* Right: Latest order & Address widgets */}
+        <div className="space-y-6">
+          {recentOrders.length > 0 && (
+            <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+              <h2 className="font-display text-base font-bold text-ink mb-3">Your latest order</h2>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm text-ink">{recentOrders[0].orderNo}</span>
+                  <span className={`text-2xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_CHIP_STYLES[recentOrders[0].status]}`}>
+                    {statusLabel(recentOrders[0].status)}
+                  </span>
+                </div>
+                <p className="text-xs text-ink/60">
+                  Total: ₹{formatPaise(recentOrders[0].total)}
+                </p>
+                <div className="pt-3">
+                  <Link
+                    href={`/orders/${recentOrders[0].id}`}
+                    className="inline-block px-4 py-2 rounded-full border border-line text-xs font-semibold text-ink hover:bg-tint transition-colors"
+                  >
+                    View order
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+            <h2 className="font-display text-base font-bold text-ink mb-2">Default delivery address</h2>
+            <p className="text-xs text-ink/70 leading-relaxed mb-4">
+              {addressCount > 0 ? `${addressCount} saved address${addressCount === 1 ? '' : 'es'} in your address book.` : 'No addresses saved yet.'}
+            </p>
+            <Link
+              href="/account/addresses"
+              className="inline-block px-4 py-2 rounded-full border border-line text-xs font-semibold text-ink hover:bg-tint transition-colors"
+            >
+              Manage addresses
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 my-8">
+        {LINKS.slice(2).map((link) => (
           <Link
             key={link.href}
             href={link.href}
             className="rounded-2xl border border-line bg-paper p-5 hover:border-accent transition-colors"
           >
             <h2 className="text-sm font-semibold text-ink">{link.label}</h2>
-            <p className="text-sm text-ink/60 mt-1">{link.desc}</p>
+            <p className="text-2xs text-ink/60 mt-1">{link.desc}</p>
           </Link>
         ))}
       </div>
 
-      <RecentlyViewedRail />
-      <ProductRail title="Recommended for you" products={recommended} />
-
-      <button
-        onClick={() => signOut()}
-        className="rounded-full border border-line text-ink px-6 py-3 text-sm font-semibold hover:border-accent hover:text-accent transition-colors w-fit"
-      >
-        Sign out
-      </button>
+      <div className="pt-6 border-t border-line flex items-center justify-between">
+        <button
+          onClick={() => signOut()}
+          className="text-xs text-ink/60 hover:text-alert font-medium underline underline-offset-4"
+        >
+          Sign out of this account
+        </button>
+      </div>
 
       <PrivacyAndSecurity />
     </main>

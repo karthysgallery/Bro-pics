@@ -16,45 +16,72 @@ export default async function CategoryIndexPage() {
 
   return (
     <Section>
-      <h1 className="text-2xl font-semibold text-ink">Shop all</h1>
-      {/* [FE-29] SEO copy for the index page itself, distinct from each
-          category's own seo.title/description (used on /category/[slug])
-          and Category.description (that page's own body copy, from
-          ABE-05) — this page lists every collection, so its intro speaks
-          to the whole catalogue rather than any one of them. */}
-      <p className="mt-1 max-w-2xl text-sm text-ink/70">
-        Every BroPics frame is personalized and made to order — pick a collection below, choose
-        your size, and upload the photo you want printed. You will see exactly how it looks
-        inside the frame before you pay for it.
-      </p>
-      <p className="mt-3 mb-6 text-sm text-ink/60">{topLevel.length} collections</p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
-        {topLevel.map((category) => {
-          const children = categories.filter((child) => child.parentId === category.id);
-          return (
-            <Link key={category.id} href={`/category/${category.slug}`} className="group">
-              <div className="relative aspect-square rounded-2xl bg-tint overflow-hidden">
-                {category.image ? (
-                  <Image
-                    src={category.image}
-                    alt=""
-                    fill
-                    sizes="(max-width: 768px) 50vw, 20vw"
-                    className="object-cover"
-                  />
-                ) : null}
-              </div>
-              <p className="mt-2 text-sm font-medium text-ink group-hover:text-accent transition-colors">
-                {category.name}
-              </p>
-              {children.length > 0 ? (
-                <p className="text-2xs text-ink/50">{children.length} sub-collections</p>
-              ) : null}
+      <div className="flex flex-col gap-8">
+        {/* Breadcrumb & Header */}
+        <div>
+          <nav className="flex items-center gap-2 text-xs text-ink/60 mb-3" aria-label="Breadcrumbs">
+            <Link href="/" className="hover:text-ink transition-colors">
+              Home
             </Link>
-          );
-        })}
+            <span>/</span>
+            <span className="text-ink font-medium">Categories</span>
+          </nav>
+
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink/60">
+            ALL COLLECTIONS
+          </p>
+          <h1 className="mt-2 font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-ink">
+            Find the frame that fits your space.
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm text-ink/75 leading-relaxed">
+            Every BroPics frame is personalized and made to order — pick a collection below, choose
+            your size, and upload the photo you want printed. You will see exactly how it looks
+            inside the frame before you pay for it.
+          </p>
+          <p className="mt-2 text-xs font-semibold text-ink/60">{topLevel.length} collections available</p>
+        </div>
+
+        {/* Categories Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {topLevel.map((category) => {
+            const children = categories.filter((child) => child.parentId === category.id);
+            return (
+              <Link
+                key={category.id}
+                href={`/category/${category.slug}`}
+                className="group flex flex-col rounded-3xl bg-paper border border-line overflow-hidden hover:shadow-md hover:border-line/80 transition-all"
+              >
+                <div className="relative aspect-[4/3] bg-tint overflow-hidden">
+                  {category.image ? (
+                    <Image
+                      src={category.image}
+                      alt={category.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : null}
+                </div>
+                <div className="p-5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-ink group-hover:text-gold transition-colors">
+                      {category.name}
+                    </h2>
+                    <p className="mt-1 text-xs text-ink/65 line-clamp-2">
+                      Handcrafted with archival prints & real wood finishes.
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-line/40 flex items-center justify-between text-xs font-semibold text-ink">
+                    <span>Explore frames</span>
+                    <span className="text-gold group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </Section>
   );
 }
+

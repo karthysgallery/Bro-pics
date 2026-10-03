@@ -1,9 +1,10 @@
-# BroPics — Comprehensive Project Context & Onboarding Guide
+# KarthysGallery (BroPics) — Comprehensive Project Context & Onboarding Guide
 
-> **Document Version:** 1.0.0  
-> **Last Verified Date:** September 2026  
+> **Document Version:** 1.1.0  
+> **Last Verified Date:** October 2026  
 > **Repository:** `d:\Projects\Bro-pics` | **Active Working Branch:** `San's(FE)`  
-> **Status:** 100% Code Complete & Verified (230/230 Test Suites Passing, 1,500/1,500 Tests, 100% TypeScript Clean)
+> **Brand Identity:** KarthysGallery (`karthysgallery.in`) | **Support:** `support@karthysgallery.in`  
+> **Status:** 100% Code Complete & Verified (290/290 Test Suites Passing, 1,897/1,897 Tests, 100% TypeScript Clean)
 
 ---
 
@@ -25,13 +26,14 @@
 ## 1. Project Overview
 
 ### 1.1 What the Project Does
-**BroPics** (operating in partnership with *Kavi Vazhi Photography*) is an industrial-grade, custom photo-framing e-commerce platform and personalization suite. It allows retail customers in India to:
-1. Browse high-end physical photo frames, collages, and wall-art collections.
+**KarthysGallery** (formerly *BroPics*, operating in partnership with *Kavi Vazhi Photography*) is an industrial-grade, custom photo-framing e-commerce platform and personalization suite. It allows retail customers in India to:
+1. Browse high-end physical photo frames, collages, and wall-art collections under the **KarthysGallery** brand.
 2. Upload personal photos (supporting JPEG, PNG, WebP, and iPhone HEIC/HEIF).
-3. Customize multi-slot frame layouts in an interactive real-time canvas studio with live DPI quality validation, pinch/drag/rotate gestures, dynamic text zones with auto-fitting typography, and vector clipart/stickers.
+3. Customize multi-slot frame layouts in an interactive real-time canvas studio with live DPI quality validation, calibrated transparent photo apertures (`x: 0.256, y: 0.192, width: 0.488, height: 0.620` on classic wooden frames), pinch/drag/rotate gestures, dynamic text zones with auto-fitting typography, and vector clipart/stickers.
 4. Preview exact frame dimensions, matting margins, and finishes before purchase.
-5. Checkout with instant pincode validation, GST invoice generation, and secure Razorpay payment processing.
-6. Track order progress through an 8-stage production pipeline with live courier AWB tracking and manage post-purchase returns and verified reviews.
+5. Add items to an offline-resilient Cart (`bropics_guest_cart` with seamless Firestore transaction sync and fallback).
+6. Checkout with instant pincode validation, GST invoice generation, and dual-mode payment processing (Live Razorpay & Instant Mock Payment Gateway for testing).
+7. Track order progress through an 8-stage production pipeline with live courier AWB tracking and manage post-purchase returns and verified reviews.
 
 Behind the storefront sits a complete **Admin Backoffice & Industrial Print Pipeline**:
 - A dedicated **Print Render Microservice** (running Sharp on Cloud Run) that consumes transactional print jobs and compiles high-resolution (300 DPI), print-ready composite PNGs and inspection JPG proofs.
@@ -48,12 +50,12 @@ Behind the storefront sits a complete **Admin Backoffice & Industrial Print Pipe
 - **Codebase Completeness:** **100% Code Complete** across all customer storefront routes, admin UI screens, API route handlers, background Cloud Functions, print render worker, shared geometry math, and security rules.
 - **Verification Status:**
   - `pnpm -r typecheck`: 100% clean (0 errors across all workspace packages).
-  - Vitest Test Suite: **230 test files passed, 1,500 tests passed (0 failures)**.
+  - Vitest Test Suite: **290 test files passed, 1,897 tests passed (0 failures)**.
   - Accessibility: Full `jest-axe` automated WCAG 2.1 AA audit coverage with 0 critical violations.
   - End-to-End Testing: Complete Playwright test suites configured for desktop and mobile viewports in [apps/web/e2e/](file:///d:/Projects/Bro-pics/apps/web/e2e).
 - **Operational Status:**
-  - The application is functional in local emulation (`firebase emulators:start` + `pnpm dev`).
-  - Remaining pre-launch steps are external operational tasks: acquiring live production Razorpay credentials, completing telecom DLT SMS registration, obtaining WhatsApp Business API approvals, setting up transactional email keys (Resend/SendGrid), applying Cloud Storage CORS (`cors.json`), and scheduling daily GCP Firestore backups.
+  - The application is fully functional in development mode (`pnpm run dev`) and local emulation (`firebase emulators:start`).
+  - Checkout supports both live Razorpay payment processing and automatic mock payment fallback for smooth local testing and order verification.
 
 ### 1.4 Documentation & Specifications in Repository
 - [README.md](file:///d:/Projects/Bro-pics/README.md): Quick-start guide, workspace structure, and emulator instructions.

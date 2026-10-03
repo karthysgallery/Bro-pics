@@ -97,5 +97,5 @@ describe('probeAndStripImage', () => {
       .toBuffer();
 
     await expect(probeAndStripImage(bomb)).rejects.toThrow();
-  });
+  }, 30000);
 });

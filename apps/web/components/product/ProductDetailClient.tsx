@@ -27,17 +27,8 @@ import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../
 import { useToast } from '../ui/Toast';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
-import type { SlotState, TextFieldValueMap } from '../editor/PersonalizationEditor';
+import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
-
-// [FE-45] PersonalizationEditor (TextFieldEditor, SlotPicker, ClipartPicker,
-// and their own dependencies — EditorCanvas is already its own dynamic
-// import inside PersonalizationEditor itself) was a static import here,
-// so its JS shipped in the main PDP bundle even before `showInlineEditor`
-// ever becomes true. A type-only import above keeps SlotState/
-// TextFieldValueMap available at zero runtime cost (types are erased);
-// only the component itself is deferred.
-const PersonalizationEditor = dynamic(() => import('../editor/PersonalizationEditor').then((mod) => mod.PersonalizationEditor));
 
 interface ProductDetailClientProps {
   product: Product;
@@ -175,8 +166,9 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   // already known on first render, so switching Size/Colour swaps the
   // canvas in place instantly with no blank/loading flash, and the editor
   // (rather than a placeholder Gallery) is what the very first paint shows.
-  const [templatesByVariant] = useState<Map<string, FrameTemplate>>(
-    () => new Map(Object.entries(initialTemplatesByVariant))
+  const templatesByVariant = useMemo(
+    () => new Map(Object.entries(initialTemplatesByVariant)),
+    [initialTemplatesByVariant]
   );
 
   const template = selectedVariant ? (templatesByVariant.get(selectedVariant.id) ?? null) : null;
@@ -491,48 +483,82 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
 
   // When the resolved template for the selected variant changes (a
   // Size/Colour switch that lands on a different FrameTemplate), re-fit
-  // every already-filled slot's photo to the new template's rect —
-  // preserving the photo and its rotation, but recentering scale/offset to
-  // a fresh cover fit, since the new rect's aspect ratio may differ. Only
-  // runs when there's something to re-fit; a no-op on first load.
+  // already-filled slots ONLY if the printable rect geometry actually changed
+  // (e.g. aspect ratio/size change). Switching frame colour preserves the
+  // customer's exact photo zoom, pan, and rotation.
   const templateIdRef = useRef<string | null>(null);
+  const prevRectsRef = useRef<Map<number, { x: number; y: number; width: number; height: number }>>(new Map());
+
   useEffect(() => {
     if (!template || templateIdRef.current === template.id) return;
     templateIdRef.current = template.id;
-    if (slots.size === 0) return;
-    // [FE-13] Built directly off the `slots` state this effect already
-    // closes over (not inside setSlots's own updater function) — a
-    // functional setState updater is not guaranteed to run synchronously
-    // before the code after the setSlots(...) call, so anything that
-    // needs to be observable right after (like deciding whether to toast)
-    // has to be computed here, not mutated from inside the updater.
+
+    if (slots.size === 0) {
+      const currentRects = new Map<number, { x: number; y: number; width: number; height: number }>();
+      for (const r of template.printableRects) {
+        currentRects.set(r.slotIndex, { x: r.x, y: r.y, width: r.width, height: r.height });
+      }
+      prevRectsRef.current = currentRects;
+      return;
+    }
+
     const worsenedSlots: number[] = [];
     const next = new Map<number, SlotState>();
+
     for (const [slotIndex, slot] of slots.entries()) {
       const rect = template.printableRects.find((r) => r.slotIndex === slotIndex);
       if (!rect) {
         next.set(slotIndex, slot);
         continue;
       }
-      const canvasRect = fractionRectToCanvasRect(rect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
-      const scale = coverScaleForRotation(canvasRect.width, canvasRect.height, slot.widthPx, slot.heightPx, slot.rotationDeg);
-      const { offsetX, offsetY } = centeredOffsetForRotation(
-        canvasRect.width,
-        canvasRect.height,
-        slot.widthPx,
-        slot.heightPx,
-        scale,
-        slot.rotationDeg
-      );
-      const effectiveDpi = selectedVariant
-        ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
-        : slot.effectiveDpi;
+
+      const prevRect = prevRectsRef.current.get(slotIndex);
+      const isSameRect =
+        prevRect &&
+        Math.abs(prevRect.x - rect.x) < 0.0001 &&
+        Math.abs(prevRect.y - rect.y) < 0.0001 &&
+        Math.abs(prevRect.width - rect.width) < 0.0001 &&
+        Math.abs(prevRect.height - rect.height) < 0.0001;
+
       const tierOrder = { green: 0, amber: 1, red: 2 } as const;
-      if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
-        worsenedSlots.push(slotIndex);
+      if (isSameRect) {
+        // Frame geometry did not change (e.g. only frame colour changed) -> PRESERVE user transform!
+        const effectiveDpi = selectedVariant
+          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, slot.scale, slot.offsetX, slot.offsetY, slot.rotationDeg, selectedVariant)
+          : slot.effectiveDpi;
+        if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
+          worsenedSlots.push(slotIndex);
+        }
+        next.set(slotIndex, { ...slot, effectiveDpi });
+      } else {
+        // Geometry changed -> re-fit to new slot rect
+        const canvasRect = fractionRectToCanvasRect(rect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+        const scale = coverScaleForRotation(canvasRect.width, canvasRect.height, slot.widthPx, slot.heightPx, slot.rotationDeg);
+        const { offsetX, offsetY } = centeredOffsetForRotation(
+          canvasRect.width,
+          canvasRect.height,
+          slot.widthPx,
+          slot.heightPx,
+          scale,
+          slot.rotationDeg
+        );
+        const effectiveDpi = selectedVariant
+          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
+          : slot.effectiveDpi;
+        const tierOrder = { green: 0, amber: 1, red: 2 } as const;
+        if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
+          worsenedSlots.push(slotIndex);
+        }
+        next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi, confirmedLowDpi: false });
       }
-      next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi, confirmedLowDpi: false });
     }
+
+    const currentRects = new Map<number, { x: number; y: number; width: number; height: number }>();
+    for (const r of template.printableRects) {
+      currentRects.set(r.slotIndex, { x: r.x, y: r.y, width: r.width, height: r.height });
+    }
+    prevRectsRef.current = currentRects;
+
     setSlots(next);
     if (worsenedSlots.length > 0) {
       showToast(
@@ -872,7 +898,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
           </div>
         </div>
       )}
-    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_350px] gap-4 lg:gap-4' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
+    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)_minmax(0,1fr)] gap-5 lg:gap-6 items-start' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
       {showInlineEditor && selectedVariant ? (
         <PersonalizationEditor
           template={template}

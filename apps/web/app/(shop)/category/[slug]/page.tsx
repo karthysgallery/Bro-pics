@@ -139,11 +139,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </div>
       )}
 
-      <h1 className="text-2xl font-semibold text-ink">{category.name}</h1>
-      {category.description && <p className="mt-2 max-w-2xl text-sm text-ink/70">{category.description}</p>}
-      <p className="mt-1 mb-5 text-sm text-ink/60">{totalCount} products</p>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-ink">{category.name}</h1>
+        {category.description && (
+          <p className="mt-2.5 max-w-3xl text-sm text-ink/75 leading-relaxed">{category.description}</p>
+        )}
+        <p className="mt-2 text-xs font-semibold text-ink/60">{totalCount} pieces available</p>
+      </div>
 
-      <div className="grid md:grid-cols-[220px_1fr] md:gap-8">
+      <div className="grid md:grid-cols-[240px_1fr] md:gap-8">
         <ProductFilters
           availableSizes={availableSizes}
           availableColours={availableColours}
@@ -152,12 +157,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         />
 
         {products.length === 0 ? (
-          <p className="text-sm text-ink/60 py-8">
-            Nothing matches those filters. Clear one and try again.
-          </p>
+          <div className="rounded-2xl border border-line bg-paper p-8 text-center">
+            <p className="text-sm font-semibold text-ink">No frames found matching your filters</p>
+            <p className="text-xs text-ink/60 mt-1">Try clearing some filters or browsing all collections.</p>
+          </div>
         ) : (
           <div>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-7">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
@@ -196,24 +202,35 @@ function CategoryPagination({
   }
 
   return (
-    <nav aria-label="Pagination" className="mt-8 flex items-center justify-center gap-4 text-sm">
+    <nav aria-label="Pagination" className="mt-12 flex items-center justify-center gap-3 text-xs">
       {currentPage > 1 ? (
-        <Link href={hrefForPage(currentPage - 1)} className="text-accent hover:text-accent-dark">
+        <Link
+          href={hrefForPage(currentPage - 1)}
+          className="rounded-full border border-line bg-paper px-4 py-2 font-semibold text-ink hover:border-ink hover:text-ink transition-all shadow-xs"
+        >
           ← Previous
         </Link>
       ) : (
-        <span className="text-ink/30">← Previous</span>
+        <span className="rounded-full border border-line/40 bg-paper/50 px-4 py-2 font-medium text-ink/30 cursor-not-allowed">
+          ← Previous
+        </span>
       )}
-      <span className="text-ink/60">
+      <span className="rounded-full bg-tint px-4 py-2 font-semibold text-ink">
         Page {currentPage} of {totalPages}
       </span>
       {currentPage < totalPages ? (
-        <Link href={hrefForPage(currentPage + 1)} className="text-accent hover:text-accent-dark">
+        <Link
+          href={hrefForPage(currentPage + 1)}
+          className="rounded-full border border-line bg-paper px-4 py-2 font-semibold text-ink hover:border-ink hover:text-ink transition-all shadow-xs"
+        >
           Next →
         </Link>
       ) : (
-        <span className="text-ink/30">Next →</span>
+        <span className="rounded-full border border-line/40 bg-paper/50 px-4 py-2 font-medium text-ink/30 cursor-not-allowed">
+          Next →
+        </span>
       )}
     </nav>
   );
 }
+

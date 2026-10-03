@@ -20,6 +20,7 @@ ui-debug.log
 tasks.zip
 tasks/
 BroPics_Production_Implementation_Master_Plan.pdf
+figma-reference/
 
 # Scratch output from scripts/seed's migration tooling
 migration-exceptions-*.json

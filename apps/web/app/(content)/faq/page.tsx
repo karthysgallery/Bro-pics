@@ -128,41 +128,76 @@ export default async function FaqPage() {
   const cmsGroups = groupBySection(faqs);
 
   return (
-    <>
-      <PageIntro
-        title="Frequently asked questions"
-        standfirst="If your question is not here, message us — we answer on WhatsApp."
-      />
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">FAQ</span>
+      </nav>
 
-      {cmsGroups.length > 0
-        ? cmsGroups.map((group) => (
-            <section key={group.section}>
-              <h2>{group.section}</h2>
-              {group.items.map((item) => (
-                <div key={item.question} className="mb-5">
-                  <h3>{item.question}</h3>
-                  <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} />
-                </div>
-              ))}
-            </section>
-          ))
-        : FAQS.map((group) => (
-            <section key={group.section}>
-              <h2>{group.section}</h2>
-              {group.items.map((item) => (
-                <div key={item.q} className="mb-5">
-                  <h3>{item.q}</h3>
-                  <p>{item.a}</p>
-                </div>
-              ))}
-            </section>
-          ))}
+      <div className="mb-10">
+        <h1 className="font-display text-3xl md:text-5xl font-bold text-ink mb-3 leading-tight">
+          Frequently asked questions
+        </h1>
+        <p className="text-sm md:text-base text-ink/70">
+          Everything you need to know about our frames, print quality, sizing, delivery and returns.
+        </p>
+      </div>
 
-      <h2>Still stuck?</h2>
-      <p>
-        <Link href="/contact">Contact us</Link> with your order number and we will pick it up from
-        there.
-      </p>
-    </>
+      <div className="max-w-3xl space-y-12 my-10">
+        {cmsGroups.length > 0
+          ? cmsGroups.map((group) => (
+              <section key={group.section} className="rounded-3xl bg-paper border border-line p-6 md:p-8 shadow-sm">
+                <h2 className="font-display text-xl font-bold text-ink mb-4 pb-3 border-b border-line">{group.section}</h2>
+                <div className="divide-y divide-line text-sm">
+                  {group.items.map((item) => (
+                    <details key={item.question} className="group py-4 cursor-pointer">
+                      <summary className="flex items-center justify-between font-semibold text-ink list-none">
+                        <span>{item.question}</span>
+                        <span className="transition group-open:rotate-45 text-lg font-light text-ink/70">+</span>
+                      </summary>
+                      <div className="pt-3 text-xs text-ink/70 leading-relaxed" dangerouslySetInnerHTML={{ __html: item.answerHtml }} />
+                    </details>
+                  ))}
+                </div>
+              </section>
+            ))
+          : FAQS.map((group) => (
+              <section key={group.section} className="rounded-3xl bg-paper border border-line p-6 md:p-8 shadow-sm">
+                <h2 className="font-display text-xl font-bold text-ink mb-4 pb-3 border-b border-line">{group.section}</h2>
+                <div className="divide-y divide-line text-sm">
+                  {group.items.map((item) => (
+                    <details key={item.q} className="group py-4 cursor-pointer">
+                      <summary className="flex items-center justify-between font-semibold text-ink list-none">
+                        <span>{item.q}</span>
+                        <span className="transition group-open:rotate-45 text-lg font-light text-ink/70">+</span>
+                      </summary>
+                      <div className="pt-3 text-xs text-ink/70 leading-relaxed">
+                        {item.a}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            ))}
+      </div>
+
+      {/* Support card */}
+      <div className="max-w-3xl p-8 rounded-3xl bg-field border border-line my-12 text-center md:text-left flex flex-col md:flex-row items-center justify-between gap-6">
+        <div>
+          <h2 className="font-display text-xl font-bold text-ink mb-1">Still have questions?</h2>
+          <p className="text-xs text-ink/70">
+            Message us on WhatsApp with your photo or order number and a real person will help.
+          </p>
+        </div>
+        <Link
+          href="/contact"
+          className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm whitespace-nowrap"
+        >
+          Contact support →
+        </Link>
+      </div>
+    </div>
   );
 }

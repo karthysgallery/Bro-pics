@@ -1,8 +1,8 @@
-# BroPics — Master Production UI & Page Inventory Report
+# KarthysGallery (BroPics) — Master Production UI & Page Inventory Report
 
-> **Project:** BroPics (Personalized Photo Frame E-Commerce Platform & Kavi Vazhi Photography)  
-> **Target Version:** Production Master Release (1.0)  
-> **Generated:** 2026-09-28  
+> **Project:** KarthysGallery (Personalized Photo Frame E-Commerce Platform & Kavi Vazhi Photography)  
+> **Target Version:** Production Master Release (1.1)  
+> **Last Updated:** October 2026  
 > **Document Purpose:** Complete, exhaustive inventory and UI/UX blueprint of all customer-facing, account, content, and backoffice administration pages.
 
 ---

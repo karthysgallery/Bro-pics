@@ -161,13 +161,13 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         {stockBadge}
                       </span>
                     )}
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <QuantityStepper
                         value={item.qty}
                         onChange={(qty) => updateQuantity(item.variantId, item.personalizationId, qty)}
                         label={`Quantity for ${item.title}`}
                       />
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         {item.productSlug && (
                           <Link
                             href={`/product/${item.productSlug}?edit=${item.personalizationId}&variantId=${item.variantId}`}

@@ -65,6 +65,11 @@ const ROLE_LABELS: Record<Role, { title: string; desc: string; badge: string }> 
     desc: 'Manage orders, update tracking AWBs, inspect QC, advance status, and moderate customer reviews.',
     badge: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
   },
+  marketing_manager: {
+    title: 'Marketing Manager',
+    desc: 'Manage coupons, review moderation, promotional banners, and storefront merchandising.',
+    badge: 'bg-teal-500/10 text-teal-600 border-teal-500/30',
+  },
   content_manager: {
     title: 'Content Manager',
     desc: 'Manage homepage sections, static CMS policy pages, FAQs, testimonials, and videos.',

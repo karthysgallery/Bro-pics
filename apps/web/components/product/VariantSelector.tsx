@@ -26,7 +26,7 @@ export function VariantSelector({ label, options, selected, onSelect, display = 
           otherwise sits directly on top of a size/colour pill at common
           scroll positions and blocks taps on it. Not needed once the
           buy box sits in its own narrower column on wider viewports. */}
-      <div className="flex flex-wrap gap-2 pr-20 sm:pr-0">
+      <div className="flex flex-wrap gap-2">
         {options.map((option) =>
           display === 'swatch' ? (
             <Swatch key={option} label={option} active={option === selected} onClick={() => onSelect(option)} />

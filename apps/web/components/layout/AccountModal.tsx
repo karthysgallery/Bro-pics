@@ -14,7 +14,7 @@ export function AccountModal({ isOpen, onClose }: AccountModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="account-modal">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="account-modal">
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
       {/* [FE-44] role="dialog"/aria-modal/aria-labelledby were missing —
           same gap as CartDrawer, fixed the same way. */}

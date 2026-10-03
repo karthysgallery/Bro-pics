@@ -18,58 +18,114 @@ export default async function HowItWorksPage() {
   const page = await getPageBySlug('how-it-works').catch(() => null);
   if (page) {
     return (
-      <>
+      <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
         <PageIntro title={page.title} />
         <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
-      </>
+      </div>
     );
   }
 
+  const steps = [
+    {
+      number: 'STEP 01',
+      title: 'Pick a frame',
+      desc: 'Choose a size, finish and layout. Single photo, collage or gallery — there’s a place for every story.',
+      imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80',
+    },
+    {
+      number: 'STEP 02',
+      title: 'Make it yours',
+      desc: 'Upload your photo, adjust the crop and add a caption if you like. Our Studio shows exactly how it will look.',
+      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
+    },
+    {
+      number: 'STEP 03',
+      title: 'We do the craft',
+      desc: 'We check the print quality, make your frame and deliver it safely. Just choose a spot on your wall.',
+      imageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80',
+    },
+  ];
+
+  const faqs = [
+    {
+      q: 'Can I use a photo from my phone?',
+      a: 'Yes. Upload the original file, rather than a screenshot or compressed WhatsApp image. Our DPI check helps you choose the right size.',
+    },
+    {
+      q: 'Will you check my photo before printing?',
+      a: 'Yes. Every photo is reviewed for sharpness and color fidelity before it enters our print and mount workshop.',
+    },
+    {
+      q: 'Can I send a frame as a gift?',
+      a: 'Absolutely. We do not include invoices inside the box with prices, and every package arrives securely packed and gift-ready.',
+    },
+  ];
+
   return (
-    <>
-      <PageIntro
-        title="How it works"
-        standfirst="Four steps, and you see the result before you pay for it."
-      />
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">How it works</span>
+      </nav>
 
-      <h2>1. Pick a frame and a size</h2>
-      <p>
-        Choose the frame design first, then the size and orientation. Prices change with size, and
-        the size you pick decides how sharp your photo needs to be — the{' '}
-        <Link href="/picture-quality-guide">picture quality guide</Link> explains that in detail.
-      </p>
+      <div className="mb-10">
+        <h1 className="font-display text-3xl md:text-5xl font-bold text-ink mb-3 leading-tight">
+          From your phone to your wall.
+        </h1>
+        <p className="text-sm md:text-base text-ink/70">
+          Three simple steps. One very personal frame.
+        </p>
+      </div>
 
-      <h2>2. Upload your photo</h2>
-      <p>
-        Upload straight from your phone or computer, up to 25&nbsp;MB. As soon as the photo lands,
-        we check its resolution against the print size and show you a quality reading. Green means
-        it will print sharp; amber means it will print, but softer than it could; red means we do
-        not recommend it at that size.
-      </p>
+      {/* 3 Step Cards */}
+      <div className="grid md:grid-cols-3 gap-6 md:gap-8 my-12">
+        {steps.map((step) => (
+          <div key={step.number} className="flex flex-col">
+            <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-tint mb-5 shadow-sm border border-line">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={step.imageUrl} alt={step.title} className="w-full h-full object-cover" />
+            </div>
+            <span className="text-2xs font-bold tracking-wider text-ink/50 uppercase mb-1">{step.number}</span>
+            <h2 className="font-display text-xl font-bold text-ink mb-2">{step.title}</h2>
+            <p className="text-xs text-ink/70 leading-relaxed">{step.desc}</p>
+          </div>
+        ))}
+      </div>
 
-      <h2>3. Position it, and add text if you want</h2>
-      <p>
-        Drag to move, pinch or use the slider to zoom, and rotate in quarter turns. Frames with
-        more than one opening let you fill each slot separately. Where a frame supports it, you can
-        add a name or a date, pick a typeface and a colour, and add a small piece of clipart.
-      </p>
-      <p>
-        Whatever is on screen is the file we print. Nothing is re-cropped afterwards.
-      </p>
+      {/* Split Callout & FAQ */}
+      <div className="grid md:grid-cols-[1fr_1.2fr] gap-8 md:gap-12 items-start my-16 pt-8 border-t border-line">
+        <div>
+          <h2 className="font-display text-2xl md:text-3xl font-bold text-ink mb-3">
+            Your favourite moment, made real.
+          </h2>
+          <p className="text-xs text-ink/70 leading-relaxed mb-6">
+            Frames start at ₹999, including photo printing. Most orders dispatch in 3-5 working days.
+          </p>
+          <Link
+            href="/category"
+            className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-colors shadow-sm"
+          >
+            Start with a frame
+          </Link>
+        </div>
 
-      <h2>4. Order, and we make it</h2>
-      <p>
-        We print, mount and assemble by hand, then check the result against your preview before it
-        is packed. Dispatch times are shown on each product page, and tracking appears on{' '}
-        <Link href="/orders">your orders page</Link> once the parcel leaves us.
-      </p>
-
-      <h2>If something is not right</h2>
-      <p>
-        Personalized prints cannot be resold, so they are not returnable on change of mind — but a
-        damaged, misprinted or wrong item is replaced or refunded. The{' '}
-        <Link href="/return-refund-policy">return &amp; refund policy</Link> has the full terms.
-      </p>
-    </>
+        {/* FAQs */}
+        <div className="divide-y divide-line text-sm">
+          {faqs.map((faq, idx) => (
+            <details key={faq.q} className="group py-4 cursor-pointer" open={idx === 0}>
+              <summary className="flex items-center justify-between font-semibold text-ink list-none">
+                <span>{faq.q}</span>
+                <span className="transition group-open:rotate-45 text-lg font-light text-ink/70">+</span>
+              </summary>
+              <div className="pt-3 text-xs text-ink/70 leading-relaxed">
+                {faq.a}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

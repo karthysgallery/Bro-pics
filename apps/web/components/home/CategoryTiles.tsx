@@ -18,10 +18,17 @@ const TAGLINES: Record<string, string> = {
   'personalized-gifts': 'Thoughtful & unique',
 };
 
+/** Default fallbacks if image is missing */
+const FALLBACK_IMAGES: Record<string, string> = {
+  'frames-wall-decor': '/placeholders/categories/frames.jpg',
+  'canvas-prints': '/placeholders/categories/canvas.jpg',
+  'collage-combo-sets': '/placeholders/categories/collage.jpg',
+  'personalized-gifts': '/placeholders/categories/gifts.jpg',
+};
+
 /**
- * Pill cards rather than bare circles: a thumbnail on the left, the name and
- * its promise on the right. The extra line is what turns a row of icons into
- * a row of reasons to click.
+ * Clean category cards with reduced curve radius, no outline,
+ * full-bleed left image, and right-aligned text content.
  */
 export function CategoryTiles({ title, categories }: CategoryTilesProps) {
   if (categories.length === 0) return null;
@@ -29,36 +36,44 @@ export function CategoryTiles({ title, categories }: CategoryTilesProps) {
   return (
     <Section>
       <SectionHeader title={title} subtitle="Find the perfect piece for every moment" href="/category" />
-      {/* pr-20 on mobile keeps a full-width tile clear of LayoutChrome's fixed
-          bottom-right WhatsApp button (bottom-6 right-6, ~48px), which
-          otherwise lands on top of a stacked single-column tile at common
-          scroll positions and blocks taps on it — same recurring class of
-          overlap as VariantSelector/BuyBox/Footer, see VariantSelector's
-          comment for the fuller explanation. */}
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pr-20 sm:pr-0">
-        {categories.map((category) => (
-          <li key={category.id}>
-            <Link
-              href={`/category/${category.slug}`}
-              className="group flex items-center gap-3 rounded-2xl bg-paper border border-line p-2.5 hover:border-gold transition-colors"
-            >
-              <span className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden bg-tint">
-                {category.image ? (
-                  <Image src={category.image} alt="" fill sizes="56px" className="object-cover" />
-                ) : null}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-ink truncate group-hover:text-accent transition-colors">
-                  {category.name}
-                </span>
-                {TAGLINES[category.slug] && (
-                  <span className="block text-2xs text-ink/55 truncate">{TAGLINES[category.slug]}</span>
-                )}
-              </span>
-            </Link>
-          </li>
-        ))}
+      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+        {categories.map((category) => {
+          const imgSrc = category.image || FALLBACK_IMAGES[category.slug] || '/placeholders/products/classic-wooden-photo-frame-1.svg';
+          const tagline = TAGLINES[category.slug] || 'Explore collection';
+
+          return (
+            <li key={category.id}>
+              <Link
+                href={`/category/${category.slug}`}
+                className="group flex items-stretch h-[68px] sm:h-[72px] rounded-[18px] bg-white overflow-hidden shadow-xs hover:shadow-md transition-all duration-200"
+              >
+                {/* Left full-bleed image container */}
+                <div className="relative w-[32%] sm:w-[35%] h-full shrink-0 overflow-hidden bg-[#EAEFF4]">
+                  <Image
+                    src={imgSrc}
+                    alt=""
+                    fill
+                    sizes="(max-width: 640px) 120px, 160px"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
+
+                {/* Right text container */}
+                <div className="flex-1 flex flex-col justify-center px-4 py-2 min-w-0 bg-white">
+                  <span className="block text-xs sm:text-sm font-bold text-[#0F172A] truncate leading-tight group-hover:text-gold transition-colors">
+                    {category.name}
+                  </span>
+                  <span className="block text-[11px] sm:text-xs text-[#718096] truncate mt-0.5">
+                    {tagline}
+                  </span>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </Section>
   );
 }
+
+export default CategoryTiles;

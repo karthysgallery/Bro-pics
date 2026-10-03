@@ -23,12 +23,12 @@ export function ProductTabs({ product, variants = [] }: { product: Product; vari
 
   return (
     <div className="mt-12">
-      <div className="flex flex-wrap gap-2 border-b border-line mb-4">
+      <div className="rail flex overflow-x-auto gap-2 border-b border-line mb-4 pb-1 sm:flex-wrap">
         {TAB_LABELS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-3 py-2 text-sm ${
+            className={`px-3 py-2 text-sm whitespace-nowrap shrink-0 ${
               activeTab === tab ? 'border-b-2 border-accent text-ink font-medium' : 'text-ink/60'
             }`}
           >

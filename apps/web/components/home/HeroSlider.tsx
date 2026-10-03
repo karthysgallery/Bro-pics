@@ -135,9 +135,10 @@ export function HeroSlider({ sections }: HeroSliderProps) {
   };
 
   return (
-    <section className="mx-auto w-full max-w-shell px-4 md:px-6 pt-5">
+    <section className="mx-auto w-full max-w-shell px-4 md:px-6 pt-6 md:pt-10">
+      {/* 2-Column Split Hero Layout matching Figma */}
       <div
-        className="group relative rounded-3xl overflow-hidden bg-tint"
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center"
         aria-roledescription="carousel"
         aria-label="Featured collections"
         onMouseEnter={() => setIsPaused(true)}
@@ -147,161 +148,145 @@ export function HeroSlider({ sections }: HeroSliderProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {slides.map((slide, index) => (
-          <div
-            key={slide.id}
-            role="group"
-            aria-roledescription="slide"
-            aria-label={`${index + 1} of ${slides.length}`}
-            aria-hidden={index !== activeIndex}
-            className={`absolute inset-0 transition-opacity duration-700 ${
-              index === activeIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            {/* [FE-26] Art-directed mobile crop when the doc/slide has its
-                own — a wide banner shot for desktop often loses its focal
-                point when simply squeezed narrower on a phone. Falls back
-                to the one image at every width when no mobile-specific art
-                exists. */}
-            {slide.mobileImage && (
-              <Image
-                src={slide.mobileImage}
-                alt=""
-                fill
-                priority={index === 0}
-                sizes="100vw"
-                className="object-cover object-right md:hidden"
-              />
-            )}
-            <Image
-              src={slide.image}
-              alt=""
-              fill
-              priority={index === 0}
-              sizes="(max-width: 1280px) 100vw, 1280px"
-              className={`object-cover object-right ${slide.mobileImage ? 'hidden md:block' : ''}`}
-            />
-            {/* Two scrims, because the text sits in different places at the
-                two sizes. On a phone the copy is over the middle of the
-                photo, so it needs a flat wash; from md the copy has its own
-                left column and the gradient can release the artwork by ~70%,
-                keeping the golden light that makes these banners worth
-                using. Stops are explicit rather than Tailwind's default
-                three, which faded out far too early to read against. */}
-            <div className="absolute inset-0 md:hidden" style={{ backgroundColor: 'rgba(250,248,244,0.9)' }} />
-            <div
-              className="absolute inset-0 hidden md:block"
-              style={{
-                backgroundImage:
-                  'linear-gradient(90deg, #FAF8F4 0%, #FAF8F4 20%, rgba(250,248,244,0.94) 34%, rgba(250,248,244,0.72) 46%, rgba(250,248,244,0.3) 57%, rgba(250,248,244,0) 66%)',
-              }}
-            />
-          </div>
-        ))}
+        {/* Left Column: Typography, CTAs, Social Proof */}
+        <div className="lg:col-span-5 flex flex-col justify-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink/60">
+            {active.eyebrow || 'YOUR LIFE, IN FRAME.'}
+          </p>
 
-        <div className="relative z-10 flex items-center min-h-[400px] sm:min-h-[420px] lg:min-h-[440px]">
-          <div className="w-full md:w-[62%] lg:w-[54%] px-6 sm:px-10 md:pl-20 lg:pl-24 py-10 md:py-12">
-            <p className="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-accent">
-              {active.eyebrow}
-              <span className="h-px w-10 bg-gold" aria-hidden="true" />
-            </p>
+          <h1 className="mt-4 font-display text-4xl sm:text-5xl lg:text-[3.25rem] font-bold leading-[1.08] text-ink tracking-tight">
+            {active.title || 'Some moments deserve a wall.'}
+          </h1>
 
-            {/* The heading element stays put across slides so switching
-                banners never rewrites the document outline. */}
-            <h1 className="mt-4 font-display text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.05] text-ink">
-              {active.title}
-            </h1>
+          <p className="mt-4 text-base text-ink/70 leading-relaxed max-w-md">
+            {active.subtitle ||
+              'Turn the photos you love into beautifully crafted frames. Made by us. Made personal by you.'}
+          </p>
 
-            {active.subtitle && <p className="mt-4 max-w-md text-base text-ink/70">{active.subtitle}</p>}
-
+          {/* Dual Action Buttons */}
+          <div className="mt-7 flex flex-col sm:flex-row sm:items-center gap-3">
             <Link
               href={active.link || '/category'}
-              className="group/cta mt-7 inline-flex items-center gap-2 rounded-full bg-gold text-ink pl-6 pr-5 py-3 text-sm font-semibold hover:bg-gold-deep transition-colors"
+              className="rounded-full bg-gold text-ink px-7 py-3 text-sm font-semibold hover:bg-gold-deep transition-all shadow-sm active:scale-95 text-center"
             >
-              {active.cta ?? 'Shop now'}
-              <span
-                className="grid place-items-center w-6 h-6 rounded-full bg-ink/10 transition-transform group-hover/cta:translate-x-0.5"
-                aria-hidden="true"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
+              {active.cta ?? 'Find your frame'}
             </Link>
+            <Link
+              href="/how-it-works"
+              className="rounded-full border border-line bg-paper text-ink px-6 py-3 text-sm font-medium hover:border-ink hover:text-ink transition-all text-center"
+            >
+              See how it works
+            </Link>
+          </div>
 
-            <ul className="mt-9 flex flex-wrap gap-x-7 gap-y-3">
-              {FEATURES.map((feature) => (
-                <li key={feature.label} className="flex items-center gap-2 text-xs text-ink/70">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#14213D"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    {feature.icon}
-                  </svg>
-                  {feature.label}
-                </li>
-              ))}
-            </ul>
+          {/* Pricing & Guarantee Meta */}
+          <p className="mt-5 text-xs text-ink/60 font-medium">
+            From ₹399 · Printed, framed & delivered
+          </p>
+
+          {/* Star Rating Social Proof */}
+          <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-ink">
+            <span className="flex text-[#FCA311]">★★★★★</span>
+            <span>4.9/5 from 320 happy homes</span>
           </div>
         </div>
 
-        {/* The frame. Drawn as an inset ring ABOVE the slides rather than as a
-            border on the container: a container border sits behind the
-            absolutely-positioned artwork, so it only showed where the scrim
-            happened to be opaque and broke up across the photograph. */}
-        <div
-          className="pointer-events-none absolute inset-0 z-20 rounded-3xl ring-1 ring-inset ring-ink/10"
-          aria-hidden="true"
-        />
-
-        {isMultiSlide && (
-          <>
-            <button
-              type="button"
-              aria-label="Previous slide"
-              onClick={() => goTo(activeIndex - 1)}
-              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-paper/90 text-ink items-center justify-center shadow-sm hover:bg-paper transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              aria-label="Next slide"
-              onClick={() => goTo(activeIndex + 1)}
-              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-paper/90 text-ink items-center justify-center shadow-sm hover:bg-paper transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
-
-            {/* Dashes rather than dots: they read as chapters of one banner
-                and sit quietly in the corner of the artwork. */}
-            <div className="absolute bottom-5 right-6 z-20 flex items-center gap-1.5">
-              {slides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  aria-label={`Go to slide ${index + 1}`}
-                  aria-current={index === activeIndex}
-                  onClick={() => goTo(index)}
-                  className={`h-1 rounded-full transition-all ${
-                    index === activeIndex ? 'w-8 bg-ink/70' : 'w-4 bg-ink/25 hover:bg-ink/40'
-                  }`}
+        {/* Right Column: Large Lifestyle Mockup with Floating Product Badge */}
+        <div className="lg:col-span-7 relative">
+          <div className="relative aspect-[4/3] sm:aspect-[16/11] rounded-3xl overflow-hidden bg-tint shadow-lg border border-line/40">
+            {slides.map((slide, index) => (
+              <div
+                key={slide.id}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`${index + 1} of ${slides.length}`}
+                aria-hidden={index !== activeIndex}
+                className={`absolute inset-0 transition-opacity duration-700 ${
+                  index === activeIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                {slide.mobileImage && (
+                  <Image
+                    src={slide.mobileImage}
+                    alt=""
+                    fill
+                    priority={index === 0}
+                    sizes="100vw"
+                    className="object-cover md:hidden"
+                  />
+                )}
+                <Image
+                  src={slide.image}
+                  alt={slide.title}
+                  fill
+                  priority={index === 0}
+                  sizes="(max-width: 1280px) 100vw, 750px"
+                  className={`object-cover ${slide.mobileImage ? 'hidden md:block' : ''}`}
                 />
-              ))}
+              </div>
+            ))}
+
+            {/* Floating Glassmorphic Badge matching Figma */}
+            <div className="absolute bottom-3 left-3 sm:bottom-5 sm:left-5 z-20 max-w-[calc(100%-80px)] sm:max-w-none rounded-2xl bg-paper/95 backdrop-blur-md px-3 py-2 sm:px-4 sm:py-2.5 shadow-md border border-line/50">
+              <p className="text-xs font-bold text-ink leading-tight truncate">Real wood. Real memories.</p>
+              <p className="text-[11px] text-ink/65 mt-0.5 truncate">The Classic Frame · From ₹1,499</p>
             </div>
-          </>
-        )}
+
+            {/* Carousel navigation controls if multi-slide */}
+            {isMultiSlide && (
+              <div className="absolute bottom-3 right-3 sm:bottom-5 sm:right-5 z-20 flex items-center gap-1.5">
+                {slides.map((slide, index) => (
+                  <button
+                    key={slide.id}
+                    type="button"
+                    aria-label={`Go to slide ${index + 1}`}
+                    aria-current={index === activeIndex}
+                    onClick={() => goTo(index)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      index === activeIndex ? 'w-6 bg-paper' : 'w-2.5 bg-paper/50 hover:bg-paper/80'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Trust Bar (4-Item Responsive Strip below Hero) */}
+      <div className="mt-12 pt-8 border-t border-line/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-6 text-xs text-ink/80">
+        <div className="flex items-center gap-2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-ink shrink-0" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <span className="font-medium">Archival-quality prints</span>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-ink shrink-0" aria-hidden="true">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+          <span className="font-medium">Handcrafted in India</span>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-ink shrink-0" aria-hidden="true">
+            <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z" />
+            <circle cx="5.5" cy="18.5" r="2.5" />
+            <circle cx="18.5" cy="18.5" r="2.5" />
+          </svg>
+          <span className="font-medium">Safe, tracked delivery</span>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-ink shrink-0" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+          <span className="font-medium">Happiness guaranteed</span>
+        </div>
       </div>
     </section>
   );

@@ -36,27 +36,53 @@ describe('roleHasPermission', () => {
     }
   });
 
-  it('scopes staff to order/return/review operations only', () => {
+  it('scopes staff to order/return/review/production/shipping/inventory operations', () => {
     expect(roleHasPermission('staff', 'orders:write')).toBe(true);
     expect(roleHasPermission('staff', 'returns:write')).toBe(true);
     expect(roleHasPermission('staff', 'reviews:moderate')).toBe(true);
+    expect(roleHasPermission('staff', 'production:write')).toBe(true);
+    expect(roleHasPermission('staff', 'shipping:write')).toBe(true);
+    expect(roleHasPermission('staff', 'inventory:write')).toBe(true);
+    expect(roleHasPermission('staff', 'refunds:execute')).toBe(false);
     expect(roleHasPermission('staff', 'catalogue:write')).toBe(false);
     expect(roleHasPermission('staff', 'settings:write')).toBe(false);
     expect(roleHasPermission('staff', 'team:manage')).toBe(false);
   });
 
-  it('scopes catalogue_manager to catalogue:write, with read-only content access', () => {
+  it('scopes catalogue_manager to catalogue and inventory writes', () => {
+    expect(roleHasPermission('catalogue_manager', 'catalogue:read')).toBe(true);
     expect(roleHasPermission('catalogue_manager', 'catalogue:write')).toBe(true);
-    expect(roleHasPermission('catalogue_manager', 'content:read')).toBe(true);
-    expect(roleHasPermission('catalogue_manager', 'content:write')).toBe(false);
+    expect(roleHasPermission('catalogue_manager', 'catalogue:publish')).toBe(true);
+    expect(roleHasPermission('catalogue_manager', 'catalogue:delete')).toBe(true);
+    expect(roleHasPermission('catalogue_manager', 'inventory:write')).toBe(true);
+    expect(roleHasPermission('catalogue_manager', 'settings:read')).toBe(true);
     expect(roleHasPermission('catalogue_manager', 'orders:write')).toBe(false);
+    expect(roleHasPermission('catalogue_manager', 'team:manage')).toBe(false);
   });
 
-  it('scopes content_manager to content:write, with read-only catalogue access', () => {
+  it('scopes marketing_manager to coupons, reviews moderation, and merchandising', () => {
+    expect(roleHasPermission('marketing_manager', 'coupons:write')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'reviews:moderate')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'catalogue:read')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'settings:write')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'analytics:read')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'orders:write')).toBe(false);
+    expect(roleHasPermission('marketing_manager', 'refunds:execute')).toBe(false);
+  });
+
+  it('scopes content_manager backwards-compatible alias', () => {
     expect(roleHasPermission('content_manager', 'content:write')).toBe(true);
     expect(roleHasPermission('content_manager', 'catalogue:read')).toBe(true);
-    expect(roleHasPermission('content_manager', 'catalogue:write')).toBe(false);
     expect(roleHasPermission('content_manager', 'orders:write')).toBe(false);
+    expect(roleHasPermission('content_manager', 'reviews:moderate')).toBe(false);
+  });
+
+  it('limits refunds:execute only to super_admin and admin', () => {
+    expect(roleHasPermission('super_admin', 'refunds:execute')).toBe(true);
+    expect(roleHasPermission('admin', 'refunds:execute')).toBe(true);
+    expect(roleHasPermission('staff', 'refunds:execute')).toBe(false);
+    expect(roleHasPermission('catalogue_manager', 'refunds:execute')).toBe(false);
+    expect(roleHasPermission('marketing_manager', 'refunds:execute')).toBe(false);
   });
 });
 

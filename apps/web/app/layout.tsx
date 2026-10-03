@@ -59,8 +59,14 @@ const textFieldFontVariables = [
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com'),
-  title: 'BroPics — Personalized Photo Frames',
+  title: 'KarthysGallery — Personalized Photo Frames',
   description: 'Custom photo frames, personalized and delivered.',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover' as const,
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

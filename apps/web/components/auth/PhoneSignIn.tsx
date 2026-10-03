@@ -43,8 +43,14 @@ export function PhoneSignIn({ onSignedIn }: PhoneSignInProps) {
 
   useEffect(() => {
     return () => {
-      verifierRef.current?.clear();
+      try { verifierRef.current?.clear(); } catch { /* already cleared */ }
       verifierRef.current = null;
+      // Flush any leftover reCAPTCHA widget DOM from the container so a
+      // re-mount (React Strict Mode double-render) doesn't hit "already
+      // rendered in this element".
+      if (recaptchaContainerRef.current) {
+        recaptchaContainerRef.current.innerHTML = '';
+      }
     };
   }, []);
 
@@ -57,16 +63,45 @@ export function PhoneSignIn({ onSignedIn }: PhoneSignInProps) {
   const handleSendOtp = async () => {
     setError(null);
     try {
-      verifierRef.current?.clear();
+      // Tear down any prior verifier and its DOM remnants
+      try { verifierRef.current?.clear(); } catch { /* ok */ }
+      verifierRef.current = null;
+      if (recaptchaContainerRef.current) {
+        recaptchaContainerRef.current.innerHTML = '';
+      }
+
+      // Create a fresh child div for the new verifier — avoids the
+      // "reCAPTCHA has already been rendered in this element" error
+      const widgetDiv = document.createElement('div');
+      recaptchaContainerRef.current!.appendChild(widgetDiv);
+
       const auth = getAuth(getFirebaseApp());
-      const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current!, { size: 'invisible' });
+      const verifier = new RecaptchaVerifier(auth, widgetDiv, { size: 'invisible' });
       verifierRef.current = verifier;
-      const result = await signInWithPhoneNumber(auth, phone, verifier);
+
+      // Normalize to E.164: strip spaces/dashes, auto-prefix +91 for bare 10-digit numbers
+      let normalized = phone.replace(/[\s\-()]/g, '');
+      if (/^\d{10}$/.test(normalized)) normalized = `+91${normalized}`;
+      if (!normalized.startsWith('+')) normalized = `+${normalized}`;
+
+      const result = await signInWithPhoneNumber(auth, normalized, verifier);
       setConfirmationResult(result);
       setFailedAttempts(0);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
-    } catch {
-      setError('Could not send OTP. Check the phone number and try again.');
+    } catch (err: any) {
+      console.error('Phone sign-in error:', err);
+      const code = err?.code ?? '';
+      if (code === 'auth/invalid-phone-number') {
+        setError('Invalid phone number. Use format: +91XXXXXXXXXX');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please wait a few minutes and try again.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Phone sign-in is not enabled. Please enable it in Firebase Console.');
+      } else if (code === 'auth/captcha-check-failed') {
+        setError('reCAPTCHA verification failed. Please reload the page and try again.');
+      } else {
+        setError(code ? `Could not send OTP (${code}). Check the phone number and try again.` : 'Could not send OTP. Check the phone number and try again.');
+      }
     }
   };
 

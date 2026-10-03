@@ -630,12 +630,14 @@ export function EditorCanvas({
       ref={canvasRef}
       width={CANVAS_SIZE}
       height={CANVAS_SIZE}
-      className="rounded-xl overflow-hidden"
+      className="rounded-xl overflow-hidden shadow-2xs"
       style={{
         touchAction: 'none',
         cursor: activeSlot?.photoUrl ? (isDragging ? 'grabbing' : 'grab') : 'default',
         width: '100%',
         maxWidth: 560,
+        aspectRatio: '1 / 1',
+        display: 'block',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

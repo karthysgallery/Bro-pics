@@ -8,94 +8,137 @@
  * keep it as a real tier, not retire it for lack of a dedicated UI
  * surface.
  */
-export const ROLES = ['super_admin', 'admin', 'staff', 'content_manager', 'catalogue_manager'] as const;
+export const ROLES = [
+  'super_admin',
+  'admin',
+  'staff',
+  'catalogue_manager',
+  'marketing_manager',
+  // content_manager kept as an alias for backwards compatibility with existing sessions
+  'content_manager',
+] as const;
 export type Role = (typeof ROLES)[number];
 
 export const PERMISSION_KEYS = [
   'catalogue:read',
   'catalogue:write',
-  'content:read',
-  'content:write',
+  'catalogue:publish',
+  'catalogue:delete',
+  'inventory:write',
   'orders:read',
   'orders:write',
+  'orders:cancel',
+  'production:write',
+  'shipping:write',
   'returns:read',
   'returns:write',
-  'reviews:moderate',
-  'coupons:write',
-  'settings:write',
+  'refunds:execute',
   'customers:read',
-  // [ABE-26] Every other resource in this list has a read/write pair;
-  // customers had only `:read` until this task needed a write action
-  // (disabling an account) — added rather than repurposing `team:manage`,
-  // which governs staff role grants, a different concern from customer
-  // account management.
   'customers:write',
+  'coupons:write',
+  'reviews:moderate',
+  'settings:read',
+  'settings:write',
   'team:manage',
   'analytics:read',
+  'audit:read',
+  // Backwards-compatible content keys for legacy routes
+  'content:read',
+  'content:write',
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
-/**
- * [ABE-01] The master plan's own §9.8 permission matrix isn't accessible
- * in this session — BroPics_Production_Implementation_Master_Plan.pdf is
- * gitignored and not present in this working directory; only the
- * original, shorter client spec PDF is ("Bro Pics.pdf", 9 pages, no
- * permission matrix). This mapping is inferred from
- * ADMIN_BACKEND_TASKS.md's own structure instead — a considered
- * inference, not a guess: each role's task cluster in that file maps
- * directly to the permission keys below.
- *
- * - staff: day-to-day fulfillment — order actions, returns, review
- *   moderation. Matches what already exists (the staff-advance/returns/
- *   reviews routes) exactly; nothing here narrows current staff access.
- * - content_manager / catalogue_manager: scoped to their own domain,
- *   read-only into the other's (a catalogue manager needs to SEE content
- *   context and vice versa, but not edit it).
- * - admin: everything except team:manage — ABE-27's own task text says
- *   team management needs "Super-Admin-only gating" explicitly.
- * - super_admin: everything, unconditionally.
- */
 export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
   super_admin: [
     'catalogue:read',
     'catalogue:write',
-    'content:read',
-    'content:write',
+    'catalogue:publish',
+    'catalogue:delete',
+    'inventory:write',
     'orders:read',
     'orders:write',
+    'orders:cancel',
+    'production:write',
+    'shipping:write',
     'returns:read',
     'returns:write',
-    'reviews:moderate',
-    'coupons:write',
-    'settings:write',
+    'refunds:execute',
     'customers:read',
     'customers:write',
+    'coupons:write',
+    'reviews:moderate',
+    'settings:read',
+    'settings:write',
     'team:manage',
     'analytics:read',
+    'audit:read',
+    'content:read',
+    'content:write',
   ],
   admin: [
     'catalogue:read',
     'catalogue:write',
-    'content:read',
-    'content:write',
+    'catalogue:publish',
+    'catalogue:delete',
+    'inventory:write',
     'orders:read',
     'orders:write',
+    'orders:cancel',
+    'production:write',
+    'shipping:write',
+    'returns:read',
+    'returns:write',
+    'refunds:execute',
+    'customers:read',
+    'customers:write',
+    'coupons:write',
+    'reviews:moderate',
+    'settings:read',
+    'settings:write',
+    'analytics:read',
+    'audit:read',
+    'content:read',
+    'content:write',
+  ],
+  staff: [
+    'orders:read',
+    'orders:write',
+    'production:write',
+    'shipping:write',
     'returns:read',
     'returns:write',
     'reviews:moderate',
-    'coupons:write',
-    'settings:write',
+    'inventory:write',
     'customers:read',
-    'customers:write',
-    'analytics:read',
   ],
-  staff: ['orders:read', 'orders:write', 'returns:read', 'returns:write', 'reviews:moderate'],
-  content_manager: ['content:read', 'content:write', 'catalogue:read'],
-  catalogue_manager: ['catalogue:read', 'catalogue:write', 'content:read'],
+  catalogue_manager: [
+    'catalogue:read',
+    'catalogue:write',
+    'catalogue:publish',
+    'catalogue:delete',
+    'inventory:write',
+    'settings:read',
+    'content:read',
+  ],
+  marketing_manager: [
+    'coupons:write',
+    'reviews:moderate',
+    'catalogue:read',
+    'settings:read',
+    'settings:write',
+    'analytics:read',
+    'content:read',
+    'content:write',
+  ],
+  content_manager: [
+    'content:read',
+    'content:write',
+    'catalogue:read',
+  ],
 };
 
 export function roleHasPermission(role: Role, key: PermissionKey): boolean {
-  return ROLE_PERMISSIONS[role].includes(key);
+  return ROLE_PERMISSIONS[role]?.includes(key) ?? false;
 }
 
 export function isValidRole(value: unknown): value is Role {

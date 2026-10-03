@@ -9,12 +9,16 @@ html {
 /* Scrollbar stays fully functional — only the visual track/thumb is hidden. */
 html,
 body {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* older Edge/IE */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* older Edge/IE */
 }
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, newer Edge */
+  display: none;
+  /* Chrome, Safari, newer Edge */
 }
 
 /* The page field is a warm off-white, not pure white. White is reserved
@@ -34,6 +38,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -51,6 +56,22 @@ body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .rail::-webkit-scrollbar {
   display: none;
+}
+
+/* Fluid media safety — prevents images, videos, and SVGs from exceeding containers */
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+/* Touch target minimum size support and safe-area insets */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

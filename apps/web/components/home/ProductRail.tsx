@@ -15,9 +15,9 @@ export function ProductRail({ title, products, viewAllHref }: ProductRailProps) 
   return (
     <Section space="tight">
       {title && <SectionHeader title={title} href={viewAllHref} />}
-      <div className="rail flex gap-4 overflow-x-auto pb-1">
+      <div className="rail flex gap-3.5 sm:gap-4 overflow-x-auto pb-2 scroll-smooth">
         {products.map((product) => (
-          <div key={product.id} className="w-[46%] sm:w-52 shrink-0">
+          <div key={product.id} className="w-[68vw] max-w-[240px] sm:w-52 md:w-56 shrink-0">
             <ProductCard product={product} />
           </div>
         ))}

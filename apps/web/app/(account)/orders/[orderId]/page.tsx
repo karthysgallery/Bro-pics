@@ -46,6 +46,10 @@ const CANCELLABLE_STATUSES = new Set(['pending_payment', 'paid', 'in_production'
 // order.placedAt comes back from the client Firestore SDK as a Timestamp
 // object (with a toDate() method), not a plain Date or ISO string, so this
 // duck-types rather than assuming a specific shape.
+function formatPaise(paise: number): string {
+  return (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 function formatPlacedAt(value: unknown): string {
   if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: unknown }).toDate === 'function') {
     return (value as { toDate: () => Date }).toDate().toLocaleString('en-IN');
@@ -312,216 +316,295 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   };
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-semibold text-ink">Order {order.orderNo}</h1>
-        <Link href={`/orders/${orderId}/invoice`} className="text-sm text-accent hover:text-accent-dark">
+    <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <Link href="/orders" className="hover:text-ink">My orders</Link>
+        {' / '}
+        <span className="text-ink font-medium">Order tracking</span>
+      </nav>
+
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">Your memories are in good hands.</h1>
+          <p className="text-xs text-ink/60">
+            Order {order.orderNo} · Placed {formatPlacedAt(order.placedAt)} · Paid ₹{formatPaise(order.total)}
+          </p>
+        </div>
+        <Link
+          href={`/orders/${orderId}/invoice`}
+          className="px-5 py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors w-fit"
+        >
           View invoice
         </Link>
       </div>
 
-      <OrderStatusTimeline status={order.status} />
+      {/* Milestone Progress Card */}
+      <div className="rounded-3xl bg-paper border border-line p-6 md:p-8 mb-8 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+          <h2 className="font-display text-xl font-bold text-ink">
+            {order.status === 'delivered'
+              ? 'Your frame has arrived.'
+              : order.status === 'shipped'
+              ? 'Your frame is on its way.'
+              : order.status === 'in_production'
+              ? 'Your frame is being handcrafted.'
+              : "We're checking your photos"}
+          </h2>
+          <span className="px-3 py-1 rounded-full border border-line bg-field text-xs font-semibold text-ink">
+            {order.status === 'paid' ? 'Payment confirmed' : order.status === 'in_production' ? 'In production' : order.status === 'shipped' ? 'Shipped' : order.status === 'delivered' ? 'Delivered' : order.status === 'cancelled' ? 'Cancelled' : 'Pending payment'}
+          </span>
+        </div>
 
-      {order.shipmentTracking && (
-        <div className="text-sm text-accent/80">
-          {order.shipmentTracking.provider} — {order.shipmentTracking.awbNumber}
-          {order.shipmentTracking.trackingUrl && (
-            <>
-              {' '}
-              ·{' '}
+        <p className="text-xs text-ink/70 font-medium mb-6">
+          Estimated dispatch: 3-5 working days
+        </p>
+
+        {/* Milestone Steps Bar */}
+        <div className="py-4 border-t border-line">
+          <OrderStatusTimeline status={order.status} />
+        </div>
+
+        {order.shipmentTracking && (
+          <div className="mt-4 pt-4 border-t border-line text-xs text-ink/80 flex items-center gap-2">
+            <span>Tracking: {order.shipmentTracking.provider} — {order.shipmentTracking.awbNumber}</span>
+            {order.shipmentTracking.trackingUrl && (
               <a
                 href={order.shipmentTracking.trackingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-accent hover:text-accent-dark underline"
+                className="text-accent hover:underline font-semibold"
               >
-                Track shipment
+                Track live →
               </a>
-            </>
-          )}
-        </div>
-      )}
-
-      <ul className="flex flex-col gap-2 text-accent/80">
-        {items.map((item, i) => {
-          const slug = productSlugs.get(item.productId);
-          const key = `${item.personalizationId}-${i}`;
-          return (
-            <li key={i} className="flex items-center justify-between gap-3">
-              <span>
-                <span>{item.title}</span> × {item.qty}
-              </span>
-              <span className="flex items-center gap-3 whitespace-nowrap">
-                {order.status === 'delivered' && (
-                  <button
-                    type="button"
-                    onClick={() => handleReorder(item, i)}
-                    disabled={reorderingKey === key}
-                    className="text-sm text-accent hover:text-accent-dark disabled:opacity-50"
-                  >
-                    {reorderingKey === key ? 'Adding…' : 'Reorder'}
-                  </button>
-                )}
-                {slug && (
-                  <Link href={`/product/${slug}`} className="text-sm text-accent hover:text-accent-dark">
-                    Personalize again
-                  </Link>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-
-      {isCancellable && (
-        <div className="pt-2">
-          <button
-            onClick={() => setShowCancelConfirm(true)}
-            className="rounded-md border border-alert text-alert px-4 py-2 text-sm font-semibold hover:bg-alert hover:text-paper transition-colors"
-          >
-            Cancel order
-          </button>
-          {cancelError && <p className="text-sm text-alert mt-2">{cancelError}</p>}
-          <ConfirmDialog
-            isOpen={showCancelConfirm}
-            title="Cancel this order?"
-            message="This can't be undone."
-            confirmLabel="Yes, cancel order"
-            cancelLabel="Keep order"
-            isLoading={isCancelling}
-            onConfirm={handleCancel}
-            onCancel={() => setShowCancelConfirm(false)}
-          />
-        </div>
-      )}
-
-      {order.status === 'delivered' && (
-        <div className="pt-2">
-          {existingReturn ? (
-            <div className="rounded-md border border-line p-4 flex flex-col gap-1">
-              <span className="text-sm font-semibold text-ink">{RETURN_STATUS_LABEL[existingReturn.status]}</span>
-              <span className="text-sm text-ink/60">&ldquo;{existingReturn.reason}&rdquo;</span>
-              {existingReturn.staffNote && <span className="text-sm text-ink/60">Note: {existingReturn.staffNote}</span>}
-            </div>
-          ) : showReturnForm ? (
-            <div className="rounded-md border border-line p-4 flex flex-col gap-3">
-              <label htmlFor="return-reason-category" className="text-sm font-medium text-ink">
-                What's the issue?
-              </label>
-              <select
-                id="return-reason-category"
-                value={returnReasonCategory}
-                onChange={(e) => setReturnReasonCategory(e.target.value as ReturnReasonCategory)}
-                className="rounded-md border border-line px-3 py-2 text-sm text-ink"
-              >
-                {Object.entries(RETURN_REASON_CATEGORY_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <label htmlFor="return-reason" className="text-sm font-medium text-ink">
-                Tell us more
-              </label>
-              <textarea
-                id="return-reason"
-                value={returnReason}
-                onChange={(e) => setReturnReason(e.target.value)}
-                rows={3}
-                className="rounded-md border border-line px-3 py-2 text-sm text-ink"
-              />
-
-              {returnReasonCategory === 'damaged' && (
-                <>
-                  <label htmlFor="return-evidence" className="text-sm font-medium text-ink">
-                    Photo of the damage (required)
-                  </label>
-                  <input
-                    id="return-evidence"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setReturnEvidenceFile(e.target.files?.[0] ?? null)}
-                    className="text-sm text-ink"
-                  />
-                  {returnEvidenceFile && <p className="text-xs text-ink/60">Selected: {returnEvidenceFile.name}</p>}
-                </>
-              )}
-
-              <span className="text-sm font-medium text-ink">Preferred resolution</span>
-              <div className="flex gap-4" role="radiogroup" aria-label="Preferred resolution">
-                <label className="flex items-center gap-1.5 text-sm text-ink">
-                  <input
-                    type="radio"
-                    name="preferred-resolution"
-                    checked={returnPreferredResolution === 'refund'}
-                    onChange={() => setReturnPreferredResolution('refund')}
-                  />
-                  Refund
-                </label>
-                <label className="flex items-center gap-1.5 text-sm text-ink">
-                  <input
-                    type="radio"
-                    name="preferred-resolution"
-                    checked={returnPreferredResolution === 'replacement'}
-                    onChange={() => setReturnPreferredResolution('replacement')}
-                  />
-                  Replacement
-                </label>
-              </div>
-
-              {returnError && <p className="text-sm text-alert">{returnError}</p>}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleRequestReturn}
-                  disabled={isSubmittingReturn || !returnReason.trim()}
-                  className="rounded-md bg-alert text-paper px-4 py-2 text-sm font-semibold disabled:opacity-50"
-                >
-                  {isUploadingEvidence ? 'Uploading photo…' : isSubmittingReturn ? 'Submitting…' : 'Submit return request'}
-                </button>
-                <button
-                  onClick={() => setShowReturnForm(false)}
-                  className="rounded-md border border-line text-ink px-4 py-2 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowReturnForm(true)}
-              className="rounded-md border border-alert text-alert px-4 py-2 text-sm font-semibold hover:bg-alert hover:text-paper transition-colors"
-            >
-              Return product
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2 pt-4 border-t border-line">
-        <h2 className="font-medium text-accent-dark">Status timeline</h2>
-        {!hasPendingPaymentEvent && (
-          <div className="text-sm text-accent/80">
-            <span>Order placed</span>
-            {order.placedAt !== undefined && <span> — <span>{formatPlacedAt(order.placedAt)}</span></span>}
+            )}
           </div>
         )}
-        {events.map((event) => (
-          <div key={event.id} className="text-sm text-accent/80">
-            <span>{event.status}</span>
-            {event.createdAt !== undefined && (
-              <span> — <span>{formatPlacedAt(event.createdAt)}</span></span>
+
+        <div className="mt-4 pt-4 border-t border-line">
+          <h3 className="text-xs font-semibold text-ink mb-2">Activity history</h3>
+          <ul className="space-y-1 text-2xs text-ink/70">
+            {!hasPendingPaymentEvent && (
+              <li className="flex justify-between">
+                <span>Order placed</span>
+                <span>{formatPlacedAt(order.placedAt)}</span>
+              </li>
             )}
-            {event.note && (
-              <span> — <span>{event.note}</span></span>
-            )}
-            {event.courier && (
-              <span> — <span>{event.courier}</span></span>
-            )}
-            {event.awbNumber && (
-              <span> (<span>{event.awbNumber}</span>)</span>
-            )}
+            {events.map((ev, i) => (
+              <li key={i} className="flex justify-between">
+                <span>
+                  {ev.status}
+                  {ev.note ? ` — ${ev.note}` : ''}
+                  {ev.courier && <span className="ml-2">{ev.courier}</span>}
+                  {ev.awbNumber && <span className="ml-2">{ev.awbNumber}</span>}
+                </span>
+                <span>{formatPlacedAt(ev.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-[1fr_360px] gap-8 items-start">
+        {/* Left: Items list & Actions */}
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+            <h2 className="font-display text-lg font-bold text-ink mb-4">Items in your order</h2>
+            <ul className="divide-y divide-line">
+              {items.map((item, i) => {
+                const slug = productSlugs.get(item.productId);
+                const key = `${item.personalizationId}-${i}`;
+                return (
+                  <li key={i} className="py-4 flex flex-col sm:flex-row gap-4 items-start justify-between">
+                    <div>
+                      <h3 className="font-display text-base font-bold text-ink">{item.title}</h3>
+                      <p className="text-xs text-ink/60 mt-0.5">Quantity: {item.qty} · ₹{formatPaise(item.unitPrice ?? 0)} each</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {order.status === 'delivered' && (
+                        <button
+                          type="button"
+                          onClick={() => handleReorder(item, i)}
+                          disabled={reorderingKey === key}
+                          className="px-4 py-2 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          {reorderingKey === key ? 'Adding…' : 'Reorder'}
+                        </button>
+                      )}
+                      {slug && (
+                        <Link
+                          href={`/product/${slug}`}
+                          className="px-4 py-2 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
+                        >
+                          Personalise again
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-        ))}
+
+          {/* Cancellations & Returns */}
+          {isCancellable && (
+            <div className="p-6 rounded-3xl bg-field border border-line">
+              <h3 className="font-display text-base font-bold text-ink mb-2">Need to cancel?</h3>
+              <p className="text-xs text-ink/70 mb-4">
+                You can cancel your order before custom crafting begins.
+              </p>
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="px-5 py-2.5 rounded-full border border-alert text-alert text-xs font-semibold hover:bg-alert hover:text-paper transition-colors"
+              >
+                Cancel order
+              </button>
+              {cancelError && <p className="text-xs text-alert mt-2">{cancelError}</p>}
+              <ConfirmDialog
+                isOpen={showCancelConfirm}
+                title="Cancel this order?"
+                message="This can't be undone. Your payment will be refunded to your original payment method."
+                confirmLabel="Yes, cancel order"
+                cancelLabel="Keep order"
+                isLoading={isCancelling}
+                onConfirm={handleCancel}
+                onCancel={() => setShowCancelConfirm(false)}
+              />
+            </div>
+          )}
+
+          {order.status === 'delivered' && (
+            <div className="p-6 rounded-3xl bg-field border border-line">
+              <h3 className="font-display text-base font-bold text-ink mb-2">Returns & Exchanges</h3>
+              {existingReturn ? (
+                <div className="rounded-2xl border border-line bg-paper p-4 flex flex-col gap-1 text-xs">
+                  <span className="font-semibold text-ink">{RETURN_STATUS_LABEL[existingReturn.status]}</span>
+                  <span className="text-ink/60">&ldquo;{existingReturn.reason}&rdquo;</span>
+                </div>
+              ) : showReturnForm ? (
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <label htmlFor="return-reason-category" className="block text-2xs font-semibold text-ink mb-1">
+                      What&apos;s the issue?
+                    </label>
+                    <select
+                      id="return-reason-category"
+                      value={returnReasonCategory}
+                      onChange={(e) => setReturnReasonCategory(e.target.value as ReturnReasonCategory)}
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-2 text-xs text-ink focus:outline-none"
+                    >
+                      {Object.entries(RETURN_REASON_CATEGORY_LABEL).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="return-reason" className="block text-2xs font-semibold text-ink mb-1">
+                      Tell us more
+                    </label>
+                    <textarea
+                      id="return-reason"
+                      value={returnReason}
+                      onChange={(e) => setReturnReason(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-2 text-xs text-ink focus:outline-none"
+                    />
+                  </div>
+
+                  {returnReasonCategory === 'damaged' && (
+                    <div>
+                      <label htmlFor="return-evidence" className="block text-2xs font-semibold text-ink mb-1">
+                        Photo of the damage (required)
+                      </label>
+                      <input
+                        id="return-evidence"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setReturnEvidenceFile(e.target.files?.[0] ?? null)}
+                        className="text-xs text-ink"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 items-center">
+                    <span className="text-2xs font-semibold text-ink">Resolution:</span>
+                    <label className="text-xs text-ink flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="res"
+                        checked={returnPreferredResolution === 'refund'}
+                        onChange={() => setReturnPreferredResolution('refund')}
+                      />
+                      Refund
+                    </label>
+                    <label className="text-xs text-ink flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="res"
+                        checked={returnPreferredResolution === 'replacement'}
+                        onChange={() => setReturnPreferredResolution('replacement')}
+                      />
+                      Replacement
+                    </label>
+                  </div>
+
+                  {returnError && <p className="text-xs text-alert">{returnError}</p>}
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleRequestReturn}
+                      disabled={isSubmittingReturn || isUploadingEvidence}
+                      className="px-5 py-2.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {isUploadingEvidence ? 'Uploading…' : isSubmittingReturn ? 'Submitting…' : 'Submit return request'}
+                    </button>
+                    <button
+                      onClick={() => setShowReturnForm(false)}
+                      className="px-4 py-2.5 rounded-full border border-line bg-paper text-ink text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowReturnForm(true)}
+                  className="px-5 py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
+                >
+                  Return product
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Delivery Info Card */}
+        <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm lg:sticky lg:top-32">
+          <h2 className="font-display text-lg font-bold text-ink mb-4">Delivery to</h2>
+          
+          <div className="space-y-1 text-xs text-ink/80 mb-6">
+            <p className="font-bold text-ink">{user.displayName || 'Customer'}</p>
+            {user.phoneNumber && <p>{user.phoneNumber}</p>}
+            {user.email && <p>{user.email}</p>}
+          </div>
+
+          <div className="pt-4 border-t border-line">
+            <p className="text-xs text-ink/60 mb-3">
+              Questions about your frame? We&apos;re here to help.
+            </p>
+            <a
+              href="mailto:hello@bropics.in"
+              className="block w-full py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-center text-xs font-semibold transition-colors"
+            >
+              Contact support
+            </a>
+          </div>
+        </div>
       </div>
     </main>
   );

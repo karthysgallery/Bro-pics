@@ -172,91 +172,117 @@ export function BuyBox({
   }, [product.title]);
 
   return (
-    <div className="rounded-2xl bg-paper border border-line p-4 md:p-5 lg:sticky lg:top-36 self-start">
-      <h1 className="font-display text-2xl font-bold leading-tight text-ink mb-1">{product.title}</h1>
+    <div className="rounded-3xl bg-[#FCFBF8] border border-line/80 p-6 lg:p-7 shadow-xs flex flex-col justify-start">
+      {/* Figma Bestseller / Featured Badge */}
+      {(product.isFeatured || (product.badges && product.badges.length > 0)) && (
+        <div className="mb-2.5">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold text-[#92400E] bg-[#FDE68A]">
+            {product.badges?.[0] || 'best-seller'}
+          </span>
+        </div>
+      )}
+
+      <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight text-ink mb-1.5">{product.title}</h1>
+      
       {product.ratingCount > 0 && (
-        <a href="#reviews" className="flex items-center gap-1.5 text-sm text-ink/70 mb-2">
+        <a href="#reviews" className="flex items-center gap-1.5 text-xs sm:text-sm text-ink/70 mb-2.5 hover:text-ink transition-colors">
           <RatingStars rating={product.ratingAverage} />
-          <span>{product.ratingAverage}</span>
-          <span>({product.ratingCount} reviews)</span>
+          <span className="font-semibold text-ink">{product.ratingAverage}</span>
+          <span className="text-ink/60">· {product.ratingCount} reviews</span>
         </a>
       )}
 
-      <div className="flex items-center gap-2 my-3">
-        <span className="text-2xl font-semibold text-ink">{formatPaise(price)}</span>
-        {compareAtPrice && compareAtPrice > price && (
-          <span className="text-sm text-ink/50 line-through">{formatPaise(compareAtPrice)}</span>
+      <div className="my-2">
+        <div className="flex items-baseline gap-2">
+          <span className="font-display text-2xl sm:text-3xl font-bold text-ink">{formatPaise(price)}</span>
+          {compareAtPrice && compareAtPrice > price && (
+            <span className="text-sm text-ink/40 line-through">{formatPaise(compareAtPrice)}</span>
+          )}
+        </div>
+        <p className="text-xs text-ink/50 mt-0.5">Inclusive of GST · Photo printing included</p>
+      </div>
+
+      {product.shortDesc && (
+        <p className="text-xs sm:text-sm text-ink/75 leading-relaxed my-3 border-b border-line pb-3">
+          {product.shortDesc}
+        </p>
+      )}
+
+      <div className="space-y-3.5 my-2">
+        <VariantSelector
+          label="Orientation"
+          options={orientations.map((o) => ORIENTATION_LABELS[o])}
+          selected={selectedOrientation ? ORIENTATION_LABELS[selectedOrientation] : ''}
+          onSelect={(label) => {
+            const orientation = (Object.entries(ORIENTATION_LABELS).find(([, l]) => l === label)?.[0] ?? 'portrait') as Orientation;
+            onSelectOrientation(orientation);
+          }}
+        />
+        <VariantSelector label="Size" options={sizes} selected={selectedSize} onSelect={onSelectSize} />
+        <VariantSelector label="Finish" options={colours} selected={selectedColour} onSelect={onSelectColour} display="swatch" />
+      </div>
+
+      {/* Primary Action Button */}
+      <div className="my-3">
+        {!personalizationReady && personalizationReason && (
+          <p className="text-xs text-ink/60 mb-2">{personalizationReason}</p>
         )}
+        {submitError && <p className="text-xs text-alert mb-2">{submitError}</p>}
+
+        <Button
+          onClick={handleAddToCart}
+          disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
+          className="w-full h-12 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {isEditingCartLine
+            ? submitting ? 'Saving…' : 'Save changes'
+            : submitting ? 'Adding…' : 'Add to cart'}
+        </Button>
       </div>
 
-      <VariantSelector label="Orientation" options={orientations.map((o) => ORIENTATION_LABELS[o])} selected={selectedOrientation ? ORIENTATION_LABELS[selectedOrientation] : ''} onSelect={(label) => {
-        const orientation = (Object.entries(ORIENTATION_LABELS).find(([, l]) => l === label)?.[0] ?? 'portrait') as Orientation;
-        onSelectOrientation(orientation);
-      }} />
-      <VariantSelector label="Size" options={sizes} selected={selectedSize} onSelect={onSelectSize} />
-      <VariantSelector label="Frame design" options={colours} selected={selectedColour} onSelect={onSelectColour} display="swatch" />
-
-      <p className={`text-sm mb-3 ${inStock ? 'text-accent font-medium' : 'text-ink/50'}`}>{stockMessage}</p>
-
-      {inStock && (
-        <DeliveryTimeline dispatchDaysMin={product.dispatchDaysMin} dispatchDaysMax={product.dispatchDaysMax} />
-      )}
-
-      {/* [FE-33] BE-21's delivery-estimate endpoint existed but nothing
-          called it — a customer had no way to check delivery to their
-          own pincode before adding to cart. */}
-      <PincodeChecker className="mb-4" />
-
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-sm text-ink/70">Qty</span>
-        <QuantityStepper value={quantity} onChange={setQuantity} />
+      {/* Stock & Meta info */}
+      <div className="space-y-1 text-xs text-ink/70 pb-3.5 border-b border-line">
+        <p className={inStock ? 'font-medium text-ink' : 'text-ink/50'}>
+          {inStock ? `Made to order · Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} working days` : stockMessage}
+        </p>
+        <p className="text-ink/50">
+          {selectedVariant?.sku ? `SKU ${selectedVariant.sku} · ` : ''}Free shipping above ₹1,999
+        </p>
       </div>
 
-      {!personalizationReady && personalizationReason && (
-        <p className="text-xs text-ink/60 mb-2">{personalizationReason}</p>
-      )}
-      {submitError && <p className="text-xs text-alert mb-2">{submitError}</p>}
+      {/* Accordions */}
+      <div className="divide-y divide-line text-sm">
+        <details className="group py-3 cursor-pointer">
+          <summary className="flex items-center justify-between font-medium text-ink list-none">
+            <span>Materials & care</span>
+            <span className="transition group-open:rotate-45 text-lg font-light">+</span>
+          </summary>
+          <div className="pt-2 text-xs text-ink/70 leading-relaxed">
+            {product.careText || 'Solid wood profile, clear acrylic glazing and a museum-style white mount. Dust gently with a soft, dry cloth.'}
+          </div>
+        </details>
+        <details className="group py-3 cursor-pointer">
+          <summary className="flex items-center justify-between font-medium text-ink list-none">
+            <span>Delivery & returns</span>
+            <span className="transition group-open:rotate-45 text-lg font-light">+</span>
+          </summary>
+          <div className="pt-2 text-xs text-ink/70 leading-relaxed space-y-2">
+            <p>Dispatched in protective shockproof packaging. Free returns or replacement if damaged in transit.</p>
+            <PincodeChecker className="mt-2" />
+          </div>
+        </details>
+      </div>
 
-      {/* w-[calc(100%-5rem)] on mobile keeps this primary CTA clear of
-          LayoutChrome's fixed bottom-right WhatsApp button (bottom-6
-          right-6, w-14 h-14) at whatever scroll position it naturally
-          falls at -- this is the single most important button on the
-          page, so unlike the other instances of this recurring overlap
-          (see VariantSelector's comment), it gets a dedicated fix rather
-          than being left to the general "floating buttons can overlap
-          content" tradeoff documented in PROJECT_STATUS.md. */}
-      <Button
-        onClick={handleAddToCart}
-        disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
-        className="w-[calc(100%-5rem)] sm:w-full"
-      >
-        {isEditingCartLine ? (submitting ? 'Saving…' : 'Save changes') : submitting ? 'Adding…' : 'Add to cart'}
-      </Button>
+      <div className="mt-3 pt-3 border-t border-line">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <span className="text-xs text-ink/70 font-medium">Quantity</span>
+          <QuantityStepper value={quantity} onChange={setQuantity} />
+        </div>
+      </div>
 
       <HelpCallout
         whatsappHref={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}?text=${encodeURIComponent(whatsappMessage)}`}
       />
-
-      <ul className="mt-5 grid grid-cols-3 rounded-2xl bg-tint divide-x divide-line">
-        {TRUST_POINTS.map((point) => (
-          <li key={point.label} className="flex flex-col items-center gap-1.5 px-2 py-3 text-center">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#14213D"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              {point.icon}
-            </svg>
-            <span className="text-2xs leading-tight text-ink/70">{point.label}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

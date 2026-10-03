@@ -18,52 +18,81 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ContactPage() {
-  // [FE-28] Unlike the other 7 static pages, this one is deliberately
-  // NOT fully replaced by CMS content when a `pages/contact` doc exists —
-  // the WhatsApp link and support email below are already env-driven
-  // (WHATSAPP_NUMBER, SUPPORT_EMAIL), not hardcoded copy an admin should
-  // be rewriting; a CMS author has no way to inject those values into
-  // bodyHtml. A CMS `contact` doc instead only overrides the page's
-  // TITLE (and via generateMetadata above, its SEO title/description) —
-  // the actual contact channels below always render from real config.
   const page = await getPageBySlug('contact').catch(() => null);
 
   return (
-    <>
-      <PageIntro
-        title={page?.title ?? 'Contact us'}
-        standfirst="Fastest on WhatsApp. Have your order number ready if you have one."
-      />
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">Contact</span>
+      </nav>
 
-      <h2>WhatsApp</h2>
-      <p>
-        <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer">
-          Message us on WhatsApp
-        </a>{' '}
-        — best for order updates, photo checks, and anything easier to show than to describe.
-        Replies during working hours, usually within a few hours.
-      </p>
+      <div className="mb-10">
+        <h1 className="font-display text-3xl md:text-5xl font-bold text-ink mb-3 leading-tight">
+          {page?.title ?? "We're here to help."}
+        </h1>
+        <p className="text-sm md:text-base text-ink/70">
+          Fastest on WhatsApp. Have your order number ready if you have one.
+        </p>
+      </div>
 
-      <h2>Email</h2>
-      <p>
-        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> — best for anything that needs
-        a paper trail: refunds, invoices, bulk and corporate orders.
-      </p>
+      <div className="grid md:grid-cols-2 gap-8 max-w-4xl my-10">
+        {/* WhatsApp Card */}
+        <div className="rounded-3xl bg-paper border border-line p-8 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 text-2xl font-bold">
+              💬
+            </div>
+            <h2 className="font-display text-xl font-bold text-ink mb-2">WhatsApp</h2>
+            <p className="text-xs text-ink/70 leading-relaxed mb-6">
+              Best for order updates, photo checks, and anything easier to show than to describe. Replies usually within a few hours during working hours.
+            </p>
+          </div>
+          <a
+            href={`https://wa.me/${WHATSAPP_NUMBER}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm w-fit"
+          >
+            Message on WhatsApp →
+          </a>
+        </div>
 
-      <h2>Before you write in</h2>
-      <p>Two things answer most messages faster than we can:</p>
-      <ul>
-        <li>
-          Order status and tracking are on <Link href="/orders">your orders page</Link>.
-        </li>
-        <li>
-          Sizing, delivery times and refunds are covered in the{' '}
-          <Link href="/faq">FAQ</Link>.
-        </li>
-      </ul>
+        {/* Email Card */}
+        <div className="rounded-3xl bg-paper border border-line p-8 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4 text-2xl font-bold">
+              ✉️
+            </div>
+            <h2 className="font-display text-xl font-bold text-ink mb-2">Email</h2>
+            <p className="text-xs text-ink/70 leading-relaxed mb-6">
+              Best for anything that needs a paper trail: refunds, invoices, bulk orders, and corporate gifting.
+            </p>
+          </div>
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors w-fit"
+          >
+            {SUPPORT_EMAIL}
+          </a>
+        </div>
+      </div>
 
-      <h2>Working hours</h2>
-      <p>Monday to Saturday, 10am to 7pm IST. Messages sent outside those hours are answered the next working day.</p>
-    </>
+      {/* Info strip */}
+      <div className="max-w-4xl p-6 rounded-3xl bg-field border border-line my-10 grid sm:grid-cols-2 gap-6 text-xs text-ink/80">
+        <div>
+          <h3 className="font-bold text-ink mb-1">Working hours</h3>
+          <p className="text-ink/60">Monday to Saturday, 10am to 7pm IST. Messages sent outside those hours are answered the next working day.</p>
+        </div>
+        <div>
+          <h3 className="font-bold text-ink mb-1">Quick self-service</h3>
+          <p className="text-ink/60">
+            Check your <Link href="/orders" className="text-accent underline">order status</Link> or visit our <Link href="/faq" className="text-accent underline">FAQ</Link> for instant answers on sizing and shipping.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

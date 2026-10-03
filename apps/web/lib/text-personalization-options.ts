@@ -51,10 +51,12 @@ export interface TextColorOption {
 
 export const TEXT_COLOR_OPTIONS: TextColorOption[] = [
   { key: 'charcoal', label: 'Charcoal', value: '#2b2420' },
-  { key: 'cream', label: 'Cream', value: '#fbf7ef' },
+  { key: 'black', label: 'Black', value: '#111111' },
+  { key: 'cream', label: 'Cream', value: '#f5ebe1' },
   { key: 'gold', label: 'Gold', value: '#c9a24b' },
-  { key: 'brown', label: 'Brown', value: '#5a3d2b' },
+  { key: 'brown', label: 'Brown', value: '#7a5230' },
   { key: 'terracotta', label: 'Terracotta', value: '#c1592a' },
+  { key: 'darkwood', label: 'Dark Wood', value: '#2b1e16' },
 ];
 
 export const DEFAULT_TEXT_COLOR = TEXT_COLOR_OPTIONS[0].value;

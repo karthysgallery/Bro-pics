@@ -197,9 +197,9 @@ describe('seed frame templates', () => {
     const variantById = new Map(seedVariants.map((v) => [v.id, v]));
     const productBySlug = new Map(seedProducts.map((p) => [p.id, p]));
 
-    // Covers both a portrait (8x12, 2:3) and a square (10x10, 1:1) variant,
+    // Covers both a portrait (6x8, 3:4) and a square (10x10, 1:1) variant,
     // to prove the fix generalizes rather than hardcoding one ratio.
-    const singleSlotVariantIds = ['var_classic_wooden_frame_8x12_black', 'var_modern_acrylic_frame_10x10_clear'];
+    const singleSlotVariantIds = ['var_couples_eye_frame_6x8_black', 'var_modern_acrylic_frame_10x10_clear'];
 
     for (const variantId of singleSlotVariantIds) {
       const variant = variantById.get(variantId)!;
@@ -215,6 +215,17 @@ describe('seed frame templates', () => {
       const variantRatio = variant.widthIn / variant.heightIn;
       expect(rectRatio).toBeCloseTo(variantRatio, 2);
     }
+
+    // Classic wooden frame uses photorealistic mat aperture coordinates
+    const classicTemplate = seedFrameTemplates.find((t) => t.variantId === 'var_classic_wooden_frame_8x12_black')!;
+    expect(classicTemplate).toBeDefined();
+    expect(classicTemplate.printableRects[0]).toEqual({
+      slotIndex: 0,
+      x: 0.256,
+      y: 0.192,
+      width: 0.488,
+      height: 0.62,
+    });
   });
 });
 

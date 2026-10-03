@@ -819,11 +819,10 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                     <button
                       type="button"
                       onClick={() => handleToggleVersionActive(tpl.id, tpl.isCurrent)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        tpl.isCurrent
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tpl.isCurrent
                           ? 'border border-line text-ink/70 hover:bg-field'
                           : 'bg-gold hover:bg-gold-deep text-ink font-bold'
-                      }`}
+                        }`}
                     >
                       {tpl.isCurrent ? 'Deactivate' : 'Set as Current'}
                     </button>

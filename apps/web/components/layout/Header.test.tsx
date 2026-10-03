@@ -44,7 +44,7 @@ describe('Header', () => {
       </AuthProvider>
     );
     // The wordmark is two spans so 'Pics' can take the accent colour.
-    expect(screen.getByRole('link', { name: 'BroPics home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'KarthysGallery home' })).toBeInTheDocument();
     expect(screen.getByText(/frames for a brighter you/i)).toBeInTheDocument();
     // Two instances by design: the search sits inline in the logo row from
     // md, and on its own full-width row below it on phones. Exactly one is

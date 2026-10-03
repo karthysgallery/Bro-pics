@@ -174,7 +174,7 @@ export function PersonalizationEditor({
 
   return (
     <>
-      <div className="rounded-2xl bg-paper border border-line p-4 md:p-5 flex flex-col">
+      <div className="flex flex-col gap-4">
         <GalleryStrip media={media} productTitle={productTitle} />
         <SlotPicker
           slotCount={photoSlots}
@@ -183,79 +183,93 @@ export function PersonalizationEditor({
           onSelectSlot={onSelectSlot}
         />
 
-        <EditorCanvasErrorBoundary>
-          <EditorCanvas
-            mockupUrl={template.mockupUrl}
-            overlayUrl={template.overlayUrl}
-            slots={canvasSlots}
-            activeSlotIndex={activeSlotIndex}
-            textFields={canvasTextFields}
-            clipart={
-              selectedClipart
-                ? { assetUrl: selectedClipart.assetUrl, x: selectedClipart.x, y: selectedClipart.y, width: selectedClipart.width, height: selectedClipart.height }
-                : null
-            }
-            onTransformChange={onTransformChange}
-            onCanvasUpdate={onCanvasUpdate}
-            // [FE-08] Reuses the exact same clamped zoom-step/rotate
-            // handlers the +/- buttons and rotate button already call —
-            // a pinch/twist gesture gets the identical cover-fit/max-zoom
-            // bounds and 90-degree-step rotation, not a second
-            // implementation of either.
-            onPinchZoom={onZoomStep}
-            onPinchRotate={onRotate}
-          />
-        </EditorCanvasErrorBoundary>
+        <div className="rounded-2xl bg-[#FAF7F2] border border-line p-2 sm:p-3 relative overflow-hidden flex flex-col items-center justify-center shadow-xs">
+          <EditorCanvasErrorBoundary>
+            <EditorCanvas
+              mockupUrl={template.mockupUrl}
+              overlayUrl={template.overlayUrl}
+              slots={canvasSlots}
+              activeSlotIndex={activeSlotIndex}
+              textFields={canvasTextFields}
+              clipart={
+                selectedClipart
+                  ? { assetUrl: selectedClipart.assetUrl, x: selectedClipart.x, y: selectedClipart.y, width: selectedClipart.width, height: selectedClipart.height }
+                  : null
+              }
+              onTransformChange={onTransformChange}
+              onCanvasUpdate={onCanvasUpdate}
+              onPinchZoom={onZoomStep}
+              onPinchRotate={onRotate}
+            />
+          </EditorCanvasErrorBoundary>
+
+          {previewDataUrl && slots.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              aria-label="Preview"
+              className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-paper/95 backdrop-blur-xs border border-line/60 text-ink shadow-sm flex items-center justify-center hover:bg-paper hover:scale-105 transition-all"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         {activeSlot && zoomBounds && (
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="Zoom out"
-              onClick={() => onZoomStep(1 / ZOOM_STEP_FACTOR)}
-              className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors"
-            >
-              −
-            </button>
-            <input
-              type="range"
-              aria-label="Zoom"
-              min={zoomBounds.min}
-              max={zoomBounds.max}
-              step={(zoomBounds.max - zoomBounds.min) / 100 || 0.001}
-              value={activeSlot.scale}
-              onChange={(event) => onZoomTo(Number(event.target.value))}
-              className="flex-1"
-            />
-            <button
-              type="button"
-              aria-label="Zoom in"
-              onClick={() => onZoomStep(ZOOM_STEP_FACTOR)}
-              className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              aria-label="Rotate 90 degrees"
-              onClick={onRotate}
-              className="px-3 h-8 rounded-md border border-line text-ink text-sm shrink-0 hover:border-accent transition-colors"
-            >
-              Rotate ⟳
-            </button>
-            <button
-              type="button"
-              aria-label="Reset position"
-              onClick={onReset}
-              className="px-3 h-8 rounded-md border border-line text-ink text-sm shrink-0 hover:border-accent transition-colors"
-            >
-              Reset
-            </button>
+          <div className="flex flex-wrap items-center gap-2 p-2.5 sm:p-3 bg-paper rounded-xl border border-line">
+            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+              <button
+                type="button"
+                aria-label="Zoom out"
+                onClick={() => onZoomStep(1 / ZOOM_STEP_FACTOR)}
+                className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors flex items-center justify-center font-bold"
+              >
+                −
+              </button>
+              <input
+                type="range"
+                aria-label="Zoom"
+                min={zoomBounds.min}
+                max={zoomBounds.max}
+                step={(zoomBounds.max - zoomBounds.min) / 100 || 0.001}
+                value={activeSlot.scale}
+                onChange={(event) => onZoomTo(Number(event.target.value))}
+                className="flex-1 min-w-[50px]"
+              />
+              <button
+                type="button"
+                aria-label="Zoom in"
+                onClick={() => onZoomStep(ZOOM_STEP_FACTOR)}
+                className="w-8 h-8 rounded-md border border-line text-ink shrink-0 hover:border-accent transition-colors flex items-center justify-center font-bold"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                aria-label="Rotate 90 degrees"
+                onClick={onRotate}
+                className="px-2.5 sm:px-3 h-8 rounded-md border border-line text-ink text-xs sm:text-sm shrink-0 hover:border-accent transition-colors"
+              >
+                Rotate ⟳
+              </button>
+              <button
+                type="button"
+                aria-label="Reset position"
+                onClick={onReset}
+                className="px-2.5 sm:px-3 h-8 rounded-md border border-line text-ink text-xs sm:text-sm shrink-0 hover:border-accent transition-colors"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         )}
 
         {(canUndo || canRedo) && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               aria-label="Undo"
@@ -277,21 +291,9 @@ export function PersonalizationEditor({
           </div>
         )}
 
-        {slots.size > 0 && previewDataUrl && (
-          <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setShowPreview(true)}
-              className="px-4 h-9 rounded-full bg-gold text-ink text-sm font-semibold hover:bg-gold-deep transition-colors"
-            >
-              Preview
-            </button>
-          </div>
-        )}
-
         <div
-          className={`mt-3 flex-1 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center transition-colors ${
-            isDraggingOver ? 'border-accent bg-tint' : 'border-line hover:border-gold'
+          className={`rounded-2xl border border-line bg-paper p-6 text-center flex flex-col items-center justify-center gap-2.5 transition-colors shadow-xs ${
+            isDraggingOver ? 'border-accent bg-tint' : 'hover:border-gold'
           }`}
           onDragOver={(event) => {
             event.preventDefault();
@@ -304,17 +306,11 @@ export function PersonalizationEditor({
             handleFile(event.dataTransfer.files?.[0]);
           }}
         >
-          {/* The native file input is visually hidden rather than removed:
-              its label is the styled button, so clicking, tabbing and
-              screen-reader labelling all keep working, and the browser's
-              "Choose File / No file chosen" chrome — which cannot be
-              styled and always lied about state here, since the chosen
-              file is cleared on every change — stops showing. */}
           <span
-            className="grid place-items-center w-11 h-11 rounded-full bg-tint text-accent"
+            className="grid place-items-center w-12 h-12 rounded-full bg-tint text-accent mb-1"
             aria-hidden="true"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3" />
               <path d="M12 3v12M8 7l4-4 4 4" />
             </svg>
@@ -326,21 +322,14 @@ export function PersonalizationEditor({
 
           <label
             htmlFor="photo-upload-input"
-            className="cursor-pointer rounded-full bg-gold text-ink px-5 py-2 text-sm font-semibold hover:bg-gold-deep transition-colors"
+            className="cursor-pointer rounded-full bg-gold hover:bg-gold-deep text-ink px-6 py-2.5 text-sm font-semibold transition-colors shadow-xs"
           >
             Choose a photo
           </label>
           <input
             id="photo-upload-input"
             type="file"
-            // [FE-05] Some pickers (notably older Android/desktop file
-            // dialogs) don't reliably map a .heic/.heif file to the
-            // image/* MIME filter, so it never shows up as selectable
-            // without the extensions listed explicitly.
             accept="image/*,.heic,.heif"
-            /* The visible trigger reads "Choose a photo", which is the right
-               words on a button but too vague as the control's name once a
-               frame has several slots — so the accessible name says which. */
             aria-label={`${activeSlot ? 'Replace' : 'Upload'} a photo for slot ${activeSlotIndex + 1}`}
             capture="environment"
             disabled={uploadingSlot !== null}
@@ -367,7 +356,7 @@ export function PersonalizationEditor({
         </div>
 
         {activeSlot && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <DpiBadge effectiveDpi={activeSlot.effectiveDpi} />
             {activeSlotIsRed && (
               <label className="flex items-center gap-1 text-xs text-ink/60">
@@ -383,7 +372,7 @@ export function PersonalizationEditor({
         )}
       </div>
 
-      <div className="rounded-2xl bg-paper border border-line p-4 md:p-5">
+      <div className="rounded-2xl bg-paper border border-line p-5 md:p-6 shadow-xs flex flex-col justify-start">
         {allowsTextPersonalization &&
           template.textZones.map((zone) => {
             const field = textFields.get(zone.fieldKey) ?? {

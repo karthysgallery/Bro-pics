@@ -36,9 +36,8 @@ export function Swatch({ label, active, onClick }: SwatchProps) {
       aria-pressed={active}
       aria-label={label}
       title={label}
-      className={`w-8 h-8 rounded-full p-0.5 border transition-colors ${
-        active ? 'border-accent' : 'border-transparent hover:border-line'
-      }`}
+      className={`w-8 h-8 rounded-full p-0.5 border transition-colors ${active ? 'border-accent' : 'border-transparent hover:border-line'
+        }`}
     >
       <span
         className="block w-full h-full rounded-full border border-ink/10"

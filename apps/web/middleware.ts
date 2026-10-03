@@ -23,12 +23,12 @@ export function middleware(request: NextRequest): NextResponse {
 
   const csp = [
     `default-src 'self'`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.google.com https://www.gstatic.com`,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: https://storage.googleapis.com`,
+    `img-src 'self' data: https://storage.googleapis.com https://www.gstatic.com`,
     `font-src 'self'`,
-    `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://api.razorpay.com`,
-    `frame-src https://api.razorpay.com https://checkout.razorpay.com`,
+    `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://api.razorpay.com`,
+    `frame-src https://api.razorpay.com https://checkout.razorpay.com https://www.google.com https://www.gstatic.com https://*.firebaseapp.com`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `frame-ancestors 'self'`,

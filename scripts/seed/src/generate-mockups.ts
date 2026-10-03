@@ -29,12 +29,17 @@ async function generateMockups(): Promise<void> {
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
   for (const product of seedProducts) {
+    if (product.slug === 'classic-wooden-frame') {
+      console.log(`Skipping placeholder mockup generation for ${product.slug} (using photorealistic asset)`);
+      continue;
+    }
+
     const variants = seedVariants.filter((v) => v.productId === product.id && v.isActive);
     if (variants.length === 0) {
       throw new Error(`Product ${product.slug} has no active variants — cannot generate a mockup for it.`);
     }
 
-    const rectsPerVariant = variants.map((v) => computePrintableRects(product.photoSlots, v.aspectRatio));
+    const rectsPerVariant = variants.map((v) => computePrintableRects(product.photoSlots, v.aspectRatio, product.id));
     const rects: FrameTemplate['printableRects'] = rectsPerVariant[0];
 
     // One mockup PNG is shared across every variant of a product

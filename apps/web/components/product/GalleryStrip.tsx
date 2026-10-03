@@ -25,20 +25,28 @@ export function GalleryStrip({ media, productTitle }: GalleryStripProps) {
   const openItem = openIndex !== null ? media[openIndex] : null;
 
   return (
-    <div className="mb-3">
-      <div className="rail flex gap-2 overflow-x-auto">
+    <>
+      <div className="rail flex gap-2.5 overflow-x-auto pb-1">
         {media.map((item, index) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setOpenIndex(index)}
             aria-label={`View product photo ${index + 1}`}
-            className="relative w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-tint border border-line hover:border-gold transition-colors"
+            className={`relative w-14 h-14 md:w-16 md:h-16 flex-shrink-0 rounded-xl overflow-hidden bg-tint border transition-all ${
+              index === 0
+                ? 'border-amber-400 ring-2 ring-amber-400 shadow-xs'
+                : 'border-line hover:border-ink/40'
+            }`}
           >
             {item.type === 'video' ? (
-              <div className="w-full h-full bg-ink/80 text-paper flex items-center justify-center text-xs">▶</div>
+              <div className="w-full h-full bg-[#0B1428] text-white flex items-center justify-center text-sm">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </div>
             ) : (
-              <Image src={item.url} alt="" fill sizes="56px" className="object-cover" />
+              <Image src={item.url} alt="" fill sizes="64px" className="object-cover" />
             )}
           </button>
         ))}
@@ -52,6 +60,6 @@ export function GalleryStrip({ media, productTitle }: GalleryStripProps) {
           onClose={() => setOpenIndex(null)}
         />
       )}
-    </div>
+    </>
   );
 }

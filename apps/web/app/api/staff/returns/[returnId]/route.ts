@@ -33,6 +33,37 @@ const NOTIFICATION_BY_RETURN_STATUS: Partial<Record<ReturnStatus, { title: strin
   refunded: { title: 'Refund complete', body: 'has been refunded.' },
 };
 
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const permission = await requirePermission(request, 'returns:read');
+  if (!permission.ok) {
+    return NextResponse.json({ error: 'Staff access required' }, { status: permission.status });
+  }
+
+  const { returnId } = await params;
+  const db = getFirestore(getAdminApp());
+  const returnSnap = await db.collection('returns').doc(returnId).get();
+  if (!returnSnap.exists) {
+    return NextResponse.json({ error: `Return not found: ${returnId}` }, { status: 404 });
+  }
+
+  const returnDoc = returnSnap.data() as Return;
+  const eventsSnap = await db.collection('returns').doc(returnId).collection('events').orderBy('createdAt', 'asc').get();
+  const events = eventsSnap.docs.map((d) => d.data());
+
+  const orderSnap = await db.collection('orders').doc(returnDoc.orderId).get();
+  const order = orderSnap.exists ? orderSnap.data() : null;
+
+  return NextResponse.json({ return: returnDoc, events, order });
+}
+
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
   if (!rateLimit.allowed) {

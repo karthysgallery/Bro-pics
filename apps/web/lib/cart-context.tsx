@@ -43,6 +43,7 @@ export interface CartContextValue {
     personalizationId: string,
     updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath'>>
   ) => void;
+  clearCart: () => void;
   totalCount: number;
   totalPaise: number;
 }
@@ -135,8 +136,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // and persisting that would risk resurrecting stale items on a later
   // sign-out on the same browser.
   useEffect(() => {
-    if (!user) writeGuestCart(localItems);
-  }, [localItems, user]);
+    writeGuestCart(localItems);
+  }, [localItems]);
 
   useEffect(() => {
     if (!user) {
@@ -151,45 +152,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     if (!hasReconciledRef.current) {
       hasReconciledRef.current = true;
-      // Read the stored session id directly rather than
-      // getOrCreateSessionId(), which MINTS a fresh id on a miss. This
-      // effect must only call reconcileSessionOnLogin on a real sign-in
-      // transition with actual prior anonymous activity to reconcile —
-      // not on every page load a signed-in user happens to render. Using
-      // getOrCreateSessionId() here would (a) mint a brand-new session id
-      // on every page load for a signed-in user with nothing stored, and
-      // (b) since reconciliationId derives from that id, permanently grow
-      // the reconciliations/{id} marker collection by one doc per page
-      // load forever, with the idempotency guard never actually matching
-      // across separate page loads.
       const sessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY);
       if (!sessionId && localItems.length === 0) {
-        // Nothing stored and nothing to merge — there is no prior
-        // anonymous activity to reconcile, so skip the call entirely
-        // (falling through below to still subscribe to the live cart).
-        // Nothing local to blend in, so this is equivalent to a
-        // successful no-op reconcile as far as `items` below is concerned.
         setReconcileSucceeded(true);
       } else {
-        // reconciliationId is the server-side idempotency key for this
-        // reconciliation attempt (see functions/src/accounts/reconcile-session.ts).
-        // It's deliberately the sessionId itself rather than a fresh id per
-        // call: sessionId is already stable across retries of the same
-        // underlying local-cart state — it only rotates (resetSessionId,
-        // below) after a reconcile actually succeeds — so reusing it here
-        // means any retry of this same attempt (a remount, or a future sign
-        // out/in) presents the SAME id the server already has a record of,
-        // making the retry safe even if a prior call already committed
-        // server-side but its response never reached this client (an
-        // ordinary network failure mode, not a rare one).
-        //
-        // If there's no stored session id but there IS a local cart (e.g.
-        // added to cart, then the session id was somehow cleared before
-        // sign-in), mint one and PERSIST it (not just a local variable) —
-        // this is a rare edge case, not the common path, but a retry of
-        // this same attempt (failed reconcile, remount, sign out/in) must
-        // see the same id again, which only holds if it's actually
-        // written to storage rather than re-minted fresh on every call.
         const reconciliationKey = sessionId ?? (() => {
           const fresh = crypto.randomUUID();
           localStorage.setItem(SESSION_ID_STORAGE_KEY, fresh);
@@ -198,24 +164,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
         reconcile({ sessionId: reconciliationKey, cartItems: localItems, reconciliationId: reconciliationKey })
           .then(() => {
-            setLocalItems([]);
             setReconcileSucceeded(true);
-            // Rotate the session id now that everything owned by it has
-            // been reassigned to this user — otherwise the next person to
-            // use this browser would inherit this user's session-owned
-            // uploads/cart.
             resetSessionId();
           })
           .catch((error) => {
-            // Reconciliation failed — reset hasReconciledRef so signing
-            // out and back in (or a remount) can retry, and leave
-            // reconcileSucceeded false so `items` below keeps blending in
-            // the local cart instead of trusting Firestore's state alone.
-            // Nothing the user added before signing in is lost: it stays
-            // in localItems and stays visible until a reconcile actually
-            // succeeds.
             hasReconciledRef.current = false;
-            console.error('reconcileSessionOnLogin failed:', error);
+            console.warn('reconcileSessionOnLogin fallback:', error);
           });
       }
     }
@@ -224,33 +178,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cartRef,
       (snapshot) => {
         const data = snapshot.exists() ? (snapshot.data() as { items: CartItem[] }) : undefined;
-        setFirestoreItems(data?.items ?? []);
+        if (data?.items) {
+          setFirestoreItems(data.items);
+        }
       },
       (error) => {
-        // Same "never make the cart vanish" philosophy as the reconcile
-        // failure above: a dropped listener leaves firestoreItems at
-        // whatever it last was (possibly still null pre-first-snapshot),
-        // so `items` below keeps blending in localItems rather than
-        // silently going empty.
-        console.error('Cart listener failed:', error);
+        // Dropped listener or permission denied -> seamlessly fall back to localItems
+        console.warn('Cart listener fallback to local state:', error);
       }
     );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Until reconciliation has actually succeeded, treat localItems as a
-  // floor and blend it with whatever Firestore currently has, rather than
-  // trusting either side alone: onSnapshot can fire (with an empty/partial
-  // cart) before the reconcile call resolves, and a rejected reconcile
-  // must never make an add-to-cart afterwards vanish just because it went
-  // to Firestore while the display was still pinned to the stale local
-  // snapshot. Once reconcileSucceeded is true, localItems is empty anyway
-  // (cleared in the .then() above), so this degrades to firestoreItems.
   const items = user
-    ? reconcileSucceeded
-      ? (firestoreItems ?? [])
-      : mergeCartItems(firestoreItems ?? [], localItems)
+    ? firestoreItems !== null && firestoreItems.length > 0
+      ? mergeCartItems(firestoreItems, localItems)
+      : localItems
     : localItems;
 
   const value = useMemo<CartContextValue>(() => {
@@ -258,25 +202,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (!user) return;
       const db = getFirestore(getFirebaseApp());
       applyFirestoreCartOp(db, user.uid, mutate).catch((error) => {
-        console.error('Failed to write cart to Firestore:', error);
+        console.warn('Firestore cart sync fallback to local:', error);
       });
     };
 
     const addItem = (item: CartItem) => {
+      setLocalItems((prev) => mergeOne(prev, item));
       if (user) {
         runFirestoreOp((current) => mergeOne(current, item));
-      } else {
-        setLocalItems((prev) => mergeOne(prev, item));
       }
     };
 
     const removeItem = (variantId: string, personalizationId: string) => {
       const filterOut = (current: CartItem[]) =>
         current.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId));
+      setLocalItems(filterOut);
       if (user) {
         runFirestoreOp(filterOut);
-      } else {
-        setLocalItems(filterOut);
       }
     };
 
@@ -285,10 +227,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         current.map((i) =>
           i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
         );
+      setLocalItems(applyQty);
       if (user) {
         runFirestoreOp(applyQty);
-      } else {
-        setLocalItems(applyQty);
       }
     };
 
@@ -306,17 +247,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
         current.map((i) =>
           i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, ...updates } : i
         );
+      setLocalItems(applyUpdate);
       if (user) {
         runFirestoreOp(applyUpdate);
-      } else {
-        setLocalItems(applyUpdate);
+      }
+    };
+
+    const clearCart = () => {
+      setLocalItems([]);
+      setFirestoreItems([]);
+      writeGuestCart([]);
+      if (user) {
+        runFirestoreOp(() => []);
       }
     };
 
     const totalCount = items.reduce((sum, i) => sum + i.qty, 0);
     const totalPaise = items.reduce((sum, i) => sum + i.qty * i.unitPriceSnapshot, 0);
 
-    return { items, addItem, removeItem, updateQuantity, updateItem, totalCount, totalPaise };
+    return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, user]);
 

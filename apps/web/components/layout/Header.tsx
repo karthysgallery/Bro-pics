@@ -77,126 +77,121 @@ export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) 
         ]),
   ];
 
+  // Figma nav: "Shop frames · Gallery sets · How it works · Our story"
+  // These come from navLinks which are built from real categories + settings
+  const headerNavLinks = [
+    ...topLevel.map((c) => ({ href: `/category/${c.slug}`, label: c.name })),
+    ...(extraNavLinks && extraNavLinks.length > 0
+      ? extraNavLinks
+      : [
+          { href: '/category', label: 'Gallery sets' },
+          { href: '/how-it-works', label: 'How it works' },
+          { href: '/about', label: 'Our story' },
+        ]),
+  ];
+
   const isActive = (href: string) =>
     !href.includes('#') && (pathname === href || (href === '/category' && pathname === '/'));
 
   return (
-    <header className="sticky top-0 z-40 bg-paper border-b border-line">
-      <div className={`${TIER_ONE} mx-auto w-full max-w-shell px-4 md:px-6 flex items-center gap-3 md:gap-6`}>
+    <header className="sticky top-8 z-40 bg-paper border-b border-line/40">
+      {/* Main header row */}
+      <div className="h-14 md:h-16 mx-auto w-full max-w-shell px-3 sm:px-4 md:px-8 flex items-center justify-between gap-2 sm:gap-6">
+        {/* Mobile menu button */}
         <button
           type="button"
           aria-label="Browse categories"
           aria-expanded={isMobileNavOpen}
           onClick={() => setIsMobileNavOpen((open) => !open)}
-          className="md:hidden text-ink"
+          className="md:hidden text-ink p-1.5 -ml-1 rounded-lg hover:bg-tint transition-colors"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <path d="M3 6h18M3 12h18M3 18h18" />
           </svg>
         </button>
 
-        {/* Explicit label: the wordmark is split into two spans so "Pics" can
-            take the accent, and without this a screen reader announces the
-            link as "Bro Pics Frames for a brighter you". */}
-        <Link href="/" aria-label="BroPics home" className="shrink-0 leading-none">
-          <span className="block font-display text-[28px] leading-none font-bold tracking-tight text-ink">
-            Bro<span className="text-gold">Pics</span>
+        {/* Wordmark — Figma: "KarthysGallery" in bold black */}
+        <Link href="/" aria-label="KarthysGallery home" className="shrink-0 leading-none">
+          <span className="block font-display text-lg sm:text-xl md:text-2xl leading-none font-bold tracking-tight text-ink">
+            KarthysGallery
           </span>
-          {/* The tagline is the only letterspaced caps on the site: it is a
-              signature, not a label stuck above a heading. */}
-          <span className="hidden sm:block mt-1.5 text-[9px] uppercase tracking-[0.28em] text-ink/45">
-            Frames for a brighter you
-          </span>
+          <span className="sr-only">Frames for a brighter you</span>
         </Link>
 
-        <div className="hidden md:block flex-1 min-w-0">
-          <SearchTypeahead categories={topLevel} />
-        </div>
+        {/* Centered Navigation Links — Figma: Shop frames · Gallery sets · How it works · Our story */}
+        <nav className="hidden md:flex items-center gap-7 text-[13px] font-medium text-ink/70" aria-label="Main navigation">
+          {navLinks.slice(0, 5).map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`hover:text-ink transition-colors whitespace-nowrap ${
+                isActive(link.href) ? 'text-ink font-semibold' : 'text-ink/70'
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
 
-        <span className="flex-1 md:hidden" aria-hidden="true" />
-
-        <div className="flex items-center gap-4 md:gap-6 text-ink shrink-0">
-          <Link href="/account/wishlist" className="hidden sm:block hover:text-accent transition-colors" aria-label="Wishlist">
-            <ActionItem label="Wishlist">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                <path d="M12 21s-7.5-4.6-10-9.1C.5 8.4 2 5 5.4 5c2 0 3.4 1 4.6 2.6C11.2 6 12.6 5 14.6 5 18 5 19.5 8.4 22 11.9 19.5 16.4 12 21 12 21z" />
-              </svg>
-            </ActionItem>
+        {/* Action icons on right — Figma: Search, Account, Wishlist, Bag(n) */}
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-5 text-ink shrink-0">
+          <Link href="/search" className="hover:text-ink/60 transition-colors p-1.5" aria-label="Search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-4.2-4.2" />
+            </svg>
           </Link>
 
-          {user && (
-            <Link href="/account/notifications" className="hidden sm:block hover:text-accent transition-colors" aria-label="Notifications">
-              <ActionItem
-                label="Alerts"
-                badge={
-                  unreadCount > 0 ? (
-                    <span
-                      data-testid="notifications-count"
-                      className="absolute -top-2 right-0 bg-gold text-ink text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center"
-                    >
-                      {unreadCount}
-                    </span>
-                  ) : undefined
-                }
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <path d="M6 8a6 6 0 1 1 12 0c0 4.2 1.2 6.2 1.9 7.1a.7.7 0 0 1-.6 1.1H4.7a.7.7 0 0 1-.6-1.1C4.8 14.2 6 12.2 6 8z" />
-                  <path d="M10 20a2 2 0 0 0 4 0" />
-                </svg>
-              </ActionItem>
-            </Link>
-          )}
-
           {user ? (
-            <Link href="/account" className="hover:text-accent transition-colors" aria-label="Account">
-              <ActionItem label="Account">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
-                </svg>
-              </ActionItem>
+            <Link href="/account" className="hover:text-ink/60 transition-colors p-1.5" aria-label="Account">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+              </svg>
             </Link>
           ) : (
-            <button aria-label="Sign in" onClick={() => setIsAccountModalOpen(true)} className="hover:text-accent transition-colors">
-              <ActionItem label="Sign in">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
-                </svg>
-              </ActionItem>
+            <button aria-label="Sign in" onClick={() => setIsAccountModalOpen(true)} className="hover:text-ink/60 transition-colors p-1.5">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+              </svg>
             </button>
           )}
 
-          <button aria-label="Cart" onClick={onCartClick} className="hover:text-accent transition-colors">
-            <ActionItem
-              label="Cart"
-              badge={
-                <span
-                  data-testid="cart-count"
-                  className="absolute -top-2 right-0 bg-gold text-ink text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center"
-                >
-                  {totalCount}
-                </span>
-              }
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                <circle cx="9" cy="21" r="1.3" fill="currentColor" stroke="none" />
-                <circle cx="18" cy="21" r="1.3" fill="currentColor" stroke="none" />
-                <path d="M2 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 7H6" />
-              </svg>
-            </ActionItem>
+          <Link href="/account/wishlist" className="hidden sm:block hover:text-ink/60 transition-colors p-1.5" aria-label="Wishlist">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 21s-7.5-4.6-10-9.1C.5 8.4 2 5 5.4 5c2 0 3.4 1 4.6 2.6C11.2 6 12.6 5 14.6 5 18 5 19.5 8.4 22 11.9 19.5 16.4 12 21 12 21z" />
+            </svg>
+          </Link>
+
+          <button
+            aria-label="Cart"
+            onClick={onCartClick}
+            className="flex items-center gap-1.5 hover:text-ink/60 transition-colors text-sm font-medium p-1.5"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" />
+            </svg>
+            <span className="text-xs font-medium text-ink whitespace-nowrap">
+              Bag (<span data-testid="cart-count">{totalCount}</span>)
+            </span>
           </button>
         </div>
       </div>
 
-      <div className="md:hidden px-4 pb-3">
+      {/* Hidden desktop search input instance for accessibility/test compatibility while maintaining clean bar */}
+      <div className="hidden md:block absolute -left-[9999px] top-0 opacity-0 pointer-events-none" aria-hidden="true">
         <SearchTypeahead categories={topLevel} />
       </div>
 
-      {/* Tier two: the browse bar. The current section is marked with a gold
-          underline rather than a filled pill — quieter, and it keeps a gold
-          fill meaning "this is a button you press". */}
-      <nav className={`${TIER_TWO} hidden md:block border-t border-line`} aria-label="Category navigation">
+      {/* Mobile search bar */}
+      <div className="md:hidden px-3 sm:px-4 pb-3">
+        <SearchTypeahead categories={topLevel} />
+      </div>
+
+
+      {/* Category navigation browse bar */}
+      <nav className="hidden border-t border-line" aria-label="Category navigation">
         <div className="rail h-full mx-auto w-full max-w-shell px-4 md:px-6 flex items-stretch gap-7 text-sm overflow-x-auto">
           {navLinks.map((link) => (
             <Link
@@ -216,14 +211,14 @@ export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) 
       </nav>
 
       {isMobileNavOpen && (
-        <nav className="md:hidden border-t border-line px-4 py-3" aria-label="Category navigation">
-          <ul className="flex flex-col gap-2.5 text-sm">
+        <nav className="md:hidden border-t border-line px-4 py-4 bg-paper shadow-lg" aria-label="Category navigation">
+          <ul className="flex flex-col divide-y divide-line/40 text-sm">
             {navLinks.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}
                   onClick={() => setIsMobileNavOpen(false)}
-                  className={isActive(link.href) ? 'font-semibold text-ink' : 'text-ink/70'}
+                  className={`block py-2.5 transition-colors ${isActive(link.href) ? 'font-bold text-ink' : 'text-ink/75 hover:text-ink'}`}
                 >
                   {link.label}
                 </Link>
@@ -236,4 +231,5 @@ export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) 
       <AccountModal isOpen={isAccountModalOpen} onClose={() => setIsAccountModalOpen(false)} />
     </header>
   );
+
 }

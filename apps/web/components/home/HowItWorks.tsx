@@ -24,7 +24,7 @@ export function HowItWorks({ title, subtitle, steps }: HowItWorksProps) {
   return (
     <Section tone="tint">
       <SectionHeader title={title} subtitle={subtitle} href="/how-it-works" linkLabel="Read the full guide" />
-      <ol className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-6">
+      <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
         {resolvedSteps.map((step, index) => (
           <li key={step.label}>
             <span className="w-8 h-8 rounded-full bg-gold text-ink text-sm font-bold flex items-center justify-center">

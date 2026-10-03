@@ -16,65 +16,140 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PictureQualityGuidePage() {
-  // [FE-28] Unlike the other 6 fully-CMS-able pages, `<PictureQualityGuide
-  // />` always renders regardless of CMS content — it's a shared React
-  // component (also used on the product page's own tab, deliberately
-  // "stated once" so the two can never drift), not markup a CMS bodyHtml
-  // field could ever represent. A CMS `picture-quality-guide` doc
-  // replaces the surrounding prose only.
   const page = await getPageBySlug('picture-quality-guide').catch(() => null);
   if (page) {
     return (
-      <>
+      <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
         <PageIntro title={page.title} />
         <PictureQualityGuide />
         <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <PageIntro
-        title="Picture quality guide"
-        standfirst="Why the same photo can look perfect at 8×12 and soft at 16×24."
-      />
+    <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">Quality guide</span>
+      </nav>
 
-      {/* The same copy the product page shows in its own tab — stated once,
-          in one component, so the two can never drift apart. */}
-      <PictureQualityGuide />
+      <div className="mb-10">
+        <h1 className="font-display text-3xl md:text-5xl font-bold text-ink mb-3 leading-tight">
+          A sharper photo. A better frame.
+        </h1>
+        <p className="text-sm md:text-base text-ink/70">
+          A few small choices make a big difference to your print.
+        </p>
+      </div>
 
-      <h2>What the reading in the editor means</h2>
-      <p>
-        When you upload, we work out the effective DPI: how many of your photo&rsquo;s pixels land
-        in each printed inch at the size you picked. Zooming in uses fewer pixels over the same
-        area, so the reading changes as you position the photo.
+      {/* Hero Story Split */}
+      <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center my-12">
+        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-tint shadow-sm border border-line">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1000&auto=format&fit=crop&q=80"
+            alt="Artisan checking photo print quality"
+            className="w-full h-full object-cover"
+          />
+        </div>
+
+        <div className="space-y-4 text-sm text-ink/80 leading-relaxed">
+          <h2 className="font-display text-2xl md:text-3xl font-bold text-ink mb-2">
+            Start with the original.
+          </h2>
+          <p>
+            Upload the full-resolution photo from your camera or phone. Avoid screenshots, social-media downloads and heavily compressed files.
+          </p>
+          <p>
+            The Studio checks the effective DPI after cropping. Bigger prints need more pixels. A closer crop can reduce resolution.
+          </p>
+          <div className="pt-2">
+            <span className="inline-flex items-center px-4 py-1.5 rounded-full border border-green-300 bg-green-50 text-green-800 text-xs font-semibold">
+              300 DPI · Ideal for crisp detail
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Resolution Table */}
+      <div className="my-16 overflow-x-auto rounded-2xl border border-line bg-paper">
+        <table className="w-full min-w-[500px] text-left text-xs">
+          <thead className="bg-tint/60 text-2xs uppercase tracking-wider font-bold text-ink/60 border-b border-line">
+            <tr>
+              <th className="px-5 py-3.5">Frame size</th>
+              <th className="px-5 py-3.5">Recommended photo</th>
+              <th className="px-5 py-3.5">Print area</th>
+              <th className="px-5 py-3.5">Best for</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line text-ink/80">
+            <tr>
+              <td className="px-5 py-3.5 font-bold text-ink">8 × 10 in</td>
+              <td className="px-5 py-3.5">2,400 × 3,000 px</td>
+              <td className="px-5 py-3.5">Portrait 4:5</td>
+              <td className="px-5 py-3.5">Phone portraits</td>
+            </tr>
+            <tr>
+              <td className="px-5 py-3.5 font-bold text-ink">12 × 16 in</td>
+              <td className="px-5 py-3.5">3,600 × 4,800 px</td>
+              <td className="px-5 py-3.5">Portrait 3:4</td>
+              <td className="px-5 py-3.5">Favourite moments</td>
+            </tr>
+            <tr>
+              <td className="px-5 py-3.5 font-bold text-ink">16 × 20 in</td>
+              <td className="px-5 py-3.5">4,800 × 6,000 px</td>
+              <td className="px-5 py-3.5">Portrait 4:5</td>
+              <td className="px-5 py-3.5">Statement prints</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* 3 DPI Tier Cards */}
+      <div className="grid md:grid-cols-3 gap-6 my-12">
+        <div className="rounded-2xl border border-line bg-paper p-6">
+          <span className="inline-block px-3 py-1 rounded-full border border-green-300 bg-green-50 text-green-800 text-2xs font-semibold mb-3">
+            Excellent · 300+ DPI
+          </span>
+          <p className="text-xs text-ink/70 leading-relaxed">
+            Clean edges and fine detail, even up close.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-line bg-paper p-6">
+          <span className="inline-block px-3 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-2xs font-semibold mb-3">
+            Good · 150–299 DPI
+          </span>
+          <p className="text-xs text-ink/70 leading-relaxed">
+            Suitable for most wall displays at a normal distance.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-line bg-paper p-6">
+          <span className="inline-block px-3 py-1 rounded-full border border-orange-300 bg-orange-50 text-orange-800 text-2xs font-semibold mb-3">
+            Low · Under 150 DPI
+          </span>
+          <p className="text-xs text-ink/70 leading-relaxed">
+            May look soft or pixelated. Try a smaller frame or replace the photo.
+          </p>
+        </div>
+      </div>
+
+      <p className="text-2xs text-ink/50 my-6">
+        Screens and prints can vary slightly in colour. We use colour-managed printing and inspect every frame before dispatch.
       </p>
-      <ul>
-        <li><strong>Good quality print</strong> — 300&nbsp;DPI or better. Print it.</li>
-        <li><strong>Lower quality print</strong> — usable, but softer up close. Fine for larger frames seen from across a room.</li>
-        <li><strong>Too low resolution</strong> — visibly blurry or blocky. We ask you to confirm before letting this through.</li>
-      </ul>
 
-      <h2>How to improve a low reading</h2>
-      <ul>
-        <li>Send the original file, not a copy from WhatsApp or Instagram — both re-compress heavily.</li>
-        <li>Zoom out, or pick a smaller print size. Both put more pixels in each printed inch.</li>
-        <li>Use the original photo rather than a screenshot of it.</li>
-        <li>Avoid photos already enlarged or upscaled by another app; the extra pixels carry no extra detail.</li>
-      </ul>
-
-      <h2>Things resolution cannot fix</h2>
-      <p>
-        Motion blur, camera shake and heavy noise from a dark room stay exactly as visible in print
-        as they are on screen — often more so, because a print does not glow. If a photo looks soft
-        at full size on your phone, it will look soft on your wall.
-      </p>
-
-      <p>
-        Not sure about a particular photo? <Link href="/contact">Send it to us</Link> before you
-        order and we will tell you honestly how large it will hold up.
-      </p>
-    </>
+      <div className="pt-4 mb-8">
+        <Link
+          href="/category"
+          className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-colors shadow-sm"
+        >
+          Choose a frame
+        </Link>
+      </div>
+    </div>
   );
 }

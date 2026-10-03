@@ -47,14 +47,14 @@ export function AdminDrawer({
         aria-hidden="true"
       />
 
-      <div className="fixed inset-y-0 right-0 flex max-w-full pl-10">
+      <div className="fixed inset-y-0 right-0 flex max-w-full pl-4 sm:pl-10">
         <div
           role="dialog"
           aria-modal="true"
           className={`w-screen ${WIDTH_MAP[width]} bg-paper border-l border-line flex flex-col shadow-2xl animate-slide-left`}
         >
           {/* Header */}
-          <div className="flex items-start justify-between p-5 border-b border-line bg-field/50">
+          <div className="flex items-start justify-between p-4 sm:p-5 border-b border-line bg-field/50">
             <div>
               <h2 className="font-display text-base font-bold text-ink">{title}</h2>
               {subtitle && <p className="text-xs text-ink/60 mt-0.5">{subtitle}</p>}
@@ -70,7 +70,7 @@ export function AdminDrawer({
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6">{children}</div>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</div>
 
           {/* Sticky Footer */}
           {footer && (

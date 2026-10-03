@@ -32,6 +32,6 @@ describe('LayoutChrome', () => {
       </AuthProvider>
     );
     expect(screen.getByText('Test child content')).toBeInTheDocument();
-    expect(screen.getAllByText('BroPics').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('KarthysGallery').length).toBeGreaterThan(0);
   });
 });

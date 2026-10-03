@@ -1,8 +1,8 @@
 # BroPics — Production Readiness Report & Frame Template Technical Architecture
 
-> **Document Version:** 1.0.0  
-> **Date:** September 2026  
-> **Status:** Code Complete & Test Verified (230/230 Test Suites Passing, 1,500/1,500 Tests)  
+> **Document Version:** 1.1.0  
+> **Date:** October 2026  
+> **Status:** Code Complete & Test Verified (290/290 Test Suites Passing, 1,897/1,897 Tests)  
 > **Repository:** `d:\Projects\Bro-pics` | **Branch:** `San's(FE)`
 
 ---
@@ -42,7 +42,7 @@ The BroPics custom photo-framing platform has achieved **100% codebase completio
 
 ```mermaid
 graph TD
-    Client[Next.js 14 Web Storefront & Admin] -->|REST / Typed APIs| NextAPI[Next.js Route Handlers]
+    Client[Next.js 15 Web Storefront & Admin] -->|REST / Typed APIs| NextAPI[Next.js Route Handlers]
     NextAPI -->|Admin & Security Middleware| Permissions[RBAC & Permission Checks]
     NextAPI -->|Firestore SDK| DB[(Google Cloud Firestore)]
     NextAPI -->|Signed Object Storage| GCS[(Google Cloud Storage)]
@@ -54,9 +54,9 @@ graph TD
 ```
 
 ### Verification & Test Suite Summary
-- **TypeScript Typecheck:** `100% clean` (0 errors across `@bro-pics/web`, `@bro-pics/shared`, `functions`, `services/print-render`).
-- **Automated Vitest Test Suites:** **230 passed** (230/230 test files).
-- **Unit & Integration Tests:** **1,500 passed** (1,500/1,500 tests).
+- **TypeScript Typecheck:** `100% clean` (0 errors across `@bro-pics/web`, `@bro-pics/shared`, `functions`, `services/print-render`, `scripts/seed`, `firestore-rules-tests`).
+- **Automated Vitest Test Suites:** **290 passed** (234 in `apps/web` + 56 in `packages/shared`).
+- **Unit & Integration Tests:** **1,897 passed** (1,509 in `apps/web` + 388 in `packages/shared`, 0 failures).
 - **Accessibility Audit:** 0 critical axe violations across key customer flows (WCAG 2.1 AA compliant).
 - **Design System:** Strict adherence to the "Black & Gold Elegance" design language tokens (`bg-dark-900`, `text-gold-400`, `border-dark-700`, `accent-gold-500`).
 

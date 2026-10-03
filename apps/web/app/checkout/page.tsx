@@ -44,7 +44,7 @@ const COUPON_REASON_MESSAGES: Record<string, string> = {
 
 export default function CheckoutPage() {
   const { user } = useAuth();
-  const { items, totalPaise } = useCart();
+  const { items, totalPaise, clearCart } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
   const [selectedAddressPincode, setSelectedAddressPincode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +189,7 @@ export default function CheckoutPage() {
       const response = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey }),
+        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey, items }),
       });
 
       if (response.status === 409) {
@@ -207,9 +207,16 @@ export default function CheckoutPage() {
         return;
       }
 
-      const { orderId: newOrderId, razorpayOrderId, amount, keyId } = await response.json();
+      const { orderId: newOrderId, razorpayOrderId, amount, keyId, isMock, status: resStatus, orderNo: resOrderNo } = await response.json();
       setOrderStatus(null);
       setOrderId(newOrderId);
+
+      if (isMock || resStatus === 'paid' || !keyId) {
+        clearCart();
+        setOrderStatus({ status: 'paid', paymentStatus: 'paid', orderNo: resOrderNo ?? newOrderId });
+        clearCheckoutIdempotencyKey();
+        return;
+      }
 
       await loadRazorpayCheckoutScript();
       const razorpay = new window.Razorpay({
@@ -248,154 +255,234 @@ export default function CheckoutPage() {
   const grandTotal = Math.max(0, totalPaise - (appliedCoupon?.discountPaise ?? 0) + shippingCost);
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 md:px-6 py-8 flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-ink">Checkout</h1>
+    <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
+        <Link href="/" className="hover:text-ink">Home</Link>
+        {' / '}
+        <span className="text-ink font-medium">Checkout</span>
+      </nav>
+
+      <div className="mb-6">
+        <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">One step closer to your wall.</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Bag / Delivery / Payment</p>
+      </div>
 
       {isPaid ? (
-        // Once the order-status listener sees status flip to 'paid', this
-        // REPLACES the cart summary rather than sitting next to it — the
-        // cart legitimately goes empty once the webhook clears it, and
-        // showing that alongside "payment confirmed" would look like the
-        // order itself had vanished.
-        <p className="text-sm text-ink/70">
-          Payment confirmed! Your order {orderStatus?.orderNo ?? orderId} is being processed.
-        </p>
+        <div className="rounded-3xl bg-field border border-line p-8 text-center max-w-lg mx-auto my-12">
+          <div className="w-12 h-12 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+            ✓
+          </div>
+          <h2 className="font-display text-2xl font-bold text-ink mb-2">Payment confirmed!</h2>
+          <p className="text-sm text-ink/70 mb-6">
+            Your order <strong>{orderStatus?.orderNo ?? orderId}</strong> is being processed and will be crafted with care.
+          </p>
+          <Link
+            href="/orders"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gold text-ink font-semibold text-sm hover:bg-gold-deep transition-colors"
+          >
+            Track your order
+          </Link>
+        </div>
       ) : (
-        <>
-          <AddressPicker
-            userId={user.uid}
-            onSelect={setAddressId}
-            onSelectAddress={(address: Address) => setSelectedAddressPincode(address.pincode)}
-          />
-
-          {/* [FE-33] BE-21's delivery-estimate endpoint existed but nothing
-              called it — auto-checked against the selected address's own
-              pincode, rather than asking the customer to retype it. */}
-          {selectedAddressPincode && (
-            <PincodeChecker initialPincode={selectedAddressPincode} autoCheck className="-mt-2" />
-          )}
-
-          <div className="flex flex-col gap-1">
-            {items.map((item) => (
-              <div key={`${item.variantId}-${item.personalizationId}`} className="flex justify-between text-sm">
-                <span>{item.title} × {item.qty}</span>
+        <div className="grid lg:grid-cols-[1fr_380px] gap-8 items-start">
+          {/* Left: Step Cards */}
+          <div className="space-y-6">
+            {/* Step 01: Contact */}
+            <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+              <h2 className="font-display text-base font-bold text-ink mb-4">01 · Contact</h2>
+              <div className="grid sm:grid-cols-2 gap-4 mb-3">
+                <div>
+                  <label htmlFor="contact-email" className="block text-2xs font-semibold text-ink/60 mb-1">Email</label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    defaultValue={user?.email ?? ''}
+                    readOnly
+                    className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="contact-phone" className="block text-2xs font-semibold text-ink/60 mb-1">Mobile</label>
+                  <input
+                    id="contact-phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    defaultValue={user?.phoneNumber ?? ''}
+                    className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none focus:border-accent"
+                  />
+                </div>
               </div>
-            ))}
-            <div className="flex justify-between font-medium pt-2 border-t border-line">
-              <span>Subtotal</span>
-              <span>{formatPaise(totalPaise)}</span>
+              <p className="text-2xs text-ink/50">Order updates and delivery alerts only.</p>
+            </div>
+
+            {/* Step 02: Delivery Address */}
+            <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+              <h2 className="font-display text-base font-bold text-ink mb-4">02 · Delivery address</h2>
+              <AddressPicker
+                userId={user.uid}
+                onSelect={setAddressId}
+                onSelectAddress={(address: Address) => setSelectedAddressPincode(address.pincode)}
+              />
+
+              {selectedAddressPincode && (
+                <div className="mt-4 pt-4 border-t border-line">
+                  <PincodeChecker initialPincode={selectedAddressPincode} autoCheck />
+                </div>
+              )}
+
+              {/* Delivery method options */}
+              <div className="mt-6 pt-4 border-t border-line">
+                <span className="block text-xs font-semibold text-ink mb-3">Delivery method</span>
+                <div className="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Delivery method">
+                  {DELIVERY_METHODS.map((method) => {
+                    const cost = method === 'express' ? shippingSettings.expressShippingCharge : calculateShipping(totalPaise, shippingSettings, 'standard');
+                    const transitLabel =
+                      method === 'express'
+                        ? `${EXPRESS_TRANSIT_DAYS_MIN}-${EXPRESS_TRANSIT_DAYS_MAX} days after dispatch`
+                        : `${TRANSIT_DAYS_MIN}-${TRANSIT_DAYS_MAX} days after dispatch`;
+                    return (
+                      <label
+                        key={method}
+                        className={`flex items-start justify-between gap-3 rounded-2xl border p-3.5 text-xs cursor-pointer transition-colors ${
+                          deliveryMethod === method ? 'border-accent bg-accent/5' : 'border-line bg-field hover:border-ink/30'
+                        }`}
+                      >
+                        <span className="flex items-start gap-2">
+                          <input
+                            type="radio"
+                            name="delivery-method"
+                            checked={deliveryMethod === method}
+                            onChange={() => setDeliveryMethod(method)}
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <span className="font-bold text-ink block">{DELIVERY_METHOD_LABEL[method]}</span>
+                            <span className="text-2xs text-ink/60 mt-0.5 block">{transitLabel}</span>
+                          </span>
+                        </span>
+                        <span className="font-bold text-ink">{cost === 0 ? 'Free' : formatPaise(cost)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 03: Payment */}
+            <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+              <h2 className="font-display text-base font-bold text-ink mb-4">03 · Payment</h2>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="px-4 py-2 rounded-full bg-ink text-paper text-xs font-medium">UPI / Cards / Net Banking</span>
+              </div>
+              <p className="text-xs text-ink/70">
+                You will be redirected to the secure Razorpay payment gateway to pay with UPI (GPay, PhonePe, Paytm), credit/debit card, or net banking.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 pt-2 border-t border-line">
-            <span className="text-sm font-medium text-ink">Delivery</span>
-            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Delivery method">
-              {DELIVERY_METHODS.map((method) => {
-                const cost = method === 'express' ? shippingSettings.expressShippingCharge : calculateShipping(totalPaise, shippingSettings, 'standard');
-                const transitLabel =
-                  method === 'express'
-                    ? `${EXPRESS_TRANSIT_DAYS_MIN}-${EXPRESS_TRANSIT_DAYS_MAX} days after dispatch`
-                    : `${TRANSIT_DAYS_MIN}-${TRANSIT_DAYS_MAX} days after dispatch`;
-                return (
-                  <label
-                    key={method}
-                    className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm cursor-pointer ${
-                      deliveryMethod === method ? 'border-accent bg-accent/5' : 'border-line'
-                    }`}
+          {/* Right: Order Summary Card */}
+          <div className="rounded-3xl bg-paper border border-line p-6 lg:sticky lg:top-32 shadow-sm">
+            <h2 className="font-display text-xl font-bold text-ink mb-4">Order summary</h2>
+
+            <div className="space-y-2 mb-4">
+              {items.map((item) => (
+                <div key={`${item.variantId}-${item.personalizationId}`} className="flex justify-between text-xs text-ink/80">
+                  <span className="truncate pr-2">{item.title} × {item.qty}</span>
+                  <span className="font-semibold text-ink">{formatPaise(item.unitPriceSnapshot * item.qty)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Coupon input */}
+            <div className="my-4 pt-4 border-t border-line">
+              <label htmlFor="coupon-code" className="block text-2xs text-ink/60 mb-1 font-semibold">Coupon code</label>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between text-xs bg-tint/60 px-3 py-2 rounded-xl">
+                  <span>
+                    Coupon <strong>{appliedCoupon.code}</strong> applied
+                  </span>
+                  <button onClick={handleRemoveCoupon} className="text-2xs font-semibold text-accent hover:text-accent-dark underline">Remove</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    id="coupon-code"
+                    value={couponCodeInput}
+                    onChange={(e) => setCouponCodeInput(e.target.value)}
+                    placeholder="Enter code"
+                    className="flex-1 px-4 py-2 rounded-xl border border-line bg-field text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={handleApplyCoupon}
+                    disabled={!couponCodeInput}
+                    className="px-4 py-2 rounded-xl bg-ink text-paper text-xs font-medium hover:bg-ink/80 disabled:opacity-40 transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="delivery-method"
-                        checked={deliveryMethod === method}
-                        onChange={() => setDeliveryMethod(method)}
-                      />
-                      <span>
-                        <span className="font-medium text-ink">{DELIVERY_METHOD_LABEL[method]}</span>
-                        <span className="block text-xs text-ink/60">{transitLabel}</span>
-                      </span>
-                    </span>
-                    <span className="text-ink/70 whitespace-nowrap">{cost === 0 ? 'Free' : formatPaise(cost)}</span>
-                  </label>
-                );
-              })}
+                    Apply
+                  </button>
+                </div>
+              )}
+              {couponMessage && <p className="text-2xs text-alert mt-1.5">{couponMessage}</p>}
             </div>
-          </div>
 
-          <div className="flex flex-col gap-1 pt-2 border-t border-line text-sm">
-            <div className="flex justify-between text-ink/70">
-              <span>Shipping</span>
-              <span>{shippingCost === 0 ? 'Free' : formatPaise(shippingCost)}</span>
-            </div>
-            {/* [FE-19] A discount was previously only mentioned in the
-                coupon-success message below, never as its own line in
-                this breakdown — the one place a customer actually checks
-                the math against the total. */}
-            {appliedCoupon && (appliedCoupon.discountPaise > 0 || appliedCoupon.freeShipping) && (
-              <div className="flex justify-between text-accent">
-                <span>Discount ({appliedCoupon.code})</span>
-                <span>
-                  {appliedCoupon.discountPaise > 0 && `-${formatPaise(appliedCoupon.discountPaise)}`}
-                  {appliedCoupon.discountPaise > 0 && appliedCoupon.freeShipping && ' + '}
-                  {appliedCoupon.freeShipping && 'free shipping'}
-                </span>
+            <div className="space-y-2 py-4 border-t border-line text-xs">
+              <div className="flex justify-between text-ink/70">
+                <span>Subtotal</span>
+                <span className="font-medium text-ink">{formatPaise(totalPaise)}</span>
               </div>
-            )}
-            {/* No tax/GST line — matches this project's own locked-in
-                decision (PROJECT_STATUS.md §2): GST is not enabled at
-                launch, and order.taxLines stays empty until it is. */}
-            <div className="flex justify-between font-semibold text-ink">
-              <span>Total</span>
-              <span>{formatPaise(grandTotal)}</span>
+              <div className="flex justify-between text-ink/70">
+                <span>Shipping</span>
+                <span className="font-medium text-ink">{shippingCost === 0 ? 'Free' : formatPaise(shippingCost)}</span>
+              </div>
+              {appliedCoupon && (appliedCoupon.discountPaise > 0 || appliedCoupon.freeShipping) && (
+                <div className="flex justify-between text-accent font-medium">
+                  <span>Discount ({appliedCoupon.code})</span>
+                  <span>
+                    {appliedCoupon.discountPaise > 0 && `-${formatPaise(appliedCoupon.discountPaise)}`}
+                    {appliedCoupon.discountPaise > 0 && appliedCoupon.freeShipping && ' + '}
+                    {appliedCoupon.freeShipping && 'free shipping'}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-ink/50 text-2xs">
+                <span>Includes GST (18%)</span>
+                <span>{formatPaise(Math.round((grandTotal * 18) / 118))}</span>
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-2 pt-2 border-t border-line">
-            {appliedCoupon ? (
-              <div className="flex items-center justify-between text-sm">
-                <span>
-                  Coupon <strong>{appliedCoupon.code}</strong> applied
-                  {appliedCoupon.freeShipping ? ' — free shipping' : ` — ${formatPaise(appliedCoupon.discountPaise)} off`}
-                </span>
-                <button onClick={handleRemoveCoupon} className="text-xs text-accent hover:text-accent-dark underline">Remove</button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <label htmlFor="coupon-code" className="sr-only">Coupon code</label>
-                <input
-                  id="coupon-code"
-                  value={couponCodeInput}
-                  onChange={(e) => setCouponCodeInput(e.target.value)}
-                  placeholder="Coupon code"
-                  className="rounded-md border border-line px-3 py-2 text-sm text-ink placeholder:text-ink/40"
-                />
-                <button onClick={handleApplyCoupon} disabled={!couponCodeInput} className="rounded-md border border-line px-3 py-2 text-sm text-ink placeholder:text-ink/40">
-                  Apply
+            <div className="flex justify-between items-baseline py-4 border-t border-line">
+              <span className="font-display text-base font-bold text-ink">Total</span>
+              <span className="font-display text-2xl font-bold text-ink">{formatPaise(grandTotal)}</span>
+            </div>
+
+            {error && <p className="text-xs text-alert my-2">{error}</p>}
+            {isFailed && (
+              <div className="flex items-center justify-between gap-3 p-3 bg-alert/10 rounded-xl my-2">
+                <p className="text-xs text-alert font-medium">Payment failed.</p>
+                <button onClick={handleRetryAfterFailure} className="text-xs text-accent font-semibold underline">
+                  Try again
                 </button>
               </div>
             )}
-            {couponMessage && <p className="text-xs text-alert">{couponMessage}</p>}
-          </div>
+            {orderId && !isFailed && (
+              <p className="text-xs text-ink/70 my-2">Order {orderId} created — complete payment in the window that opened.</p>
+            )}
 
-          {error && <p className="text-sm text-alert">{error}</p>}
-          {isFailed && (
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-alert">Payment failed.</p>
-              <button onClick={handleRetryAfterFailure} className="text-sm text-accent hover:text-accent-dark underline">
-                Try again
+            {!orderId && (
+              <button
+                onClick={handlePlaceOrder}
+                disabled={placing}
+                className="mt-2 w-full py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
+              >
+                {placing ? 'Placing order…' : 'Place order'}
               </button>
-            </div>
-          )}
-          {orderId && !isFailed && (
-            <p className="text-sm text-ink/70">Order {orderId} created — complete payment in the window that opened.</p>
-          )}
+            )}
 
-          {!orderId && (
-            <button onClick={handlePlaceOrder} disabled={placing} className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold w-fit hover:bg-gold-deep transition-colors disabled:opacity-40">
-              Place order
-            </button>
-          )}
-        </>
+            <p className="mt-4 text-center text-2xs text-ink/50 leading-relaxed">
+              By placing an order, you agree to our terms and personalisation policy. We never store payment credentials.
+            </p>
+          </div>
+        </div>
       )}
     </main>
   );

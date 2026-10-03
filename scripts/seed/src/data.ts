@@ -427,8 +427,22 @@ export const seedProductMedia: ProductMedia[] = [
  */
 export function computePrintableRects(
   slotCount: number,
-  variantAspectRatio: number
+  variantAspectRatio: number,
+  productId?: string
 ): FrameTemplate['printableRects'] {
+  // Classic wooden frame uses the photorealistic black frame mockup aperture (0.488 x 0.620 centered)
+  if (productId === 'prod_classic_wooden_frame' || productId === 'classic-wooden-frame') {
+    return [
+      {
+        slotIndex: 0,
+        x: 0.256,
+        y: 0.192,
+        width: 0.488,
+        height: 0.620,
+      },
+    ];
+  }
+
   // Evenly-spaced grid layout for multi-slot products; a single centered
   // rect — sized to the variant's real physical aspect ratio — for
   // single-slot products. Simple, deterministic, and always produces
@@ -486,9 +500,10 @@ export function computePrintableRects(
 // template doc as real per-product config instead of a client-side
 // fallback computed at render time for every product regardless of
 // allowsTextPersonalization.
-function computeTextZones(): FrameTemplate['textZones'] {
-  const stripTop = 0.84;
-  const stripHeight = 0.13;
+function computeTextZones(productId?: string): FrameTemplate['textZones'] {
+  const isClassicFrame = productId === 'prod_classic_wooden_frame' || productId === 'classic-wooden-frame';
+  const stripTop = isClassicFrame ? 0.825 : 0.84;
+  const stripHeight = isClassicFrame ? 0.08 : 0.13;
   const fields: Array<{ key: string; label: string }> = [
     { key: 'name', label: 'Name' },
     { key: 'date', label: 'Date' },
@@ -497,8 +512,8 @@ function computeTextZones(): FrameTemplate['textZones'] {
   return fields.map((field, index) => ({
     fieldKey: field.key,
     label: field.label,
-    x: 0.08,
-    width: 0.84,
+    x: isClassicFrame ? 0.25 : 0.08,
+    width: isClassicFrame ? 0.5 : 0.84,
     y: stripTop + bandHeight * index,
     height: bandHeight,
     maxLength: 40,
@@ -524,7 +539,7 @@ export const seedFrameTemplates: FrameTemplate[] = seedVariants
   .map((variant) => {
     const product = seedProducts.find((p) => p.id === variant.productId)!;
     const slotCount = product.photoSlots;
-    const printableRects = computePrintableRects(slotCount, variant.aspectRatio);
+    const printableRects = computePrintableRects(slotCount, variant.aspectRatio, variant.productId);
 
     return {
       id: `ft_${variant.id}`,
@@ -537,7 +552,7 @@ export const seedFrameTemplates: FrameTemplate[] = seedVariants
       matInset: 0,
       version: 1,
       isCurrent: true,
-      textZones: product.allowsTextPersonalization ? computeTextZones() : [],
+      textZones: product.allowsTextPersonalization ? computeTextZones(product.id) : [],
       clipartOptions: stockClipartOptions(),
     };
   });
@@ -684,10 +699,10 @@ export const seedHomepageSections: HomepageSection[] = [
   {
     id: 'sec_why_us',
     type: 'why_us',
-    title: 'Why BroPics',
-    subtitle: 'Quality you can trust',
-    image: '/placeholders/home/why-us.svg',
-    mobileImage: '/placeholders/home/why-us.svg',
+    title: 'Made with care. Kept for years.',
+    subtitle: 'We believe the best things in a home are personal. Every BroPics frame is finished by hand in India, with archival prints and materials chosen to make your memories last.',
+    image: '/banners/artisan-framing-craft.jpg',
+    mobileImage: '/banners/artisan-framing-craft.jpg',
     link: '',
     sortOrder: 10,
     startsAt: null,
@@ -700,8 +715,8 @@ export const seedHomepageSections: HomepageSection[] = [
     type: 'offer_strip',
     title: 'Use code NEW10 for 10% off your first order',
     subtitle: '',
-    image: '',
-    mobileImage: '',
+    image: '/banners/gallery-wall.png',
+    mobileImage: '/banners/gallery-wall.png',
     link: '',
     sortOrder: 11,
     startsAt: null,

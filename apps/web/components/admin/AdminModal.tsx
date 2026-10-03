@@ -49,7 +49,7 @@ export function AdminModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative w-full ${MAX_WIDTH_MAP[maxWidth]} rounded-2xl bg-paper border border-line p-6 shadow-2xl z-10 animate-scale-in`}
+        className={`relative w-full ${MAX_WIDTH_MAP[maxWidth]} max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-paper border border-line p-5 sm:p-6 shadow-2xl z-10 animate-scale-in`}
       >
         <div className="flex items-start justify-between mb-4">
           <div>
