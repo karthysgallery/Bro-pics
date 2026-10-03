@@ -74,3 +74,5 @@ export * from './schemas/analytics-daily';
 export * from './analytics/dashboard';
 export * from './analytics/daily-rollup';
 export * from './analytics/reports';
+export * from './font-map';
+export * from './text-fitting';

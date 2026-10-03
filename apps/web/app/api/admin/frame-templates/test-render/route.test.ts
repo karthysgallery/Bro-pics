@@ -151,6 +151,54 @@ describe('POST /api/admin/frame-templates/test-render', () => {
     );
   });
 
+  it('parses textFields JSON and passes formatted text fields to renderPrintFile', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockTemplateQueryGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        {
+          data: () => ({
+            ...currentTemplate,
+            textZones: [
+              {
+                fieldKey: 'heading',
+                label: 'Heading',
+                x: 0.1,
+                y: 0.8,
+                width: 0.8,
+                height: 0.1,
+                maxLength: 40,
+                align: 'center',
+                defaultFontFamily: 'dancing-script',
+                defaultColor: '#2b2420',
+              },
+            ],
+          }),
+        },
+      ],
+    });
+
+    await POST(
+      makeRequest({
+        variantId: 'var_1',
+        photo: samplePhoto,
+        textFields: JSON.stringify({ heading: 'Forever & Always' }),
+      })
+    );
+
+    expect(mockRenderPrintFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textFields: [
+          expect.objectContaining({
+            value: 'Forever & Always',
+            align: 'center',
+            color: '#2b2420',
+          }),
+        ],
+      })
+    );
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 7 });
     const response = await POST(makeRequest({ variantId: 'var_1', photo: samplePhoto }));

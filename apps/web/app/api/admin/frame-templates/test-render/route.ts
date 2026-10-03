@@ -120,6 +120,34 @@ export async function POST(request: Request): Promise<NextResponse> {
     maskBuffer,
   }));
 
+  const textFieldsRaw = formData?.get('textFields');
+  let textFieldsInput: Record<string, string> = {};
+  if (typeof textFieldsRaw === 'string') {
+    try {
+      textFieldsInput = JSON.parse(textFieldsRaw);
+    } catch {
+      // Ignore JSON parse error
+    }
+  }
+
+  const textFields = template.textZones
+    ? template.textZones
+        .map((zone) => {
+          const val = textFieldsInput[zone.fieldKey];
+          if (!val || !val.trim()) return null;
+          return {
+            zoneRect: { x: zone.x, y: zone.y, width: zone.width, height: zone.height },
+            align: zone.align,
+            value: val.trim(),
+            fontKeyOrCssVar: zone.defaultFontFamily || 'dancing-script',
+            color: zone.defaultColor || '#000000',
+            minFontSizePx: zone.minFontSizePx,
+            maxFontSizePx: zone.maxFontSizePx,
+          };
+        })
+        .filter((f): f is NonNullable<typeof f> => f !== null)
+    : undefined;
+
   let renderedBuffer: Buffer;
   try {
     renderedBuffer = await renderPrintFile({
@@ -128,6 +156,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       slots,
       mockupBuffer,
       overlayBuffer,
+      textFields,
     });
   } catch (error) {
     logger.error('Test render failed', { variantId, templateId: template.id, error: String(error) });

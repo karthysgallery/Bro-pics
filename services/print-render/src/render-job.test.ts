@@ -125,4 +125,53 @@ describe('renderPrintJob', () => {
     expect(deps.failJob).toHaveBeenCalledWith('order_1_item_1', expect.stringContaining('No customizations found'));
     expect(deps.markCustomizationsFailed).not.toHaveBeenCalled();
   });
+
+  it('renders personalization with text fields', async () => {
+    const deps = await makeDeps({
+      getCustomizationsForPersonalization: vi.fn().mockResolvedValue([
+        {
+          id: 'cust_1',
+          uploadId: 'upload_1',
+          slotIndex: 0,
+          templateVersion: 1,
+          cropRect: { x: 0, y: 0, width: 4, height: 4 },
+          rotationDeg: 0,
+          textFieldsJson: {
+            headline: { value: 'Happy Birthday', fontFamily: 'var(--font-dancing-script)', color: '#111111' },
+          },
+        },
+      ]),
+      getFrameTemplate: vi.fn().mockResolvedValue({
+        mockupUrl: 'https://cdn.example.com/mockup.png',
+        maskUrl: null,
+        overlayUrl: null,
+        printableRects: [{ slotIndex: 0, x: 0, y: 0, width: 1, height: 1 }],
+        textZones: [
+          {
+            fieldKey: 'headline',
+            label: 'Headline',
+            x: 0.1,
+            y: 0.8,
+            width: 0.8,
+            height: 0.1,
+            maxLength: 30,
+            align: 'center',
+            defaultFontFamily: 'dancing-script',
+            defaultColor: '#000000',
+          },
+        ],
+      }),
+    });
+
+    await renderPrintJob(deps, 'order_1_item_1');
+
+    expect(deps.uploadPrintFile).toHaveBeenCalledWith(
+      'order_1',
+      'item_1',
+      'print.png',
+      expect.any(Buffer),
+      'image/png'
+    );
+    expect(deps.completeJobAndAdvanceOrder).toHaveBeenCalledWith('order_1_item_1', 'print-files/order_1/item_1/print.png');
+  });
 });

@@ -23,6 +23,7 @@ export interface RenderJobDependencies {
       templateVersion: number;
       cropRect: Rect;
       rotationDeg: RotationDeg;
+      textFieldsJson?: Record<string, { value: string; fontFamily: string; color: string }>;
     }>
   >;
   getFrameTemplate(
@@ -33,6 +34,23 @@ export interface RenderJobDependencies {
     maskUrl: string | null;
     overlayUrl: string | null;
     printableRects: Array<{ slotIndex: number; x: number; y: number; width: number; height: number }>;
+    textZones?: Array<{
+      fieldKey: string;
+      label: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      maxLength: number;
+      align: 'left' | 'center' | 'right';
+      defaultFontFamily?: string;
+      defaultColor?: string;
+      allowedFonts?: string[];
+      allowedColors?: string[];
+      minFontSizePx?: number;
+      maxFontSizePx?: number;
+      required?: boolean;
+    }>;
   } | null>;
   getUpload(uploadId: string): Promise<{ originalPath: string } | null>;
   // public/** template assets (world-readable per storage.rules — see
@@ -123,12 +141,33 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
       })
     );
 
+    const textFieldsJson = customizations[0]?.textFieldsJson;
+    const textFields =
+      template.textZones && textFieldsJson
+        ? template.textZones
+            .map((zone) => {
+              const field = textFieldsJson[zone.fieldKey];
+              if (!field || !field.value?.trim()) return null;
+              return {
+                zoneRect: { x: zone.x, y: zone.y, width: zone.width, height: zone.height },
+                align: zone.align,
+                value: field.value,
+                fontKeyOrCssVar: field.fontFamily || zone.defaultFontFamily || 'dancing-script',
+                color: field.color || zone.defaultColor || '#000000',
+                minFontSizePx: zone.minFontSizePx,
+                maxFontSizePx: zone.maxFontSizePx,
+              };
+            })
+            .filter((f): f is NonNullable<typeof f> => f !== null)
+        : undefined;
+
     const printBuffer = await renderPrintFile({
       printWidthPx: variant.printWidthPx,
       printHeightPx: variant.printHeightPx,
       slots,
       mockupBuffer,
       overlayBuffer,
+      textFields,
     });
 
     const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');

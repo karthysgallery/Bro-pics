@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { fractionRectToCanvasRect, type Rect, type RotationDeg } from '@bro-pics/shared';
 import { renderSlotPhoto } from './render-slot';
+import { buildTextZoneSvg, type PrintTextField } from './render-text';
 
 export interface PrintSlotInput {
   /** FrameTemplate.printableRects[i] — fractions (0-1) of the print canvas. */
@@ -18,6 +19,9 @@ export interface RenderPrintFileInput {
   slots: PrintSlotInput[];
   mockupBuffer: Buffer;
   overlayBuffer?: Buffer | null;
+  /** Personalized text fields — optional for backwards compat. Old jobs
+   *  and callers that predate text rendering continue to work unchanged. */
+  textFields?: PrintTextField[];
   clipart?: { buffer: Buffer; rect: Rect } | null;
 }
 
@@ -27,19 +31,16 @@ const BACKGROUND = { r: 255, g: 255, b: 255, alpha: 1 };
 
 /**
  * Assembles one print-ready file at print resolution (print inches × DPI),
- * replicating EditorCanvas.tsx's compositing order exactly: background,
- * every slot's masked photo, mockup (the frame graphic — drawn ON TOP of
- * the photo layer, since the mockup PNG has a transparent cutout where the
- * photo shows through), overlay, then clipart. Text personalization is
- * deliberately NOT rendered here yet — see PROJECT_STATUS.md for why
- * (custom Google Font delivery to sharp/librsvg needs verification against
- * a real Linux deployment target this sandbox can't provide; a base64
- * @font-face embed was tried and confirmed to silently fall back to a
- * generic font rather than erroring, which would be a much worse failure
- * mode on a real printed, shipped product than not rendering text at all).
+ * replicating EditorCanvas.tsx's compositing order exactly:
+ *   Layer 0: white background
+ *   Layer 1: every slot's masked photo
+ *   Layer 2: mockup (frame graphic — transparent cutout shows photos)
+ *   Layer 3: overlay (glass glare, embossed border)
+ *   Layer 4: personalized text zones (SVG → librsvg → PNG)
+ *   Layer 5: clipart stickers
  */
 export async function renderPrintFile(input: RenderPrintFileInput): Promise<Buffer> {
-  const { printWidthPx, printHeightPx, slots, mockupBuffer, overlayBuffer, clipart } = input;
+  const { printWidthPx, printHeightPx, slots, mockupBuffer, overlayBuffer, textFields, clipart } = input;
 
   const slotComposites = await Promise.all(
     slots.map(async (slot) => {
@@ -72,7 +73,17 @@ export async function renderPrintFile(input: RenderPrintFileInput): Promise<Buff
       ]
     : [];
 
-  const clipartComposite = [];
+  // Text composites — SVG rendered via Sharp's librsvg at full print resolution
+  const textComposites: Array<{ input: Buffer; left: number; top: number }> = [];
+  if (textFields?.length) {
+    for (const field of textFields) {
+      if (!field.value.trim()) continue;
+      const svgBuffer = buildTextZoneSvg(field, printWidthPx, printHeightPx);
+      textComposites.push({ input: svgBuffer, left: 0, top: 0 });
+    }
+  }
+
+  const clipartComposite: Array<{ input: Buffer; left: number; top: number }> = [];
   if (clipart) {
     const rect = fractionRectToCanvasRect(clipart.rect, printWidthPx, printHeightPx);
     const resized = await sharp(clipart.buffer, { limitInputPixels: false })
@@ -81,10 +92,17 @@ export async function renderPrintFile(input: RenderPrintFileInput): Promise<Buff
     clipartComposite.push({ input: resized, left: rect.x, top: rect.y });
   }
 
+  // Composite order matches EditorCanvas: bg → photos → mockup → overlay → text → clipart
   return sharp({
     create: { width: printWidthPx, height: printHeightPx, channels: 4, background: BACKGROUND },
   })
-    .composite([...slotComposites, { input: resizedMockup, left: 0, top: 0 }, ...overlayComposite, ...clipartComposite])
+    .composite([
+      ...slotComposites,
+      { input: resizedMockup, left: 0, top: 0 },
+      ...overlayComposite,
+      ...textComposites,
+      ...clipartComposite,
+    ])
     .png()
     .toBuffer();
 }

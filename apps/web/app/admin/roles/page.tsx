@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
 
 interface LookupResult {
@@ -25,9 +26,8 @@ export default function AdminRolesPage() {
     }
     user
       .getIdTokenResult()
-      .then((result) => setAuthorized(result.claims.role === 'admin'))
+      .then((res) => setAuthorized(res.claims.role === 'admin' || res.claims.role === 'super_admin'))
       .catch(() => setAuthorized(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, loading]);
 
   if (authorized === null) return null;
@@ -64,52 +64,55 @@ export default function AdminRolesPage() {
     }
     const body = await response.json();
     if (body.uid === user!.uid) {
-      // The admin just changed their own role, which revokes their cached
-      // ID token's refresh tokens server-side. Force a fresh token now so
-      // their next action in this session doesn't fail with a confusing
-      // error before their SDK naturally refreshes.
       await user!.getIdToken(true);
     }
     setResult({ ...result, role: body.role });
   };
 
   return (
-    <main className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl text-brown-dark">Role Management</h1>
+    <main className="flex flex-col gap-4 p-6 max-w-4xl mx-auto">
+      <div className="p-3 bg-gold/10 border border-gold/30 rounded-xl text-xs flex items-center justify-between">
+        <span>Looking for the full Team &amp; Role Management suite?</span>
+        <Link href="/admin/settings/team" className="font-bold text-gold-deep underline">
+          Go to Team Settings ↗
+        </Link>
+      </div>
 
-      <label htmlFor="phone-lookup-input" className="text-sm text-brown/70">Phone number</label>
+      <h1 className="font-display text-2xl text-brown-dark font-bold">Role Management</h1>
+
+      <label htmlFor="phone-lookup-input" className="text-sm text-brown/70 font-medium">Phone number</label>
       <input
         id="phone-lookup-input"
         aria-label="Phone number"
         value={phoneInput}
         onChange={(e) => setPhoneInput(e.target.value)}
-        className="rounded-lg border border-gold/30 px-3 py-2 w-fit"
+        className="rounded-lg border border-gold/30 px-3 py-2 w-fit text-sm"
       />
-      <button onClick={handleLookup} className="rounded-full bg-gradient-to-b from-brown-light to-brown text-cream px-4 py-2 w-fit">
+      <button onClick={handleLookup} className="rounded-full bg-gradient-to-b from-brown-light to-brown text-cream px-4 py-2 w-fit text-xs font-bold">
         Look up
       </button>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {result && (
-        <div className="flex flex-col gap-3 pt-4 border-t border-gold/30">
-          <p className="text-brown-dark">{result.phoneNumber}</p>
+        <div className="flex flex-col gap-3 pt-4 border-t border-gold/30 text-sm">
+          <p className="text-brown-dark font-bold">{result.phoneNumber}</p>
           <p className="text-brown/70">Current role: {result.role ?? 'None'}</p>
 
-          <label htmlFor="role-select" className="text-sm text-brown/70">Role</label>
+          <label htmlFor="role-select" className="text-sm text-brown/70 font-medium">Role</label>
           <select
             id="role-select"
             aria-label="Role"
             value={roleInput}
             onChange={(e) => setRoleInput(e.target.value)}
-            className="rounded-lg border border-gold/30 px-3 py-2 w-fit"
+            className="rounded-lg border border-gold/30 px-3 py-2 w-fit text-sm"
           >
             <option value="">None</option>
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
           </select>
 
-          <button onClick={handleSave} className="rounded-full bg-gradient-to-b from-brown-light to-brown text-cream px-4 py-2 w-fit">
+          <button onClick={handleSave} className="rounded-full bg-gradient-to-b from-brown-light to-brown text-cream px-4 py-2 w-fit text-xs font-bold">
             Save
           </button>
         </div>

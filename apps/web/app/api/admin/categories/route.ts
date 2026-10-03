@@ -9,6 +9,34 @@ import { revalidateHomepage, revalidateCategoryPage } from '../../../../lib/reva
 import { CreateCategoryBodySchema } from './category-request-schema';
 import { CategorySchema, logger } from '@bro-pics/shared';
 
+export async function GET(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const permission = await requirePermission(request, 'catalogue:read');
+  if (!permission.ok) {
+    return adminApiError(
+      permission.status,
+      permission.status === 401 ? 'unauthenticated' : 'forbidden',
+      'Catalogue read access required'
+    );
+  }
+
+  const db = getFirestore(getAdminApp());
+  const snap = await db.collection('categories').orderBy('sortOrder', 'asc').get();
+  const categories = snap.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as Record<string, unknown>),
+  }));
+
+  return NextResponse.json({ categories }, { status: 200 });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
   if (!rateLimit.allowed) {

@@ -58,3 +58,25 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   return NextResponse.json({ page }, { status: 201 });
 }
+
+export async function GET(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const permission = await requirePermission(request, 'content:read');
+  if (!permission.ok) {
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Content read access required');
+  }
+
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('pages').get();
+  const pages = snapshot.docs.map((doc) => doc.data());
+
+  return NextResponse.json({ pages }, { status: 200 });
+}
+

@@ -5,6 +5,7 @@ import { logger } from '@bro-pics/shared';
 // importing it directly here is exactly the intended use.
 import { PrintJobNotLeasableError } from '@bro-pics/shared/src/print-jobs/print-jobs';
 import { renderPrintJob, type RenderJobDependencies } from './render-job';
+import { verifyFontFiles } from './render-text';
 
 /**
  * deps is injected (rather than built internally) so tests can exercise
@@ -25,7 +26,8 @@ export function createServer(deps: RenderJobDependencies): Express {
   app.use(express.json({ limit: '30mb' }));
 
   app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+    const fonts = verifyFontFiles();
+    res.status(200).json({ status: 'ok', fonts });
   });
 
   app.post('/render/:jobId', async (req, res) => {
@@ -47,6 +49,13 @@ export function createServer(deps: RenderJobDependencies): Express {
 }
 
 if (process.env.NODE_ENV !== 'test') {
+  const fontCheck = verifyFontFiles();
+  if (!fontCheck.ok) {
+    logger.warn('Missing font files at startup', { missing: fontCheck.missing });
+  } else {
+    logger.info('All required fonts verified for print rendering');
+  }
+
   const { buildFirestoreRenderDeps } = await import('./firestore-render-deps');
   const port = process.env.PORT ? Number(process.env.PORT) : 8080;
   createServer(buildFirestoreRenderDeps()).listen(port, () => {

@@ -20,3 +20,4 @@ export const VariantSchema = z.object({
 });
 
 export type Variant = z.infer<typeof VariantSchema>;
+export type StockStatus = 'in_stock' | 'out_of_stock' | 'backorder';

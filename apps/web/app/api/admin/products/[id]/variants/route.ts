@@ -7,10 +7,29 @@ import { adminApiError } from '../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../lib/audit-log';
 import { revalidateProductPage } from '../../../../../../lib/revalidate-catalogue';
 import { CreateVariantBodySchema } from './variant-request-schema';
-import { VariantSchema, deriveVariantPrintPixels, logger } from '@bro-pics/shared';
+import { VariantSchema, deriveVariantPrintPixels, logger, type Variant } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
+}
+
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const permission = await requirePermission(request, 'catalogue:read');
+  if (!permission.ok) {
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Catalogue read access required');
+  }
+
+  const { id: productId } = await params;
+  const db = getFirestore(getAdminApp());
+  const productSnap = await db.collection('products').doc(productId).get();
+  if (!productSnap.exists) {
+    return adminApiError(404, 'not_found', `Unknown product id: ${productId}`);
+  }
+
+  const variantsSnap = await db.collection('products').doc(productId).collection('variants').get();
+  const variants = variantsSnap.docs.map((doc) => doc.data() as Variant);
+
+  return NextResponse.json({ variants });
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {

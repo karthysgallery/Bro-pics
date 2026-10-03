@@ -38,21 +38,24 @@ export async function GET(request: Request): Promise<NextResponse> {
   const url = new URL(request.url);
   const q = url.searchParams.get('q')?.trim();
   if (!q) {
-    return adminApiError(400, 'invalid_request', 'Missing q');
+    return adminApiError(400, 'invalid_request', 'Missing search query');
   }
 
   const db = getFirestore(getAdminApp());
   let query: FirebaseFirestore.Query = db.collection('users');
-  if (q.includes('@')) {
-    query = query.where('email', '==', q);
-  } else if (/^\+?\d{6,}$/.test(q)) {
-    query = query.where('phone', '==', q);
-  } else {
-    query = query.where('displayName', '>=', q).where('displayName', '<=', `${q}`);
+
+  if (q) {
+    if (q.includes('@')) {
+      query = query.where('email', '==', q);
+    } else if (/^\+?\d{6,}$/.test(q)) {
+      query = query.where('phone', '==', q);
+    } else {
+      query = query.where('displayName', '>=', q).where('displayName', '<=', `${q}`);
+    }
   }
 
   const snapshot = await query.limit(SEARCH_LIMIT).get();
-  const customers = snapshot.docs.map((doc) => doc.data());
+  const customers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
   return NextResponse.json({ customers }, { status: 200 });
 }

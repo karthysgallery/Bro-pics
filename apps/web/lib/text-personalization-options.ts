@@ -1,3 +1,5 @@
+import { FONT_MAP, type FontEntry } from '@bro-pics/shared';
+
 // Curated font and colour choices for the personalization editor's text
 // fields (Name/Date-style fields) — mirrors the reference site's "Style
 // 1..10" font grid and swatch-based colour picker, sized down to a
@@ -8,16 +10,7 @@ export interface TextFontOption {
   cssVariable: string;
 }
 
-export const TEXT_FONT_OPTIONS: TextFontOption[] = [
-  { key: 'dancing-script', label: 'Dancing Script', cssVariable: '--font-dancing-script' },
-  { key: 'great-vibes', label: 'Great Vibes', cssVariable: '--font-great-vibes' },
-  { key: 'pacifico', label: 'Pacifico', cssVariable: '--font-pacifico' },
-  { key: 'sacramento', label: 'Sacramento', cssVariable: '--font-sacramento' },
-  { key: 'cormorant', label: 'Cormorant', cssVariable: '--font-cormorant' },
-  { key: 'cinzel', label: 'Cinzel', cssVariable: '--font-cinzel' },
-  { key: 'caveat', label: 'Caveat', cssVariable: '--font-caveat' },
-  { key: 'josefin', label: 'Josefin Sans', cssVariable: '--font-josefin' },
-];
+export const TEXT_FONT_OPTIONS: readonly TextFontOption[] = FONT_MAP;
 
 export const DEFAULT_TEXT_FONT_KEY = TEXT_FONT_OPTIONS[0].key;
 

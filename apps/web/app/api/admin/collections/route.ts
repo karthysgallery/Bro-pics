@@ -6,7 +6,20 @@ import { checkRateLimit } from '../../../../lib/rate-limit';
 import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
 import { CreateCollectionBodySchema } from './collection-request-schema';
-import { CollectionSchema, logger } from '@bro-pics/shared';
+import { CollectionSchema, logger, type Collection } from '@bro-pics/shared';
+
+export async function GET(request: Request): Promise<NextResponse> {
+  const permission = await requirePermission(request, 'catalogue:read');
+  if (!permission.ok) {
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Catalogue read access required');
+  }
+
+  const db = getFirestore(getAdminApp());
+  const snap = await db.collection('collections').get();
+  const collections = snap.docs.map((d) => d.data() as Collection);
+
+  return NextResponse.json({ collections });
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');

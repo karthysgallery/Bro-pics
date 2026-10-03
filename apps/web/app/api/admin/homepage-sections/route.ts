@@ -7,7 +7,20 @@ import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
 import { revalidateHomepage } from '../../../../lib/revalidate-catalogue';
 import { CreateHomepageSectionBodySchema } from './homepage-section-request-schema';
-import { HomepageSectionSchema, logger } from '@bro-pics/shared';
+import { HomepageSectionSchema, logger, type HomepageSection } from '@bro-pics/shared';
+
+export async function GET(request: Request): Promise<NextResponse> {
+  const permission = await requirePermission(request, 'content:read');
+  if (!permission.ok) {
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Content read access required');
+  }
+
+  const db = getFirestore(getAdminApp());
+  const snap = await db.collection('homepageSections').orderBy('sortOrder', 'asc').get();
+  const sections = snap.docs.map((doc) => doc.data() as HomepageSection);
+
+  return NextResponse.json({ sections });
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');

@@ -1,166 +1,406 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
+import { StatusChip } from '../../../components/admin/StatusChip';
+import { AdminModal } from '../../../components/admin/AdminModal';
+import { RefundModal } from '../../../components/admin/RefundModal';
+import { FormField } from '../../../components/admin/AdminForm';
+import { useToast } from '../../../components/ui/Toast';
 import { isValidReturnStatusTransition, type Return, type ReturnStatus } from '@bro-pics/shared';
 
-const ALL_STATUSES: ReturnStatus[] = [
-  'requested',
-  'approved',
-  'rejected',
-  'pickup_scheduled',
-  'picked_up',
-  'refund_processing',
-  'refunded',
+const RETURN_STATUS_TABS: { key: ReturnStatus; label: string }[] = [
+  { key: 'requested', label: 'Requested' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'pickup_scheduled', label: 'Pickup Scheduled' },
+  { key: 'picked_up', label: 'Picked Up' },
+  { key: 'refund_processing', label: 'Refund Processing' },
+  { key: 'refunded', label: 'Refunded' },
+  { key: 'rejected', label: 'Rejected' },
 ];
 
-function formatMoney(paise: number): string {
-  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatISTDate(dateVal: unknown): string {
+  if (!dateVal) return '—';
+  if (typeof dateVal === 'object' && '_seconds' in (dateVal as { _seconds: number })) {
+    return new Date((dateVal as { _seconds: number })._seconds * 1000).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  const d = new Date(dateVal as string | number | Date);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-// Mirrors admin/orders/page.tsx's queue-and-advance shape — a return is a
-// smaller lifecycle attached to an order (see packages/shared/src/schemas/
-// return.ts), so the UI pattern is the same rather than inventing a new one.
 export default function AdminReturnsPage() {
   const { user } = useAuth();
-  const [statusFilter, setStatusFilter] = useState<ReturnStatus>('requested');
-  const [queue, setQueue] = useState<Return[]>([]);
-  const [selected, setSelected] = useState<Return | null>(null);
+  const { showToast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<ReturnStatus>('requested');
+  const [returnsList, setReturnsList] = useState<Return[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Selected Return for Drawer / Modal
+  const [selectedReturn, setSelectedReturn] = useState<Return | null>(null);
   const [nextStatus, setNextStatus] = useState<ReturnStatus | ''>('');
   const [staffNote, setStaffNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [queueError, setQueueError] = useState<string | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      setQueueError(null);
-      const idToken = await user.getIdToken();
-      const response = await fetch(`/api/staff/returns?status=${statusFilter}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      if (!response.ok) {
-        setQueue([]);
-        setQueueError('Could not load the queue.');
-        return;
-      }
-      const body = await response.json();
-      setQueue(body.returns ?? []);
-    })();
-  }, [user, statusFilter]);
+  // Photo viewer modal
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
-  const handleSelect = (ret: Return) => {
-    setSelected(ret);
-    setNextStatus('');
-    setStaffNote('');
-    setError(null);
+  // Refund modal
+  const [showRefundModal, setShowRefundModal] = useState(false);
+
+  // Fetch Returns
+  const fetchReturns = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/staff/returns?status=${activeTab}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load returns queue');
+      const data = await res.json();
+      setReturnsList(data.returns || []);
+    } catch {
+      showToast('Error loading returns', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAdvance = async () => {
-    if (!selected || !nextStatus || !user) return;
-    setError(null);
+  useEffect(() => {
+    fetchReturns();
+  }, [user, activeTab]);
+
+  // Advance Return Status
+  const handleAdvanceReturn = async () => {
+    if (!user || !selectedReturn || !nextStatus) return;
     setIsAdvancing(true);
+
     try {
-      const idToken = await user.getIdToken();
-      const response = await fetch(`/api/staff/returns/${selected.id}`, {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/staff/returns/${selectedReturn.id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ status: nextStatus, staffNote: staffNote || undefined }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: nextStatus,
+          staffNote: staffNote.trim() || undefined,
+        }),
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        setError(body?.error ?? 'Could not advance this return.');
-        return;
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || 'Failed to advance return');
       }
-      setSelected((prev) => (prev ? { ...prev, status: nextStatus } : prev));
-      setQueue((prev) => prev.filter((r) => r.id !== selected.id));
+
+      showToast(`Return #${selectedReturn.id.slice(0, 8)} updated to ${nextStatus}`, 'success');
+      setSelectedReturn(null);
       setNextStatus('');
       setStaffNote('');
+      fetchReturns();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error updating return';
+      showToast(msg, 'error');
     } finally {
       setIsAdvancing(false);
     }
   };
 
-  const validNextStatuses = selected ? ALL_STATUSES.filter((s) => isValidReturnStatusTransition(selected.status, s)) : [];
+  const validNextStatuses = selectedReturn
+    ? (['requested', 'approved', 'rejected', 'pickup_scheduled', 'picked_up', 'refund_processing', 'refunded'] as ReturnStatus[]).filter((s) =>
+        isValidReturnStatusTransition(selectedReturn.status, s)
+      )
+    : [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl text-brown-dark">Returns Queue</h1>
-
-      <label htmlFor="return-status-filter" className="text-sm text-brown/70">Status</label>
-      <select
-        id="return-status-filter"
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value as ReturnStatus)}
-        className="rounded-lg border border-gold/30 px-3 py-2 w-fit"
-      >
-        {ALL_STATUSES.map((s) => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
-
-      {queueError && <p className="text-sm text-red-600">{queueError}</p>}
-
-      <ul className="flex flex-col gap-1 text-brown/80">
-        {queue.map((ret) => (
-          <li key={ret.id}>
-            <button onClick={() => handleSelect(ret)} className="text-left underline text-brown-dark">
-              {ret.orderId}
-            </button>
-            {' — '}
-            {ret.reason}
-            {' — '}
-            {formatMoney(ret.refundAmount)}
-          </li>
-        ))}
-        {queue.length === 0 && !queueError && <li>No returns in this status.</li>}
-      </ul>
-
-      {selected && (
-        <div className="flex flex-col gap-3 pt-4 border-t border-gold/30">
-          <p className="text-brown-dark">Order: {selected.orderId}</p>
-          <p className="text-brown/80">Reason: {selected.reason}</p>
-          <p className="text-brown/80">Refund amount: {formatMoney(selected.refundAmount)}</p>
-          <p className="text-brown-dark">Current status: {selected.status}</p>
-
-          <label htmlFor="return-next-status" className="text-sm text-brown/70">Next status</label>
-          <select
-            id="return-next-status"
-            value={nextStatus}
-            onChange={(e) => setNextStatus(e.target.value as ReturnStatus)}
-            className="rounded-lg border border-gold/30 px-3 py-2 w-fit"
-          >
-            <option value="">Select…</option>
-            {validNextStatuses.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
-          <label htmlFor="return-staff-note" className="text-sm text-brown/70">Staff note (optional)</label>
-          <textarea
-            id="return-staff-note"
-            value={staffNote}
-            onChange={(e) => setStaffNote(e.target.value)}
-            className="rounded-lg border border-gold/30 px-3 py-2"
-          />
-
-          {nextStatus === 'refunded' && (
-            <p className="text-sm text-red-700">
-              This will call Razorpay&apos;s refund API for {formatMoney(selected.refundAmount)} — real money movement.
-            </p>
-          )}
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button
-            onClick={handleAdvance}
-            disabled={!nextStatus || isAdvancing}
-            className="rounded-full bg-gradient-to-b from-brown-light to-brown text-cream px-4 py-2 w-fit disabled:opacity-50"
-          >
-            {isAdvancing ? 'Working…' : 'Advance'}
-          </button>
+    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-display font-bold text-ink">
+            Returns, Replacements & Refunds
+          </h1>
+          <p className="text-xs text-ink/60">
+            Review customer return requests, inspect damage evidence photos, schedule courier pickups, and trigger instant Razorpay refunds.
+          </p>
         </div>
+      </div>
+
+      {/* Status Tabs */}
+      <div className="border-b border-line overflow-x-auto pb-px flex items-center gap-1">
+        {RETURN_STATUS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 ${
+              activeTab === tab.key
+                ? 'border-gold text-ink font-bold'
+                : 'border-transparent text-ink/50 hover:text-ink hover:border-line'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Table / Queue */}
+      <div className="rounded-2xl border border-line bg-paper shadow-xs overflow-hidden">
+        {loading ? (
+          <div className="p-8 space-y-3 animate-pulse">
+            <div className="h-10 bg-field rounded-xl" />
+            <div className="h-10 bg-field rounded-xl" />
+            <div className="h-10 bg-field rounded-xl" />
+          </div>
+        ) : returnsList.length === 0 ? (
+          <div className="p-16 text-center text-xs text-ink/50 space-y-2">
+            <span className="text-3xl block">✨</span>
+            <p>No returns currently in &quot;{activeTab.replace(/_/g, ' ')}&quot; state.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-field/70 border-b border-line text-2xs uppercase tracking-wider text-ink/60 font-semibold">
+                  <th className="p-3">Return ID</th>
+                  <th className="p-3">Order ID</th>
+                  <th className="p-3">Reason</th>
+                  <th className="p-3">Resolution</th>
+                  <th className="p-3">Amount</th>
+                  <th className="p-3">Requested At</th>
+                  <th className="p-3">Evidence</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {returnsList.map((ret) => {
+                  const photos = (ret as unknown as { photoUrls?: string[] }).photoUrls || [];
+
+                  return (
+                    <tr key={ret.id} className="hover:bg-field/30 transition-colors">
+                      <td className="p-3 font-mono font-bold text-ink">
+                        #{ret.id.slice(0, 8)}
+                      </td>
+
+                      <td className="p-3">
+                        <Link
+                          href={`/admin/orders/${ret.orderId}`}
+                          className="font-mono text-gold-deep hover:underline font-semibold"
+                        >
+                          #{ret.orderId.slice(0, 8)}... ↗
+                        </Link>
+                      </td>
+
+                      <td className="p-3 text-ink max-w-xs truncate" title={ret.reason}>
+                        {ret.reason}
+                      </td>
+
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            ret.resolution === 'replacement'
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}
+                        >
+                          {ret.resolution || 'refund'}
+                        </span>
+                      </td>
+
+                      <td className="p-3 font-bold text-ink">
+                        ₹{(ret.refundAmount / 100).toFixed(0)}
+                      </td>
+
+                      <td className="p-3 text-ink/70 font-mono text-2xs">
+                        {formatISTDate(ret.requestedAt)}
+                      </td>
+
+                      <td className="p-3">
+                        {photos.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingPhotoUrl(photos[0])}
+                            className="px-2 py-1 bg-gold/10 hover:bg-gold/20 text-gold-deep rounded text-2xs font-bold transition-colors"
+                          >
+                            📷 View ({photos.length})
+                          </button>
+                        ) : (
+                          <span className="text-2xs text-ink/40 italic">No photos</span>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReturn(ret);
+                            setNextStatus('');
+                            setStaffNote('');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-gold hover:bg-gold-deep text-ink text-2xs font-bold transition-colors shadow-xs"
+                        >
+                          Review & Advance
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Review & Advance Modal */}
+      {selectedReturn && (
+        <AdminModal
+          isOpen={Boolean(selectedReturn)}
+          onClose={() => setSelectedReturn(null)}
+          title={`Review Return #${selectedReturn.id.slice(0, 8)}`}
+          description={`Order reference: ${selectedReturn.orderId}`}
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-field border border-line space-y-2 text-2xs">
+              <div className="flex justify-between">
+                <span>Customer Reason:</span>
+                <span className="font-semibold text-ink text-right max-w-xs">{selectedReturn.reason}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Resolution Chosen:</span>
+                <span className="font-bold text-ink uppercase">{selectedReturn.resolution || 'refund'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Refund Amount:</span>
+                <span className="font-bold text-emerald-700">₹{(selectedReturn.refundAmount / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Current Status:</span>
+                <StatusChip status={selectedReturn.status} size="sm" />
+              </div>
+            </div>
+
+            {validNextStatuses.length > 0 ? (
+              <div className="space-y-3">
+                <FormField label="Move to Status" required>
+                  <select
+                    value={nextStatus}
+                    onChange={(e) => setNextStatus(e.target.value as ReturnStatus)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+                  >
+                    <option value="">-- Choose Next Transition --</option>
+                    {validNextStatuses.map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField label="Staff Note / Inspection Remark">
+                  <input
+                    type="text"
+                    value={staffNote}
+                    onChange={(e) => setStaffNote(e.target.value)}
+                    placeholder="e.g. Damage confirmed in corner frame joint; approved for full refund"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+                  />
+                </FormField>
+              </div>
+            ) : (
+              <p className="text-2xs text-ink/60 italic">This return is in a terminal status ({selectedReturn.status}).</p>
+            )}
+
+            <div className="flex items-center justify-between pt-4 border-t border-line">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRefundModal(true);
+                }}
+                className="px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold"
+              >
+                ₹ Direct Refund Modal
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReturn(null)}
+                  className="px-3.5 py-2 rounded-xl border border-line text-xs font-semibold hover:bg-field"
+                >
+                  Cancel
+                </button>
+                {validNextStatuses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleAdvanceReturn}
+                    disabled={!nextStatus || isAdvancing}
+                    className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    {isAdvancing ? 'Updating...' : 'Save & Advance'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </AdminModal>
+      )}
+
+      {/* Evidence Photo Viewer Modal */}
+      {viewingPhotoUrl && (
+        <AdminModal
+          isOpen={Boolean(viewingPhotoUrl)}
+          onClose={() => setViewingPhotoUrl(null)}
+          title="Customer Evidence Photo"
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-line bg-field overflow-hidden flex items-center justify-center p-2 max-h-[500px]">
+              <img src={viewingPhotoUrl} alt="Return Evidence" className="max-h-[480px] object-contain rounded-lg" />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingPhotoUrl(null)}
+                className="px-4 py-2 rounded-xl bg-ink text-gold text-xs font-semibold"
+              >
+                Close Photo Viewer
+              </button>
+            </div>
+          </div>
+        </AdminModal>
+      )}
+
+      {/* Refund Modal */}
+      {selectedReturn && (
+        <RefundModal
+          isOpen={showRefundModal}
+          onClose={() => setShowRefundModal(false)}
+          orderId={selectedReturn.orderId}
+          orderNo={selectedReturn.orderId.slice(0, 8)}
+          orderTotal={Math.round(selectedReturn.refundAmount / 100)}
+          onSuccess={() => {
+            fetchReturns();
+            setSelectedReturn(null);
+          }}
+        />
       )}
     </div>
   );

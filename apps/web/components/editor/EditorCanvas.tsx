@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { PAPER, ALERT } from '../../lib/design-tokens';
-import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE, type Rect as GeometryRect, type RotationDeg } from '@bro-pics/shared';
+import { fractionRectToCanvasRect, fitTextToZone, EDITOR_CANVAS_SIZE, type Rect as GeometryRect, type RotationDeg } from '@bro-pics/shared';
 
 const CANVAS_SIZE = EDITOR_CANVAS_SIZE;
 
@@ -228,25 +228,27 @@ function drawTextField(ctx: CanvasRenderingContext2D, field: CanvasTextField) {
   if (!field.value) return;
   const zoneRect = fractionRectToCanvasRect(field.zoneRect, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Auto-shrink: step the font size down until the text fits both the
-  // zone's width and its height, rather than squishing glyphs with
-  // fillText's maxWidth argument (which distorts rather than resizes).
-  // [FE-12] minFontSizePx/maxFontSizePx (when set) narrow this range —
-  // a template author's chosen bounds always win over the auto-fit
-  // default, even if that means text overflowing the zone at the floor
-  // rather than shrinking below the template's own minimum.
-  const floor = Math.max(8, field.minFontSizePx ?? 8);
-  const ceiling = Math.max(floor, Math.min(field.maxFontSizePx ?? 32, 32));
-  let fontSize = Math.max(floor, Math.min(ceiling, zoneRect.height));
+  const fitResult = fitTextToZone({
+    text: field.value,
+    zoneWidthPx: zoneRect.width,
+    zoneHeightPx: zoneRect.height,
+    minFontSizePx: field.minFontSizePx,
+    maxFontSizePx: field.maxFontSizePx,
+    measureTextWidth: (t, size) => {
+      ctx.save();
+      ctx.font = `${size}px ${field.fontFamily}`;
+      const width = ctx.measureText(t).width;
+      ctx.restore();
+      return width;
+    },
+  });
+
+  if (fitResult.lines.length === 0) return;
+
   ctx.save();
   ctx.fillStyle = field.color;
+  ctx.font = `${fitResult.fontSizePx}px ${field.fontFamily}`;
   ctx.textBaseline = 'middle';
-  for (; fontSize > floor; fontSize -= 1) {
-    ctx.font = `${fontSize}px ${field.fontFamily}`;
-    const width = ctx.measureText(field.value).width;
-    if (width <= zoneRect.width && fontSize <= zoneRect.height) break;
-  }
-  ctx.font = `${fontSize}px ${field.fontFamily}`;
 
   let x: number;
   if (field.align === 'left') {
@@ -259,7 +261,15 @@ function drawTextField(ctx: CanvasRenderingContext2D, field: CanvasTextField) {
     ctx.textAlign = 'center';
     x = zoneRect.x + zoneRect.width / 2;
   }
-  ctx.fillText(field.value, x, zoneRect.y + zoneRect.height / 2);
+
+  const lineHeight = fitResult.fontSizePx * 1.2;
+  const totalHeight = fitResult.lines.length * lineHeight;
+  const startY = zoneRect.y + (zoneRect.height - totalHeight) / 2 + lineHeight / 2;
+
+  for (let i = 0; i < fitResult.lines.length; i++) {
+    ctx.fillText(fitResult.lines[i]!, x, startY + i * lineHeight);
+  }
+
   ctx.restore();
 }
 

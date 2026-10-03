@@ -9,6 +9,58 @@ import { revalidateHomepage, revalidateProductPage, revalidateCategoryPage } fro
 import { CreateProductBodySchema } from './product-request-schema';
 import { ProductSchema, buildProductSearchFields, logger } from '@bro-pics/shared';
 
+export async function GET(request: Request): Promise<NextResponse> {
+  const rateLimit = checkRateLimit(request, 'staff');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests, please try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
+  const permission = await requirePermission(request, 'catalogue:read');
+  if (!permission.ok) {
+    return adminApiError(
+      permission.status,
+      permission.status === 401 ? 'unauthenticated' : 'forbidden',
+      'Catalogue read access required'
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const statusFilter = searchParams.get('status');
+  const categoryFilter = searchParams.get('categoryId');
+  const searchQuery = searchParams.get('q')?.toLowerCase().trim();
+
+  const db = getFirestore(getAdminApp());
+  let queryRef: FirebaseFirestore.Query = db.collection('products');
+
+  if (categoryFilter) {
+    queryRef = queryRef.where('categoryId', '==', categoryFilter);
+  }
+
+  const snap = await queryRef.get();
+  let products = snap.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as Record<string, unknown>),
+  }));
+
+  if (statusFilter && statusFilter !== 'all') {
+    products = products.filter((p: any) => p.status === statusFilter);
+  }
+
+  if (searchQuery) {
+    products = products.filter(
+      (p: any) =>
+        (p.title && String(p.title).toLowerCase().includes(searchQuery)) ||
+        (p.slug && String(p.slug).toLowerCase().includes(searchQuery)) ||
+        (p.shortDesc && String(p.shortDesc).toLowerCase().includes(searchQuery))
+    );
+  }
+
+  return NextResponse.json({ products }, { status: 200 });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
   if (!rateLimit.allowed) {

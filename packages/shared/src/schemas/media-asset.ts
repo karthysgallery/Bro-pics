@@ -21,6 +21,7 @@ export const MediaAssetSchema = z.object({
   type: z.enum(['image', 'video']),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
   alt: z.string().default(''),
   tags: z.array(z.string()).default([]),
   // [ABE-11] Populated by whatever CRUD route attaches this asset to a
