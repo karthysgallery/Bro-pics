@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { FONT_MAP, FALLBACK_FONTS, fontEntryForKey, fontKeyFromCssVar, type FontEntry } from '@bro-pics/shared';
-import { fitTextToZone, type TextFitResult } from '@bro-pics/shared';
+import { estimateTextWidth, fitTextToZone, type TextFitResult } from '@bro-pics/shared';
 import { fractionRectToCanvasRect, type Rect } from '@bro-pics/shared';
 
 /**
@@ -78,20 +78,14 @@ export interface PrintTextField {
 }
 
 // ── Server-side text measurement heuristic ───────────────────────────
-// Without a real text shaping engine, we use a character-count heuristic
-// that deliberately OVERESTIMATES width (0.65 × fontSize per character).
-// This is conservative: text that fits on the server also fits on the
-// client. The alternative (accurate shaping via HarfBuzz or canvas) would
-// require a heavyweight native dependency we don't need for this project's
+// Without a real text shaping engine, we use the shared character-count
+// heuristic (estimateTextWidth) that deliberately OVERESTIMATES width
+// (0.65 × fontSize per character). The v2 template editor uses the same
+// function, so its preview wraps and sizes text exactly like this file.
+// The alternative (accurate shaping via HarfBuzz or canvas) would require
+// a heavyweight native dependency we don't need for this project's
 // decorative-text use case.
-
-function serverMeasureTextWidth(text: string, fontSizePx: number): number {
-  // Average character width as a fraction of font size.
-  // 0.65 is intentionally wider than most Latin fonts (~0.5-0.55) to be
-  // conservative. Cursive fonts (Dancing Script, Great Vibes) tend to be
-  // wider due to ligatures and swashes.
-  return text.length * fontSizePx * 0.65;
-}
+const serverMeasureTextWidth = estimateTextWidth;
 
 // ── SVG generation ───────────────────────────────────────────────────
 

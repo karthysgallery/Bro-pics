@@ -20,6 +20,10 @@ export const RATE_LIMITS = {
   // Read-only, called on every keystroke by the client (search-suggestions
   // typeahead) — generous, short window.
   read: { windowMs: 10_000, max: 30 },
+  // Same-origin image delivery for the personalization canvas: opening a
+  // collage loads one photo per slot at once, so the burst is bigger than
+  // `read`, but each request is one Storage read and a resize.
+  image: { windowMs: 10_000, max: 60 },
   // Staff/admin routes: already gated by a custom-claim check, so the
   // abuse model is "a compromised or buggy staff session," not the public
   // internet — generous but present, so a runaway client script can't

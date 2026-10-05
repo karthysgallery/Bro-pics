@@ -45,6 +45,17 @@ export interface TextFitResult {
 }
 
 /**
+ * The print renderer has no text-shaping engine, so it sizes text with this
+ * deliberately wide estimate (0.65 × font size per character; most Latin
+ * fonts are ~0.5–0.55). The template editor fits text with the SAME estimate,
+ * so the font size and line breaks the customer sees are exactly the ones
+ * that get printed.
+ */
+export function estimateTextWidth(text: string, fontSizePx: number): number {
+  return text.length * fontSizePx * 0.65;
+}
+
+/**
  * Auto-fit a text string into a bounding box.
  *
  * Algorithm (matches EditorCanvas.tsx's drawTextField exactly):
