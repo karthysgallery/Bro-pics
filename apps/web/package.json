@@ -20,6 +20,7 @@
     "heic-convert": "^2.1.0",
     "jszip": "^3.10.2",
     "next": "^15.0.0",
+    "ogl": "^1.0.11",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "sanitize-html": "^2.17.7",

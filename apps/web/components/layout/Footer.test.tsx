@@ -11,9 +11,10 @@ describe('Footer', () => {
     expect(screen.getByText('Shipping policy')).toBeInTheDocument();
   });
 
-  it('renders a newsletter signup form', () => {
+  it('does not render a signup form or placeholder social links it cannot honour', () => {
     render(<Footer />);
-    expect(screen.getByPlaceholderText('Email address')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Email address')).not.toBeInTheDocument();
+    expect(screen.queryByText('Instagram')).not.toBeInTheDocument();
   });
 
   it('[FE-27] renders columns/social links from settings instead of the hardcoded defaults when given', () => {
@@ -25,7 +26,6 @@ describe('Footer', () => {
         }}
       />
     );
-    expect(screen.getByText('Company')).toBeInTheDocument();
     expect(screen.getByText('Careers')).toBeInTheDocument();
     expect(screen.getByText('YouTube')).toBeInTheDocument();
     expect(screen.queryByText('About us')).not.toBeInTheDocument();
@@ -37,9 +37,25 @@ describe('Footer', () => {
     expect(screen.getByText(/\+91 98765 43210/)).toBeInTheDocument();
   });
 
-  it('[FE-27] falls back to the hardcoded columns/social links when settings is absent', () => {
+  it('[FE-27] falls back to the default links when settings is absent', () => {
     render(<Footer />);
-    expect(screen.getByText('Instagram')).toBeInTheDocument();
     expect(screen.getByText('About us')).toBeInTheDocument();
+  });
+
+  it('flattens settings columns into one list and skips "#" social placeholders', () => {
+    render(
+      <Footer
+        settings={{
+          columns: [
+            { title: 'A', links: [{ label: 'Careers', href: '/careers' }] },
+            { title: 'B', links: [{ label: 'Careers again', href: '/careers' }, { label: 'Press', href: '/press' }] },
+          ],
+          socialLinks: [{ platform: 'Instagram', url: '#' }],
+        }}
+      />
+    );
+    expect(screen.getAllByRole('link', { name: /Careers/ })).toHaveLength(1);
+    expect(screen.getByText('Press')).toBeInTheDocument();
+    expect(screen.queryByText('Instagram')).not.toBeInTheDocument();
   });
 });

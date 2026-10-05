@@ -8,6 +8,7 @@ const validVideo = {
   caption: 'Unboxing the wooden frame',
   productId: null,
   placement: 'homepage' as const,
+  kind: 'unboxing' as const,
   isActive: true,
   sortOrder: 0,
   createdAt: new Date('2026-09-01'),
@@ -21,6 +22,15 @@ describe('VideoSchema', () => {
   it('accepts a video with a thumbnail and product association', () => {
     const withAssociations = { ...validVideo, thumbnailMediaId: 'media_2', productId: 'prod_1' };
     expect(VideoSchema.parse(withAssociations)).toEqual(withAssociations);
+  });
+
+  it('defaults kind to making so videos saved before the field existed still parse', () => {
+    const { kind: _kind, ...legacy } = validVideo;
+    expect(VideoSchema.parse(legacy).kind).toBe('making');
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(() => VideoSchema.parse({ ...validVideo, kind: 'ad' })).toThrow();
   });
 
   it('rejects an unknown placement', () => {

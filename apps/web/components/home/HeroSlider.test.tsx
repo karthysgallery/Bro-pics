@@ -40,7 +40,7 @@ describe('HeroSlider', () => {
     expect(screen.getByLabelText('1 of 2')).toBeInTheDocument();
     expect(screen.getByLabelText('2 of 2')).toBeInTheDocument();
     // The first-by-sortOrder slide's own title/CTA are what's active initially.
-    expect(screen.getByText('First slide')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'First slide' })).toBeInTheDocument();
     expect(screen.getByText('Shop frames')).toBeInTheDocument();
   });
 });

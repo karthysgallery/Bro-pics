@@ -5,7 +5,7 @@ import {
   getActiveHomepageSections,
   getBestSellingProducts,
   getFeaturedProducts,
-  getHomepageVideos,
+  getTrustVideos,
   getFeaturedReviews,
 } from '../../lib/firestore-homepage';
 import { getActiveCategories } from '../../lib/firestore-categories';
@@ -17,21 +17,30 @@ import { OfferStrip } from '../../components/home/OfferStrip';
 import { HowItWorks } from '../../components/home/HowItWorks';
 import { WhyUs } from '../../components/home/WhyUs';
 import { HomeReviewsCarousel } from '../../components/home/HomeReviewsCarousel';
-import { Section } from '../../components/ui/Section';
 
 // [FE-45] Both are 'use client' components rendered only below the fold
-// (Products in Motion, and the very last section on the page) — dynamic()
+// (the trust reels, and the very last section on the page) — dynamic()
 // defers their JS to a separate chunk instead of shipping it in the
 // initial page bundle every visitor downloads whether or not they ever
 // scroll that far. HeroSlider is deliberately NOT deferred this way — it's
 // the page's own LCP element, so it needs to be ready immediately, not
 // lazy.
-const VideoRail = dynamic(() => import('../../components/product/VideoRail').then((mod) => mod.VideoRail));
+const TrustReels = dynamic(() => import('../../components/home/TrustReels').then((mod) => mod.TrustReels));
+const TrustReelsPreview = dynamic(() =>
+  import('../../components/home/TrustReelsPreview').then((mod) => mod.TrustReelsPreview)
+);
 const RecentlyViewedRail = dynamic(() =>
   import('../../components/product/RecentlyViewedRail').then((mod) => mod.RecentlyViewedRail)
 );
 
 export const revalidate = 60;
+
+// Seeded sections still carry the old "products in motion" titles; those are
+// replaced by the trust heading, while an admin-written title wins.
+function trustTitle(title: string): string | undefined {
+  const legacy = ['products in motion', 'in motion', 'see it in motion'];
+  return !title || legacy.includes(title.trim().toLowerCase()) ? undefined : title;
+}
 
 // The page is a renderer for the admin-managed homepageSections collection:
 // getActiveHomepageSections applies isActive + the startsAt/endsAt window and
@@ -55,10 +64,10 @@ export default async function HomePage() {
   const featuredCategoryId =
     typeof featuredSection?.config.categoryId === 'string' ? featuredSection.config.categoryId : categories[0]?.id;
 
-  const [bestSellers, featuredProducts, homepageVideos, featuredReviews] = await Promise.all([
+  const [bestSellers, featuredProducts, trustVideos, featuredReviews] = await Promise.all([
     bestSellersSection ? getBestSellingProducts(10) : Promise.resolve([]),
     featuredSection && featuredCategoryId ? getFeaturedProducts(featuredCategoryId, 10) : Promise.resolve([]),
-    productsInMotionSection ? getHomepageVideos(8) : Promise.resolve([]),
+    productsInMotionSection ? getTrustVideos(12) : Promise.resolve([]),
     reviewsSection ? getFeaturedReviews(6) : Promise.resolve([]),
   ]);
 
@@ -66,7 +75,7 @@ export default async function HomePage() {
     switch (section.type) {
       case 'hero_slider':
         // Only the first hero doc draws the band; the rest are its posters.
-        return index === firstHeroIndex ? <HeroSlider sections={heroSections} /> : null;
+        return index === firstHeroIndex ? <HeroSlider sections={heroSections} hasTrustVideos={trustVideos.length > 0} /> : null;
       case 'category_tiles':
         return <CategoryTiles title={section.title} categories={categories} />;
       case 'best_sellers':
@@ -91,11 +100,12 @@ export default async function HomePage() {
           />
         );
       case 'products_in_motion':
-        return homepageVideos.length > 0 ? (
-          <Section space="tight">
-            <VideoRail title={section.title} media={homepageVideos} />
-          </Section>
-        ) : null;
+        // The "products in motion" slot is the trust section: real clips from
+        // the admin video library, and nothing at all until some exist.
+        if (trustVideos.length > 0) {
+          return <TrustReels reels={trustVideos} title={trustTitle(section.title)} subtitle={section.subtitle || undefined} />;
+        }
+        return process.env.NODE_ENV !== 'production' ? <TrustReelsPreview /> : null;
       case 'reviews_testimonials':
         return <HomeReviewsCarousel title={section.title} reviews={featuredReviews} />;
       case 'why_us':
@@ -108,11 +118,9 @@ export default async function HomePage() {
           />
         );
       case 'recently_viewed':
-        return (
-          <Section space="tight">
-            <RecentlyViewedRail />
-          </Section>
-        );
+        // The rail owns its own spacing and renders nothing when empty —
+        // wrapping it in a Section here left a blank band above the footer.
+        return <RecentlyViewedRail />;
       default:
         return null;
     }

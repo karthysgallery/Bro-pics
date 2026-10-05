@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VideoPlacementSchema } from '@bro-pics/shared';
+import { VideoKindSchema, VideoPlacementSchema } from '@bro-pics/shared';
 
 export const CreateVideoBodySchema = z
   .object({
@@ -8,6 +8,7 @@ export const CreateVideoBodySchema = z
     caption: z.string().default(''),
     productId: z.string().nullable().default(null),
     placement: VideoPlacementSchema,
+    kind: VideoKindSchema.default('making'),
     isActive: z.boolean().default(true),
     sortOrder: z.number().int().nonnegative().default(0),
   })

@@ -37,12 +37,7 @@ const DEFAULT_SUBTITLE =
   'We believe the best things in a home are personal. Every KarthysGallery frame is finished by hand in India, with archival prints and materials chosen to make your memories last.';
 const DEFAULT_IMAGE = '/banners/artisan-framing-craft.jpg';
 
-export function WhyUs({
-  title,
-  subtitle,
-  image,
-  valueProps,
-}: WhyUsProps) {
+export function WhyUs({ title, subtitle, image, valueProps }: WhyUsProps) {
   const displayTitle =
     !title || title === 'Why KarthysGallery' || title === 'Why BroPics' ? DEFAULT_TITLE : title;
 
@@ -57,12 +52,13 @@ export function WhyUs({
   const hasCustomValueProps = Boolean(valueProps && valueProps.length > 0);
 
   return (
-    <section className="bg-[#EFEBE4] py-14 sm:py-18 lg:py-22 my-12 sm:my-16 border-y border-black/5">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
-          {/* Left Column: Workshop Artisan Framing Image matching Image 1 */}
-          <div className="lg:col-span-6">
-            <div className="relative aspect-[4/3] rounded-[28px] sm:rounded-[32px] overflow-hidden bg-[#E5E0D8] shadow-sm">
+    <section className="bg-tint py-14 sm:py-18 lg:py-20 my-12 sm:my-16 border-y border-line">
+      <div className="mx-auto w-full max-w-shell px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-center">
+
+          {/* Left: Artisan image */}
+          <div>
+            <div className="relative aspect-[4/3] rounded-card overflow-hidden bg-line">
               <Image
                 src={displayImage}
                 alt="Artisan framing workshop"
@@ -74,51 +70,48 @@ export function WhyUs({
             </div>
           </div>
 
-          {/* Right Column: Copy, 3 numbered steps, CTA matching Image 1 */}
-          <div className="lg:col-span-6 flex flex-col justify-center">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#718096]">
-              FROM CAMERA ROLL TO CENTRE STAGE
+          {/* Right: Copy */}
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-semibold uppercase tracking-eyebrow text-ink/40 mb-3">
+              From camera roll to centre stage
             </p>
 
-            <h2 className="mt-3 font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-[#0F172A] leading-[1.15] tracking-tight">
+            <h2 className="font-display text-3xl sm:text-4xl lg:text-[2.5rem] font-bold text-ink leading-tight tracking-tight">
               {displayTitle}
             </h2>
 
-            <p className="mt-4 text-sm sm:text-base text-[#4A5568] leading-relaxed max-w-xl">
+            <p className="mt-4 text-[15px] text-ink/55 leading-relaxed max-w-[480px]">
               {displaySubtitle}
             </p>
 
-            {/* 3 Numbered Steps / Value Props */}
-            <div className="mt-8 flex flex-col gap-5 sm:gap-6">
+            {/* Steps */}
+            <div className="mt-9 flex flex-col divide-y divide-line/60">
               {hasCustomValueProps ? (
                 valueProps!.map((point, index) => (
-                  <div key={point} className="flex items-start gap-3.5">
-                    <span className="font-bold text-xs sm:text-sm text-[#0F172A] shrink-0 mt-0.5">
+                  <div key={point} className="flex items-start gap-4 py-4 first:pt-0 last:pb-0">
+                    <span className="font-bold text-[11px] text-ink/30 shrink-0 pt-0.5 w-6 tabular-nums">
                       0{index + 1}
                     </span>
-                    <p className="text-xs sm:text-sm text-[#1E293B] font-medium leading-snug">
-                      {point}
-                    </p>
+                    <p className="text-[14px] text-ink font-medium leading-snug">{point}</p>
                   </div>
                 ))
               ) : (
                 <>
                   {DEFAULT_STEPS.map((step) => (
-                    <div key={step.num} className="flex items-start gap-3.5">
-                      <span className="font-bold text-xs sm:text-sm text-[#0F172A] shrink-0 mt-0.5">
+                    <div key={step.num} className="flex items-start gap-4 py-4 first:pt-0 last:pb-0">
+                      <span className="font-bold text-[11px] text-ink/30 shrink-0 pt-0.5 w-6 tabular-nums">
                         {step.num}
                       </span>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-[#0F172A] leading-tight">
+                      <div>
+                        <span className="block text-[14px] font-semibold text-ink leading-tight">
                           {step.title}
                         </span>
-                        <span className="text-xs sm:text-[13px] text-[#718096] leading-normal mt-1">
+                        <span className="block text-[13px] text-ink/50 leading-normal mt-0.5">
                           {step.desc}
                         </span>
                       </div>
                     </div>
                   ))}
-                  {/* Hidden accessible fallback text for tests */}
                   <span className="sr-only">
                     Handcrafted with premium materials and checked before it ships
                   </span>
@@ -126,13 +119,16 @@ export function WhyUs({
               )}
             </div>
 
-            {/* Explore our craft Pill Button */}
-            <div className="mt-8 sm:mt-10">
+            {/* CTA */}
+            <div className="mt-8">
               <Link
                 href="/about"
-                className="inline-flex items-center justify-center rounded-full bg-white text-[#0F172A] px-7 py-3 text-xs sm:text-sm font-semibold shadow-xs hover:shadow-md hover:bg-white/95 transition-all border border-black/5"
+                className="inline-flex items-center gap-2 text-[13px] font-semibold text-ink hover:text-accent transition-colors"
               >
                 Explore our craft
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
               </Link>
             </div>
           </div>

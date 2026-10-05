@@ -7,13 +7,14 @@ import { MediaPickerModal } from '../../../components/admin/MediaPickerModal';
 import { StatusChip } from '../../../components/admin/StatusChip';
 import { FormField } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
-import type { Video, Product } from '@bro-pics/shared';
+import type { Video, Product, VideoKind, VideoPlacement } from '@bro-pics/shared';
 
 interface VideoFormState {
   mediaId: string;
   thumbnailMediaId?: string;
   caption: string;
-  placement: 'homepage' | 'gallery' | 'product';
+  placement: VideoPlacement;
+  kind: VideoKind;
   productId?: string;
   sortOrder: number;
   isActive: boolean;
@@ -24,6 +25,7 @@ const BLANK_VIDEO: VideoFormState = {
   thumbnailMediaId: '',
   caption: '',
   placement: 'homepage',
+  kind: 'making',
   productId: '',
   sortOrder: 0,
   isActive: true,
@@ -93,7 +95,8 @@ export default function AdminVideosPage() {
       mediaId: v.mediaId,
       thumbnailMediaId: v.thumbnailMediaId || '',
       caption: v.caption,
-      placement: v.placement as 'homepage' | 'gallery' | 'product',
+      placement: v.placement,
+      kind: v.kind ?? 'making',
       productId: v.productId || '',
       sortOrder: v.sortOrder,
       isActive: v.isActive,
@@ -117,6 +120,7 @@ export default function AdminVideosPage() {
         thumbnailMediaId: form.thumbnailMediaId || undefined,
         caption: form.caption.trim(),
         placement: form.placement,
+        kind: form.kind,
         productId: form.productId || undefined,
         sortOrder: Number(form.sortOrder) || 0,
         isActive: form.isActive,
@@ -216,7 +220,7 @@ export default function AdminVideosPage() {
         </div>
       ) : videos.length === 0 ? (
         <div className="p-16 border border-line rounded-2xl bg-paper text-center space-y-3">
-          <span className="text-4xl block">🎬</span>
+          <span className="text-4xl block flex justify-center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>
           <p className="text-xs text-ink/50">No showcase videos added yet.</p>
           <button
             type="button"
@@ -348,16 +352,28 @@ export default function AdminVideosPage() {
             />
           </FormField>
 
+          <FormField label="What the video shows" required>
+            <select
+              value={form.kind}
+              onChange={(e) => setForm((prev) => ({ ...prev, kind: e.target.value as VideoKind }))}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+            >
+              <option value="making">Frame making</option>
+              <option value="unboxing">Package opening</option>
+              <option value="feedback">Customer feedback</option>
+            </select>
+          </FormField>
+
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Storefront Placement" required>
               <select
                 value={form.placement}
-                onChange={(e) => setForm((prev) => ({ ...prev, placement: e.target.value as 'homepage' | 'gallery' | 'product' }))}
+                onChange={(e) => setForm((prev) => ({ ...prev, placement: e.target.value as VideoPlacement }))}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
               >
-                <option value="homepage">Homepage Video Rail</option>
-                <option value="gallery">Customer Gallery</option>
-                <option value="product">Product Detail Page</option>
+                <option value="homepage">Homepage trust reels</option>
+                <option value="standalone">Standalone</option>
+                <option value="product_page">Product Detail Page</option>
               </select>
             </FormField>
 

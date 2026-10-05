@@ -1,7 +1,8 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
 import { serializeDoc } from './serialize-doc';
-import type { HomepageSection, Product, ProductMedia, Review } from '@bro-pics/shared';
+import type { HomepageSection, MediaAsset, Product, ProductMedia, Review, Video, VideoKind } from '@bro-pics/shared';
+import { buildPublicMediaUrl } from './media-public-url';
 
 function toDateOrNull(value: unknown): Date | null {
   if (value === null || value === undefined) return null;
@@ -128,4 +129,56 @@ export async function getFeaturedReviews(limit: number): Promise<HomepageReview[
   );
 
   return selected.map((review) => ({ ...review, productSlug: slugById.get(review.productId) ?? '' }));
+}
+
+export interface TrustVideo {
+  id: string;
+  kind: VideoKind;
+  caption: string;
+  src: string;
+  poster: string | null;
+  productSlug: string | null;
+}
+
+/**
+ * Homepage trust reels: the admin-curated `videos` collection (placement
+ * `homepage`, active), resolved to playable URLs. Two equality filters need
+ * no composite index; ordering is by the admin's `sortOrder`, in memory. A
+ * clip whose media asset is missing or no longer active is skipped rather
+ * than rendered broken.
+ */
+export async function getTrustVideos(limit: number): Promise<TrustVideo[]> {
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db
+    .collection('videos')
+    .where('placement', '==', 'homepage')
+    .where('isActive', '==', true)
+    .get();
+
+  const videos = snapshot.docs
+    .map((doc) => doc.data() as Video)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .slice(0, limit);
+
+  const resolved = await Promise.all(
+    videos.map(async (video): Promise<TrustVideo | null> => {
+      const [mediaDoc, thumbDoc, productDoc] = await Promise.all([
+        db.collection('media').doc(video.mediaId).get(),
+        video.thumbnailMediaId ? db.collection('media').doc(video.thumbnailMediaId).get() : Promise.resolve(null),
+        video.productId ? db.collection('products').doc(video.productId).get() : Promise.resolve(null),
+      ]);
+      const media = mediaDoc.exists ? (mediaDoc.data() as MediaAsset) : null;
+      if (!media || media.type !== 'video' || !media.isActive) return null;
+      const thumb = thumbDoc?.exists ? (thumbDoc.data() as MediaAsset) : null;
+      return {
+        id: video.id,
+        kind: video.kind ?? 'making',
+        caption: video.caption,
+        src: buildPublicMediaUrl(media.path),
+        poster: thumb && thumb.isActive ? buildPublicMediaUrl(thumb.path) : null,
+        productSlug: productDoc?.exists ? (productDoc.data() as Product).slug : null,
+      };
+    })
+  );
+  return resolved.filter((v): v is TrustVideo => v !== null);
 }

@@ -22,7 +22,7 @@ const CATEGORY_TABS = [
 
 export function ProductGrid({
   title = "Meet your wall's next favourite.",
-  subtitle = 'Considered shapes, timeless finishes. Just add your favourite photo.',
+  subtitle,
   products,
   viewAllHref = '/category',
 }: ProductGridProps) {
@@ -32,41 +32,48 @@ export function ProductGrid({
 
   return (
     <Section>
-      <div className="flex flex-col gap-6 sm:gap-8">
-        {/* Header row with eyebrow, title, and "Shop all frames" button */}
+      <div className="flex flex-col gap-7 sm:gap-8">
+
+        {/* Header row */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#718096]">
-              A FRAME FOR EVERY FEELING
+            <p className="text-[10px] font-semibold uppercase tracking-eyebrow text-ink/40 mb-2">
+              A frame for every feeling
             </p>
-            <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F172A]">
+            <h2 className="font-display text-2xl sm:text-3xl lg:text-[2.25rem] font-bold text-ink tracking-tight leading-tight">
               {title}
             </h2>
-            {subtitle && <p className="mt-1.5 text-sm text-[#4A5568]">{subtitle}</p>}
+            {subtitle && (
+              <p className="mt-1.5 text-[14px] text-ink/55">{subtitle}</p>
+            )}
           </div>
 
           <Link
             href={viewAllHref}
-            className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#0F172A] hover:text-gold border border-black/15 rounded-full px-5 py-2 hover:border-black transition-all"
+            className="self-start sm:self-auto inline-flex items-center gap-1.5 text-[13px] font-medium text-ink/60 hover:text-ink border border-line rounded-btn px-4 py-2.5 hover:border-ink/30 transition-all duration-140"
           >
-            <span>Shop all frames</span>
-            <span aria-hidden="true">→</span>
+            Shop all frames
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </Link>
         </div>
 
-        {/* Filter pill chips matching Image 2 */}
-        <div className="flex items-center gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+        {/* Filter tab pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-4 px-4 sm:mx-0 sm:px-0 rail" role="tablist" aria-label="Product categories">
           {CATEGORY_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap text-xs sm:text-sm font-medium px-5 py-2 rounded-full transition-all duration-200 ${
+                className={`whitespace-nowrap text-[13px] font-medium px-4 py-2 rounded-btn transition-all duration-140 shrink-0 ${
                   isActive
-                    ? 'bg-[#0B1428] text-white shadow-xs'
-                    : 'bg-[#E8EDF2] text-[#4A5568] hover:text-[#0B1428] hover:bg-[#DEE5EC]'
+                    ? 'bg-ink text-paper'
+                    : 'bg-tint text-ink/55 hover:text-ink hover:bg-line'
                 }`}
               >
                 {tab.label}
@@ -75,8 +82,8 @@ export function ProductGrid({
           })}
         </div>
 
-        {/* 4-Column Grid matching Image 2 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-7">
+        {/* Product grid — 2 cols mobile, 4 cols desktop */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
           {products.slice(0, 8).map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
