@@ -27,7 +27,7 @@ import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../
 import { useToast } from '../ui/Toast';
 import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
-import { PersonalizationEditor, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
+import { PersonalizationPreview, PersonalizationControls, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
 
 interface ProductDetailClientProps {
@@ -480,6 +480,7 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     }
     return sessionIdRef.current;
   };
+  const uploadPromisesRef = useRef<Map<number, Promise<string | null>>>(new Map());
 
   // When the resolved template for the selected variant changes (a
   // Size/Colour switch that lands on a different FrameTemplate), re-fit
@@ -603,67 +604,145 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
       return;
     }
 
-    setUploadingSlot(slotIndex);
-    try {
-      const sessionId = ensureSessionId();
-      const formData = new FormData();
-      formData.append('file', file);
-      // The server looks up minUploadPx from this variantId itself — a
-      // client-supplied minUploadPx would be trivially bypassable.
-      formData.append('variantId', selectedVariant.id);
+    // 1. Instant client-side preview via local object URL (0ms latency, 60fps canvas blitting)
+    const localPreviewUrl =
+      typeof window !== 'undefined' && window.URL && typeof window.URL.createObjectURL === 'function'
+        ? window.URL.createObjectURL(file)
+        : undefined;
 
-      const res = await fetch('/api/uploads', {
-        method: 'POST',
-        headers: { 'X-Session-Id': sessionId },
-        body: formData,
-      });
-      // POST /api/uploads returns the persisted Upload doc (originalPath)
-      // plus a freshly-signed, never-persisted originalUrl for immediate
-      // canvas display — see that route for why the two are kept separate.
-      const body = await res.json();
-
-      if (!res.ok) {
-        // [FE-06] Map the server's own error `code` (route.ts's
-        // errorResponse) to a message specific enough to act on, instead
-        // of one generic "try a different file" line for every failure —
-        // a decode timeout and a 25MB-over file need different advice.
-        setUploadError(UPLOAD_ERROR_MESSAGES[body.code] ?? "We couldn't process this photo — please try a different file.");
-        return;
+    let localWidthPx = 0;
+    let localHeightPx = 0;
+    if (localPreviewUrl) {
+      try {
+        const img = new Image();
+        img.src = localPreviewUrl;
+        if (img.decode) {
+          await img.decode();
+        } else {
+          await new Promise((res, rej) => {
+            img.onload = () => res(img);
+            img.onerror = rej;
+          });
+        }
+        localWidthPx = img.naturalWidth;
+        localHeightPx = img.naturalHeight;
+      } catch {
+        // Fallback to server decode if local decode is unsupported
       }
-      const upload: Upload & { originalUrl: string } = body;
-      if (upload.status === 'rejected') {
-        setUploadError("We couldn't process this photo — please try a different file.");
-        return;
-      }
+    }
 
+    if (localPreviewUrl && localWidthPx > 0 && localHeightPx > 0) {
       const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
-      const scale = coverScale(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx);
-      const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, upload.widthPx, upload.heightPx, scale);
-      const effectiveDpi = computeEffectiveDpi(slotRect, upload.widthPx, upload.heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+      const scale = coverScale(canvasRect.width, canvasRect.height, localWidthPx, localHeightPx);
+      const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, localWidthPx, localHeightPx, scale);
+      const effectiveDpi = computeEffectiveDpi(slotRect, localWidthPx, localHeightPx, scale, offsetX, offsetY, 0, selectedVariant);
 
       setSlots((prev) => {
         const next = new Map(prev);
         next.set(slotIndex, {
-          uploadId: upload.id,
-          originalUrl: upload.originalUrl,
-          widthPx: upload.widthPx,
-          heightPx: upload.heightPx,
+          uploadId: prev.get(slotIndex)?.uploadId ?? '',
+          originalUrl: localPreviewUrl,
+          localPreviewUrl,
+          widthPx: localWidthPx,
+          heightPx: localHeightPx,
           scale,
           offsetX,
           offsetY,
           rotationDeg: 0,
           effectiveDpi,
-          // A fresh photo always needs a fresh confirmation if it's still
-          // red-tier — never inherit a previous photo's confirmation.
           confirmedLowDpi: false,
         });
         return next;
       });
-    } catch {
-      setUploadError('Upload failed. Please check your connection and try again.');
-    } finally {
-      setUploadingSlot(null);
     }
+
+    // 2. Persisted storage upload in background
+    setUploadingSlot(slotIndex);
+    const uploadTask = (async () => {
+      try {
+        const sessionId = ensureSessionId();
+        const formData = new FormData();
+        formData.append('file', file);
+        // The server looks up minUploadPx from this variantId itself — a
+        // client-supplied minUploadPx would be trivially bypassable.
+        formData.append('variantId', selectedVariant.id);
+
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'X-Session-Id': sessionId },
+          body: formData,
+        });
+        // POST /api/uploads returns the persisted Upload doc (originalPath)
+        // plus a freshly-signed, never-persisted originalUrl for immediate
+        // canvas display — see that route for why the two are kept separate.
+        const body = await res.json();
+
+        if (!res.ok) {
+          // [FE-06] Map the server's own error `code` (route.ts's
+          // errorResponse) to a message specific enough to act on, instead
+          // of one generic "try a different file" line for every failure —
+          // a decode timeout and a 25MB-over file need different advice.
+          setUploadError(UPLOAD_ERROR_MESSAGES[body.code] ?? "We couldn't process this photo — please try a different file.");
+          setSlots((prev) => {
+            const next = new Map(prev);
+            next.delete(slotIndex);
+            return next;
+          });
+          return null;
+        }
+        const upload: Upload & { originalUrl: string } = body;
+        if (upload.status === 'rejected') {
+          setUploadError("We couldn't process this photo — please try a different file.");
+          setSlots((prev) => {
+            const next = new Map(prev);
+            next.delete(slotIndex);
+            return next;
+          });
+          return null;
+        }
+
+        const widthPx = localWidthPx > 0 ? localWidthPx : upload.widthPx;
+        const heightPx = localHeightPx > 0 ? localHeightPx : upload.heightPx;
+        const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
+        const scale = coverScale(canvasRect.width, canvasRect.height, widthPx, heightPx);
+        const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, widthPx, heightPx, scale);
+        const effectiveDpi = computeEffectiveDpi(slotRect, widthPx, heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+
+        setSlots((prev) => {
+          const next = new Map(prev);
+          next.set(slotIndex, {
+            uploadId: upload.id,
+            originalUrl: upload.originalUrl,
+            localPreviewUrl: localPreviewUrl,
+            widthPx,
+            heightPx,
+            scale,
+            offsetX,
+            offsetY,
+            rotationDeg: 0,
+            effectiveDpi,
+            // A fresh photo always needs a fresh confirmation if it's still
+            // red-tier — never inherit a previous photo's confirmation.
+            confirmedLowDpi: false,
+          });
+          return next;
+        });
+        return upload.id;
+      } catch {
+        setUploadError('Upload failed. Please check your connection and try again.');
+        setSlots((prev) => {
+          const next = new Map(prev);
+          next.delete(slotIndex);
+          return next;
+        });
+        return null;
+      } finally {
+        setUploadingSlot((cur) => (cur === slotIndex ? null : cur));
+      }
+    })();
+
+    uploadPromisesRef.current.set(slotIndex, uploadTask);
+    await uploadTask;
   };
 
   const handleZoomTo = (newScale: number) => {
@@ -741,6 +820,21 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
     });
   };
 
+  const handleRemoveSlot = (slotIndex: number) => {
+    setSlots((prev) => {
+      const current = prev.get(slotIndex);
+      if (current?.localPreviewUrl && typeof window !== 'undefined' && window.URL?.revokeObjectURL) {
+        try {
+          window.URL.revokeObjectURL(current.localPreviewUrl);
+        } catch {}
+      }
+      const next = new Map(prev);
+      next.delete(slotIndex);
+      return next;
+    });
+    uploadPromisesRef.current.delete(slotIndex);
+  };
+
   const handleTextFieldChange = (fieldKey: string, value: { value: string; fontKey: string; color: string }) => {
     setTextFields((prev) => {
       const next = new Map(prev);
@@ -756,6 +850,19 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
 
     const personalizationId = isEditingCartLine && editPersonalizationId ? editPersonalizationId : crypto.randomUUID();
     const sessionId = ensureSessionId();
+
+    // Await any in-flight background uploads before persisting customizations
+    for (const [slotIndex, slot] of slots.entries()) {
+      if (!slot.uploadId) {
+        const pendingPromise = uploadPromisesRef.current.get(slotIndex);
+        if (pendingPromise) {
+          const resolvedId = await pendingPromise;
+          if (resolvedId) {
+            slot.uploadId = resolvedId;
+          }
+        }
+      }
+    }
 
     // One shared preview for the whole personalization (every slot now
     // renders onto the same persistent canvas) rather than one capture
@@ -898,12 +1005,11 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
           </div>
         </div>
       )}
-    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)_minmax(0,1fr)] gap-5 lg:gap-6 items-start' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
+    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-6 lg:gap-8 items-start' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
       {showInlineEditor && selectedVariant ? (
-        <PersonalizationEditor
+        <PersonalizationPreview
           template={template}
-          photoSlots={product.photoSlots}
-          allowsTextPersonalization={product.allowsTextPersonalization}
+          variant={selectedVariant}
           media={galleryMedia}
           productTitle={product.title}
           previewDataUrl={previewDataUrl}
@@ -911,8 +1017,6 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
           slots={slots}
           textFields={textFields}
           selectedClipartId={selectedClipartId}
-          uploadingSlot={uploadingSlot}
-          uploadError={uploadError}
           zoomBounds={
             activeSlot
               ? (() => {
@@ -924,22 +1028,18 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
                 })()
               : null
           }
-          activeSlotIsRed={activeSlotIsRed}
           onSelectSlot={setActiveSlotIndex}
-          onFileChange={handleFileChange}
           onZoomStep={handleZoom}
           onZoomTo={handleZoomTo}
           onRotate={handleRotate}
           onReset={handleReset}
           onTransformChange={handleTransformChange}
           onCanvasUpdate={setPreviewDataUrl}
-          onConfirmLowDpi={handleConfirmLowDpi}
-          onTextFieldChange={handleTextFieldChange}
-          onSelectClipart={setSelectedClipartId}
           onUndo={handleUndo}
           onRedo={handleRedo}
           canUndo={canUndo}
           canRedo={canRedo}
+          allowsTextPersonalization={product.allowsTextPersonalization}
         />
       ) : (
         <div className="rounded-2xl bg-paper border border-line p-4 md:p-5">
@@ -962,7 +1062,31 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
         submitError={submitError}
         onAddToCart={showInlineEditor ? handleAddToCart : undefined}
         isEditingCartLine={isEditingCartLine}
-      />
+      >
+        {showInlineEditor && selectedVariant && (
+          <PersonalizationControls
+            template={template}
+            photoSlots={product.photoSlots}
+            allowsTextPersonalization={product.allowsTextPersonalization}
+            activeSlotIndex={activeSlotIndex}
+            slots={slots}
+            textFields={textFields}
+            selectedClipartId={selectedClipartId}
+            uploadingSlot={uploadingSlot}
+            uploadError={uploadError}
+            activeSlotIsRed={activeSlotIsRed}
+            variant={selectedVariant}
+            onSelectSlot={setActiveSlotIndex}
+            onFileChange={handleFileChange}
+            onRemoveSlot={handleRemoveSlot}
+            onConfirmLowDpi={handleConfirmLowDpi}
+            onTextFieldChange={handleTextFieldChange}
+            onSelectClipart={setSelectedClipartId}
+            onTransformChange={handleTransformChange}
+            onRotate={handleRotate}
+          />
+        )}
+      </BuyBox>
     </div>
     </div>
   );
