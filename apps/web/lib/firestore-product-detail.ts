@@ -1,7 +1,8 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
 import { serializeDoc } from './serialize-doc';
-import type { Product, Variant, ProductMedia, Review, Category, FrameTemplate } from '@bro-pics/shared';
+import type { Product, Variant, ProductMedia, Review, Category, FrameTemplate, PersonalizationTemplate } from '@bro-pics/shared';
+import { getLatestPublished } from './personalization-templates';
 
 export interface ProductDetail {
   product: Product;
@@ -125,4 +126,28 @@ export async function getFrameTemplatesByProductId(productId: string): Promise<R
   }
 
   return Object.fromEntries(Array.from(byVariant.entries()).map(([variantId, template]) => [variantId, serializeDoc(template)]));
+}
+
+/**
+ * The published v2 personalization template each variant uses: the variant's
+ * own personalizationTemplateId, else the product's. A variant whose template
+ * has no published version yet is left out (it keeps the classic editor).
+ */
+export async function getPersonalizationTemplatesByVariant(
+  product: Product,
+  variants: Variant[]
+): Promise<Record<string, PersonalizationTemplate>> {
+  const idByVariant = new Map(variants.map((v) => [v.id, v.personalizationTemplateId ?? product.personalizationTemplateId ?? null]));
+  const ids = [...new Set([...idByVariant.values()].filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return {};
+  const db = getFirestore(getAdminApp());
+  const published = new Map(
+    await Promise.all(ids.map(async (id) => [id, await getLatestPublished(db, id).catch(() => null)] as const))
+  );
+  const byVariant: Record<string, PersonalizationTemplate> = {};
+  for (const [variantId, id] of idByVariant) {
+    const template = id ? published.get(id) : null;
+    if (template) byVariant[variantId] = JSON.parse(JSON.stringify(template)) as PersonalizationTemplate;
+  }
+  return byVariant;
 }

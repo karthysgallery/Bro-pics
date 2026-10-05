@@ -36,6 +36,8 @@ export const CreateProductBodySchema = z
     status: z.enum(['draft', 'published', 'archived']).default('draft'),
     relatedProductIds: z.array(z.string()).max(8).default([]),
     frequentlyBoughtTogetherIds: z.array(z.string()).max(8).default([]),
+    // null unlinks; see ProductSchema.personalizationTemplateId.
+    personalizationTemplateId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).nullable().optional(),
   })
   .strict();
 

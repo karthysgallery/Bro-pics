@@ -33,6 +33,8 @@ export const CreateVariantBodySchema = z
     compareAtPrice: z.number().int().nonnegative().optional(),
     stockStatus: z.enum(['in_stock', 'out_of_stock', 'backorder']).default('in_stock'),
     isActive: z.boolean().default(true),
+    // null falls back to the product's template; see VariantSchema.personalizationTemplateId.
+    personalizationTemplateId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).nullable().optional(),
   })
   .strict();
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { FrameTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
+import type { FrameTemplate, PersonalizationTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
 import {
   coverScale,
   coverScaleForRotation,
@@ -29,6 +29,7 @@ import { Gallery } from './Gallery';
 import { BuyBox } from './BuyBox';
 import { PersonalizationPreview, PersonalizationControls, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
+import { TemplateProductLayout } from '../customizer/TemplateProductLayout';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -40,11 +41,18 @@ interface ProductDetailClientProps {
   // page showing the plain Gallery for ~1s before swapping to the editor
   // once the fetch resolved.
   initialTemplatesByVariant: Record<string, FrameTemplate>;
+  // Published v2 personalization templates (photo collages and other
+  // template designs), by variant id. A variant listed here gets the template
+  // editor; every other variant keeps the classic editor above.
+  personalizationTemplatesByVariant?: Record<string, PersonalizationTemplate>;
   // [FE-16] Set from the cart drawer's Edit link (?edit=). Rehydrates the
   // editor from the existing personalization instead of starting blank,
   // and switches Add to Cart's save path to update the SAME
   // personalizationId/cart line rather than creating a new one.
   editPersonalizationId?: string;
+  // The size/finish of the cart line being edited (the Edit link's
+  // &variantId=), so editing starts on what the customer actually bought.
+  initialVariantId?: string;
 }
 
 function orientationOf(v: Variant): Orientation {
@@ -91,9 +99,21 @@ const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
   unknown_variant: "We couldn't set up this photo slot — please close and reopen the editor.",
 };
 
-export function ProductDetailClient({ product, variants, media, initialTemplatesByVariant, editPersonalizationId }: ProductDetailClientProps) {
+export function ProductDetailClient({
+  product,
+  variants,
+  media,
+  initialTemplatesByVariant,
+  personalizationTemplatesByVariant = {},
+  editPersonalizationId,
+  initialVariantId,
+}: ProductDetailClientProps) {
   const { showToast } = useToast();
-  const firstInStock = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
+  const firstInStock =
+    (initialVariantId ? variants.find((v) => v.id === initialVariantId) : undefined) ??
+    variants.find((v) => v.stockStatus === 'in_stock') ??
+    variants[0] ??
+    null;
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
   const [selectedColour, setSelectedColour] = useState(firstInStock?.frameColour ?? '');
   const [selectedOrientation, setSelectedOrientation] = useState<Orientation | ''>(
@@ -969,6 +989,25 @@ export function ProductDetailClient({ product, variants, media, initialTemplates
   };
 
   const showInlineEditor = templateStatus === 'loaded' && template !== null;
+  const personalizationTemplate = selectedVariant ? personalizationTemplatesByVariant[selectedVariant.id] ?? null : null;
+
+  if (personalizationTemplate && selectedVariant) {
+    return (
+      <TemplateProductLayout
+        product={product}
+        variants={variants}
+        selectedVariant={selectedVariant}
+        template={personalizationTemplate}
+        selectedSize={selectedSize}
+        selectedColour={selectedColour}
+        selectedOrientation={selectedOrientation}
+        onSelectSize={handleSelectSize}
+        onSelectColour={handleSelectColour}
+        onSelectOrientation={handleSelectOrientation}
+        editPersonalizationId={editPersonalizationId}
+      />
+    );
+  }
 
   // The frame column is the widest of the three: its canvas is square, so
   // width is what gives it height, and at equal widths it finished well

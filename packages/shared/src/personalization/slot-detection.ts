@@ -508,7 +508,9 @@ export function detectPhotoSlots(px: RgbaPixels, options: DetectOptions = {}): S
     const { labels, components } = labelComponents(isBg, w, h);
     for (const c of components) {
       if (c.touchesBorder || c.area < minArea || c.area > maxArea) continue;
-      const a = analyse(labels, w, h, c, 'enclosed-area', 0);
+      // Grown by a pixel so no sliver of the design's own colour shows between
+      // the line work and the customer's photo after scaling up to print size.
+      const a = analyse(labels, w, h, c, 'enclosed-area', 1);
       if (a) candidates.push(a);
     }
   }
@@ -517,7 +519,7 @@ export function detectPhotoSlots(px: RgbaPixels, options: DetectOptions = {}): S
     const { labels, components } = labelComponents(notBg, w, h);
     for (const c of components) {
       if (c.area < minArea || c.area > maxArea) continue;
-      const a = analyse(labels, w, h, c, 'placeholder', 0);
+      const a = analyse(labels, w, h, c, 'placeholder', 1);
       if (a) candidates.push(a);
     }
   }
@@ -563,9 +565,15 @@ export interface DraftFromDetectionInput {
 
 /** Turns a detection into a DRAFT template the admin can review in the builder. */
 export function templateDraftFromDetection(input: DraftFromDetectionInput): PersonalizationTemplate {
-  const photoSlots = input.detection.slots.map((s, i) => ({
+  // A hero collage: one space at least twice the size of any other is filled
+  // first, so a customer's first (usually favourite) photo lands there.
+  const area = (d: DetectedSlot) => d.width * d.height;
+  const bySize = [...input.detection.slots].sort((a, b) => area(b) - area(a));
+  const hero = bySize.length > 1 && area(bySize[0]) >= 2 * area(bySize[1]) ? bySize[0] : null;
+  const ordered = hero ? [hero, ...input.detection.slots.filter((d) => d !== hero)] : input.detection.slots;
+  const photoSlots = ordered.map((s, i) => ({
     id: `photo_${String(i + 1).padStart(2, '0')}`,
-    label: input.detection.slots.length === 1 ? 'Your photo' : `Photo ${i + 1}`,
+    label: ordered.length === 1 ? 'Your photo' : s === hero ? 'Main photo' : `Photo ${i + 1}`,
     required: true,
     x: s.x,
     y: s.y,

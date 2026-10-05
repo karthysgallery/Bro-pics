@@ -8,8 +8,10 @@ interface RateLimitConfig {
 // inline in a route.
 export const RATE_LIMITS = {
   // Expensive: image processing + Storage writes. Abuse here costs real
-  // money (Storage bytes, Sharp CPU).
-  upload: { windowMs: 60_000, max: 10 },
+  // money (Storage bytes, Sharp CPU). Sized for a collage: a customer filling
+  // a 20-30 photo design uploads that many photos in a minute (the editor
+  // queues them and waits out Retry-After beyond this).
+  upload: { windowMs: 60_000, max: 30 },
   // Money-critical: creates a real Razorpay order (an external API call)
   // and writes an Order doc. Generous enough for legitimate retry-after-
   // failed-payment, tight enough to block scripted abuse.

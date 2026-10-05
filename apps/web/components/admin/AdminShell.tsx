@@ -233,6 +233,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Categories', href: '/admin/categories', permission: 'catalogue:read', icon: 'categories' },
       { label: 'Collections', href: '/admin/collections', permission: 'catalogue:read', icon: 'collections' },
       { label: 'Frame Templates', href: '/admin/frame-templates', permission: 'catalogue:read', icon: 'templates' },
+      { label: 'Collage Templates', href: '/admin/personalization-templates', permission: 'catalogue:read', icon: 'templates' },
       { label: 'Inventory Matrix', href: '/admin/inventory', permission: 'catalogue:read', icon: 'inventory' },
       { label: 'Media Assets', href: '/admin/media', permission: 'catalogue:read', icon: 'media' },
     ],

@@ -50,13 +50,20 @@ const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ docs: [] });
 const mockIdempotencyWhereGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
 const mockPerUserLimitWhereGet = vi.fn().mockResolvedValue({ size: 0 });
 const mockProductDocGet = vi.fn().mockResolvedValue({ exists: false });
+const mockVariantDocGet = vi.fn().mockResolvedValue({ exists: false });
 const mockOrderDocGet = vi.fn().mockResolvedValue({ exists: false });
 const mockUserDocGet = vi.fn().mockResolvedValue({ exists: false });
 const mockDb = {
   collection: vi.fn((name: string) => ({
     doc: vi.fn((id?: string) => {
       if (name === 'carts') return mockCartDoc;
-      if (name === 'products') return { id: id ?? 'product_id', get: () => mockProductDocGet(id) };
+      if (name === 'products') {
+        return {
+          id: id ?? 'product_id',
+          get: () => mockProductDocGet(id),
+          collection: vi.fn(() => ({ doc: vi.fn((variantId: string) => ({ get: () => mockVariantDocGet(id, variantId) })) })),
+        };
+      }
       if (name === 'users') {
         return {
           id: id ?? 'user_id',
@@ -908,9 +915,27 @@ describe('POST /api/checkout/create-order', () => {
       mockBuildLineSnapshot.mockResolvedValueOnce(snapshot);
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      expect(mockBuildLineSnapshot).toHaveBeenCalledWith(expect.anything(), 'user_1', claim);
+      expect(mockBuildLineSnapshot).toHaveBeenCalledWith(expect.anything(), 'user_1', claim, { offeredTemplateId: null });
       const item = mockBatchSet.mock.calls.map(([, d]) => d).find((d) => d?.variantId === 'v1');
       expect(item.personalization).toEqual(snapshot);
+    });
+
+    it('checks the design against the template the variant offers, at the variant\'s print size', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWithPersonalization();
+      mockProductDocGet.mockImplementation(async (id: string) =>
+        id === 'p1' ? { exists: true, data: () => ({ title: 'Collage frame', personalizationTemplateId: 'product-design' }) } : { exists: false }
+      );
+      mockVariantDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ widthIn: 12, heightIn: 18, personalizationTemplateId: 'single-8x12' }) });
+      mockBuildLineSnapshot.mockResolvedValueOnce(snapshot);
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      expect(mockVariantDocGet).toHaveBeenCalledWith('p1', 'v1');
+      expect(mockBuildLineSnapshot).toHaveBeenCalledWith(expect.anything(), 'user_1', claim, {
+        offeredTemplateId: 'single-8x12',
+        printSizeIn: { width: 12, height: 18 },
+      });
+      mockProductDocGet.mockReset().mockResolvedValue({ exists: false });
     });
 
     it('refuses the order (409 personalization_invalid) BEFORE any order number or payment session when validation fails', async () => {

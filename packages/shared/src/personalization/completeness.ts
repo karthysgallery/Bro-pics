@@ -1,5 +1,5 @@
 import { dpiTier } from '../dpi/calculate';
-import { cropRectInOriginalPx, effectiveDpi, slotAspectRatio } from './geometry';
+import { cropRectInOriginalPx, effectiveDpi, slotAspectRatio, type PrintSizeIn } from './geometry';
 import type { PersonalizationState } from './state';
 import type { PersonalizationTemplate } from './template-schema';
 
@@ -32,7 +32,12 @@ export interface Completeness {
  * A red-tier (low-resolution) photo blocks only until the customer has
  * explicitly accepted the warning for THAT photo ("don't block unnecessarily").
  */
-export function checkCompleteness(template: PersonalizationTemplate, state: PersonalizationState): Completeness {
+export interface CompletenessOptions {
+  /** The frame size being bought; DPI is judged at that size (see canvasPrintWidthIn). */
+  printSizeIn?: PrintSizeIn;
+}
+
+export function checkCompleteness(template: PersonalizationTemplate, state: PersonalizationState, options: CompletenessOptions = {}): Completeness {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const slots: SlotStatus[] = [];
@@ -47,7 +52,7 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     }
     const aspect = slotAspectRatio(slot, template.canvas);
     const crop = cropRectInOriginalPx(photo.width, photo.height, photo.rotation, aspect, photo.transform);
-    const dpi = effectiveDpi(crop, slot, template.canvas);
+    const dpi = effectiveDpi(crop, slot, template.canvas, options.printSizeIn);
     const tier = dpiTier(dpi);
     const status: SlotStatus = { slotId: slot.id, filled: true, required: slot.required, dpi, tier };
     if (tier === 'red') {

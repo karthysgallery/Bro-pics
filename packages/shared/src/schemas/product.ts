@@ -87,6 +87,12 @@ export const ProductSchema = z.object({
   // reasoning as `status` above.
   relatedProductIds: z.array(z.string()).max(8).optional(),
   frequentlyBoughtTogetherIds: z.array(z.string()).max(8).optional(),
+
+  // v2 personalization template (personalizationTemplates/{id}) used by every
+  // size of this product unless a variant names its own. The storefront shows
+  // the template editor only once that template has a PUBLISHED version;
+  // until then (or when unset/null) the product keeps the classic editor.
+  personalizationTemplateId: z.string().min(1).nullable().optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  clampScale, clampTransform, cropRectInOriginalPx, effectiveDpi, fitPhotoToSlot, rectToOriginalSpace, rectToRotatedSpace,
+  canvasPrintWidthIn, clampScale, clampTransform, cropRectInOriginalPx, effectiveDpi, fitPhotoToSlot, rectToOriginalSpace, rectToRotatedSpace,
   rotatedSize, slotAspectRatio, slotRectPx, transformFromVisibleRegion, visibleRegion, MAX_SCALE,
 } from './geometry';
 import { complexCollageTemplate, singlePhotoTemplate, threePhotoTemplate } from './test-fixtures';
@@ -156,5 +156,30 @@ describe('effective DPI', () => {
   it('works for the small slots of a 29-slot collage', () => {
     const small = complexCollageTemplate.photoSlots[5];
     expect(effectiveDpi({ x: 0, y: 0, width: 1500, height: 1500 }, small, complexCollageTemplate.canvas)).toBeGreaterThan(0);
+  });
+});
+
+describe('canvasPrintWidthIn', () => {
+  const canvas = { width: 2400, height: 3600, dpi: 300 }; // drawn at 8 × 12 in
+
+  it('is the canvas’s own size without a frame size', () => {
+    expect(canvasPrintWidthIn(canvas)).toBe(8);
+  });
+
+  it('follows the frame being bought, turned to the canvas orientation', () => {
+    expect(canvasPrintWidthIn(canvas, { width: 12, height: 18 })).toBe(12);
+    expect(canvasPrintWidthIn(canvas, { width: 18, height: 12 })).toBe(12);
+  });
+
+  it('fits a canvas with other proportions inside the frame', () => {
+    expect(canvasPrintWidthIn({ width: 3000, height: 3000, dpi: 300 }, { width: 8, height: 12 })).toBe(8);
+    expect(canvasPrintWidthIn({ width: 3000, height: 1000, dpi: 300 }, { width: 12, height: 12 })).toBe(12);
+  });
+
+  it('halves the DPI when the same collage is printed twice as wide', () => {
+    const slot = { width: 0.5 };
+    const region = { x: 0, y: 0, width: 1200, height: 1200 };
+    expect(effectiveDpi(region, slot, canvas)).toBe(300);
+    expect(effectiveDpi(region, slot, canvas, { width: 16, height: 24 })).toBe(150);
   });
 });

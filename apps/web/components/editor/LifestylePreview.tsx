@@ -19,6 +19,14 @@ interface LifestylePreviewProps {
   /** Real frame size, so it is drawn at its true proportion of the scene. */
   frameInches?: FrameInches | null;
   scenes?: PreviewScene[];
+  /**
+   * Cut the frame out of a plain paper background first (the classic editor's
+   * mockup has one). Off for a template design, which is already exactly the
+   * frame edge to edge — a light photo at its edge must not be eaten away.
+   */
+  cutOut?: boolean;
+  /** Shown over the scene before there is a design to place. */
+  emptyMessage?: string;
 }
 
 const DEFAULT_LIGHT: SceneLight = { angleDeg: 65, strength: 0.7 };
@@ -102,7 +110,7 @@ function useElementWidth() {
 }
 
 /** The finished frame cut out of its paper background, or the original while that is worked out / when it is not possible. */
-function useFrameCutout(imageUrl: string | null) {
+function useFrameCutout(imageUrl: string | null, enabled: boolean) {
   const [cutout, setCutout] = useState<FrameCutout | null>(null);
   const [measuredAspect, setMeasuredAspect] = useState(1);
 
@@ -117,13 +125,15 @@ function useFrameCutout(imageUrl: string | null) {
       if (!cancelled && probe.naturalWidth > 0 && probe.naturalHeight > 0) setMeasuredAspect(probe.naturalWidth / probe.naturalHeight);
     };
     probe.src = imageUrl;
-    cutOutFrameFromUrl(imageUrl).then((result) => {
-      if (!cancelled) setCutout(result);
-    });
+    if (enabled) {
+      cutOutFrameFromUrl(imageUrl).then((result) => {
+        if (!cancelled) setCutout(result);
+      });
+    }
     return () => {
       cancelled = true;
     };
-  }, [imageUrl]);
+  }, [imageUrl, enabled]);
 
   return {
     url: cutout?.url ?? imageUrl,
@@ -166,10 +176,16 @@ function shadowFilter(widthPx: number, light: SceneLight, standing: boolean): st
  * them with a perspective transform. The same design follows the customer from
  * scene to scene.
  */
-export function LifestylePreview({ imageUrl, frameInches = null, scenes = DEFAULT_PREVIEW_SCENES }: LifestylePreviewProps) {
+export function LifestylePreview({
+  imageUrl,
+  frameInches = null,
+  scenes = DEFAULT_PREVIEW_SCENES,
+  cutOut = true,
+  emptyMessage = 'Add a photo to see your frame in this room.',
+}: LifestylePreviewProps) {
   const [sceneId, setSceneId] = useState(scenes[0]?.id ?? '');
   const [failedPhotos, setFailedPhotos] = useState<ReadonlySet<string>>(new Set());
-  const { url, aspect } = useFrameCutout(imageUrl);
+  const { url, aspect } = useFrameCutout(imageUrl, cutOut);
   const stage = useElementWidth();
   const scene = scenes.find((s) => s.id === sceneId) ?? scenes[0];
 
@@ -288,7 +304,7 @@ export function LifestylePreview({ imageUrl, frameInches = null, scenes = DEFAUL
 
         {placeholder && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm font-medium text-ink/55">
-            Add a photo to see your frame in this room.
+            {emptyMessage}
           </div>
         )}
         <span className="absolute left-3 top-3 rounded-full bg-ink/75 px-3 py-1 text-[11px] font-semibold text-paper backdrop-blur-xs">

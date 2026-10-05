@@ -8,6 +8,7 @@ import {
   getAllActiveProductSlugs,
   getCategoryById,
   getFrameTemplatesByProductId,
+  getPersonalizationTemplatesByVariant,
 } from '../../../../lib/firestore-product-detail';
 import { ProductDetailClient } from '../../../../components/product/ProductDetailClient';
 import { ProductTabs } from '../../../../components/product/ProductTabs';
@@ -26,7 +27,7 @@ interface ProductPageProps {
   // reading searchParams makes this one request dynamic (not served from
   // the static/ISR cache) without opting the whole route out of
   // generateStaticParams/revalidate for every other visit.
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; variantId?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -62,16 +63,17 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const { slug } = await params;
-  const { edit: editPersonalizationId } = await searchParams;
+  const { edit: editPersonalizationId, variantId: editVariantId } = await searchParams;
   const detail = await getProductBySlug(slug);
   if (!detail) notFound();
 
   const { product, variants, media, reviews } = detail;
-  const [relatedProducts, frequentlyBoughtTogether, category, templatesByVariant] = await Promise.all([
+  const [relatedProducts, frequentlyBoughtTogether, category, templatesByVariant, personalizationTemplatesByVariant] = await Promise.all([
     getRelatedProducts(product.categoryId, product.id, 8),
     getFrequentlyBoughtTogether(product),
     getCategoryById(product.categoryId),
     getFrameTemplatesByProductId(product.id),
+    getPersonalizationTemplatesByVariant(product, variants),
   ]);
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
@@ -137,7 +139,9 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
         variants={variants}
         media={media}
         initialTemplatesByVariant={templatesByVariant}
+        personalizationTemplatesByVariant={personalizationTemplatesByVariant}
         editPersonalizationId={editPersonalizationId}
+        initialVariantId={editPersonalizationId ? editVariantId : undefined}
       />
 
       {/* Figma 4-item Trust Reassurance Bar */}

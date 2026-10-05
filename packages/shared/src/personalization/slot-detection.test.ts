@@ -129,9 +129,11 @@ describe('detectPhotoSlots — opaque designs', () => {
     expect(r.backgroundColor).toBe('#ffffff');
     expect(r.slots).toHaveLength(6);
     expect(r.slots.every((s) => s.shape === 'rect')).toBe(true);
-    // Reading order: top row left to right, then bottom row.
-    expect(r.slots.map((s) => Math.round(s.x * 600))).toEqual([30, 220, 410, 30, 220, 410]);
-    expect(r.slots.map((s) => Math.round(s.y * 400))).toEqual([30, 30, 30, 200, 200, 200]);
+    // Reading order: top row left to right, then bottom row. Each slot overlaps
+    // its placeholder by one pixel so no grey edge shows around the photo.
+    expect(r.slots.map((s) => Math.round(s.x * 600))).toEqual([29, 219, 409, 29, 219, 409]);
+    expect(r.slots.map((s) => Math.round(s.y * 400))).toEqual([29, 29, 29, 199, 199, 199]);
+    expect(Math.round(r.slots[0].width * 600)).toBe(162);
   });
 
   it('uses the inside of outlined boxes, so the printed outline stays visible', () => {
@@ -140,8 +142,9 @@ describe('detectPhotoSlots — opaque designs', () => {
     outline(img, 220, 40, 140, 200, 4, [20, 20, 20, 255]);
     const r = detectPhotoSlots(img);
     expect(r.slots).toHaveLength(2);
-    expect(Math.round(r.slots[0].x * 400)).toBe(44);
-    expect(Math.round(r.slots[0].width * 400)).toBe(132);
+    // The 4px outline stays visible; the photo tucks one pixel under its inner edge.
+    expect(Math.round(r.slots[0].x * 400)).toBe(43);
+    expect(Math.round(r.slots[0].width * 400)).toBe(134);
     expect(r.slots[0].source).toBe('enclosed-area');
   });
 
@@ -163,9 +166,9 @@ describe('detectPhotoSlots — opaque designs', () => {
     photo(img, 40, 210, 420, 150, 3);
     const r = detectPhotoSlots(img);
     expect(r.slots.map((s) => [Math.round(s.x * 500), Math.round(s.y * 400)])).toEqual([
-      [40, 40],
-      [260, 40],
-      [40, 210],
+      [39, 39],
+      [259, 39],
+      [39, 209],
     ]);
   });
 
@@ -216,5 +219,16 @@ describe('templateDraftFromDetection', () => {
     expect(draft.layers.map((l) => l.kind)).toEqual(['fixed', 'photoSlot']);
     expect(draft.background).toEqual({ type: 'color', color: '#ffffff' });
     expect(draft.photoSlots[0].label).toBe('Your photo');
+  });
+
+  it('fills a dominant hero space first and calls it the main photo', () => {
+    const img = canvas(600, 400, WHITE);
+    rect(img, 20, 40, 120, 100, GREY);
+    rect(img, 200, 40, 200, 320, GREY);
+    rect(img, 460, 40, 120, 100, GREY);
+    const draft = templateDraftFromDetection({ id: 'hero', name: 'Hero', artwork: { assetId: 'a' }, canvas: { width: 3000, height: 2000 }, detection: detectPhotoSlots(img) });
+    expect(draft.photoSlots[0].label).toBe('Main photo');
+    expect(Math.round(draft.photoSlots[0].x * 600)).toBe(199);
+    expect(draft.photoSlots.map((s) => s.label)).toEqual(['Main photo', 'Photo 2', 'Photo 3']);
   });
 });

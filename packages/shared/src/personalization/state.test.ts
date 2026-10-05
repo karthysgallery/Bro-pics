@@ -149,6 +149,17 @@ describe('completeness (one rule for the editor, add-to-cart and the server)', (
     expect(checkCompleteness(singlePhotoTemplate, s).slots[0].dpi!).toBeLessThan(before / 3);
   });
 
+  it('judges photo sharpness at the frame size being bought', () => {
+    const slot = singlePhotoTemplate.photoSlots[0];
+    // 2000 px across a slot that is 0.8 of an 8 in wide canvas = 312.5 DPI.
+    const s = setSlotPhoto(createEmptyState(singlePhotoTemplate.id, singlePhotoTemplate.version), slot.id, { assetId: 'u', width: 2000, height: 3000 });
+    expect(checkCompleteness(singlePhotoTemplate, s).slots[0].tier).toBe('green');
+    // The same photo in a 16 × 24 in frame is stretched twice as far.
+    const large = checkCompleteness(singlePhotoTemplate, s, { printSizeIn: { width: 16, height: 24 } });
+    expect(Math.round(large.slots[0].dpi!)).toBe(156);
+    expect(large.slots[0].tier).toBe('amber');
+  });
+
   it('requires required text and enforces the max length', () => {
     const base = setSlotPhoto(createEmptyState(photoPlusTextTemplate.id, 1), 'photo_01', photo(1, 6000, 6000));
     expect(checkCompleteness(photoPlusTextTemplate, base).blockers.join(' ')).toMatch(/Enter “Names”/);

@@ -89,6 +89,21 @@ describe('buildLineSnapshot (server-side trust boundary for personalization)', (
     expect(ok.state.texts.name.value).toBe('Asha & Ravi');
   });
 
+  it('only accepts the design the product actually offers', async () => {
+    await rejects(buildLineSnapshot(setup(), 'user_1', claim(goodState()), { offeredTemplateId: 'another-design' }), 'template_not_offered');
+    await rejects(buildLineSnapshot(setup(), 'user_1', claim(goodState()), { offeredTemplateId: null }), 'template_not_offered');
+    const ok = await buildLineSnapshot(setup(), 'user_1', claim(goodState()), { offeredTemplateId: 'single-8x12' });
+    expect(ok.templateId).toBe('single-8x12');
+  });
+
+  it('judges sharpness at the frame size bought: a photo fine at 8×12 is refused at 40×60', async () => {
+    const small = { upload: { widthPx: 1600, heightPx: 2400 } };
+    const state = setSlotPhoto(createEmptyState('single-8x12', 1), 'photo_01', { assetId: 'up_1', width: 1600, height: 2400 });
+    await expect(buildLineSnapshot(setup(small), 'user_1', claim(state), { printSizeIn: { width: 8, height: 12 } })).resolves.toBeTruthy();
+    const err = await rejects(buildLineSnapshot(setup(small), 'user_1', claim(state), { printSizeIn: { width: 40, height: 60 } }), 'incomplete');
+    expect(err.details?.join(' ')).toMatch(/too low-resolution/);
+  });
+
   it('the crop the customer chose survives into the snapshot (and is clamped to keep covering the slot)', async () => {
     const cropped = setSlotTransform(goodState(), 'photo_01', { scale: 1.5, offsetX: 0.05, offsetY: 0 }, 1);
     const snap = await buildLineSnapshot(setup(), 'user_1', claim(cropped));

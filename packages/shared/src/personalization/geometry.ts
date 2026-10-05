@@ -178,6 +178,27 @@ export function rectToRotatedSpace(rect: Rect, photoWidth: number, photoHeight: 
   }
 }
 
+/** A frame's physical print area in inches (a variant's widthIn × heightIn). */
+export interface PrintSizeIn {
+  width: number;
+  height: number;
+}
+
+/**
+ * How wide (in inches) the template canvas actually prints. Without a frame
+ * size that is the canvas's own size (pixels / dpi). With one — the same
+ * collage offered in several sizes — the canvas is turned to the frame's
+ * orientation and fitted inside it, so DPI checks follow the size the
+ * customer is buying rather than the size the template was drawn at.
+ */
+export function canvasPrintWidthIn(canvas: Pick<TemplateCanvas, 'width' | 'dpi'> & { height?: number }, printSize?: PrintSizeIn): number {
+  if (!printSize || !canvas.height || printSize.width <= 0 || printSize.height <= 0) return canvas.width / canvas.dpi;
+  let { width: w, height: h } = printSize;
+  const portraitCanvas = canvas.height > canvas.width;
+  if (w !== h && canvas.width !== canvas.height && h > w !== portraitCanvas) [w, h] = [h, w];
+  return Math.min(w, h * (canvas.width / canvas.height));
+}
+
 /**
  * Effective print resolution of the visible photo region in this slot: source
  * pixels across the slot divided by the slot's printed width in inches.
@@ -185,9 +206,10 @@ export function rectToRotatedSpace(rect: Rect, photoWidth: number, photoHeight: 
 export function effectiveDpi(
   region: Rect,
   slot: Pick<PhotoSlot, 'width' | 'widthMm'>,
-  canvas: Pick<TemplateCanvas, 'width' | 'dpi'>
+  canvas: Pick<TemplateCanvas, 'width' | 'dpi'> & { height?: number },
+  printSize?: PrintSizeIn
 ): number {
-  const slotWidthIn = slot.widthMm ? slot.widthMm / 25.4 : (slot.width * canvas.width) / canvas.dpi;
+  const slotWidthIn = slot.widthMm ? slot.widthMm / 25.4 : slot.width * canvasPrintWidthIn(canvas, printSize);
   if (slotWidthIn <= 0 || region.width <= 0) return 0;
   return region.width / slotWidthIn;
 }

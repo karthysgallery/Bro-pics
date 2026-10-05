@@ -41,7 +41,7 @@ export interface CartContextValue {
   updateItem: (
     variantId: string,
     personalizationId: string,
-    updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath'>>
+    updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization'>>
   ) => void;
   clearCart: () => void;
   totalCount: number;
@@ -244,7 +244,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const updateItem = (
       variantId: string,
       personalizationId: string,
-      updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath'>>
+      updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization'>>
     ) => {
       const applyUpdate = (current: CartItem[]) =>
         current.map((i) =>

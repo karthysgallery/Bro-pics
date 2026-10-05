@@ -6,6 +6,7 @@ import {
   checkCompleteness,
   type OrderPersonalizationSnapshot,
   type PersonalizationState,
+  type PrintSizeIn,
 } from '@bro-pics/shared';
 import { getTemplateVersion } from './personalization-templates';
 
@@ -19,6 +20,7 @@ export interface ClaimedPersonalization {
 export type PersonalizationRejection =
   | 'malformed'
   | 'template_unavailable'
+  | 'template_not_offered'
   | 'unknown_slot'
   | 'asset_not_found'
   | 'asset_not_owned'
@@ -41,12 +43,30 @@ export class PersonalizationRejectedError extends Error {
  * fake a sharp DPI), slot ids, text length, or completeness (re-checked here — the
  * browser's own check is only a convenience).
  */
-export async function buildLineSnapshot(db: Firestore, userId: string, claimed: ClaimedPersonalization): Promise<OrderPersonalizationSnapshot> {
+export interface LineContext {
+  /** The template the product/variant actually offers (variant override, else product). */
+  offeredTemplateId?: string | null;
+  /** The frame size bought, so photo sharpness is judged at that size. */
+  printSizeIn?: PrintSizeIn;
+}
+
+export async function buildLineSnapshot(
+  db: Firestore,
+  userId: string,
+  claimed: ClaimedPersonalization,
+  context: LineContext = {}
+): Promise<OrderPersonalizationSnapshot> {
   const parsed = PersonalizationStateSchema.safeParse(claimed.state);
   if (!parsed.success) throw new PersonalizationRejectedError('malformed', 'The personalization data is invalid.');
   const claimedState = parsed.data;
   if (claimedState.templateId !== claimed.templateId || claimedState.templateVersion !== claimed.templateVersion) {
     throw new PersonalizationRejectedError('malformed', 'The personalization does not match its template version.');
+  }
+
+  // A design can only be bought on the product it is offered for: otherwise a
+  // 30-photo collage could be ordered at a single-photo frame's price.
+  if (context.offeredTemplateId !== undefined && context.offeredTemplateId !== claimed.templateId) {
+    throw new PersonalizationRejectedError('template_not_offered', 'This design is no longer offered for this frame. Please personalize it again.');
   }
 
   const template = await getTemplateVersion(db, claimed.templateId, claimed.templateVersion);
@@ -86,7 +106,7 @@ export async function buildLineSnapshot(db: Firestore, userId: string, claimed: 
 
   const state: PersonalizationState = { ...claimedState, slots };
 
-  const completeness = checkCompleteness(template, state);
+  const completeness = checkCompleteness(template, state, { printSizeIn: context.printSizeIn });
   if (!completeness.complete) {
     throw new PersonalizationRejectedError('incomplete', 'Your personalization is not complete.', completeness.blockers);
   }

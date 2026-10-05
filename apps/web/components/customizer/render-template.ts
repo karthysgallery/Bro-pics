@@ -34,6 +34,8 @@ export interface RenderInput {
   assetSrc: (ref: AssetRef) => string | null;
   /** Where a slot's photo is drawn from (a blob: URL), or null while it is not available yet. */
   photoSrc: (slotId: string, photo: SlotPhoto) => string | null;
+  /** True when a photo could not be loaded at all (shown as such instead of "Loading"). */
+  photoUnavailable?: (photo: SlotPhoto) => boolean;
   /** Canvas font-family for a stored font key. */
   fontFamily: (fontKey: string) => string;
   /** 'editor' draws empty-slot placeholders, text hints and the selection outline; 'export' draws only the design. */
@@ -152,7 +154,7 @@ function applyShapeMask(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: numbe
   ctx.restore();
 }
 
-function drawPlaceholder(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: number, h: number, loading: boolean): void {
+function drawPlaceholder(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: number, h: number, photoState: 'empty' | 'loading' | 'unavailable'): void {
   ctx.save();
   traceSlotShape(ctx, slot, w, h);
   ctx.fillStyle = PLACEHOLDER_FILL;
@@ -166,9 +168,9 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: numb
   ctx.strokeStyle = PLACEHOLDER_INK;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (loading) {
+  if (photoState !== 'empty') {
     ctx.font = `600 ${labelSize}px system-ui, -apple-system, sans-serif`;
-    ctx.fillText('Loading photo…', cx, h / 2, w * 0.9);
+    ctx.fillText(photoState === 'loading' ? 'Loading photo…' : 'Photo unavailable', cx, h / 2, w * 0.9);
     ctx.restore();
     return;
   }
@@ -205,13 +207,14 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
 
   if (!photo || !img) {
     if (input.mode !== 'editor') return null;
-    const key = ['empty', cw, ch, slot.label, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), photo ? 'loading' : ''].join('|');
+    const photoState = !photo ? 'empty' : input.photoUnavailable?.(photo) ? 'unavailable' : 'loading';
+    const key = ['empty', cw, ch, slot.label, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), photoState].join('|');
     const cached = input.slotCache?.get(slot.id);
     if (cached && cached.key === key) return cached.canvas;
     const canvas = create(cw, ch);
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    drawPlaceholder(ctx, slot, cw, ch, Boolean(photo));
+    drawPlaceholder(ctx, slot, cw, ch, photoState);
     input.slotCache?.set(slot.id, { key, canvas });
     return canvas;
   }

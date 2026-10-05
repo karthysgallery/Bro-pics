@@ -210,9 +210,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   const distinctProductIds = [...new Set(priced.map((line) => line.productId))];
   const productSnaps = await Promise.all(distinctProductIds.map((id) => db.collection('products').doc(id).get()));
   const titleByProductId = new Map<string, string>();
+  const templateIdByProductId = new Map<string, string | null>();
   productSnaps.forEach((snap, index) => {
-    const title = snap.exists ? (snap.data() as { title?: unknown } | undefined)?.title : undefined;
+    const data = snap.exists ? (snap.data() as { title?: unknown; personalizationTemplateId?: unknown } | undefined) : undefined;
+    const title = data?.title;
     if (typeof title === 'string' && title.length > 0) titleByProductId.set(distinctProductIds[index], title);
+    templateIdByProductId.set(distinctProductIds[index], typeof data?.personalizationTemplateId === 'string' ? data.personalizationTemplateId : null);
   });
   for (const line of priced) {
     line.title = titleByProductId.get(line.productId) ?? line.title;
@@ -241,7 +244,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     const cartLine = cartItems.find((c) => c.variantId === line.variantId && c.personalizationId === line.personalizationId);
     if (!cartLine?.personalization) continue;
     try {
-      const snapshot = await buildLineSnapshot(db, userId, cartLine.personalization);
+      // The variant decides which template is offered and the size it prints at.
+      const variantSnap = await db.collection('products').doc(line.productId).collection('variants').doc(line.variantId).get();
+      const variant = variantSnap.exists
+        ? (variantSnap.data() as { widthIn?: number; heightIn?: number; personalizationTemplateId?: string | null })
+        : undefined;
+      const snapshot = await buildLineSnapshot(db, userId, cartLine.personalization, {
+        offeredTemplateId: variant?.personalizationTemplateId ?? templateIdByProductId.get(line.productId) ?? null,
+        ...(variant?.widthIn && variant?.heightIn && { printSizeIn: { width: variant.widthIn, height: variant.heightIn } }),
+      });
       line.personalization = snapshot;
       personalizationFp.set(`${line.variantId}|${line.personalizationId}`, stateFingerprint(snapshot.state));
     } catch (err) {
