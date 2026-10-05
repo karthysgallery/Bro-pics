@@ -146,8 +146,11 @@ export function DataTable<T extends Record<string, any>>({
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-1 max-w-md">
           <div className="relative w-full">
-            <span className="absolute inset-y-0 left-3 flex items-center text-ink/40 pointer-events-none text-xs">
-              🔍
+            <span className="absolute inset-y-0 left-3 flex items-center text-ink/40 pointer-events-none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
             </span>
             <input
               type="text"

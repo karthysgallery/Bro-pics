@@ -1,0 +1,98 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+const mockFindVariantById = vi.fn();
+vi.mock('./variant-lookup', () => ({ findVariantById: (...a: unknown[]) => mockFindVariantById(...a) }));
+const mockFindCouponByCode = vi.fn();
+vi.mock('./coupon-lookup', () => ({ findCouponByCode: (...a: unknown[]) => mockFindCouponByCode(...a) }));
+const mockShipping = vi.fn();
+const mockGst = vi.fn();
+vi.mock('./firestore-settings', () => ({ getShippingSettings: () => mockShipping(), getGstSettings: () => mockGst() }));
+
+const mockPaidUses = vi.fn();
+const ordersQuery: { where: ReturnType<typeof vi.fn>; get: () => unknown } = { where: vi.fn(), get: () => mockPaidUses() };
+ordersQuery.where.mockReturnValue(ordersQuery);
+const db = { collection: (name: string) => (name === 'orders' ? ordersQuery : { doc: () => ({ get: () => ({ exists: false }) }) }) } as never;
+
+import { computeOrderPricing } from './order-pricing';
+
+const variant = (over: Record<string, unknown> = {}) => ({
+  id: 'v1', productId: 'p1', sku: 'S', sizeLabel: '8x12', frameColour: 'Black', material: 'Wood',
+  widthIn: 8, heightIn: 12, price: 100000, stockStatus: 'in_stock', isActive: true, ...over,
+});
+const cart = [{ variantId: 'v1', personalizationId: 'pz1', title: 'Frame', qty: 2 }];
+const run = (over: Record<string, unknown> = {}) =>
+  computeOrderPricing(db, { userId: 'u1', cartItems: cart, couponCode: null, deliveryMethod: 'standard', ...over } as never);
+
+describe('computeOrderPricing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ordersQuery.where.mockReturnValue(ordersQuery);
+    mockFindVariantById.mockResolvedValue(variant());
+    mockShipping.mockResolvedValue({ freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+    mockGst.mockResolvedValue({ gstEnabled: false, taxRate: 0 });
+    mockPaidUses.mockReturnValue({ size: 0 });
+  });
+
+  it('derives price from the catalogue, never from the cart, and always satisfies total = subtotal - discount + shipping', async () => {
+    const result = await run();
+    expect(result.subtotal).toBe(200000);
+    expect(result.total).toBe(result.subtotal - result.discount + result.shipping);
+    expect(result.shipping).toBe(0); // 2,000 is above the 1,500 free-shipping threshold
+  });
+
+  it('charges the flat rate below the threshold and the express rate for express', async () => {
+    mockFindVariantById.mockResolvedValue(variant({ price: 50000 }));
+    expect((await run({ cartItems: [{ ...cart[0], qty: 1 }] })).shipping).toBe(5000);
+    expect((await run({ cartItems: [{ ...cart[0], qty: 1 }], deliveryMethod: 'express' })).shipping).toBe(15000);
+  });
+
+  it('applies a percent coupon and reports it applied', async () => {
+    mockFindCouponByCode.mockResolvedValue({ code: 'TEN', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0, startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01') });
+    const result = await run({ couponCode: 'TEN' });
+    expect(result.discount).toBe(20000);
+    expect(result.coupon).toEqual({ requested: true, applied: true, code: 'TEN', freeShipping: false });
+    expect(result.total).toBe(180000);
+  });
+
+  it('zeroes shipping (not the discount) for a free_ship coupon', async () => {
+    mockFindVariantById.mockResolvedValue(variant({ price: 50000 }));
+    mockFindCouponByCode.mockResolvedValue({ code: 'SHIP', type: 'free_ship', value: 0, appliesTo: 'all', usedCount: 0, startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01') });
+    const result = await run({ cartItems: [{ ...cart[0], qty: 1 }], couponCode: 'SHIP' });
+    expect(result.shipping).toBe(0);
+    expect(result.discount).toBe(0);
+    expect(result.coupon).toMatchObject({ applied: true, freeShipping: true });
+  });
+
+  it('counts only PAID prior uses toward the per-user limit', async () => {
+    mockFindCouponByCode.mockResolvedValue({ code: 'ONCE', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0, perUserLimit: 1, startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01') });
+    mockPaidUses.mockReturnValue({ size: 0 });
+    expect((await run({ couponCode: 'ONCE' })).coupon).toMatchObject({ applied: true });
+    expect(ordersQuery.where).toHaveBeenCalledWith('paymentStatus', '==', 'paid');
+
+    mockPaidUses.mockReturnValue({ size: 1 });
+    expect((await run({ couponCode: 'ONCE' })).coupon).toEqual({ requested: true, applied: false, reason: 'per_user_limit_reached' });
+  });
+
+  it('reports an unknown coupon without touching the totals', async () => {
+    mockFindCouponByCode.mockResolvedValue(null);
+    const result = await run({ couponCode: 'NOPE' });
+    expect(result.coupon).toEqual({ requested: true, applied: false, reason: 'unknown_coupon' });
+    expect(result.discount).toBe(0);
+  });
+
+  it('returns the unavailable lines and zero totals when an item cannot be bought', async () => {
+    mockFindVariantById.mockResolvedValue(variant({ stockStatus: 'out_of_stock' }));
+    const result = await run();
+    expect(result.unavailable).toEqual([{ variantId: 'v1', reason: 'out_of_stock' }]);
+    expect(result.total).toBe(0);
+  });
+
+  it('adds a GST line as a SPLIT of the inclusive total, never on top of it', async () => {
+    mockGst.mockResolvedValue({ gstEnabled: true, taxRate: 18, gstin: '33ABCDE1234F1Z5' });
+    const result = await run();
+    expect(result.total).toBe(200000); // unchanged by GST
+    expect(result.taxLines).toEqual([{ gstin: '33ABCDE1234F1Z5', rate: 18, amount: 30508 }]);
+  });
+});

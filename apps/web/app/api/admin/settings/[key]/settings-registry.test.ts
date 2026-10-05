@@ -29,7 +29,7 @@ describe('SETTINGS_REGISTRY schemas', () => {
   });
 
   it('store: requires name and supportPhone', () => {
-    expect(SETTINGS_REGISTRY.store.safeParse({ name: 'BroPics', supportPhone: '+91...', processingDays: 2 }).success).toBe(true);
+    expect(SETTINGS_REGISTRY.store.safeParse({ name: 'KarthysGallery', supportPhone: '+91...', processingDays: 2 }).success).toBe(true);
     expect(SETTINGS_REGISTRY.store.safeParse({ processingDays: 2 }).success).toBe(false);
   });
 
@@ -54,7 +54,7 @@ describe('SETTINGS_REGISTRY schemas', () => {
   });
 
   it('seo: requires defaultTitle and defaultDescription', () => {
-    expect(SETTINGS_REGISTRY.seo.safeParse({ defaultTitle: 'BroPics', defaultDescription: 'Personalized frames' }).success).toBe(true);
+    expect(SETTINGS_REGISTRY.seo.safeParse({ defaultTitle: 'KarthysGallery', defaultDescription: 'Personalized frames' }).success).toBe(true);
   });
 
   it('header: accepts a list of nav links', () => {

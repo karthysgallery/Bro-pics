@@ -7,6 +7,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
+  /** 'danger' (default, red) for destructive actions; 'default' for ordinary irreversible-but-benign ones. */
+  tone?: 'danger' | 'default';
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -24,6 +26,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   isLoading = false,
+  tone = 'danger',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -50,7 +53,9 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className="rounded-full bg-alert text-paper px-4 py-2 text-sm font-semibold disabled:opacity-40"
+            className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+              tone === 'danger' ? 'bg-alert text-paper' : 'bg-gold text-ink hover:bg-gold-deep'
+            }`}
           >
             {isLoading ? 'Working…' : confirmLabel}
           </button>

@@ -63,6 +63,9 @@ export const OrderSchema = z
     shipping: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
     couponId: z.string().optional(),
+    // Who placed the order, frozen at creation (the delivery address carries
+    // a phone but no recipient name). Optional so older orders still parse.
+    customerName: z.string().optional(),
     addressJson: z.record(z.string(), z.unknown()),
     // [BE-25a] Denormalized from the order's line items at creation —
     // lets a future "frequently bought together" query filter orders
@@ -77,6 +80,15 @@ export const OrderSchema = z
     // of creating a duplicate. Optional so an order placed before this
     // field existed still parses.
     idempotencyKey: z.string().optional(),
+    // Fingerprint of everything that determines what this order is (lines,
+    // address, coupon, delivery method, computed totals). A retry under the
+    // same idempotencyKey reuses this order ONLY if the fingerprint still
+    // matches; otherwise the customer changed something and gets a new order.
+    inputsHash: z.string().optional(),
+    // Which gateway handled (or, for 'mock', pretended to handle) this
+    // order's payment — lets admin show a TEST badge, since no real money
+    // moved. Optional so orders placed before this field existed still parse.
+    paymentProvider: z.enum(['mock', 'razorpay']).optional(),
     razorpayOrderId: z.string().optional(),
     razorpayPaymentId: z.string().optional(),
     // [BE-22] Sequential GST invoice number, assigned once payment is

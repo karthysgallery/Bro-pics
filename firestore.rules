@@ -11,9 +11,30 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Must stay in lockstep with getStaffUserIdFromAuthHeader (verify-id-token.ts):
+    // super_admin is a superset of admin, so it can never be locked out of
+    // anything a plain admin can read.
     function isStaffOrAdmin() {
       return isSignedIn() &&
-        (request.auth.token.role == 'admin' || request.auth.token.role == 'staff');
+        (request.auth.token.role == 'admin' ||
+         request.auth.token.role == 'staff' ||
+         request.auth.token.role == 'super_admin');
+    }
+
+    // Profile fields a customer may write on their own users/{uid} doc.
+    // Everything else on that doc (role, passwordHash, status/disabled,
+    // whatsappVerified, totalSpent, orderCount, lastOrderAt, lastLoginAt…)
+    // is server-owned: UserStore trusts `phone`/`role`/`passwordHash` from
+    // it, and webhook-maintained stats must not be forgeable. `id`, `phone`
+    // and `createdAt` may be present (the profile page merges them) but can
+    // never CHANGE from the client.
+    function clientProfileKeys() {
+      return ['id', 'phone', 'displayName', 'firstName', 'lastName', 'email', 'dob', 'gender',
+              'photoPath', 'notificationPreferences', 'createdAt', 'updatedAt'];
+    }
+    function clientMutableProfileKeys() {
+      return ['displayName', 'firstName', 'lastName', 'email', 'dob', 'gender',
+              'photoPath', 'notificationPreferences', 'updatedAt'];
     }
 
     // Public catalog — readable by anyone, writable only by server (Admin SDK bypasses rules).
@@ -121,7 +142,12 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaffOrAdmin();
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(clientProfileKeys())
+        && request.resource.data.get('phone', '') in ['', request.auth.token.get('phone_number', '')];
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(clientMutableProfileKeys());
+      allow delete: if false;
 
       match /addresses/{addressId} {
         allow read: if isOwner(userId) || isStaffOrAdmin();
@@ -180,6 +206,25 @@ service cloud.firestore {
     // /api/admin/staff/invite and /api/staff/invite/accept.
     match /staffInvites/{token} {
       allow read, write: if false;
+    }
+
+    // Hashed login OTP sessions (lib/services/whatsapp/otp-store.ts).
+    // Admin-SDK-only — a readable/writable OTP store would defeat the OTP.
+    match /otpSessions/{id} {
+      allow read, write: if false;
+    }
+
+    // v2 personalization templates. Summaries and drafts are staff-only; a version a
+    // customer could ever need (published, or archived for saved carts/orders) is
+    // readable. All writes go through the admin API (Admin SDK), never the client.
+    match /personalizationTemplates/{templateId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+
+      match /versions/{version} {
+        allow read: if resource.data.status in ['published', 'archived'] || isStaffOrAdmin();
+        allow write: if false;
+      }
     }
 
     match /counters/{id} {

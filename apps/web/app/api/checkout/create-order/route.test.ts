@@ -25,6 +25,12 @@ vi.mock('../../../../lib/firestore-settings', () => ({
 const mockFindVariantById = vi.fn();
 vi.mock('../../../../lib/variant-lookup', () => ({ findVariantById: (...args: unknown[]) => mockFindVariantById(...args) }));
 
+const mockBuildLineSnapshot = vi.hoisted(() => vi.fn());
+vi.mock('../../../../lib/personalization-order', async () => {
+  const actual = await vi.importActual<typeof import('../../../../lib/personalization-order')>('../../../../lib/personalization-order');
+  return { ...actual, buildLineSnapshot: (...a: unknown[]) => mockBuildLineSnapshot(...a) };
+});
+
 const mockFindCouponByCode = vi.fn();
 vi.mock('../../../../lib/coupon-lookup', () => ({
   findCouponByCode: (...args: unknown[]) => mockFindCouponByCode(...args),
@@ -36,6 +42,7 @@ vi.mock('../../../../lib/coupon-lookup', () => ({
 const mockCartDoc = { get: vi.fn() };
 const mockAddressDoc = { get: vi.fn() };
 const mockBatchSet = vi.fn();
+const mockBatchCreate = vi.fn();
 const mockBatchUpdate = vi.fn();
 const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
 const mockRunTransaction = vi.fn();
@@ -43,6 +50,8 @@ const mockCustomizationsWhereGet = vi.fn().mockResolvedValue({ docs: [] });
 const mockIdempotencyWhereGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
 const mockPerUserLimitWhereGet = vi.fn().mockResolvedValue({ size: 0 });
 const mockProductDocGet = vi.fn().mockResolvedValue({ exists: false });
+const mockOrderDocGet = vi.fn().mockResolvedValue({ exists: false });
+const mockUserDocGet = vi.fn().mockResolvedValue({ exists: false });
 const mockDb = {
   collection: vi.fn((name: string) => ({
     doc: vi.fn((id?: string) => {
@@ -51,6 +60,7 @@ const mockDb = {
       if (name === 'users') {
         return {
           id: id ?? 'user_id',
+          get: () => mockUserDocGet(id),
           collection: vi.fn((subName: string) => {
             if (subName === 'addresses') return { doc: vi.fn(() => mockAddressDoc) };
             return { doc: vi.fn(() => ({ id: 'sub_id' })) };
@@ -60,6 +70,7 @@ const mockDb = {
       if (name === 'orders') {
         return {
           id: id ?? 'order_id',
+          get: () => mockOrderDocGet(id),
           collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'item_id' })) })),
         };
       }
@@ -90,7 +101,7 @@ const mockDb = {
   })),
   doc: vi.fn(() => ({})),
   runTransaction: (...args: unknown[]) => mockRunTransaction(...args),
-  batch: () => ({ set: mockBatchSet, update: mockBatchUpdate, commit: mockBatchCommit }),
+  batch: () => ({ set: mockBatchSet, create: mockBatchCreate, update: mockBatchUpdate, commit: mockBatchCommit }),
 };
 vi.mock('firebase-admin/firestore', () => ({
   getFirestore: () => mockDb,
@@ -99,6 +110,8 @@ vi.mock('firebase-admin/firestore', () => ({
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 import { POST } from './route';
+import { buildOrderSnapshot, createEmptyState } from '@bro-pics/shared';
+import { singlePhotoTemplate } from '@bro-pics/shared/src/personalization/test-fixtures';
 import { checkRateLimit, resetRateLimitState } from '../../../../lib/rate-limit';
 
 function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
@@ -112,7 +125,17 @@ function makeRequest(body: unknown, authHeader = 'Bearer good-token'): Request {
 describe('POST /api/checkout/create-order', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateRazorpayOrder.mockReset(); // clearAllMocks leaves queued mockResolvedValueOnce values behind
+    mockProductDocGet.mockReset();
+    mockProductDocGet.mockResolvedValue({ exists: false });
+    mockUserDocGet.mockReset();
+    mockUserDocGet.mockResolvedValue({ exists: false });
     resetRateLimitState();
+    // These tests exercise the Razorpay-provider path; the mock provider has
+    // its own describe block below.
+    process.env.PAYMENT_PROVIDER = 'razorpay';
+    process.env.RAZORPAY_KEY_ID = 'rzp_test_key';
+    process.env.RAZORPAY_KEY_SECRET = 'rzp_test_secret';
   });
 
   it('returns 401 when there is no valid Authorization header', async () => {
@@ -283,7 +306,7 @@ describe('POST /api/checkout/create-order', () => {
     );
     expect(mockBatchCommit).toHaveBeenCalled();
 
-    const [, writtenOrder] = mockBatchSet.mock.calls[0];
+    const [, writtenOrder] = mockBatchCreate.mock.calls[0];
     expect(writtenOrder).toMatchObject({
       userId: 'user_1',
       status: 'pending_payment',
@@ -331,7 +354,7 @@ describe('POST /api/checkout/create-order', () => {
 
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       expect(orderArg?.taxLines).toEqual([]);
     });
 
@@ -342,7 +365,7 @@ describe('POST /api/checkout/create-order', () => {
 
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       expect(orderArg?.taxLines).toHaveLength(1);
       const [taxLine] = orderArg!.taxLines as Array<{ gstin: string; rate: number; amount: number }>;
       expect(taxLine.gstin).toBe('33AAAAA0000A1Z5');
@@ -360,7 +383,7 @@ describe('POST /api/checkout/create-order', () => {
 
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       expect(orderArg?.productIds).toEqual(['p1']);
     });
   });
@@ -372,7 +395,7 @@ describe('POST /api/checkout/create-order', () => {
 
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      const [, writtenOrder] = mockBatchCreate.mock.calls[0];
       expect(writtenOrder).toMatchObject({ shipping: 5000, deliveryMethod: 'standard' });
     });
 
@@ -397,7 +420,7 @@ describe('POST /api/checkout/create-order', () => {
 
       const response = await POST(makeRequest({ addressId: 'addr_1', deliveryMethod: 'express' }));
       expect(response.status).toBe(200);
-      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      const [, writtenOrder] = mockBatchCreate.mock.calls[0];
       expect(writtenOrder).toMatchObject({ shipping: 15000, deliveryMethod: 'express' });
     });
 
@@ -419,11 +442,11 @@ describe('POST /api/checkout/create-order', () => {
       });
       const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'NEW10' }));
       expect(response.status).toBe(200);
-      expect(mockBatchSet).toHaveBeenCalledWith(
+      expect(mockBatchCreate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ couponId: 'NEW10', discount: expect.any(Number) })
       );
-      const [, writtenOrder] = mockBatchSet.mock.calls[0];
+      const [, writtenOrder] = mockBatchCreate.mock.calls[0];
       // subtotal 2000, 10% off => discount 200
       expect(writtenOrder.discount).toBe(200);
       expect(writtenOrder.total).toBe(2000 - 200 + 5000);
@@ -443,7 +466,7 @@ describe('POST /api/checkout/create-order', () => {
       });
       const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'FREESHIP' }));
       expect(response.status).toBe(200);
-      expect(mockBatchSet).toHaveBeenCalledWith(
+      expect(mockBatchCreate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ shipping: 0, discount: 0, couponId: 'FREESHIP' })
       );
@@ -457,25 +480,38 @@ describe('POST /api/checkout/create-order', () => {
         startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
       });
       await POST(makeRequest({ addressId: 'addr_1', couponCode: '  new10  ' }));
-      expect(mockBatchSet).toHaveBeenCalledWith(
+      expect(mockBatchCreate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ couponId: 'NEW10' })
       );
     });
 
-    it('proceeds without a discount when the coupon fails re-validation, rather than blocking the order', async () => {
+    it('REFUSES the order (409 coupon_invalid) when a coupon the customer asked for no longer applies, instead of silently charging full price', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
       setUpValidCartAndAddress();
-      mockFindCouponByCode.mockResolvedValueOnce(null); // unknown/expired by order time
+      mockFindCouponByCode.mockResolvedValueOnce(null); // expired/removed between "Apply" and "Place order"
       const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'STALE' }));
-      expect(response.status).toBe(200);
-      expect(mockBatchSet).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ discount: 0 })
-      );
-      // A stale/invalid coupon must never still get "used" — guards against
-      // the usedCount increment firing when no coupon actually applied.
-      expect(mockBatchUpdate).not.toHaveBeenCalled();
+      const body = await response.json();
+      expect(response.status).toBe(409);
+      expect(body.code).toBe('coupon_invalid');
+      expect(body.reason).toBe('unknown_coupon');
+      // Nothing was created, no order number burned, no payment session opened.
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+      expect(mockRunTransaction).not.toHaveBeenCalled();
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+
+    it('also refuses (409) when the coupon is valid in general but this customer has used it up', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindCouponByCode.mockResolvedValueOnce({
+        code: 'ONCE', type: 'percent', value: 10, appliesTo: 'all', usedCount: 0, perUserLimit: 1,
+        startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
+      });
+      mockPerUserLimitWhereGet.mockResolvedValueOnce({ size: 1 });
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'ONCE' }));
+      expect(response.status).toBe(409);
+      expect((await response.json()).reason).toBe('per_user_limit_reached');
     });
 
     it('does NOT increment usedCount at order creation [BE-14] — only razorpayWebhook does, once payment is confirmed', async () => {
@@ -502,7 +538,7 @@ describe('POST /api/checkout/create-order', () => {
       mockPerUserLimitWhereGet.mockResolvedValueOnce({ size: 0 });
 
       const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'ONECOUP' }));
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
 
       expect(response.status).toBe(200);
       expect(orderArg?.discount).toBeGreaterThan(0);
@@ -519,7 +555,7 @@ describe('POST /api/checkout/create-order', () => {
         });
         const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'P1ONLY' }));
         expect(response.status).toBe(200);
-        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        const orderArg = mockBatchCreate.mock.calls[0]?.[1];
         expect(orderArg?.discount).toBe(200); // 10% of the full 2000 subtotal — the whole cart is eligible
       });
 
@@ -532,35 +568,35 @@ describe('POST /api/checkout/create-order', () => {
         });
         const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'OTHERPRODUCT' }));
         expect(response.status).toBe(200);
-        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        const orderArg = mockBatchCreate.mock.calls[0]?.[1];
         expect(orderArg?.discount).toBe(0);
       });
 
       it('applies the discount when the cart\'s product resolves to a category in a category-scoped coupon\'s categoryIds', async () => {
         mockGetUserId.mockResolvedValueOnce('user_1');
         setUpValidCartAndAddress();
-        mockProductDocGet.mockResolvedValueOnce({ exists: true, id: 'p1', data: () => ({ categoryId: 'c1' }) });
+        mockProductDocGet.mockResolvedValue({ exists: true, id: 'p1', data: () => ({ categoryId: 'c1' }) }); // read for the title snapshot AND for category eligibility
         mockFindCouponByCode.mockResolvedValueOnce({
           code: 'CAT1', type: 'percent', value: 10, appliesTo: 'category', categoryIds: ['c1'], usedCount: 0,
           startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
         });
         const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'CAT1' }));
         expect(response.status).toBe(200);
-        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        const orderArg = mockBatchCreate.mock.calls[0]?.[1];
         expect(orderArg?.discount).toBe(200);
       });
 
       it('applies zero discount when the cart\'s product resolves to a category NOT in a category-scoped coupon\'s categoryIds', async () => {
         mockGetUserId.mockResolvedValueOnce('user_1');
         setUpValidCartAndAddress();
-        mockProductDocGet.mockResolvedValueOnce({ exists: true, id: 'p1', data: () => ({ categoryId: 'c_unrelated' }) });
+        mockProductDocGet.mockResolvedValue({ exists: true, id: 'p1', data: () => ({ categoryId: 'c_unrelated' }) });
         mockFindCouponByCode.mockResolvedValueOnce({
           code: 'CAT1', type: 'percent', value: 10, appliesTo: 'category', categoryIds: ['c1'], usedCount: 0,
           startsAt: new Date('2020-01-01'), endsAt: new Date('2030-01-01'),
         });
         const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'CAT1' }));
         expect(response.status).toBe(200);
-        const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+        const orderArg = mockBatchCreate.mock.calls[0]?.[1];
         expect(orderArg?.discount).toBe(0);
       });
     });
@@ -570,11 +606,11 @@ describe('POST /api/checkout/create-order', () => {
       setUpValidCartAndAddress();
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
-      expect(mockBatchSet).toHaveBeenCalledWith(
+      expect(mockBatchCreate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ discount: 0 })
       );
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       // Must be absent from the object entirely, not present with value
       // `undefined` — Firestore's Admin SDK rejects `undefined` field
       // values, so `'couponId' in orderArg` must be false, not merely
@@ -652,25 +688,38 @@ describe('POST /api/checkout/create-order', () => {
   });
 
   describe('idempotency [BE-13]', () => {
-    it('creates a normal new order and persists the idempotencyKey when none exists yet for this key', async () => {
+    // The fingerprint is internal, so these tests learn it the honest way: place
+    // an order once, read the inputsHash that was written onto it, then describe
+    // that order to the "prior orders under this key" query.
+    async function placeOnceAndReadHash(body: Record<string, unknown> = {}) {
       mockGetUserId.mockResolvedValueOnce('user_1');
       setUpValidCartAndAddress();
       mockIdempotencyWhereGet.mockResolvedValueOnce({ empty: true, docs: [] });
-
-      const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1' }));
+      const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1', ...body }));
       expect(response.status).toBe(200);
-      expect(mockCreateRazorpayOrder).toHaveBeenCalledOnce();
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const written = mockBatchCreate.mock.calls[0][1];
+      return { hash: written.inputsHash as string, orderId: written.id as string };
+    }
+
+    it('creates a normal new order and persists the idempotencyKey and inputsHash when none exists yet', async () => {
+      const { hash } = await placeOnceAndReadHash();
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       expect(orderArg?.idempotencyKey).toBe('attempt_1');
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(mockCreateRazorpayOrder).toHaveBeenCalledOnce();
     });
 
-    it('returns the SAME existing order/Razorpay order on a retry with the same key, without creating a new one', async () => {
+    it('returns the SAME pending order/payment session on a retry whose inputs have not changed', async () => {
+      const { hash } = await placeOnceAndReadHash();
+      vi.clearAllMocks();
+      mockCreateRazorpayOrder.mockReset();
+
       mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
       mockIdempotencyWhereGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ data: () => ({ id: 'order_existing', status: 'pending_payment', razorpayOrderId: 'rzp_existing', total: 5000 }) }],
+        docs: [{ data: () => ({ id: 'order_existing', orderNo: 'BP-2026-00001', status: 'pending_payment', paymentStatus: 'pending', paymentProvider: 'razorpay', razorpayOrderId: 'rzp_existing', total: 7000, inputsHash: hash }) }],
       });
-
       const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1' }));
       const body = await response.json();
 
@@ -678,14 +727,61 @@ describe('POST /api/checkout/create-order', () => {
       expect(body.orderId).toBe('order_existing');
       expect(body.razorpayOrderId).toBe('rzp_existing');
       expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
-      expect(mockCartDoc.get).not.toHaveBeenCalled(); // short-circuits before ever reading the cart
+      expect(mockBatchCreate).not.toHaveBeenCalled();
+      expect(mockRunTransaction).not.toHaveBeenCalled(); // no order number consumed
     });
 
-    it('returns 409 already_paid when a retry arrives after the order already settled', async () => {
+    it('creates a NEW order and supersedes the stale pending one when the cart/address/coupon changed since the failed attempt', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      // A pending order under the same key, but for different inputs (different hash).
       mockIdempotencyWhereGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ data: () => ({ id: 'order_paid', status: 'paid', razorpayOrderId: 'rzp_paid', total: 5000 }) }],
+        docs: [{ data: () => ({ id: 'order_stale', status: 'pending_payment', paymentStatus: 'failed', paymentProvider: 'razorpay', razorpayOrderId: 'rzp_stale', total: 3000, inputsHash: 'a-different-hash' }) }],
+      });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1' }));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.orderId).not.toBe('order_stale');
+      expect(body.razorpayOrderId).not.toBe('rzp_stale');
+      expect(mockCreateRazorpayOrder).toHaveBeenCalledOnce();
+      // The stale order is cancelled in the same atomic batch, with an explanatory event.
+      expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), { status: 'cancelled' });
+      expect(mockBatchSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: 'cancelled', note: 'Superseded by a newer checkout', createdBy: 'system_checkout' })
+      );
+    });
+
+    it('gives different orders (different ids) for the same key when the inputs differ, so concurrent edits can\'t collide', async () => {
+      const first = await placeOnceAndReadHash();
+      vi.clearAllMocks();
+      mockCreateRazorpayOrder.mockReset();
+      mockProductDocGet.mockResolvedValue({ exists: false });
+
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCartDoc.get.mockReset();
+      mockCartDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 3, previewPath: 'x.png' }] }), // qty 2 -> 3
+      });
+      mockIdempotencyWhereGet.mockResolvedValueOnce({ empty: true, docs: [] });
+      await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1' }));
+      const second = mockBatchCreate.mock.calls[0][1];
+      expect(second.inputsHash).not.toBe(first.hash);
+      expect(second.id).not.toBe(first.orderId);
+    });
+
+    it('returns 409 already_paid when a retry arrives after the order settled (paymentStatus paid, even though status has moved on)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockIdempotencyWhereGet.mockResolvedValueOnce({
+        empty: false,
+        // Settlement moves status past 'paid' within one transaction — paymentStatus is the truth.
+        docs: [{ data: () => ({ id: 'order_paid', status: 'print_rendering', paymentStatus: 'paid', razorpayOrderId: 'rzp_paid', total: 5000, inputsHash: 'whatever' }) }],
       });
 
       const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_1' }));
@@ -694,6 +790,7 @@ describe('POST /api/checkout/create-order', () => {
       expect(response.status).toBe(409);
       expect(body.code).toBe('already_paid');
       expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+      expect(mockBatchCreate).not.toHaveBeenCalled();
     });
 
     it('creates a normal new order when no idempotencyKey is sent (backward compatible)', async () => {
@@ -703,8 +800,270 @@ describe('POST /api/checkout/create-order', () => {
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
       expect(mockIdempotencyWhereGet).not.toHaveBeenCalled();
-      const orderArg = mockBatchSet.mock.calls.find((call) => call[1]?.orderNo)?.[1];
+      const orderArg = mockBatchCreate.mock.calls[0]?.[1];
       expect(orderArg && 'idempotencyKey' in orderArg).toBe(false);
+      expect(orderArg && 'inputsHash' in orderArg).toBe(false);
+    });
+  });
+
+  describe('payment provider (server-side config, never client-controlled)', () => {
+    function setUpCartForAnyProvider() {
+      mockCartDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 2, previewPath: 'x.png' }] }),
+      });
+      mockAddressDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      });
+      mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
+        fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
+      );
+    }
+
+    it('mock provider: creates the order pending_payment (NOT paid), records paymentProvider, and never calls Razorpay', async () => {
+      process.env.PAYMENT_PROVIDER = 'mock';
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpCartForAnyProvider();
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ paymentProvider: 'mock', status: 'pending_payment', paymentStatus: 'pending', keyId: null });
+      expect(body.razorpayOrderId).toMatch(/^order_mock_/);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+
+      const [, writtenOrder] = mockBatchCreate.mock.calls[0];
+      expect(writtenOrder).toMatchObject({ status: 'pending_payment', paymentStatus: 'pending', paymentProvider: 'mock' });
+      // No inline "paid" event and no cart clearing: settlement is the shared pipeline's job.
+      expect(mockBatchSet.mock.calls.some(([, data]) => data?.status === 'paid')).toBe(false);
+    });
+
+    it('ignores a client-supplied isMock flag: with the razorpay provider the order stays pending_payment and Razorpay is called', async () => {
+      process.env.PAYMENT_PROVIDER = 'razorpay';
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpCartForAnyProvider();
+      mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_real' });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', isMock: true }));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockCreateRazorpayOrder).toHaveBeenCalledOnce();
+      expect(body).toMatchObject({ paymentProvider: 'razorpay', status: 'pending_payment', razorpayOrderId: 'order_rzp_real' });
+    });
+
+    it('fails closed with 503 in production when PAYMENT_PROVIDER is unset — no free orders from a forgotten env var — and consumes no order number', async () => {
+      delete process.env.PAYMENT_PROVIDER;
+      delete process.env.RAZORPAY_KEY_ID;
+      const env = process.env as Record<string, string | undefined>;
+      const originalNodeEnv = env.NODE_ENV;
+      env.NODE_ENV = 'production';
+      try {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        const response = await POST(makeRequest({ addressId: 'addr_1' }));
+        expect(response.status).toBe(503);
+        expect((await response.json()).code).toBe('payments_unavailable');
+        expect(mockRunTransaction).not.toHaveBeenCalled();
+        expect(mockBatchCommit).not.toHaveBeenCalled();
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    it('fails closed with 503 when razorpay is selected but its keys are missing (no silent fallback to mock)', async () => {
+      process.env.PAYMENT_PROVIDER = 'razorpay';
+      delete process.env.RAZORPAY_KEY_SECRET;
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(503);
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('structured personalization (template v2)', () => {
+    const claim = { templateId: 'single-8x12', templateVersion: 1, state: { templateId: 'single-8x12', templateVersion: 1, slots: {}, texts: {} } };
+    const snapshot = buildOrderSnapshot(singlePhotoTemplate, createEmptyState('single-8x12', 1), new Date('2026-10-05T00:00:00Z'));
+    function cartWithPersonalization() {
+      mockCartDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 2, previewPath: 'x.png', personalization: claim }] }),
+      });
+      mockAddressDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      });
+      mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
+      mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
+    }
+
+    it('stores the VERIFIED snapshot (not the browser\'s claim) on the order item', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWithPersonalization();
+      mockBuildLineSnapshot.mockResolvedValueOnce(snapshot);
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      expect(mockBuildLineSnapshot).toHaveBeenCalledWith(expect.anything(), 'user_1', claim);
+      const item = mockBatchSet.mock.calls.map(([, d]) => d).find((d) => d?.variantId === 'v1');
+      expect(item.personalization).toEqual(snapshot);
+    });
+
+    it('refuses the order (409 personalization_invalid) BEFORE any order number or payment session when validation fails', async () => {
+      const { PersonalizationRejectedError } = await import('../../../../lib/personalization-order');
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWithPersonalization();
+      mockBuildLineSnapshot.mockRejectedValueOnce(new PersonalizationRejectedError('asset_not_owned', 'One of your photos could not be found. Please upload it again.'));
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      const body = await response.json();
+      expect(response.status).toBe(409);
+      expect(body).toMatchObject({ code: 'personalization_invalid', reason: 'asset_not_owned' });
+      expect(mockRunTransaction).not.toHaveBeenCalled();
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+
+    it('changing the personalization changes the order fingerprint (a retry after editing the design is a NEW order)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWithPersonalization();
+      mockBuildLineSnapshot.mockResolvedValueOnce(snapshot);
+      await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'k1' }));
+      const first = mockBatchCreate.mock.calls[0][1].inputsHash;
+
+      vi.clearAllMocks();
+      mockCreateRazorpayOrder.mockReset();
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWithPersonalization();
+      mockBuildLineSnapshot.mockResolvedValueOnce({ ...snapshot, state: { ...snapshot.state, texts: { name: { value: 'changed' } } } });
+      await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'k1' }));
+      expect(mockBatchCreate.mock.calls[0][1].inputsHash).not.toBe(first);
+    });
+
+    it('rejects a malformed personalization claim on a cart line (400) without calling the validator', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      mockCartDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1, personalization: 'not-an-object' }] }),
+      });
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(400);
+      expect(mockBuildLineSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('lines WITHOUT v2 personalization (legacy per-slot customizations) are untouched', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      expect(mockBuildLineSnapshot).not.toHaveBeenCalled();
+      const item = mockBatchSet.mock.calls.map(([, d]) => d).find((d) => d?.variantId === 'v1');
+      expect('personalization' in item).toBe(false);
+    });
+  });
+
+  describe('customer snapshot', () => {
+    it('freezes the customer\'s display name onto the order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockUserDocGet.mockResolvedValue({ exists: true, data: () => ({ displayName: '  Asha Raman ' }) });
+      await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(mockBatchCreate.mock.calls[0][1].customerName).toBe('Asha Raman');
+    });
+
+    it('still places the order when the profile is unreadable (best-effort snapshot)', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockUserDocGet.mockRejectedValue(new Error('firestore blip'));
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+      expect('customerName' in mockBatchCreate.mock.calls[0][1]).toBe(false);
+    });
+  });
+
+  describe('order item snapshot', () => {
+    it('freezes variant details and takes the title from the catalogue, not from the cart line', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockFindVariantById.mockReset();
+      mockFindVariantById.mockResolvedValueOnce({
+        id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true,
+        sku: 'CWF-8x12-BLK', sizeLabel: '8x12 in', frameColour: 'Black', material: 'Solid wood', widthIn: 8, heightIn: 12,
+      });
+      mockProductDocGet.mockResolvedValue({ exists: true, id: 'p1', data: () => ({ title: 'Classic Wooden Photo Frame' }) });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(200);
+
+      const itemWrite = mockBatchSet.mock.calls.map(([, data]) => data).find((d) => d?.variantId === 'v1');
+      expect(itemWrite).toMatchObject({
+        title: 'Classic Wooden Photo Frame', // cart line said "A"
+        unitPrice: 1000,
+        qty: 2,
+        sku: 'CWF-8x12-BLK',
+        sizeLabel: '8x12 in',
+        frameColour: 'Black',
+        material: 'Solid wood',
+        widthIn: 8,
+        heightIn: 12,
+      });
+    });
+  });
+
+  describe('concurrent duplicate submit', () => {
+    it('uses a deterministic order id + create() with an idempotencyKey, and hands the loser of a race the winner\'s order', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      // The fast-path query saw nothing (both requests passed it), but create() collides.
+      mockBatchCommit.mockRejectedValueOnce(Object.assign(new Error('ALREADY_EXISTS'), { code: 6 }));
+      mockOrderDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ id: 'winner', orderNo: 'BP-2026-00007', status: 'pending_payment', paymentStatus: 'pending', paymentProvider: 'razorpay', razorpayOrderId: 'rzp_winner', total: 7000 }),
+      });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_race' }));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ orderId: 'winner', razorpayOrderId: 'rzp_winner', amount: 7000 });
+      expect(mockBatchCreate).toHaveBeenCalledOnce();
+    });
+
+    it('rethrows a commit failure that is not an already-exists collision', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockBatchCommit.mockRejectedValueOnce(new Error('deadline exceeded'));
+      await expect(POST(makeRequest({ addressId: 'addr_1', idempotencyKey: 'attempt_x' }))).rejects.toThrow('deadline exceeded');
+    });
+  });
+
+  describe('failures before any side effect', () => {
+    it('a foreign customization is rejected BEFORE the order number is consumed or a payment session is opened', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCustomizationsWhereGet.mockResolvedValueOnce({ docs: [{ data: () => ({ userId: 'someone_else' }), ref: {} }] });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(404);
+      expect(mockRunTransaction).not.toHaveBeenCalled();
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+
+    it('returns 502 and writes nothing when the payment provider fails to open a session', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      mockCreateRazorpayOrder.mockReset();
+      mockCreateRazorpayOrder.mockRejectedValueOnce(new Error('razorpay down'));
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(502);
+      expect(mockBatchCommit).not.toHaveBeenCalled();
     });
   });
 

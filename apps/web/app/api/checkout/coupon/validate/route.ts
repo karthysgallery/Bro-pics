@@ -3,13 +3,16 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
-import { findCouponByCode } from '../../../../../lib/coupon-lookup';
-import { findVariantById } from '../../../../../lib/variant-lookup';
-import { priceCartLines, type CartLineInput } from '../../../../../lib/checkout-calc';
-import { computeEligibleSubtotal } from '../../../../../lib/coupon-eligibility';
+import { computeOrderPricing } from '../../../../../lib/order-pricing';
+import type { CartLineInput } from '../../../../../lib/checkout-calc';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
-import { calculateCouponDiscount } from '@bro-pics/shared';
 
+/**
+ * "Does this coupon apply to my cart?" — answered by computeOrderPricing, the
+ * very function create-order charges with. (This route used to carry its own
+ * copy of the rules and disagreed with create-order on the per-user limit, so a
+ * single abandoned checkout made a one-use coupon look used up.)
+ */
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
   if (!rateLimit.allowed) {
@@ -31,47 +34,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
-
-  const coupon = await findCouponByCode(db, code);
-  if (!coupon) {
-    return NextResponse.json({ error: 'Unknown coupon code' }, { status: 404 });
-  }
-
   const cartDoc = await db.collection('carts').doc(userId).get();
   const cartItems = (cartDoc.exists ? (cartDoc.data() as { items: CartLineInput[] }).items : []) ?? [];
-  const uniqueVariantIds = [...new Set(cartItems.map((item) => item.variantId))];
-  const variantEntries = await Promise.all(
-    uniqueVariantIds.map(async (variantId) => [variantId, await findVariantById(db, variantId)] as const)
-  );
-  const variantsById = new Map(variantEntries.filter(([, variant]) => variant !== null) as [string, NonNullable<(typeof variantEntries)[number][1]>][]);
-  const { priced } = priceCartLines(cartItems, variantsById);
 
-  if (coupon.perUserLimit) {
-    // Query by coupon.code (the normalized, trustworthy value sourced from
-    // doc.id inside findCouponByCode), not the raw client-supplied code —
-    // orders always write couponId as coupon.code, so matching against
-    // anything else could under/over-count a customer's prior usage.
-    const usedSnapshot = await db
-      .collection('orders')
-      .where('userId', '==', userId)
-      .where('couponId', '==', coupon.code)
-      .get();
-    if (usedSnapshot.size >= coupon.perUserLimit) {
-      return NextResponse.json({ valid: false, reason: 'per_user_limit_reached' }, { status: 200 });
+  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode: code, deliveryMethod: 'standard' });
+  const coupon = pricing.coupon;
+
+  if (coupon.requested && !coupon.applied) {
+    if (coupon.reason === 'unknown_coupon') {
+      return NextResponse.json({ error: 'Unknown coupon code' }, { status: 404 });
     }
+    return NextResponse.json({ valid: false, reason: coupon.reason }, { status: 200 });
+  }
+  if (!coupon.requested || !coupon.applied) {
+    return NextResponse.json({ valid: false, reason: 'invalid' }, { status: 200 });
   }
 
-  // [BE-24] See create-order's own use of computeEligibleSubtotal — same
-  // reasoning, kept in sync so a coupon that's rejected/discounted
-  // differently here vs. at actual checkout would be a real bug.
-  const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
-  const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
-  if (!result.valid) {
-    return NextResponse.json({ valid: false, reason: result.reason }, { status: 200 });
-  }
-
-  return NextResponse.json(
-    { valid: true, discountPaise: result.discountPaise, freeShipping: coupon.type === 'free_ship' },
-    { status: 200 }
-  );
+  return NextResponse.json({ valid: true, discountPaise: pricing.discount, freeShipping: coupon.freeShipping }, { status: 200 });
 }

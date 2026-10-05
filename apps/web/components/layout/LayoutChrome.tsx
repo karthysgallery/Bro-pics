@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import type { Category } from '@bro-pics/shared';
 import { Header } from './Header';
@@ -9,6 +9,7 @@ import { CartDrawer } from './CartDrawer';
 import { WhatsAppButton } from './WhatsAppButton';
 import { AnnouncementBar } from './AnnouncementBar';
 import { ConsentBanner } from './ConsentBanner';
+import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
 
 interface LayoutChromeProps {
   categories: Category[];
@@ -32,22 +33,33 @@ export function LayoutChrome({
 }: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const pathname = usePathname();
+  const shippingSettings = useShippingSettings();
+  // Fallback announcement only states things that are always true: the shipping
+  // promise comes from the real shipping settings, and no coupon code is
+  // advertised unless an admin writes one into the announcement setting.
+  const defaultAnnouncement = ['Made for your memories', freeShippingPromise(shippingSettings)].filter(Boolean).join(' • ');
 
-  // Admin routes use their own AdminShell layout — skip storefront chrome entirely.
-  if (pathname?.startsWith('/admin')) {
+  useEffect(() => {
+    const handleOpen = () => setIsCartOpen(true);
+    window.addEventListener('karthys:open-cart', handleOpen);
+    return () => window.removeEventListener('karthys:open-cart', handleOpen);
+  }, []);
+
+  // Admin routes and dedicated full-screen auth routes skip storefront chrome entirely
+  const isAuthRoute = pathname === '/signin' || pathname === '/signup' || pathname === '/forgot-password';
+  if (pathname?.startsWith('/admin') || isAuthRoute) {
     return <>{children}</>;
   }
 
   return (
     <>
-      <AnnouncementBar
-        text={
-          announcementBar?.text ??
-          'Made for your memories ✦ Free shipping on orders above ₹1,999 ✦ Use code FIRST15 for 15% OFF'
-        }
-        link={announcementBar?.link}
-      />
-      <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
+      <div className="sticky top-0 z-40 w-full shadow-xs">
+        <AnnouncementBar
+          text={announcementBar?.text ?? defaultAnnouncement}
+          link={announcementBar?.link}
+        />
+        <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
+      </div>
       <main>{children}</main>
       <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />

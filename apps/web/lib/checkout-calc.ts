@@ -8,6 +8,15 @@ export interface PricedCartLine {
   unitPrice: number;
   qty: number;
   previewPath: string | null;
+  // Variant details frozen onto the order (see OrderItemSchema).
+  sku: string;
+  sizeLabel: string;
+  frameColour: string;
+  material: string;
+  widthIn: number;
+  heightIn: number;
+  /** Verified snapshot, attached by create-order for lines that carry v2 personalization. */
+  personalization?: import('@bro-pics/shared').OrderPersonalizationSnapshot;
 }
 
 export interface UnavailableLine {
@@ -21,6 +30,11 @@ export interface CartLineInput {
   title: string;
   qty: number;
   previewPath?: string;
+  /**
+   * Structured personalization (template v2 + state) as CLAIMED by the browser. Never trusted
+   * as-is: create-order rebuilds it into a verified snapshot (see lib/personalization-order.ts).
+   */
+  personalization?: { templateId: string; templateVersion: number; state: unknown };
 }
 
 /**
@@ -60,6 +74,12 @@ export function priceCartLines(
       unitPrice: variant.price,
       qty: item.qty,
       previewPath: item.previewPath ?? null,
+      sku: variant.sku,
+      sizeLabel: variant.sizeLabel,
+      frameColour: variant.frameColour,
+      material: variant.material,
+      widthIn: variant.widthIn,
+      heightIn: variant.heightIn,
     });
   }
 

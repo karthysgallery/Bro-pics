@@ -39,6 +39,15 @@ describe('getPermissionContext', () => {
     });
   });
 
+  it('does NOT promote a role-less token to super_admin because of its phone number or email (no hard-coded admin identity)', async () => {
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'u1', phone_number: '+919999999999' });
+    expect(await getPermissionContext(makeRequest('Bearer t'))).toEqual({ authenticated: true, uid: 'u1', role: null });
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'u2', email: 'admin@bropics.in' });
+    expect(await getPermissionContext(makeRequest('Bearer t'))).toEqual({ authenticated: true, uid: 'u2', role: null });
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'u3', phone_number: '+919999999999' });
+    expect(await requirePermission(makeRequest('Bearer t'), 'orders:read' as never)).toEqual({ ok: false, status: 403 });
+  });
+
   it('returns {uid, role: null} when the token verifies but the role claim is unknown', async () => {
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'user_1', role: 'owner' });
     expect(await getPermissionContext(makeRequest('Bearer good-token'))).toEqual({

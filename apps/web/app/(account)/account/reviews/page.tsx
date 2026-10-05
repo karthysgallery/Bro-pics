@@ -7,6 +7,7 @@ import { useAuth } from '../../../../lib/auth-context';
 import { Skeleton } from '../../../../components/ui/Skeleton';
 import { EmptyState } from '../../../../components/ui/EmptyState';
 import { Card } from '../../../../components/ui/Card';
+import { RatingStars } from '../../../../components/ui/RatingStars';
 import type { Review, ReviewStatus } from '@bro-pics/shared';
 
 function formatCreatedAt(value: unknown): string {
@@ -143,7 +144,7 @@ export default function MyReviewsPage() {
                   {STATUS_LABELS[review.status]}
                 </span>
               </div>
-              <span className="text-sm text-ink/70">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+              <RatingStars rating={review.rating} size={14} />
               <p className="text-sm text-ink/70">{review.body}</p>
               <span className="text-2xs text-ink/50">{formatCreatedAt(review.createdAt)}</span>
             </Card>

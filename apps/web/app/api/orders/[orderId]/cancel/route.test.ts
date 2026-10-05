@@ -76,6 +76,20 @@ describe('POST /api/orders/[orderId]/cancel', () => {
     expect(mockTransactionUpdate).not.toHaveBeenCalled();
   });
 
+  it.each(['payment_confirmed', 'photo_validation', 'print_rendering', 'print_ready'])(
+    'lets the customer cancel from the automatic post-payment sub-stage %s',
+    async (status) => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      mockTransactionGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ userId: 'user_1', status, orderNo: 'BP-2026-00002', paymentStatus: 'paid', total: 5000 }),
+      });
+      const response = await POST(makeRequest(), { params: Promise.resolve({ orderId: 'order_1' }) });
+      expect(response.status).toBe(200);
+      expect(mockTransactionUpdate).toHaveBeenCalledWith(expect.anything(), { status: 'cancelled' });
+    }
+  );
+
   it('cancels a cancellable order, writes an event, and updates status', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockTransactionGet.mockResolvedValueOnce({ exists: true, data: () => ({ userId: 'user_1', status: 'paid', orderNo: 'BP-2026-00001' }) });

@@ -51,7 +51,12 @@ export function ReviewsSection({ product, reviews }: { product: Product; reviews
           <div className="mb-6 max-w-sm">
             {breakdown.map(({ star, count }) => (
               <div key={star} data-testid="rating-breakdown-row" className="flex items-center gap-2 text-xs mb-1">
-                <span className="w-8">{star}★</span>
+                <span className="w-8 inline-flex items-center gap-0.5">
+                  {star}
+                  <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor" className="text-amber-500 shrink-0" aria-hidden="true">
+                    <path d="M10 1.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L1.5 7.7l5.9-.8L10 1.5z" />
+                  </svg>
+                </span>
                 <div className="flex-1 h-1.5 bg-tint rounded-full overflow-hidden">
                   <div className="h-full bg-accent" style={{ width: `${(count / maxCount) * 100}%` }} />
                 </div>

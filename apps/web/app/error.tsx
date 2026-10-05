@@ -59,8 +59,8 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
             </p>
             <p className="text-2xs text-ink/50 pt-2 border-t border-line">
               If this keeps happening, email{' '}
-              <a href="mailto:hello@bropics.in" className="text-ink underline">
-                hello@bropics.in
+              <a href="mailto:support@karthysgallery.in" className="text-ink underline">
+                support@karthysgallery.in
               </a>{' '}
               with reference {error.digest ? `BP-ERR-${error.digest}` : 'BP-ERR-021026'}.
             </p>

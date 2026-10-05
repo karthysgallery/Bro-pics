@@ -13,11 +13,19 @@ import {
 import { loadEnvLocal } from './load-env';
 
 async function main(): Promise<void> {
-  loadEnvLocal();
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set');
-
-  const app = initializeApp({ credential: cert(JSON.parse(serviceAccountJson)) });
+  // Emulator mode: FIRESTORE_EMULATOR_HOST set => write to the local emulator
+  // only (no credentials, never touches the live project).
+  const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+  let app;
+  if (emulatorHost) {
+    console.log(`Seeding the Firestore EMULATOR at ${emulatorHost}`);
+    app = initializeApp({ projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'demo-bropics' });
+  } else {
+    loadEnvLocal();
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set');
+    app = initializeApp({ credential: cert(JSON.parse(serviceAccountJson)) });
+  }
   const db = getFirestore(app);
   db.settings({ ignoreUndefinedProperties: true });
 

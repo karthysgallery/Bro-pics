@@ -76,4 +76,89 @@ describe('AddressForm', () => {
     fireEvent.click(screen.getByText('Save address'));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ isDefault: false })));
   });
+
+  function fillValid(overrides: Partial<Record<'Address line 1' | 'City' | 'State' | 'Pincode' | 'Phone', string>> = {}) {
+    const values = { 'Address line 1': '12 MG Road', City: 'Chennai', State: 'Tamil Nadu', Pincode: '600001', Phone: '98765 43210', ...overrides };
+    for (const [label, value] of Object.entries(values)) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+  }
+
+  describe('validation and submission behaviour', () => {
+    it('tells the customer which fields are missing, one message per field, instead of a single generic line', async () => {
+      render(<AddressForm userId="user_1" onSaved={vi.fn()} />);
+      fireEvent.click(screen.getByText('Save address'));
+
+      expect(await screen.findByText('Enter your house/flat number and street.')).toBeInTheDocument();
+      expect(screen.getByText('Enter your city or town.')).toBeInTheDocument();
+      expect(screen.getByText('Choose your state.')).toBeInTheDocument();
+      expect(screen.getByText('Enter a valid 6-digit pincode.')).toBeInTheDocument();
+      expect(screen.getByText('Enter a valid 10-digit mobile number.')).toBeInTheDocument();
+      expect(screen.getByLabelText('City')).toHaveAttribute('aria-invalid', 'true');
+      expect(mockSetDoc).not.toHaveBeenCalled();
+    });
+
+    it('rejects a phone number that is not a valid Indian mobile', async () => {
+      render(<AddressForm userId="user_1" onSaved={vi.fn()} />);
+      fillValid({ Phone: '12345' });
+      fireEvent.click(screen.getByText('Save address'));
+      expect(await screen.findByText('Enter a valid 10-digit mobile number.')).toBeInTheDocument();
+      expect(mockSetDoc).not.toHaveBeenCalled();
+    });
+
+    it('normalises an accepted phone to +91XXXXXXXXXX however it was typed', async () => {
+      const onSaved = vi.fn();
+      render(<AddressForm userId="user_1" onSaved={onSaved} />);
+      fillValid({ Phone: '098765 43210' });
+      fireEvent.click(screen.getByText('Save address'));
+      await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ phone: '+919876543210' })));
+    });
+
+    it('offers states as a list (not free text) and keeps an unlisted legacy value selectable', () => {
+      const legacy = {
+        id: 'a1', label: null, line1: '1 Road', line2: null, city: 'Chennai', state: 'TN', pincode: '600001',
+        phone: '+919876543210', isDefault: false, type: null, country: 'India', deliveryInstructions: null,
+      };
+      render(<AddressForm userId="user_1" onSaved={vi.fn()} existingAddress={legacy} />);
+      const select = screen.getByLabelText('State') as HTMLSelectElement;
+      expect(select.tagName).toBe('SELECT');
+      expect(select.value).toBe('TN');
+      expect(Array.from(select.options).some((o) => o.value === 'Tamil Nadu')).toBe(true);
+    });
+
+    it('gives mobile keyboards the right hints (numeric pincode, tel phone)', () => {
+      render(<AddressForm userId="user_1" onSaved={vi.fn()} />);
+      expect(screen.getByLabelText('Pincode')).toHaveAttribute('inputmode', 'numeric');
+      expect(screen.getByLabelText('Phone')).toHaveAttribute('type', 'tel');
+    });
+
+    it('does not create duplicate addresses on a double-click: the button is disabled while saving', async () => {
+      let resolveSave: () => void = () => {};
+      mockSetDoc.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+      const onSaved = vi.fn();
+      render(<AddressForm userId="user_1" onSaved={onSaved} />);
+      fillValid();
+
+      fireEvent.click(screen.getByText('Save address'));
+      fireEvent.click(await screen.findByText('Saving…'));
+      fireEvent.click(screen.getByText('Saving…'));
+      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Saving…')).toBeDisabled();
+
+      resolveSave();
+      await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    });
+
+    it('shows an error and re-enables the button when saving fails, rather than failing silently', async () => {
+      mockSetDoc.mockRejectedValueOnce(new Error('offline'));
+      const onSaved = vi.fn();
+      render(<AddressForm userId="user_1" onSaved={onSaved} />);
+      fillValid();
+      fireEvent.click(screen.getByText('Save address'));
+
+      expect(await screen.findByText(/couldn't save this address/i)).toBeInTheDocument();
+      expect(onSaved).not.toHaveBeenCalled();
+      expect(screen.getByText('Save address')).not.toBeDisabled();
+    });
+  });
 });

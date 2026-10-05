@@ -129,8 +129,11 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
           <h2 id="cart-drawer-title" className="text-base font-semibold text-ink">
             Your cart {items.length > 0 ? <span className="text-ink/50 font-normal">({items.length})</span> : null}
           </h2>
-          <button aria-label="Close cart" onClick={onClose} className="text-ink/60 hover:text-ink text-lg leading-none">
-            ✕
+          <button aria-label="Close cart" onClick={onClose} className="p-1 rounded-lg text-ink/60 hover:text-ink hover:bg-tint transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 

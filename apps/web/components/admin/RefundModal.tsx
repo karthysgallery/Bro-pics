@@ -5,14 +5,20 @@ import { useAuth } from '../../lib/auth-context';
 import { AdminModal } from './AdminModal';
 import { FormField } from './AdminForm';
 import { useToast } from '../ui/Toast';
+import { formatPaise } from '../../lib/format-price';
+import { paiseToRupees, rupeesToPaise } from '../../lib/admin-money';
 
 interface RefundModalProps {
   isOpen: boolean;
   onClose: () => void;
   orderId: string;
   orderNo: string;
+  /** Paise, like every stored amount. The form below is typed in rupees. */
   orderTotal: number;
+  /** Paise. */
   alreadyRefunded?: number;
+  /** 'mock' orders had no real charge, so their refund is recorded without any gateway call. */
+  paymentProvider?: 'mock' | 'razorpay';
   onSuccess: () => void;
 }
 
@@ -23,6 +29,7 @@ export function RefundModal({
   orderNo,
   orderTotal,
   alreadyRefunded = 0,
+  paymentProvider,
   onSuccess,
 }: RefundModalProps) {
   const { user } = useAuth();
@@ -32,14 +39,18 @@ export function RefundModal({
   const maxRefundable = Math.max(0, orderTotal - alreadyRefunded);
 
   const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
-  const [partialAmount, setPartialAmount] = useState<number>(maxRefundable);
+  // The partial-amount input is typed in rupees (as text, so "12." mid-typing
+  // doesn't fight the user); everything else here — and everything sent to the
+  // API — is integer paise.
+  const [partialRupees, setPartialRupees] = useState<string>(String(paiseToRupees(maxRefundable)));
   const [reason, setReason] = useState('Customer Request');
   const [typedConfirm, setTypedConfirm] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
-  const amountToRefund = refundType === 'full' ? maxRefundable : Number(partialAmount) || 0;
-  const expectedTypedText = `REFUND-${amountToRefund}`;
+  const amountToRefund = refundType === 'full' ? maxRefundable : (rupeesToPaise(partialRupees) ?? 0);
+  // Confirmation text is the rupee amount, as the admin reads it on screen.
+  const expectedTypedText = `REFUND-${paiseToRupees(amountToRefund)}`;
   const isFormValid =
     amountToRefund > 0 &&
     amountToRefund <= maxRefundable &&
@@ -70,10 +81,10 @@ export function RefundModal({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error?.message || data.error || 'Failed to process refund via Razorpay');
+        throw new Error(data.error?.message || data.error || 'Failed to process the refund');
       }
 
-      showToast(`Successfully processed refund of ₹${amountToRefund}!`, 'success');
+      showToast(`Successfully processed refund of ${formatPaise(amountToRefund)}!`, 'success');
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -90,22 +101,22 @@ export function RefundModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`Issue Refund for Order #${orderNo}`}
-      description="Direct Razorpay gateway refund processing"
+      description={paymentProvider === 'mock' ? 'Test payment — recorded as refunded, no gateway call' : 'Refund to the original payment method'}
     >
       <form onSubmit={handleSubmitRefund} className="space-y-4 text-xs">
         {/* Balance Breakdown */}
         <div className="p-3 rounded-xl border border-line bg-field space-y-1 text-2xs text-ink/70">
           <div className="flex justify-between">
             <span>Order Total:</span>
-            <span className="font-bold text-ink">₹{orderTotal}</span>
+            <span className="font-bold text-ink">{formatPaise(orderTotal)}</span>
           </div>
           <div className="flex justify-between">
             <span>Already Refunded:</span>
-            <span className="font-mono text-red-600">₹{alreadyRefunded}</span>
+            <span className="font-mono text-red-600">{formatPaise(alreadyRefunded)}</span>
           </div>
           <div className="flex justify-between pt-1 border-t border-line font-bold text-ink text-xs">
             <span>Max Refundable:</span>
-            <span className="text-emerald-700">₹{maxRefundable}</span>
+            <span className="text-emerald-700">{formatPaise(maxRefundable)}</span>
           </div>
         </div>
 
@@ -119,7 +130,7 @@ export function RefundModal({
               type="button"
               onClick={() => {
                 setRefundType('full');
-                setPartialAmount(maxRefundable);
+                setPartialRupees(String(paiseToRupees(maxRefundable)));
               }}
               className={`p-3 rounded-xl border text-left transition-all ${
                 refundType === 'full'
@@ -128,14 +139,14 @@ export function RefundModal({
               }`}
             >
               <span className="block text-xs">Full Refund</span>
-              <span className="text-2xs text-ink/60">₹{maxRefundable}</span>
+              <span className="text-2xs text-ink/60">{formatPaise(maxRefundable)}</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
                 setRefundType('partial');
-                setPartialAmount(Math.round(maxRefundable / 2));
+                setPartialRupees(String(paiseToRupees(Math.round(maxRefundable / 2))));
               }}
               className={`p-3 rounded-xl border text-left transition-all ${
                 refundType === 'partial'
@@ -153,10 +164,12 @@ export function RefundModal({
           <FormField label="Partial Refund Amount (₹)" required>
             <input
               type="number"
-              min={1}
-              max={maxRefundable}
-              value={partialAmount}
-              onChange={(e) => setPartialAmount(Number(e.target.value))}
+              inputMode="decimal"
+              min={0.01}
+              step="0.01"
+              max={paiseToRupees(maxRefundable)}
+              value={partialRupees}
+              onChange={(e) => setPartialRupees(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-bold focus:outline-none focus:border-gold"
             />
           </FormField>
@@ -194,7 +207,7 @@ export function RefundModal({
 
         {errorDetails && (
           <div className="p-3 rounded-xl bg-red-100 border border-red-300 text-red-800 text-2xs space-y-1">
-            <span className="font-bold block">Gateway Error:</span>
+            <span className="font-bold block">Refund error:</span>
             <p>{errorDetails}</p>
           </div>
         )}
@@ -213,7 +226,7 @@ export function RefundModal({
             disabled={!isFormValid || isProcessing}
             className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-40"
           >
-            {isProcessing ? 'Processing with Razorpay...' : `Authorize ₹${amountToRefund} Refund`}
+            {isProcessing ? 'Processing refund…' : `Authorize ${formatPaise(amountToRefund)} Refund`}
           </button>
         </div>
       </form>

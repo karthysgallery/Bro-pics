@@ -2,7 +2,7 @@ import type { Review } from '@bro-pics/shared';
 import { SUPPORT_EMAIL } from './support-contact';
 import { buildPublicMediaUrl } from './media-public-url';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
 
 /**
@@ -34,7 +34,7 @@ export function buildOrganizationJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'BroPics',
+    name: 'KarthysGallery',
     url: SITE_URL,
     email: SUPPORT_EMAIL,
     sameAs: [`https://wa.me/${WHATSAPP_NUMBER}`],
@@ -68,7 +68,7 @@ export function buildProductReviewsJsonLd(reviews: Review[]) {
     .map((review) => ({
       '@type': 'Review',
       reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5, worstRating: 1 },
-      author: { '@type': 'Person', name: 'Verified BroPics customer' },
+      author: { '@type': 'Person', name: 'Verified KarthysGallery customer' },
       reviewBody: review.body,
       name: review.title,
     }));

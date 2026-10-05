@@ -134,7 +134,7 @@ export default function DeliveryServiceabilityPage() {
             onClick={() => setShowImportModal(true)}
             className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2"
           >
-            <span>📥</span> Bulk CSV Import
+            Bulk CSV Import
           </button>
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function DeliveryServiceabilityPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       {row.codAvailable ? (
-                        <span className="text-emerald-400">✓ Enabled</span>
+                        <span className="text-emerald-400 font-semibold">Enabled</span>
                       ) : (
                         <span className="text-sand/50">Prepaid Only</span>
                       )}
@@ -263,9 +263,7 @@ export default function DeliveryServiceabilityPage() {
               <button
                 onClick={() => setShowImportModal(false)}
                 className="text-sand hover:text-cream text-lg"
-              >
-                ✕
-              </button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
 
             <p className="text-xs text-sand/80 leading-relaxed">

@@ -25,7 +25,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signOut = () => firebaseSignOut(getAuth(getFirebaseApp()));
+  const signOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore network errors on server logout
+    }
+    return firebaseSignOut(getAuth(getFirebaseApp()));
+  };
 
   return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>;
 }

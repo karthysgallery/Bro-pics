@@ -152,7 +152,7 @@ export default function CouriersRegistryPage() {
           onClick={handleOpenAdd}
           className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2"
         >
-          <span>➕</span> Add Courier Partner
+          Add Courier Partner
         </button>
       </div>
 
@@ -186,7 +186,7 @@ export default function CouriersRegistryPage() {
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🚚</span>
+                    <span className="text-lg flex justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
                     <h3 className="font-bold text-cream text-base">{c.name}</h3>
                   </div>
                   <span
@@ -253,9 +253,7 @@ export default function CouriersRegistryPage() {
               <button
                 onClick={() => setShowModal(false)}
                 className="text-sand hover:text-cream text-lg"
-              >
-                ✕
-              </button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">

@@ -5,8 +5,8 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Terms & conditions — BroPics',
-  description: 'The terms you agree to when you order a personalized frame from BroPics.',
+  title: 'Terms & conditions — KarthysGallery',
+  description: 'The terms you agree to when you order a personalized frame from KarthysGallery.',
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,12 +29,12 @@ export default async function TermsPage() {
     <>
       <PageIntro
         title="Terms & conditions"
-        standfirst="The agreement between you and BroPics when you place an order."
+        standfirst="The agreement between you and KarthysGallery when you place an order."
       />
 
       <h2>1. Who we are</h2>
       <p>
-        BroPics sells made-to-order personalized photo frames in India. Using this site or placing
+        KarthysGallery sells made-to-order personalized photo frames in India. Using this site or placing
         an order means you accept these terms.
       </p>
 

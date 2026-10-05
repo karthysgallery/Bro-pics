@@ -5,7 +5,7 @@ import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../lib/audit-log';
-import { createRazorpayRefund } from '../../../../../../lib/razorpay-client';
+import { refundPayment } from '../../../../../../lib/payments/refunds';
 import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../../lib/admin-idempotency';
 import { CreateRefundBodySchema } from './refund-request-schema';
 import { RefundSchema, logger, type Order, type Refund } from '@bro-pics/shared';
@@ -125,7 +125,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   let responseBody: Record<string, unknown>;
   let responseStatus: number;
   try {
-    const result = await createRazorpayRefund({
+    const result = await refundPayment(order, {
       paymentId: order.razorpayPaymentId,
       amount: refund.amount,
       notes: { orderId, refundId: refundRef.id },
@@ -172,7 +172,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       details: { orderId, amount: refund.amount, error: String(error) },
     }).catch((auditError) => logger.error('Failed to write audit log', { refundId: refundRef.id, error: String(auditError) }));
 
-    responseBody = { refundId: refundRef.id, status: 'failed', error: 'Razorpay refund failed' };
+    responseBody = { refundId: refundRef.id, status: 'failed', error: 'Refund failed' };
     responseStatus = 502;
   }
 

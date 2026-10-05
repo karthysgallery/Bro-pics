@@ -164,6 +164,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
         reconcile({ sessionId: reconciliationKey, cartItems: localItems, reconciliationId: reconciliationKey })
           .then(() => {
+            setLocalItems([]);
             setReconcileSucceeded(true);
             resetSessionId();
           })
@@ -192,9 +193,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const items = user
-    ? firestoreItems !== null && firestoreItems.length > 0
-      ? mergeCartItems(firestoreItems, localItems)
-      : localItems
+    ? reconcileSucceeded
+      ? (firestoreItems ?? [])
+      : firestoreItems !== null && firestoreItems.length > 0
+        ? mergeCartItems(firestoreItems, localItems)
+        : localItems
     : localItems;
 
   const value = useMemo<CartContextValue>(() => {

@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   const detail = await getProductBySlug(slug);
 
   if (!detail) {
-    return { title: 'Product Not Found | BroPics' };
+    return { title: 'Product Not Found | KarthysGallery' };
   }
 
   const { product } = detail;

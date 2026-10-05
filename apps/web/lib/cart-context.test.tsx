@@ -543,7 +543,8 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
     // the client retried.
     await act(async () => {
       firestoreMock._server.items = [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 }];
-      firestoreMock.onSnapshot.mock.calls[0][1]({
+      const latestSnapshotCallback = firestoreMock.onSnapshot.mock.calls[firestoreMock.onSnapshot.mock.calls.length - 1][1];
+      latestSnapshotCallback({
         exists: () => true,
         data: () => ({ items: firestoreMock._server.items }),
       });

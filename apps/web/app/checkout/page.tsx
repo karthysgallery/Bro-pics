@@ -11,7 +11,12 @@ import { useAuth } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
 import { AddressPicker } from '../../components/checkout/AddressPicker';
 import { PincodeChecker } from '../../components/checkout/PincodeChecker';
-import type { Address } from '@bro-pics/shared';
+import { splitGstFromInclusiveTotal, type Address } from '@bro-pics/shared';
+import { MockPaymentDialog, type MockPaymentOutcome } from '../../components/checkout/MockPaymentDialog';
+import { getPaymentModeClient } from '../../lib/payment-mode-client';
+import { timeoutSignal } from '../../lib/timeout-signal';
+import { fetchCheckoutQuote, type CheckoutQuote } from '../../lib/checkout-quote-client';
+import { getGstSettingsClient, type GstDisplaySettings } from '../../lib/gst-settings-client';
 import { loadRazorpayCheckoutScript } from '../../lib/razorpay-checkout-script';
 import { calculateShipping, DELIVERY_METHODS, DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '../../lib/checkout-calc';
 import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
@@ -59,10 +64,47 @@ export default function CheckoutPage() {
   // nothing to mismatch between server and client render — only upgraded
   // (in an effect, below) if settings/shipping actually overrides it.
   const [shippingSettings, setShippingSettings] = useState<Required<ShippingSettings>>(DEFAULT_SHIPPING_SETTINGS);
+  // Display-only; the server recomputes tax. Absent/failed read => no GST line
+  // rather than a made-up rate.
+  const [gst, setGst] = useState<GstDisplaySettings>({ gstEnabled: false, taxRate: 0 });
+  // Which gateway the server is configured with ('mock' = test mode, no real
+  // charge). Only used to describe the payment step honestly.
+  const [paymentProvider, setPaymentProvider] = useState<'mock' | 'razorpay' | null>(null);
+  const [mockPayment, setMockPayment] = useState<{ orderId: string; orderNo?: string; amount: number } | null>(null);
+  const [mockBusy, setMockBusy] = useState(false);
+  // The server's own price summary. Until it arrives (or if it fails) the page
+  // falls back to its local estimate below; create-order recomputes either way.
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
 
   useEffect(() => {
     getShippingSettingsClient().then(setShippingSettings);
+    getGstSettingsClient().then(setGst);
+    getPaymentModeClient().then(setPaymentProvider);
   }, []);
+
+  // Re-quote whenever anything that affects the price changes. Debounced a little
+  // so flipping options quickly doesn't fire a request per click.
+  const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}`;
+  useEffect(() => {
+    if (!user || items.length === 0 || orderId) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchCheckoutQuote(user, { couponCode: appliedCoupon?.code ?? null, deliveryMethod }, controller.signal).then((result) => {
+        if (controller.signal.aborted) return;
+        setQuote(result);
+        // A coupon that has stopped applying must be dropped and explained, not kept on screen.
+        if (result?.coupon.requested && !result.coupon.applied) {
+          setAppliedCoupon(null);
+          setCouponMessage(COUPON_REASON_MESSAGES[result.coupon.reason] ?? 'That coupon can no longer be applied.');
+        }
+      });
+    }, 200);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey, user?.uid, orderId]);
 
   // Subscribe to orders/{orderId} once an order has been created, so the
   // page can detect the webhook flipping status to 'paid' and show a real
@@ -97,7 +139,7 @@ export default function CheckoutPage() {
         setOrderStatus({ status: data.status, paymentStatus: data.paymentStatus, orderNo: data.orderNo });
         // This attempt is done — a NEXT, unrelated purchase should mint its
         // own fresh idempotency key, not keep reusing this completed one.
-        if (data.status === 'paid') clearCheckoutIdempotencyKey();
+        if (data.paymentStatus === 'paid') clearCheckoutIdempotencyKey();
       },
       (error) => {
         console.error('Order listener failed:', error);
@@ -170,6 +212,41 @@ export default function CheckoutPage() {
     setOrderId(null);
     setOrderStatus(null);
     setError(null);
+    setMockPayment(null);
+  };
+
+  // Settles the mock payment through the server (same pipeline the Razorpay
+  // webhook uses). The order listener above then reflects the result.
+  const handleMockPaymentChoice = async (outcome: MockPaymentOutcome) => {
+    if (!mockPayment) return;
+    if (outcome === 'cancel') {
+      setMockPayment(null);
+      return;
+    }
+    setMockBusy(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/checkout/mock-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ orderId: mockPayment.orderId, outcome }),
+      });
+      if (!response.ok) {
+        setError('Payment could not be completed. Please try again.');
+        return;
+      }
+      const body = await response.json();
+      setOrderStatus({ status: body.status, paymentStatus: body.paymentStatus, orderNo: body.orderNo ?? mockPayment.orderNo });
+      if (outcome === 'success') {
+        clearCart();
+        clearCheckoutIdempotencyKey();
+      }
+      setMockPayment(null);
+    } catch {
+      setError('Payment could not be completed. Please check your connection and try again.');
+    } finally {
+      setMockBusy(false);
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -190,10 +267,19 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey, items }),
+        signal: timeoutSignal(30_000),
       });
 
       if (response.status === 409) {
         const body = await response.json().catch(() => null);
+        if (body?.code === 'coupon_invalid') {
+          // The coupon stopped applying between "Apply" and "Place order". Say so and
+          // refresh the total, rather than letting the customer pay more than shown.
+          setAppliedCoupon(null);
+          setCouponMessage(COUPON_REASON_MESSAGES[body.reason] ?? 'That coupon can no longer be applied.');
+          setError('Your coupon no longer applies, so your total has changed. Please review it and place the order again.');
+          return;
+        }
         setError(
           body?.code === 'already_paid'
             ? 'This order has already been paid for.'
@@ -202,19 +288,28 @@ export default function CheckoutPage() {
         if (body?.code === 'already_paid') clearCheckoutIdempotencyKey();
         return;
       }
+      if (response.status === 503) {
+        setError('Payments are temporarily unavailable. Please try again in a little while.');
+        return;
+      }
       if (!response.ok) {
         setError('Could not place your order. Please try again.');
         return;
       }
 
-      const { orderId: newOrderId, razorpayOrderId, amount, keyId, isMock, status: resStatus, orderNo: resOrderNo } = await response.json();
-      setOrderStatus(null);
+      const { orderId: newOrderId, razorpayOrderId, amount, keyId, paymentProvider: provider, paymentStatus, orderNo: resOrderNo } = await response.json();
       setOrderId(newOrderId);
+      // Paid status is only ever reported by the server's settlement
+      // pipeline (via the order listener) — never inferred client-side.
+      setOrderStatus({ status: undefined, paymentStatus, orderNo: resOrderNo });
 
-      if (isMock || resStatus === 'paid' || !keyId) {
-        clearCart();
-        setOrderStatus({ status: 'paid', paymentStatus: 'paid', orderNo: resOrderNo ?? newOrderId });
-        clearCheckoutIdempotencyKey();
+      if (provider === 'mock') {
+        setMockPayment({ orderId: newOrderId, orderNo: resOrderNo, amount });
+        return;
+      }
+
+      if (provider !== 'razorpay' || !keyId) {
+        setError('Payment could not be started. Please try again.');
         return;
       }
 
@@ -224,7 +319,13 @@ export default function CheckoutPage() {
         amount,
         currency: 'INR',
         order_id: razorpayOrderId,
-        name: 'BroPics',
+        name: 'KarthysGallery',
+        modal: {
+          // Closing the window without paying leaves the order pending; the
+          // "Resume payment" button re-opens the SAME order (same
+          // idempotency key), so there is no duplicate and no dead end.
+          ondismiss: () => setPlacing(false),
+        },
         handler: () => {
           // Intentionally does nothing beyond letting the user know payment
           // is being confirmed — the order-status listener above (driven by
@@ -245,14 +346,31 @@ export default function CheckoutPage() {
     }
   };
 
-  const isPaid = orderStatus?.status === 'paid';
+  // paymentStatus, not status: settlement moves the order past 'paid' (to
+  // payment_confirmed / photo_validation / print_rendering) in one transaction,
+  // so status === 'paid' is never observable.
+  const isPaid = orderStatus?.paymentStatus === 'paid';
   const isFailed = orderStatus?.paymentStatus === 'failed';
-  const shippingCost = appliedCoupon?.freeShipping ? 0 : calculateShipping(totalPaise, shippingSettings, deliveryMethod);
-  // Clamped for display only — the real order total is always recomputed
-  // and clamped server-side (calculateCouponDiscount already caps a
-  // discount at the subtotal); this just keeps the on-page summary honest
-  // if a coupon's discount happens to exceed subtotal + shipping.
-  const grandTotal = Math.max(0, totalPaise - (appliedCoupon?.discountPaise ?? 0) + shippingCost);
+  // Prefer the server's quote (live catalogue prices, real settings, real coupon
+  // rules). The local figures are only an estimate shown until it arrives, or if
+  // it can't be fetched — create-order recomputes everything either way.
+  const hasQuote = quote !== null && quote.unavailable.length === 0;
+  const localShipping = appliedCoupon?.freeShipping ? 0 : calculateShipping(totalPaise, shippingSettings, deliveryMethod);
+  const displaySubtotal = hasQuote ? quote.subtotal : totalPaise;
+  const displayShipping = hasQuote ? quote.shipping : localShipping;
+  const displayDiscount = hasQuote ? quote.discount : (appliedCoupon?.discountPaise ?? 0);
+  // Clamped for display only in the fallback path (calculateCouponDiscount already
+  // caps a discount at the subtotal server-side).
+  const grandTotal = hasQuote ? quote.total : Math.max(0, totalPaise - (appliedCoupon?.discountPaise ?? 0) + localShipping);
+  const displayFreeShipping = hasQuote ? quote.coupon.requested && quote.coupon.applied && quote.coupon.freeShipping : Boolean(appliedCoupon?.freeShipping);
+  const displayGst = hasQuote
+    ? (quote.taxLines[0] ?? null)
+    : gst.gstEnabled && gst.taxRate > 0
+      ? { rate: gst.taxRate, amount: splitGstFromInclusiveTotal(grandTotal, gst.taxRate).gstAmountPaise }
+      : null;
+  const hasUnavailableItems = quote !== null && quote.unavailable.length > 0;
+  const quotedUnitPrice = (item: { variantId: string; personalizationId: string }) =>
+    quote?.lines.find((l) => l.variantId === item.variantId && l.personalizationId === item.personalizationId)?.unitPrice;
 
   return (
     <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
@@ -270,8 +388,10 @@ export default function CheckoutPage() {
 
       {isPaid ? (
         <div className="rounded-3xl bg-field border border-line p-8 text-center max-w-lg mx-auto my-12">
-          <div className="w-12 h-12 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
-            ✓
+          <div className="w-12 h-12 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
           </div>
           <h2 className="font-display text-2xl font-bold text-ink mb-2">Payment confirmed!</h2>
           <p className="text-sm text-ink/70 mb-6">
@@ -288,33 +408,29 @@ export default function CheckoutPage() {
         <div className="grid lg:grid-cols-[1fr_380px] gap-8 items-start">
           {/* Left: Step Cards */}
           <div className="space-y-6">
-            {/* Step 01: Contact */}
-            <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
-              <h2 className="font-display text-base font-bold text-ink mb-4">01 · Contact</h2>
-              <div className="grid sm:grid-cols-2 gap-4 mb-3">
-                <div>
-                  <label htmlFor="contact-email" className="block text-2xs font-semibold text-ink/60 mb-1">Email</label>
-                  <input
-                    id="contact-email"
-                    type="email"
-                    defaultValue={user?.email ?? ''}
-                    readOnly
-                    className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="contact-phone" className="block text-2xs font-semibold text-ink/60 mb-1">Mobile</label>
-                  <input
-                    id="contact-phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    defaultValue={user?.phoneNumber ?? ''}
-                    className="w-full px-4 py-2.5 rounded-xl border border-line bg-field text-xs text-ink focus:outline-none focus:border-accent"
-                  />
-                </div>
+            {/* Step 01: Contact — read-only; order updates go to the account's own
+                email/mobile. Only what is actually on file is shown, and the whole
+                card is hidden when nothing is (email is optional at sign-up). */}
+            {(user.email || user.phoneNumber) && (
+              <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
+                <h2 className="font-display text-base font-bold text-ink mb-4">01 · Contact</h2>
+                <dl className="grid sm:grid-cols-2 gap-4 mb-3 text-xs">
+                  {user.phoneNumber && (
+                    <div>
+                      <dt className="text-2xs font-semibold text-ink/60 mb-1">Mobile</dt>
+                      <dd className="text-ink font-medium">{user.phoneNumber}</dd>
+                    </div>
+                  )}
+                  {user.email && (
+                    <div>
+                      <dt className="text-2xs font-semibold text-ink/60 mb-1">Email</dt>
+                      <dd className="text-ink font-medium break-all">{user.email}</dd>
+                    </div>
+                  )}
+                </dl>
+                <p className="text-2xs text-ink/50">Order updates and delivery alerts only.</p>
               </div>
-              <p className="text-2xs text-ink/50">Order updates and delivery alerts only.</p>
-            </div>
+            )}
 
             {/* Step 02: Delivery Address */}
             <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
@@ -372,12 +488,21 @@ export default function CheckoutPage() {
             {/* Step 03: Payment */}
             <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
               <h2 className="font-display text-base font-bold text-ink mb-4">03 · Payment</h2>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className="px-4 py-2 rounded-full bg-ink text-paper text-xs font-medium">UPI / Cards / Net Banking</span>
-              </div>
-              <p className="text-xs text-ink/70">
-                You will be redirected to the secure Razorpay payment gateway to pay with UPI (GPay, PhonePe, Paytm), credit/debit card, or net banking.
-              </p>
+              {paymentProvider === 'mock' ? (
+                <p className="text-xs text-ink/70">
+                  <span className="rounded-full bg-gold/30 text-ink px-2 py-0.5 text-2xs font-bold uppercase tracking-wider mr-2">Test mode</span>
+                  Payments are simulated right now — placing an order will not charge you.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="px-4 py-2 rounded-full bg-ink text-paper text-xs font-medium">UPI / Cards / Net Banking</span>
+                  </div>
+                  <p className="text-xs text-ink/70">
+                    You will be redirected to the secure Razorpay payment gateway to pay with UPI (GPay, PhonePe, Paytm), credit/debit card, or net banking.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -389,7 +514,7 @@ export default function CheckoutPage() {
               {items.map((item) => (
                 <div key={`${item.variantId}-${item.personalizationId}`} className="flex justify-between text-xs text-ink/80">
                   <span className="truncate pr-2">{item.title} × {item.qty}</span>
-                  <span className="font-semibold text-ink">{formatPaise(item.unitPriceSnapshot * item.qty)}</span>
+                  <span className="font-semibold text-ink">{formatPaise((quotedUnitPrice(item) ?? item.unitPriceSnapshot) * item.qty)}</span>
                 </div>
               ))}
             </div>
@@ -428,26 +553,28 @@ export default function CheckoutPage() {
             <div className="space-y-2 py-4 border-t border-line text-xs">
               <div className="flex justify-between text-ink/70">
                 <span>Subtotal</span>
-                <span className="font-medium text-ink">{formatPaise(totalPaise)}</span>
+                <span className="font-medium text-ink">{formatPaise(displaySubtotal)}</span>
               </div>
               <div className="flex justify-between text-ink/70">
                 <span>Shipping</span>
-                <span className="font-medium text-ink">{shippingCost === 0 ? 'Free' : formatPaise(shippingCost)}</span>
+                <span className="font-medium text-ink">{displayShipping === 0 ? 'Free' : formatPaise(displayShipping)}</span>
               </div>
-              {appliedCoupon && (appliedCoupon.discountPaise > 0 || appliedCoupon.freeShipping) && (
+              {appliedCoupon && (displayDiscount > 0 || displayFreeShipping) && (
                 <div className="flex justify-between text-accent font-medium">
                   <span>Discount ({appliedCoupon.code})</span>
                   <span>
-                    {appliedCoupon.discountPaise > 0 && `-${formatPaise(appliedCoupon.discountPaise)}`}
-                    {appliedCoupon.discountPaise > 0 && appliedCoupon.freeShipping && ' + '}
-                    {appliedCoupon.freeShipping && 'free shipping'}
+                    {displayDiscount > 0 && `-${formatPaise(displayDiscount)}`}
+                    {displayDiscount > 0 && displayFreeShipping && ' + '}
+                    {displayFreeShipping && 'free shipping'}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-ink/50 text-2xs">
-                <span>Includes GST (18%)</span>
-                <span>{formatPaise(Math.round((grandTotal * 18) / 118))}</span>
-              </div>
+              {displayGst && (
+                <div className="flex justify-between text-ink/50 text-2xs">
+                  <span>Includes GST ({displayGst.rate}%)</span>
+                  <span>{formatPaise(displayGst.amount)}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-baseline py-4 border-t border-line">
@@ -455,6 +582,11 @@ export default function CheckoutPage() {
               <span className="font-display text-2xl font-bold text-ink">{formatPaise(grandTotal)}</span>
             </div>
 
+            {hasUnavailableItems && (
+              <p role="alert" className="text-xs text-alert my-2">
+                Some items in your bag are no longer available. Please review your bag before checking out.
+              </p>
+            )}
             {error && <p className="text-xs text-alert my-2">{error}</p>}
             {isFailed && (
               <div className="flex items-center justify-between gap-3 p-3 bg-alert/10 rounded-xl my-2">
@@ -465,17 +597,22 @@ export default function CheckoutPage() {
               </div>
             )}
             {orderId && !isFailed && (
-              <p className="text-xs text-ink/70 my-2">Order {orderId} created — complete payment in the window that opened.</p>
+              <p className="text-xs text-ink/70 my-2">
+                Order {orderStatus?.orderNo ?? ''} is created and waiting for payment. If the payment window closed, use “Resume payment”.
+              </p>
             )}
 
-            {!orderId && (
+            {!isFailed && (
               <button
                 onClick={handlePlaceOrder}
-                disabled={placing}
-                className="mt-2 w-full py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
+                disabled={placing || !addressId || hasUnavailableItems}
+                className="mt-2 w-full min-h-[48px] py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
               >
-                {placing ? 'Placing order…' : 'Place order'}
+                {placing ? 'Please wait…' : orderId ? 'Resume payment' : 'Place order'}
               </button>
+            )}
+            {!addressId && !orderId && (
+              <p className="text-2xs text-ink/50 mt-2 text-center">Choose or add a delivery address to continue.</p>
             )}
 
             <p className="mt-4 text-center text-2xs text-ink/50 leading-relaxed">
@@ -483,6 +620,14 @@ export default function CheckoutPage() {
             </p>
           </div>
         </div>
+      )}
+      {mockPayment && (
+        <MockPaymentDialog
+          amountPaise={mockPayment.amount}
+          orderNo={mockPayment.orderNo}
+          busy={mockBusy}
+          onChoose={handleMockPaymentChoice}
+        />
       )}
     </main>
   );

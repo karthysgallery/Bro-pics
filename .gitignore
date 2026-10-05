@@ -3,6 +3,7 @@ dist/
 functions/lib/
 services/print-render/lib/
 .next/
+.next-*/
 .firebase/
 firebase-debug.log
 firestore-debug.log
@@ -24,3 +25,10 @@ figma-reference/
 
 # Scratch output from scripts/seed's migration tooling
 migration-exceptions-*.json
+
+# Playwright artifacts
+playwright-report/
+test-results/
+
+# Browser-automation tool output
+.playwright-mcp/

@@ -82,7 +82,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-8 items-start mb-8">
         <div>
-          <label htmlFor="search-input" className="block text-2xs font-semibold text-ink/60 mb-2">Search BroPics</label>
+          <label htmlFor="search-input" className="block text-2xs font-semibold text-ink/60 mb-2">Search KarthysGallery</label>
           <form action="/search" method="GET" className="relative">
             <input
               id="search-input"

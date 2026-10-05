@@ -40,8 +40,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'pnpm dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    url: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+    reuseExistingServer: true,
     timeout: 120 * 1000,
   },
 });

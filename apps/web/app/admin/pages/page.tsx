@@ -5,6 +5,7 @@ import { useAuth } from '../../../lib/auth-context';
 import { AdminModal } from '../../../components/admin/AdminModal';
 import { FormField } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
+import { RatingStars } from '../../../components/ui/RatingStars';
 import type { Page, FaqItem, Testimonial } from '@bro-pics/shared';
 
 function formatISTDate(dateVal: unknown): string {
@@ -307,7 +308,7 @@ export default function AdminContentCMSPage() {
               : 'text-ink/60 hover:text-ink hover:bg-field'
           }`}
         >
-          📄 Policy & Static Pages ({pages.length})
+          Policy & Static Pages ({pages.length})
         </button>
         <button
           onClick={() => setActiveTab('faqs')}
@@ -317,7 +318,7 @@ export default function AdminContentCMSPage() {
               : 'text-ink/60 hover:text-ink hover:bg-field'
           }`}
         >
-          ❓ FAQ Help Center ({faqs.length})
+          FAQ Help Center ({faqs.length})
         </button>
         <button
           onClick={() => setActiveTab('testimonials')}
@@ -327,7 +328,7 @@ export default function AdminContentCMSPage() {
               : 'text-ink/60 hover:text-ink hover:bg-field'
           }`}
         >
-          💬 Testimonials ({testimonials.length})
+          Testimonials ({testimonials.length})
         </button>
       </div>
 
@@ -345,7 +346,7 @@ export default function AdminContentCMSPage() {
             <div className="rounded-2xl border border-line bg-paper shadow-xs overflow-hidden">
               {pages.length === 0 ? (
                 <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-                  <span className="text-3xl block">📄</span>
+                  <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
                   <p>No static pages created yet.</p>
                 </div>
               ) : (
@@ -386,7 +387,7 @@ export default function AdminContentCMSPage() {
                             }}
                             className="px-3 py-1.5 rounded-lg bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
                           >
-                            Edit Page ✏️
+                            Edit Page
                           </button>
                         </td>
                       </tr>
@@ -402,7 +403,7 @@ export default function AdminContentCMSPage() {
             <div className="space-y-4">
               {faqs.length === 0 ? (
                 <div className="p-16 text-center text-xs text-ink/50 space-y-2 rounded-2xl border border-line bg-paper">
-                  <span className="text-3xl block">❓</span>
+                  <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                   <p>No FAQ questions created yet.</p>
                 </div>
               ) : (
@@ -446,7 +447,7 @@ export default function AdminContentCMSPage() {
             <div className="space-y-4">
               {testimonials.length === 0 ? (
                 <div className="p-16 text-center text-xs text-ink/50 space-y-2 rounded-2xl border border-line bg-paper">
-                  <span className="text-3xl block">💬</span>
+                  <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
                   <p>No customer testimonials added yet.</p>
                 </div>
               ) : (
@@ -458,9 +459,7 @@ export default function AdminContentCMSPage() {
                     >
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="text-amber-500 font-bold">
-                            {'★'.repeat(t.rating || 5)}
-                          </div>
+                          <RatingStars rating={t.rating || 5} size={12} />
                           {t.isFeatured && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-gold/10 text-gold-deep border border-gold/30">
                               Featured
@@ -559,7 +558,7 @@ export default function AdminContentCMSPage() {
                     seo: { ...(prev?.seo || {}), title: e.target.value },
                   }))
                 }
-                placeholder="BroPics - Terms of Service"
+                placeholder="KarthysGallery - Terms of Service"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
               />
             </FormField>
@@ -722,11 +721,11 @@ export default function AdminContentCMSPage() {
                 }
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
               >
-                <option value={5}>5 Stars ★★★★★</option>
-                <option value={4}>4 Stars ★★★★☆</option>
-                <option value={3}>3 Stars ★★★☆☆</option>
-                <option value={2}>2 Stars ★★☆☆☆</option>
-                <option value={1}>1 Star ★☆☆☆☆</option>
+                <option value={5}>5 Stars (Highest)</option>
+                <option value={4}>4 Stars</option>
+                <option value={3}>3 Stars</option>
+                <option value={2}>2 Stars</option>
+                <option value={1}>1 Star</option>
               </select>
             </FormField>
           </div>

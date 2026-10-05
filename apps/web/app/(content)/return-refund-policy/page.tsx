@@ -5,7 +5,7 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Return & refund policy — BroPics',
+  title: 'Return & refund policy — KarthysGallery',
   description: 'When a personalized frame can be returned, how replacements work, and how refunds are paid.',
 };
 

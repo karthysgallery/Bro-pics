@@ -1,6 +1,6 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import type { FrameTemplate, Variant } from '@bro-pics/shared';
+import { OrderPersonalizationSnapshotSchema, type FrameTemplate, type Variant } from '@bro-pics/shared';
 // Not from the main '@bro-pics/shared' barrel — see print-jobs.ts's own
 // doc comment for why. This is a standalone Cloud Run service (never
 // bundled for a browser), so importing it directly here is exactly the
@@ -42,6 +42,20 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
       if (!snap.exists) return null;
       const data = snap.data() as { variantId: string };
       return { variantId: data.variantId };
+    },
+    async getOrderItemPersonalization(orderId, itemId) {
+      const snap = await db.collection('orders').doc(orderId).collection('items').doc(itemId).get();
+      const raw = snap.exists ? (snap.data() as { personalization?: unknown }).personalization : undefined;
+      if (raw === undefined) return null;
+      // Parsed strictly: a corrupt snapshot must fail the job loudly, not render something else.
+      return OrderPersonalizationSnapshotSchema.parse(raw);
+    },
+    async loadTemplateAsset(assetId) {
+      const media = await db.collection('media').doc(assetId).get();
+      const path = media.exists ? (media.data() as { path?: string }).path : undefined;
+      if (!path) throw new Error(`Template asset ${assetId} is not in the media library`);
+      const [buffer] = await bucket.file(path).download();
+      return buffer;
     },
     async getVariant(variantId) {
       // variants is a subcollection of products — a collection-group query

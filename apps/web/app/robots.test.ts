@@ -12,6 +12,6 @@ describe('robots', () => {
 
   it('references the sitemap URL', () => {
     const result = robots();
-    expect(result.sitemap).toBe(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com'}/sitemap.xml`);
+    expect(result.sitemap).toBe(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'}/sitemap.xml`);
   });
 });

@@ -17,6 +17,11 @@ vi.mock('../../../../../lib/coupon-lookup', () => ({
   findCouponByCode: (...args: unknown[]) => mockFindCouponByCode(...args),
 }));
 
+vi.mock('../../../../../lib/firestore-settings', () => ({
+  getShippingSettings: () => Promise.resolve({ freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 }),
+  getGstSettings: () => Promise.resolve({ gstEnabled: false, taxRate: 0 }),
+}));
+
 const mockFindVariantById = vi.fn();
 vi.mock('../../../../../lib/variant-lookup', () => ({
   findVariantById: (...args: unknown[]) => mockFindVariantById(...args),
@@ -124,6 +129,16 @@ describe('POST /api/checkout/coupon/validate', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toEqual({ valid: false, reason: 'per_user_limit_reached' });
+  });
+
+  it('counts only PAID uses toward the per-user limit — an abandoned/failed checkout must not use the coupon up', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockFindCouponByCode.mockResolvedValueOnce({ ...NOW_COUPON, perUserLimit: 1 });
+    mockOrdersGet.mockResolvedValue({ size: 0 }); // no paid uses
+    const response = await POST(makeRequest({ code: 'NEW10' }));
+    expect((await response.json()).valid).toBe(true);
+    // The query must be restricted to paid orders — the same rule create-order enforces.
+    expect(mockOrdersQuery.where).toHaveBeenCalledWith('paymentStatus', '==', 'paid');
   });
 
   it('sets freeShipping true for a free_ship coupon', async () => {

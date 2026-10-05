@@ -183,7 +183,7 @@ export default function MerchandisingPage() {
         <div className="flex items-center justify-between border-b border-line pb-4">
           <div>
             <h2 className="font-display text-base font-bold text-ink flex items-center gap-2">
-              <span>📢</span>
+              
               <span>Top Announcement Bar</span>
             </h2>
             <p className="text-xs text-ink/60">
@@ -211,7 +211,7 @@ export default function MerchandisingPage() {
                 type="text"
                 value={announcement.text}
                 onChange={(e) => setAnnouncement({ ...announcement, text: e.target.value })}
-                placeholder="e.g. ✨ Free shipping across India on orders above ₹999!"
+                placeholder="e.g. Free shipping across India on orders above ₹999!"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-line bg-tint/40 text-ink focus:outline-none focus:bg-paper focus:border-gold"
               />
             </div>
@@ -320,7 +320,7 @@ export default function MerchandisingPage() {
                         : 'bg-tint text-ink/60 hover:text-ink'
                     }`}
                   >
-                    {item.featuredOnHomepage ? '★ Featured on Home' : '☆ Not Featured'}
+                    {item.featuredOnHomepage ? 'Featured on Home' : 'Not Featured'}
                   </button>
                 </div>
               </div>

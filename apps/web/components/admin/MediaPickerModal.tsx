@@ -265,7 +265,13 @@ export function MediaPickerModal({
                 className="hidden"
               />
               <label htmlFor="media-modal-file" className="cursor-pointer block space-y-2">
-                <span className="text-2xl block">📁</span>
+                <span className="w-10 h-10 rounded-full bg-tint text-ink flex items-center justify-center mx-auto mb-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </span>
                 <span className="text-xs font-bold text-ink block">
                   {uploadFile ? uploadFile.name : 'Click to select an image or video'}
                 </span>

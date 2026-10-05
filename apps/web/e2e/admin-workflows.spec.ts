@@ -12,7 +12,7 @@ test.describe('Admin Control Panel & Workflows [AFE-33]', () => {
     await expect(header).toBeVisible();
 
     // Staging badge or Brand logo
-    const brand = page.locator('text=BroPics Admin');
+    const brand = page.locator('text=KarthysGallery Admin');
     await expect(brand).toBeVisible();
 
     // Check grouped navigation links

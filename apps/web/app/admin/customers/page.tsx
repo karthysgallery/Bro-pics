@@ -94,7 +94,7 @@ export default function AdminCustomersDirectoryPage() {
       <form onSubmit={handleSearchSubmit} className="flex gap-2 max-w-md">
         <div className="relative flex-1">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -122,7 +122,7 @@ export default function AdminCustomersDirectoryPage() {
           </div>
         ) : customers.length === 0 ? (
           <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block">👥</span>
+            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
             <p>No customers found matching your search.</p>
           </div>
         ) : (

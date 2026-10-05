@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { TextLoop } from '../ui/TextLoop/TextLoop';
 
 interface AnnouncementBarProps {
   text?: string;
@@ -9,43 +8,75 @@ interface AnnouncementBarProps {
   speed?: number;
 }
 
-const DEFAULT_ANNOUNCEMENT =
-  'Made for your memories  ✦  Free shipping on orders above ₹1,999  ✦  Use code FIRST15 for 15% OFF';
+// Only the always-true line. Pages normally pass real text (admin setting or
+// LayoutChrome's shipping-aware default); this is just the last-resort fallback.
+const DEFAULT_ANNOUNCEMENT = 'Made for your memories';
+
+function parseAnnouncementSegments(rawText: string): string[] {
+  const parts = rawText
+    .split(/\s+[•✦|·*]\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [rawText.trim()];
+}
 
 export function AnnouncementBar({
   text,
   link,
-  speed = 75,
 }: AnnouncementBarProps) {
   const displayText = text && text.trim().length > 0 ? text : DEFAULT_ANNOUNCEMENT;
+  const segments = parseAnnouncementSegments(displayText);
+  const repeatCount = Math.max(2, Math.ceil(8 / segments.length));
+  const items = Array.from({ length: repeatCount }, () => segments).flat();
 
   const content = (
-    <div className="w-full h-8 flex items-center overflow-hidden">
-      <TextLoop
-        text={displayText}
-        shape="line"
-        speed={speed}
-        direction="forward"
-        separator="✦"
-        curviness={0}
-        fontSize={9}
-        fontWeight={600}
-        letterSpacing={2.2}
-        uppercase
-        color="#F8FAFC"
-        ribbon
-        ribbonColor="#0B1428"
-        ribbonWidth={35}
-        pauseOnHover={true}
-        className="w-full flex items-center cursor-pointer"
-      />
+    <div
+      role="img"
+      aria-label={displayText}
+      className="w-full h-8 sm:h-8.5 flex items-center overflow-hidden bg-[#0A1120]"
+    >
+      <div className="flex w-max animate-announcement-marquee" aria-hidden="true">
+        {/* Track Group 1 */}
+        <div className="flex items-center shrink-0">
+          {items.map((item, idx) => (
+            <span key={`g1-${idx}`} className="inline-flex items-center">
+              <span className="px-3.5 sm:px-4 text-[12.5px] sm:text-[13px] font-bold tracking-wide uppercase text-white whitespace-nowrap">
+                {item}
+              </span>
+              <span
+                className="text-[#FCA311] text-xs select-none font-bold"
+                aria-hidden="true"
+              >
+                ✦
+              </span>
+            </span>
+          ))}
+        </div>
+
+        {/* Track Group 2 (seamless loop clone) */}
+        <div className="flex items-center shrink-0">
+          {items.map((item, idx) => (
+            <span key={`g2-${idx}`} className="inline-flex items-center">
+              <span className="px-3.5 sm:px-4 text-[12.5px] sm:text-[13px] font-bold tracking-wide uppercase text-white whitespace-nowrap">
+                {item}
+              </span>
+              <span
+                className="text-[#FCA311] text-xs select-none font-bold"
+                aria-hidden="true"
+              >
+                ✦
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
   return (
     <aside
       aria-label="Announcements"
-      className="sticky top-0 z-50 bg-[#0B1428] text-white overflow-hidden select-none border-b border-white/5"
+      className="relative w-full bg-[#0B1428] text-white overflow-hidden select-none border-b border-white/10 z-30"
     >
       {link ? (
         <Link
@@ -63,3 +94,4 @@ export function AnnouncementBar({
 }
 
 export default AnnouncementBar;
+

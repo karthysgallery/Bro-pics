@@ -50,17 +50,17 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   const category = await getCategoryBySlug(slug);
 
   if (!category) {
-    return { title: 'Category Not Found | BroPics' };
+    return { title: 'Category Not Found | KarthysGallery' };
   }
 
   const urlParams = toSearchParams(await searchParams);
-  const fallbackDescription = `Shop ${category.name} at BroPics.`;
+  const fallbackDescription = `Shop ${category.name} at KarthysGallery.`;
   // [FE-42] Falls back to settings/seo.ogImagePath only when this
   // category has no image of its own — never overrides a real one.
   const seoSettings = await getSeoSettings().catch(() => null);
   const ogImage = resolveOgImage(category.image, seoSettings);
   return {
-    title: category.seo.title ?? `${category.name} | BroPics`,
+    title: category.seo.title ?? `${category.name} | KarthysGallery`,
     description: category.seo.description ?? fallbackDescription,
     alternates: { canonical: `/category/${category.slug}` },
     ...(shouldNoindexFacetedUrl(urlParams) && { robots: { index: false, follow: true } }),
@@ -163,7 +163,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           </div>
         ) : (
           <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

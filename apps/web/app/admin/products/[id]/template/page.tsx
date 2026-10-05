@@ -11,7 +11,7 @@ import { useToast } from '../../../../../components/ui/Toast';
 import type { FrameTemplate, TextZone, ClipartOption, Variant, Product } from '@bro-pics/shared';
 
 interface TemplateFormPageProps {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 }
 
 function blankTextZone(): TextZone {
@@ -431,7 +431,7 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                 <img src={mockupUrl} alt="Frame Mockup" className="w-full h-full object-contain pointer-events-none" />
               ) : (
                 <div className="text-center p-6 text-ink/40 text-xs">
-                  <span className="text-3xl block mb-2">🖼️</span>
+                  <span className="text-3xl block mb-2 flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
                   No mockup asset chosen yet
                 </div>
               )}
@@ -469,9 +469,7 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                 >
                   {clip.assetUrl ? (
                     <img src={clip.assetUrl} alt={clip.label} className="w-full h-full object-contain" />
-                  ) : (
-                    <span className="text-2xs">✨</span>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -482,7 +480,7 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                 <span className="text-2xs font-bold text-ink uppercase tracking-wider block">Server Test Render (300 DPI)</span>
                 {testRenderPreviewUrl && (
                   <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    ✓ Rendered
+                    Rendered
                   </span>
                 )}
               </div>
@@ -545,7 +543,7 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                     Rendering High-Res Test...
                   </>
                 ) : (
-                  '📥 Render & Download Test Print (300 DPI)'
+                  'Render & Download Test Print (300 DPI)'
                 )}
               </button>
             </div>

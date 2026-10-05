@@ -81,9 +81,12 @@ export function RecentlyViewedRail({ excludeProductId }: RecentlyViewedRailProps
               type="button"
               aria-label={`Remove ${product.title} from recently viewed`}
               onClick={() => removeRecentlyViewed(product.id)}
-              className="absolute top-2 left-2 z-10 w-7 h-7 rounded-full bg-paper/90 flex items-center justify-center text-ink/70 hover:text-ink"
+              className="absolute top-2 left-2 z-10 w-7 h-7 rounded-full bg-paper/90 backdrop-blur-xs flex items-center justify-center text-ink/70 hover:text-ink shadow-xs transition-colors"
             >
-              ✕
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
             <ProductCard product={product} />
           </div>

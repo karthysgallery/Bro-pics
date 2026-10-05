@@ -22,10 +22,13 @@ export async function getPermissionContext(request: Request): Promise<AuthResult
   const idToken = authHeader.slice('Bearer '.length);
   try {
     const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken, true);
-    let role = (decoded as { role?: unknown }).role;
-    if (!role && (decoded.phone_number === '+919999999999' || decoded.email === 'admin@bropics.in')) {
-      role = 'super_admin';
-    }
+    const role = (decoded as { role?: unknown }).role;
+    // Authorization comes from the verified `role` custom claim ONLY. (A
+    // hard-coded "this phone number / email is a super_admin" fallback used to
+    // live here; anyone able to obtain a token with that identity — e.g. a
+    // Firebase test phone number with a fixed code — got full admin API
+    // access. The first owner account is created with the bootstrap-admin
+    // seed script, which sets a real claim.)
     return { authenticated: true, uid: decoded.uid, role: isValidRole(role) ? role : null };
   } catch {
     return { authenticated: false };

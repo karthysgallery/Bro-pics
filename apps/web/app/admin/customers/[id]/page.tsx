@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useAuth } from '../../../../lib/auth-context';
 import { formatPaise } from '../../../../lib/format-price';
 import { StatusChip } from '../../../../components/admin/StatusChip';
@@ -52,8 +52,8 @@ interface CustomerDetail {
   }>;
 }
 
-export default function CustomerDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { user } = useAuth();
   const [data, setData] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);

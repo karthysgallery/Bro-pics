@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidStatusTransition } from './status-transitions';
+import { isValidStatusTransition, CUSTOMER_CANCELLABLE_STATUSES, isOrderInProgress } from './status-transitions';
 import type { OrderStatus } from '../schemas/order';
 
 describe('isValidStatusTransition — happy path', () => {
@@ -150,5 +150,39 @@ describe('isValidStatusTransition — quality-check gate [ABE-16]', () => {
     expect(isValidStatusTransition('quality_check', 'refunded')).toBe(true);
     expect(isValidStatusTransition('rework', 'cancelled')).toBe(true);
     expect(isValidStatusTransition('rework', 'refunded')).toBe(true);
+  });
+});
+
+describe('CUSTOMER_CANCELLABLE_STATUSES', () => {
+  it('only lists statuses that actually have cancelled as a legal transition', () => {
+    for (const status of CUSTOMER_CANCELLABLE_STATUSES) {
+      expect(isValidStatusTransition(status, 'cancelled')).toBe(true);
+    }
+  });
+
+  it('covers every automatic sub-stage a freshly-paid order passes through (so a customer can cancel right after paying)', () => {
+    for (const status of ['paid', 'payment_confirmed', 'photo_validation', 'print_rendering', 'print_ready'] as const) {
+      expect(CUSTOMER_CANCELLABLE_STATUSES).toContain(status);
+    }
+  });
+
+  it('never offers cancellation once the order is packed or beyond', () => {
+    for (const status of ['printed_packed', 'packed', 'shipped', 'delivered', 'cancelled', 'refunded'] as const) {
+      expect(CUSTOMER_CANCELLABLE_STATUSES).not.toContain(status);
+    }
+  });
+});
+
+describe('isOrderInProgress', () => {
+  it('is true for every paid, not-yet-delivered status, including internal production sub-stages', () => {
+    for (const status of ['paid', 'payment_confirmed', 'photo_validation', 'print_rendering', 'print_ready', 'in_production', 'quality_check', 'rework', 'packed', 'printed_packed', 'shipped'] as const) {
+      expect(isOrderInProgress(status)).toBe(true);
+    }
+  });
+
+  it('is false for unpaid and closed orders', () => {
+    for (const status of ['pending_payment', 'delivered', 'cancelled', 'refunded', 'replacement_issued'] as const) {
+      expect(isOrderInProgress(status)).toBe(false);
+    }
   });
 });

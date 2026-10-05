@@ -468,12 +468,12 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
 
         {activeTab === 'seo' && (
           <div className="space-y-4">
-            <FormField label="SEO Meta Title" hint="Leave blank to use Product Title | BroPics">
+            <FormField label="SEO Meta Title" hint="Leave blank to use Product Title | KarthysGallery">
               <input
                 type="text"
                 value={seoTitle}
                 onChange={(e) => { setSeoTitle(e.target.value); setIsDirty(true); }}
-                placeholder="Personalized Photo Frames Online | BroPics"
+                placeholder="Personalized Photo Frames Online | KarthysGallery"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
               />
             </FormField>

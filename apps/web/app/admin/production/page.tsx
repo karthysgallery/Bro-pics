@@ -7,17 +7,18 @@ import { StatusChip } from '../../../components/admin/StatusChip';
 import { AdminModal } from '../../../components/admin/AdminModal';
 import { FormField } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
+import { AdminIcon, type AdminIconName } from '../../../components/admin/AdminIcon';
 import type { Order, OrderStatus } from '@bro-pics/shared';
 
-const PRODUCTION_STATIONS: { key: OrderStatus; label: string; icon: string; nextStatus?: OrderStatus }[] = [
-  { key: 'paid', label: '1. Order Paid', icon: '💳', nextStatus: 'print_rendering' },
-  { key: 'photo_validation', label: '2. Photo Check', icon: '🔍', nextStatus: 'print_rendering' },
-  { key: 'print_rendering', label: '3. Rendering', icon: '⚙️', nextStatus: 'print_ready' },
-  { key: 'print_ready', label: '4. Print Ready', icon: '🖨️', nextStatus: 'in_production' },
-  { key: 'in_production', label: '5. Assembly / Framing', icon: '🔨', nextStatus: 'quality_check' },
-  { key: 'quality_check', label: '6. QC Inspection', icon: '🛡️', nextStatus: 'packed' },
-  { key: 'packed', label: '7. Packed & Ready', icon: '📦', nextStatus: 'shipped' },
-  { key: 'shipped', label: '8. In Transit', icon: '🚚' },
+const PRODUCTION_STATIONS: { key: OrderStatus; label: string; icon: AdminIconName; nextStatus?: OrderStatus }[] = [
+  { key: 'paid', label: '1. Order Paid', icon: 'payment', nextStatus: 'print_rendering' },
+  { key: 'photo_validation', label: '2. Photo Check', icon: 'search', nextStatus: 'print_rendering' },
+  { key: 'print_rendering', label: '3. Rendering', icon: 'gear', nextStatus: 'print_ready' },
+  { key: 'print_ready', label: '4. Print Ready', icon: 'printer', nextStatus: 'in_production' },
+  { key: 'in_production', label: '5. Assembly / Framing', icon: 'hammer', nextStatus: 'quality_check' },
+  { key: 'quality_check', label: '6. QC Inspection', icon: 'shield', nextStatus: 'packed' },
+  { key: 'packed', label: '7. Packed & Ready', icon: 'package', nextStatus: 'shipped' },
+  { key: 'shipped', label: '8. In Transit', icon: 'truck' },
 ];
 
 function formatISTDate(dateVal: unknown): string {
@@ -190,9 +191,10 @@ export default function AdminProductionQueuePage() {
         <div className="flex items-center gap-2">
           <Link
             href="/admin/production/qc"
-            className="px-3.5 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors shadow-xs"
           >
-            🛡️ Launch QC Inspection Station →
+            <AdminIcon name="shield" size={14} />
+            <span>Launch QC Inspection Station →</span>
           </Link>
         </div>
       </div>
@@ -212,7 +214,9 @@ export default function AdminProductionQueuePage() {
                   : 'border-line bg-paper hover:bg-field text-ink/70'
               }`}
             >
-              <span className="text-lg block mb-1">{station.icon}</span>
+              <span className="block mb-1.5">
+                <AdminIcon name={station.icon} size={18} className={isActive ? 'text-gold-deep' : 'text-ink/60'} />
+              </span>
               <span className={`text-xs block font-bold truncate ${isActive ? 'text-ink' : 'text-ink/80'}`}>
                 {station.label}
               </span>
@@ -225,7 +229,7 @@ export default function AdminProductionQueuePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border border-line bg-field/40">
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-ink flex items-center gap-2">
-            <span>{currentStationConfig?.icon}</span>
+            {currentStationConfig && <AdminIcon name={currentStationConfig.icon} size={16} className="text-gold" />}
             <span>{currentStationConfig?.label} Station</span>
             <span className="text-xs text-ink/50 font-mono">({orders.length} in queue)</span>
           </span>
@@ -239,9 +243,10 @@ export default function AdminProductionQueuePage() {
                   type="button"
                   onClick={handleDownloadZip}
                   disabled={isDownloadingZip}
-                  className="px-3.5 py-1.5 rounded-xl bg-ink text-gold hover:bg-ink/80 text-xs font-bold transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-ink text-gold hover:bg-ink/80 text-xs font-bold transition-colors disabled:opacity-50"
                 >
-                  {isDownloadingZip ? 'Generating ZIP...' : `📥 Download Batch ZIP (${selectedIds.size})`}
+                  <AdminIcon name="download" size={14} />
+                  <span>{isDownloadingZip ? 'Generating ZIP...' : `Download Batch ZIP (${selectedIds.size})`}</span>
                 </button>
               )}
 
@@ -270,7 +275,9 @@ export default function AdminProductionQueuePage() {
           </div>
         ) : orders.length === 0 ? (
           <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block">✨</span>
+            <div className="flex justify-center mb-1">
+              <AdminIcon name="check" size={32} className="text-emerald-500" />
+            </div>
             <p>Station queue is currently clear! No orders pending at {currentStationConfig?.label}.</p>
           </div>
         ) : (

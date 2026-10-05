@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPaise } from '../../../lib/format-price';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
@@ -173,7 +174,7 @@ export default function AdminInventoryPage() {
 
         {dirtyCount > 0 && (
           <div className="flex items-center gap-2 bg-gold/10 border border-gold/30 px-3 py-1.5 rounded-xl text-xs font-semibold text-gold-deep">
-            <span>⚡ {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}</span>
+            <span className="font-semibold">{dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}</span>
           </div>
         )}
       </div>
@@ -216,7 +217,7 @@ export default function AdminInventoryPage() {
 
         <div className="relative flex-1 max-w-xs">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -337,7 +338,7 @@ export default function AdminInventoryPage() {
                         {item.sizeLabel} · {item.frameColour}
                       </td>
                       <td className="p-3 font-bold text-ink">
-                        ₹{item.price}
+                        {formatPaise(item.price)}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">

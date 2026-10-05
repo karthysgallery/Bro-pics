@@ -44,6 +44,10 @@ export const SettingsStoreSchema = z
     supportPhone: z.string().min(1),
     processingDays: z.number().int().nonnegative(),
     description: z.string().optional(),
+    // Seller identity printed on tax invoices. Optional — and never invented:
+    // an invoice shows only what the owner has actually entered here.
+    legalName: z.string().optional(),
+    address: z.string().optional(),
   })
   .strict();
 

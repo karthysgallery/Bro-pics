@@ -274,7 +274,7 @@ export default function AdminCategoriesPage() {
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -339,7 +339,7 @@ export default function AdminCategoriesPage() {
                     {category.image ? (
                       <img src={category.image} alt={category.name} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-xs text-ink/30">🖼️</span>
+                      <span className="text-xs text-ink/30"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
                     )}
                   </div>
 
@@ -472,7 +472,7 @@ export default function AdminCategoriesPage() {
                 type="text"
                 value={form.seoTitle || ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, seoTitle: e.target.value }))}
-                placeholder="Handcrafted Wooden Photo Frames Online | BroPics"
+                placeholder="Handcrafted Wooden Photo Frames Online | KarthysGallery"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
               />
             </FormField>

@@ -94,16 +94,56 @@ describe('reviews collection', () => {
 });
 
 describe('users collection', () => {
-  it('allows the owning user to read and write their own profile', async () => {
+  it('allows the owning user to read and write their own profile fields', async () => {
     const userA = testEnv.authenticatedContext('user_a');
     const db = userA.firestore();
-    await assertSucceeds(db.doc('users/user_a').set({ phone: '+91123' }));
+    await assertSucceeds(db.doc('users/user_a').set({ displayName: 'A', firstName: 'A', updatedAt: new Date() }));
     await assertSucceeds(db.doc('users/user_a').get());
+    await assertSucceeds(db.doc('users/user_a').set({ displayName: 'A2' }, { merge: true }));
+  });
+
+  it('allows creating a profile whose phone matches the verified phone_number claim', async () => {
+    const userA = testEnv.authenticatedContext('user_a', { phone_number: '+919876543210' });
+    await assertSucceeds(userA.firestore().doc('users/user_a').set({ id: 'user_a', phone: '+919876543210', displayName: 'A' }));
+  });
+
+  it('denies creating a profile with someone else\'s phone number (phone squatting)', async () => {
+    const userA = testEnv.authenticatedContext('user_a', { phone_number: '+919876543210' });
+    await assertFails(userA.firestore().doc('users/user_a').set({ phone: '+919999999999', displayName: 'A' }));
+  });
+
+  it('denies a customer from granting themselves a role or touching server-owned fields', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('users/user_a').set({ phone: '+919876543210', role: 'customer', totalSpent: 0, passwordHash: 'h' });
+    });
+    const db = testEnv.authenticatedContext('user_a').firestore();
+    await assertFails(db.doc('users/user_a').set({ role: 'super_admin' }, { merge: true }));
+    await assertFails(db.doc('users/user_a').set({ passwordHash: 'attacker' }, { merge: true }));
+    await assertFails(db.doc('users/user_a').set({ totalSpent: 999999 }, { merge: true }));
+    await assertFails(db.doc('users/user_a').set({ phone: '+919999999999' }, { merge: true }));
+    await assertFails(db.doc('users/user_a').set({ disabled: false, status: 'active' }, { merge: true }));
+  });
+
+  it('still allows a merge that re-sends unchanged id/phone (what the profile page does)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('users/user_a').set({ id: 'user_a', phone: '+919876543210', role: 'customer' });
+    });
+    const db = testEnv.authenticatedContext('user_a').firestore();
+    await assertSucceeds(
+      db.doc('users/user_a').set({ id: 'user_a', phone: '+919876543210', displayName: 'New Name', updatedAt: new Date() }, { merge: true })
+    );
+  });
+
+  it('denies deleting the profile doc from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('users/user_a').set({ phone: '+91123' });
+    });
+    await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('users/user_a').delete());
   });
 
   it('denies a different user from writing to someone else\'s profile', async () => {
     const userB = testEnv.authenticatedContext('user_b');
-    await assertFails(userB.firestore().doc('users/user_a').set({ phone: '+91999' }));
+    await assertFails(userB.firestore().doc('users/user_a').set({ displayName: 'x' }));
   });
 
   it('allows staff to read but not write another user\'s profile', async () => {
@@ -113,7 +153,29 @@ describe('users collection', () => {
     const staff = testEnv.authenticatedContext('staff_1', { role: 'staff' });
     const db = staff.firestore();
     await assertSucceeds(db.doc('users/user_a').get());
-    await assertFails(db.doc('users/user_a').set({ phone: '+91999' }));
+    await assertFails(db.doc('users/user_a').set({ displayName: 'x' }));
+  });
+});
+
+describe('super_admin role', () => {
+  it('can read any order and user, exactly like admin (the owner account is super_admin)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const seedDb = ctx.firestore();
+      await seedDb.doc('orders/order_1').set({ userId: 'user_a' });
+      await seedDb.doc('users/user_a').set({ phone: '+91123' });
+    });
+    const db = testEnv.authenticatedContext('owner', { role: 'super_admin' }).firestore();
+    await assertSucceeds(db.doc('orders/order_1').get());
+    await assertSucceeds(db.doc('users/user_a').get());
+    await assertFails(db.doc('orders/order_1').set({ userId: 'x' }));
+  });
+
+  it('a content_manager still cannot read orders', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('orders/order_1').set({ userId: 'user_a' });
+    });
+    const cm = testEnv.authenticatedContext('cm', { role: 'content_manager' });
+    await assertFails(cm.firestore().doc('orders/order_1').get());
   });
 });
 
@@ -211,3 +273,46 @@ describe('customizations collection', () => {
     await assertSucceeds(staff.firestore().doc('customizations/c1').get());
   });
 });
+
+describe('personalizationTemplates', () => {
+  async function seed() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.doc('personalizationTemplates/t1').set({ id: 't1', name: 'T1' });
+      await db.doc('personalizationTemplates/t1/versions/1').set({ status: 'published' });
+      await db.doc('personalizationTemplates/t1/versions/2').set({ status: 'draft' });
+      await db.doc('personalizationTemplates/t1/versions/3').set({ status: 'review' });
+      await db.doc('personalizationTemplates/t1/versions/4').set({ status: 'archived' });
+    });
+  }
+
+  it('lets anyone read published and archived versions (so saved carts/orders still open their design)', async () => {
+    await seed();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(anon.doc('personalizationTemplates/t1/versions/1').get());
+    await assertSucceeds(anon.doc('personalizationTemplates/t1/versions/4').get());
+  });
+
+  it('hides drafts and in-review versions from customers and anonymous visitors', async () => {
+    await seed();
+    const customer = testEnv.authenticatedContext('user_a').firestore();
+    await assertFails(customer.doc('personalizationTemplates/t1/versions/2').get());
+    await assertFails(customer.doc('personalizationTemplates/t1/versions/3').get());
+    await assertFails(testEnv.unauthenticatedContext().firestore().doc('personalizationTemplates/t1/versions/2').get());
+  });
+
+  it('keeps the admin summary list staff-only', async () => {
+    await seed();
+    await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('personalizationTemplates/t1').get());
+    await assertSucceeds(testEnv.authenticatedContext('s', { role: 'staff' }).firestore().doc('personalizationTemplates/t1').get());
+  });
+
+  it('lets staff read drafts, but nobody — not even an admin — write from the client', async () => {
+    await seed();
+    const admin = testEnv.authenticatedContext('a', { role: 'super_admin' }).firestore();
+    await assertSucceeds(admin.doc('personalizationTemplates/t1/versions/2').get());
+    await assertFails(admin.doc('personalizationTemplates/t1/versions/2').set({ status: 'published' }));
+    await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('personalizationTemplates/t9').set({ x: 1 }));
+  });
+});
+

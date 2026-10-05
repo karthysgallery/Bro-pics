@@ -130,14 +130,19 @@ export default function AdminCouponsPage() {
       const payload = {
         code: form.code.trim().toUpperCase(),
         type: form.type,
-        value: form.type === 'flat' ? form.value * 100 : form.value,
-        minOrder: form.minOrder ? form.minOrder * 100 : 0,
-        maxDiscountCap: form.maxDiscountCap ? form.maxDiscountCap * 100 : undefined,
+        value: form.type === 'flat' ? Math.round(form.value * 100) : form.value,
+        minOrder: form.minOrder ? Math.round(form.minOrder * 100) : 0,
+        maxDiscountCap: form.maxDiscountCap ? Math.round(form.maxDiscountCap * 100) : undefined,
         perUserLimit: Number(form.perUserLimit) || 1,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : undefined,
         startsAt: new Date(form.startsAt).toISOString(),
         endsAt: new Date(form.endsAt).toISOString(),
-        appliesTo: 'all' as const,
+        // This form has no scope controls, so an edit must carry the coupon's
+        // existing scope through untouched — hard-coding 'all' here used to turn a
+        // product- or category-limited coupon into a store-wide one on any edit.
+        appliesTo: editingCoupon?.appliesTo ?? ('all' as const),
+        ...(editingCoupon?.productIds && { productIds: editingCoupon.productIds }),
+        ...(editingCoupon?.categoryIds && { categoryIds: editingCoupon.categoryIds }),
         isActive: form.isActive,
       };
 
@@ -212,7 +217,7 @@ export default function AdminCouponsPage() {
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"

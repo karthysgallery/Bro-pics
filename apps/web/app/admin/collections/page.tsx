@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPaise } from '../../../lib/format-price';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
@@ -236,7 +237,7 @@ export default function AdminCollectionsPage() {
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -378,7 +379,7 @@ export default function AdminCollectionsPage() {
                     />
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-semibold text-ink block truncate">{p.title}</span>
-                      <span className="text-2xs text-ink/50 font-mono">₹{p.basePrice} · /{p.slug}</span>
+                      <span className="text-2xs text-ink/50 font-mono">{formatPaise(p.basePrice)} · /{p.slug}</span>
                     </div>
                   </label>
                 );

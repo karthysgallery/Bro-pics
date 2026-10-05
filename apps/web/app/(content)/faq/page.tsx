@@ -4,7 +4,7 @@ import { PageIntro } from '../../../components/content/PageIntro';
 import { getActiveFaqs } from '../../../lib/firestore-content';
 
 export const metadata: Metadata = {
-  title: 'FAQ — BroPics',
+  title: 'FAQ — KarthysGallery',
   description: 'Answers about photos, sizing, delivery, personalization and refunds.',
 };
 

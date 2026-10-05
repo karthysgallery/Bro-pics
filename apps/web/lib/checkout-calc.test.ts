@@ -45,6 +45,13 @@ describe('priceCartLines', () => {
         unitPrice: 79900,
         qty: 2,
         previewPath: 'uploads/sess_1/previews/pers_1/slot-0.png',
+        // Variant details frozen onto the order line at purchase time.
+        sku: 'SKU1',
+        sizeLabel: '8x12',
+        frameColour: 'walnut',
+        material: 'wood',
+        widthIn: 8,
+        heightIn: 12,
       },
     ]);
   });
@@ -87,9 +94,10 @@ describe('priceCartLines', () => {
 
 describe('calculateSubtotal', () => {
   it('sums unitPrice * qty across all priced lines', () => {
+    const snapshot = { sku: 'SKU', sizeLabel: '8x12', frameColour: 'Black', material: 'Wood', widthIn: 8, heightIn: 12 };
     const priced = [
-      { variantId: 'v1', productId: 'p1', personalizationId: 'pers_1', title: 'A', unitPrice: 1000, qty: 2, previewPath: null },
-      { variantId: 'v2', productId: 'p2', personalizationId: 'pers_2', title: 'B', unitPrice: 500, qty: 3, previewPath: null },
+      { variantId: 'v1', productId: 'p1', personalizationId: 'pers_1', title: 'A', unitPrice: 1000, qty: 2, previewPath: null, ...snapshot },
+      { variantId: 'v2', productId: 'p2', personalizationId: 'pers_2', title: 'B', unitPrice: 500, qty: 3, previewPath: null, ...snapshot },
     ];
     expect(calculateSubtotal(priced)).toBe(1000 * 2 + 500 * 3);
   });

@@ -26,7 +26,13 @@ export async function GET(request: NextRequest) {
     searchCategoriesPage(query),
   ]);
   return NextResponse.json({
-    products: products.slice(0, 6).map((p) => ({ id: p.id, title: p.title, slug: p.slug })),
+    products: products.slice(0, 6).map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      ...(p.primaryImageUrl ? { image: p.primaryImageUrl } : {}),
+      ...(p.minPrice != null ? { pricePaise: p.minPrice } : (p.basePrice != null ? { pricePaise: p.basePrice } : {})),
+    })),
     categories: categories.slice(0, 3).map((c) => ({ id: c.id, name: c.name, slug: c.slug, image: c.image })),
     popularSearches: [],
   });

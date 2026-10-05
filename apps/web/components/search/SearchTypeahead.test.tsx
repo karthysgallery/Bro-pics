@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SearchTypeahead } from './SearchTypeahead';
 
@@ -79,7 +79,7 @@ describe('SearchTypeahead', () => {
     expect(screen.getByText('Popular searches')).toBeInTheDocument();
   });
 
-  it('[FE-31] prefers recent searches over popular searches when both exist', async () => {
+  it('shows both recent searches and popular searches when returning user focuses input', async () => {
     localStorage.setItem('bropics_recent_searches', JSON.stringify(['photo frame']));
     vi.stubGlobal(
       'fetch',
@@ -91,7 +91,7 @@ describe('SearchTypeahead', () => {
     render(<SearchTypeahead />);
     fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
     await waitFor(() => expect(screen.getByText('photo frame')).toBeInTheDocument());
-    expect(screen.queryByText('Popular searches')).not.toBeInTheDocument();
+    expect(screen.getByText('Popular searches')).toBeInTheDocument();
   });
 
   it('[FE-31] shows a category suggestion with a thumbnail alongside product suggestions', async () => {

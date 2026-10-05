@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OrderPersonalizationSnapshotSchema } from '../personalization/versioning';
 
 export const OrderItemSchema = z.object({
   id: z.string(),
@@ -10,6 +11,20 @@ export const OrderItemSchema = z.object({
   qty: z.number().int().positive(),
   // A Storage object path, never a signed URL — see Upload.originalPath.
   previewPath: z.string().nullable(),
+  // Variant details as they were at the moment of purchase, copied from the
+  // server-side variant at create-order. An order is a historical record: if
+  // the variant is later renamed, resized or deleted, the order (and what
+  // production/invoicing read from it) must not change. All optional so
+  // orders placed before this snapshot existed still parse.
+  sku: z.string().optional(),
+  sizeLabel: z.string().optional(),
+  frameColour: z.string().optional(),
+  material: z.string().optional(),
+  widthIn: z.number().positive().optional(),
+  heightIn: z.number().positive().optional(),
+  // Structured personalization (template v2 + the customer's state) frozen at purchase. Optional:
+  // orders from before the engine, and non-personalized items, simply don't have it.
+  personalization: OrderPersonalizationSnapshotSchema.optional(),
 });
 
 export type OrderItem = z.infer<typeof OrderItemSchema>;

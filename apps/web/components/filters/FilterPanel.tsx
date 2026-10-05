@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { Chip } from '../ui/Chip';
 import { Swatch } from '../ui/Swatch';
 
@@ -12,12 +15,6 @@ interface FilterPanelProps {
   onToggleColour: (colour: string) => void;
   onToggleOrientation: (orientation: string) => void;
   onClearAll: () => void;
-  // [FE-30] minRating/inStockOnly were already understood end to end by
-  // parseSearchFilters and the backend's own buildProductQueryPlan —
-  // nothing here ever exposed a way to actually set them, so both are
-  // optional and default to "not shown"/off rather than becoming a
-  // required prop every existing FilterPanel caller/test would need to
-  // update just to keep building.
   minRating?: number | null;
   onSetMinRating?: (minRating: number | null) => void;
   inStockOnly?: boolean;
@@ -48,81 +45,226 @@ export function FilterPanel({
   inStockOnly = false,
   onToggleInStockOnly,
 }: FilterPanelProps) {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    size: true,
+    orientation: true,
+    colour: true,
+    rating: true,
+    availability: true,
+  });
+
+  const toggleSection = (section: string) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const hasAnyFilter =
+    selectedSizes.length > 0 ||
+    selectedColours.length > 0 ||
+    selectedOrientations.length > 0 ||
+    minRating !== null ||
+    inStockOnly;
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">Filters</h3>
-        <button onClick={onClearAll} className="text-sm text-accent hover:text-accent-dark">
+    <div className="flex flex-col gap-5 divide-y divide-line/40">
+      <div className="flex items-center justify-between pb-1">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-ink">Filters</h3>
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="text-xs font-semibold text-gold-deep hover:underline"
+        >
           Clear all
         </button>
       </div>
 
       {availableSizes.length > 0 && (
-        <div>
-          <h4 className="text-xs font-semibold text-ink/70 mb-2">Size</h4>
-          <div className="flex flex-wrap gap-2">
-            {availableSizes.map((size) => (
-              <Chip key={size} label={size} active={selectedSizes.includes(size)} onClick={() => onToggleSize(size)} />
-            ))}
-          </div>
+        <div className="pt-4">
+          <button
+            type="button"
+            onClick={() => toggleSection('size')}
+            aria-expanded={openSections.size}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/80 hover:text-ink mb-2 py-0.5"
+          >
+            <span>Size</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-ink/40 transition-transform duration-200 ${openSections.size ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openSections.size && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {availableSizes.map((size) => (
+                <Chip key={size} label={size} active={selectedSizes.includes(size)} onClick={() => onToggleSize(size)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {availableOrientations.length > 0 && (
-        <div>
-          <h4 className="text-xs font-semibold text-ink/70 mb-2">Orientation</h4>
-          <div className="flex flex-wrap gap-2">
-            {availableOrientations.map((orientation) => (
-              <Chip
-                key={orientation}
-                label={ORIENTATION_LABELS[orientation] ?? orientation}
-                active={selectedOrientations.includes(orientation)}
-                onClick={() => onToggleOrientation(orientation)}
-              />
-            ))}
-          </div>
+        <div className="pt-4">
+          <button
+            type="button"
+            onClick={() => toggleSection('orientation')}
+            aria-expanded={openSections.orientation}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/80 hover:text-ink mb-2 py-0.5"
+          >
+            <span>Orientation</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-ink/40 transition-transform duration-200 ${openSections.orientation ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openSections.orientation && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {availableOrientations.map((orientation) => (
+                <Chip
+                  key={orientation}
+                  label={ORIENTATION_LABELS[orientation] ?? orientation}
+                  active={selectedOrientations.includes(orientation)}
+                  onClick={() => onToggleOrientation(orientation)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {availableColours.length > 0 && (
-        <div>
-          <h4 className="text-xs font-semibold text-ink/70 mb-2">Frame design</h4>
-          <div className="flex flex-wrap gap-3">
-            {availableColours.map((colour) => (
-              <Swatch
-                key={colour}
-                label={colour}
-                active={selectedColours.includes(colour)}
-                onClick={() => onToggleColour(colour)}
-              />
-            ))}
-          </div>
+        <div className="pt-4">
+          <button
+            type="button"
+            onClick={() => toggleSection('colour')}
+            aria-expanded={openSections.colour}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/80 hover:text-ink mb-2 py-0.5"
+          >
+            <span>Frame finish</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-ink/40 transition-transform duration-200 ${openSections.colour ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openSections.colour && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {availableColours.map((colour) => (
+                <Swatch
+                  key={colour}
+                  label={colour}
+                  active={selectedColours.includes(colour)}
+                  onClick={() => onToggleColour(colour)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {onSetMinRating && (
-        <div>
-          <h4 className="text-xs font-semibold text-ink/70 mb-2">Rating</h4>
-          <div className="flex flex-wrap gap-2">
-            {RATING_OPTIONS.map((rating) => (
-              <Chip
-                key={rating}
-                label={`${rating}★ & up`}
-                active={minRating === rating}
-                onClick={() => onSetMinRating(minRating === rating ? null : rating)}
-              />
-            ))}
-          </div>
+        <div className="pt-4">
+          <button
+            type="button"
+            onClick={() => toggleSection('rating')}
+            aria-expanded={openSections.rating}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/80 hover:text-ink mb-2 py-0.5"
+          >
+            <span>Rating</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-ink/40 transition-transform duration-200 ${openSections.rating ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openSections.rating && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {RATING_OPTIONS.map((rating) => (
+                <Chip
+                  key={rating}
+                  label={`${rating}★ & up`}
+                  active={minRating === rating}
+                  onClick={() => onSetMinRating(minRating === rating ? null : rating)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {onToggleInStockOnly && (
-        <div>
-          <h4 className="text-xs font-semibold text-ink/70 mb-2">Availability</h4>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={inStockOnly} onChange={onToggleInStockOnly} />
-            In stock only
-          </label>
+        <div className="pt-4">
+          <button
+            type="button"
+            onClick={() => toggleSection('availability')}
+            aria-expanded={openSections.availability}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/80 hover:text-ink mb-2 py-0.5"
+          >
+            <span>Availability</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-ink/40 transition-transform duration-200 ${openSections.availability ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openSections.availability && (
+            <div className="pt-1">
+              <label className="flex items-center gap-2.5 text-xs font-medium text-ink cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={inStockOnly}
+                  onChange={onToggleInStockOnly}
+                  className="rounded border-line text-ink focus:ring-1 focus:ring-ink"
+                />
+                In stock only
+              </label>
+            </div>
+          )}
         </div>
       )}
     </div>

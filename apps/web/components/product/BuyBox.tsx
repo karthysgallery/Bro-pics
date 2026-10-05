@@ -12,6 +12,7 @@ import { orientationFromDimensions, type Orientation } from '../../lib/orientati
 import { formatPaise } from '../../lib/format-price';
 import { HelpCallout } from './HelpCallout';
 import { PincodeChecker } from '../checkout/PincodeChecker';
+import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
 
 const ORIENTATION_LABELS: Record<Orientation, string> = {
   portrait: 'Portrait',
@@ -73,6 +74,7 @@ interface BuyBoxProps {
   // that SAME line's price/preview (via updateItem) instead of adding a
   // new one, and changes the button's own label to match the action.
   isEditingCartLine?: boolean;
+  children?: React.ReactNode;
 }
 
 export function BuyBox({
@@ -91,9 +93,11 @@ export function BuyBox({
   submitError,
   onAddToCart,
   isEditingCartLine,
+  children,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
   const { addItem, updateItem } = useCart();
+  const shippingPromise = freeShippingPromise(useShippingSettings());
 
   // Options are scoped to the current orientation + the other dimension's
   // current selection, so the user can never click into a combination that
@@ -146,6 +150,9 @@ export function BuyBox({
           unitPriceSnapshot: selectedVariant.price,
           previewPath,
         });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('karthys:open-cart'));
+        }
         return;
       }
       addItem({
@@ -157,6 +164,9 @@ export function BuyBox({
         previewPath,
         productSlug: product.slug,
       });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('karthys:open-cart'));
+      }
     });
   };
 
@@ -222,12 +232,43 @@ export function BuyBox({
         <VariantSelector label="Finish" options={colours} selected={selectedColour} onSelect={onSelectColour} display="swatch" />
       </div>
 
-      {/* Primary Action Button */}
-      <div className="my-3">
+      {children}
+
+      {/* Delivery Information Section */}
+      <div className="my-3 p-3.5 rounded-2xl bg-paper border border-line/70 space-y-2.5">
+        <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-accent shrink-0">
+            <rect x="1" y="3" width="15" height="13" rx="2" />
+            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+            <circle cx="5.5" cy="18.5" r="2.5" />
+            <circle cx="18.5" cy="18.5" r="2.5" />
+          </svg>
+          <span>Delivery & Dispatch</span>
+        </div>
+        <p className={`text-xs ${inStock ? 'text-ink/80' : 'text-alert'}`}>
+          {inStock ? `Made to order · Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} working days` : stockMessage}
+        </p>
+        <p className="text-2xs text-ink/50">
+          {selectedVariant?.sku ? `SKU ${selectedVariant.sku}` : ''}
+          {selectedVariant?.sku && shippingPromise ? ' · ' : ''}
+          {shippingPromise}
+        </p>
+        <div className="pt-1 border-t border-line/60">
+          <PincodeChecker />
+        </div>
+      </div>
+
+      {/* Quantity & Primary Action Button */}
+      <div className="my-2 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-ink/70 font-medium">Quantity</span>
+          <QuantityStepper value={quantity} onChange={setQuantity} />
+        </div>
+
         {!personalizationReady && personalizationReason && (
-          <p className="text-xs text-ink/60 mb-2">{personalizationReason}</p>
+          <p className="text-xs text-ink/60">{personalizationReason}</p>
         )}
-        {submitError && <p className="text-xs text-alert mb-2">{submitError}</p>}
+        {submitError && <p className="text-xs text-alert">{submitError}</p>}
 
         <Button
           onClick={handleAddToCart}
@@ -240,18 +281,8 @@ export function BuyBox({
         </Button>
       </div>
 
-      {/* Stock & Meta info */}
-      <div className="space-y-1 text-xs text-ink/70 pb-3.5 border-b border-line">
-        <p className={inStock ? 'font-medium text-ink' : 'text-ink/50'}>
-          {inStock ? `Made to order · Dispatches in ${product.dispatchDaysMin}-${product.dispatchDaysMax} working days` : stockMessage}
-        </p>
-        <p className="text-ink/50">
-          {selectedVariant?.sku ? `SKU ${selectedVariant.sku} · ` : ''}Free shipping above ₹1,999
-        </p>
-      </div>
-
       {/* Accordions */}
-      <div className="divide-y divide-line text-sm">
+      <div className="divide-y divide-line text-sm mt-3 pt-2 border-t border-line">
         <details className="group py-3 cursor-pointer">
           <summary className="flex items-center justify-between font-medium text-ink list-none">
             <span>Materials & care</span>
@@ -263,26 +294,37 @@ export function BuyBox({
         </details>
         <details className="group py-3 cursor-pointer">
           <summary className="flex items-center justify-between font-medium text-ink list-none">
-            <span>Delivery & returns</span>
+            <span>Returns & warranty</span>
             <span className="transition group-open:rotate-45 text-lg font-light">+</span>
           </summary>
-          <div className="pt-2 text-xs text-ink/70 leading-relaxed space-y-2">
+          <div className="pt-2 text-xs text-ink/70 leading-relaxed">
             <p>Dispatched in protective shockproof packaging. Free returns or replacement if damaged in transit.</p>
-            <PincodeChecker className="mt-2" />
           </div>
         </details>
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-line">
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="text-xs text-ink/70 font-medium">Quantity</span>
-          <QuantityStepper value={quantity} onChange={setQuantity} />
-        </div>
       </div>
 
       <HelpCallout
         whatsappHref={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}?text=${encodeURIComponent(whatsappMessage)}`}
       />
+
+      {/* Sticky Mobile Bottom CTA Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-paper/95 backdrop-blur-md border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-ink truncate">Total {formatPaise(price * quantity)}</div>
+          <div className="text-3xs text-ink/60 truncate">{selectedSize || 'Standard'} · {selectedColour || 'Default'}</div>
+        </div>
+        <button
+          type="button"
+          aria-label="Quick checkout"
+          onClick={handleAddToCart}
+          disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
+          className="h-11 min-h-[44px] px-6 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs"
+        >
+          {isEditingCartLine
+            ? submitting ? 'Saving…' : 'Save'
+            : submitting ? 'Adding…' : 'Add to cart'}
+        </button>
+      </div>
     </div>
   );
 }

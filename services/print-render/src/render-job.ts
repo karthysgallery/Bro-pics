@@ -1,5 +1,7 @@
 import type { Rect, RotationDeg } from '@bro-pics/shared';
 import { renderPrintFile } from './render-print-file';
+import { renderTemplate, type AssetLoader } from './render-template';
+import type { OrderPersonalizationSnapshot } from '@bro-pics/shared';
 
 export interface RenderJobDependencies {
   // Firestore-backed steps — see packages/shared/src/print-jobs for the
@@ -64,6 +66,13 @@ export interface RenderJobDependencies {
   uploadPrintFile(orderId: string, itemId: string, filename: string, buffer: Buffer, contentType: string): Promise<string>;
   markCustomizationsRendered(customizationIds: string[], renderedFilePath: string): Promise<void>;
   markCustomizationsFailed(customizationIds: string[]): Promise<void>;
+  /**
+   * Template-v2 items carry a frozen personalization snapshot on the order item. Optional so
+   * existing wiring/tests (legacy per-slot customizations only) keep working unchanged.
+   */
+  getOrderItemPersonalization?(orderId: string, itemId: string): Promise<OrderPersonalizationSnapshot | null>;
+  /** Bytes of a template/mask asset by its media-library id (customer photos go through getUpload/downloadPrivateFile). */
+  loadTemplateAsset?(assetId: string): Promise<Buffer>;
 }
 
 /**
@@ -98,6 +107,30 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
   try {
     const orderItem = await deps.getOrderItem(job.orderId, job.itemId);
     if (!orderItem) throw new Error(`Order item ${job.itemId} not found on order ${job.orderId}`);
+
+    // Template-v2 item: render straight from its frozen template + state. The snapshot is the
+    // whole truth — nothing here consults the live product or the current template version, so
+    // an old order prints exactly what the customer bought.
+    const snapshot = deps.getOrderItemPersonalization ? await deps.getOrderItemPersonalization(job.orderId, job.itemId) : null;
+    if (snapshot) {
+      const photoAssetIds = new Set(Object.values(snapshot.state.slots).map((p) => p.assetId));
+      const assets: AssetLoader = {
+        async load(assetId) {
+          if (photoAssetIds.has(assetId)) {
+            const upload = await deps.getUpload(assetId);
+            if (!upload) throw new Error(`Upload ${assetId} not found`);
+            return deps.downloadPrivateFile(upload.originalPath);
+          }
+          if (!deps.loadTemplateAsset) throw new Error('No template asset loader configured');
+          return deps.loadTemplateAsset(assetId);
+        },
+      };
+      // scale 1 = the template's own canvas = print resolution; preview-only (unprinted) layers stay out.
+      const printBuffer = await renderTemplate({ template: snapshot.template, state: snapshot.state, assets, scale: 1, includeUnprinted: false });
+      const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');
+      await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath);
+      return;
+    }
 
     const variant = await deps.getVariant(orderItem.variantId);
     if (!variant) throw new Error(`Variant ${orderItem.variantId} not found`);

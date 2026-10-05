@@ -8,6 +8,7 @@ import { MediaPickerModal } from '../../../components/admin/MediaPickerModal';
 import { StatusChip } from '../../../components/admin/StatusChip';
 import { FormField } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
+import { AdminIcon, type AdminIconName } from '../../../components/admin/AdminIcon';
 import type { HomepageSection } from '@bro-pics/shared';
 
 interface SectionFormState {
@@ -19,16 +20,16 @@ interface SectionFormState {
   content: Record<string, unknown>;
 }
 
-const SECTION_TYPE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
-  hero: { label: 'Hero Carousel / Banner', icon: '🌟', desc: 'Main full-width headline banner with desktop/mobile photos and CTA' },
-  categories: { label: 'Category Browse Tiles', icon: '🗂️', desc: 'Curated category cards with image thumbnails' },
-  bestsellers: { label: 'Bestseller Highlights', icon: '🔥', desc: 'Top-selling frames with dynamic ratings & price' },
-  how_it_works: { label: 'How It Works (3 Steps)', icon: '✨', desc: 'Upload photo → Customize frame → Doorstep delivery' },
-  featured_collection: { label: 'Featured Campaign Grid', icon: '🎨', desc: 'Curated collection showcase block' },
-  videos: { label: 'Customer Video Showcase', icon: '🎬', desc: 'Reels-style unboxing and customer reaction videos' },
-  reviews: { label: 'Featured Customer Reviews', icon: '⭐', desc: 'Verified buyer testimonials and star ratings' },
-  why_us: { label: 'Why Choose BroPics', icon: '💎', desc: 'Solid wood, museum glass, 300 DPI archival guarantees' },
-  closing_cta: { label: 'Closing CTA Banner', icon: '🚀', desc: 'Bottom call-to-action banner' },
+const SECTION_TYPE_LABELS: Record<string, { label: string; icon: AdminIconName; desc: string }> = {
+  hero: { label: 'Hero Carousel / Banner', icon: 'star', desc: 'Main full-width headline banner with desktop/mobile photos and CTA' },
+  categories: { label: 'Category Browse Tiles', icon: 'grid', desc: 'Curated category cards with image thumbnails' },
+  bestsellers: { label: 'Bestseller Highlights', icon: 'tag', desc: 'Top-selling frames with dynamic ratings & price' },
+  how_it_works: { label: 'How It Works (3 Steps)', icon: 'check', desc: 'Upload photo → Customize frame → Doorstep delivery' },
+  featured_collection: { label: 'Featured Campaign Grid', icon: 'image', desc: 'Curated collection showcase block' },
+  videos: { label: 'Customer Video Showcase', icon: 'video', desc: 'Reels-style unboxing and customer reaction videos' },
+  reviews: { label: 'Featured Customer Reviews', icon: 'star', desc: 'Verified buyer testimonials and star ratings' },
+  why_us: { label: 'Why Choose KarthysGallery', icon: 'shield', desc: 'Solid wood, museum glass, 300 DPI archival guarantees' },
+  closing_cta: { label: 'Closing CTA Banner', icon: 'arrow-right', desc: 'Bottom call-to-action banner' },
 };
 
 export default function AdminHomepageBuilderPage() {
@@ -205,7 +206,7 @@ export default function AdminHomepageBuilderPage() {
           </div>
         ) : sections.length === 0 ? (
           <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block">🏠</span>
+            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
             <p>No homepage sections registered in the database.</p>
           </div>
         ) : (
@@ -213,7 +214,7 @@ export default function AdminHomepageBuilderPage() {
             {sections.map((sec, index) => {
               const meta = SECTION_TYPE_LABELS[sec.type] || {
                 label: sec.type.replace(/_/g, ' '),
-                icon: '📄',
+                icon: 'document' as AdminIconName,
                 desc: 'Standard homepage section',
               };
 
@@ -247,8 +248,8 @@ export default function AdminHomepageBuilderPage() {
                       </button>
                     </div>
 
-                    <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center text-xl shrink-0">
-                      {meta.icon}
+                    <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center shrink-0">
+                      <AdminIcon name={meta.icon} size={18} className="text-ink/70" />
                     </div>
 
                     <div>

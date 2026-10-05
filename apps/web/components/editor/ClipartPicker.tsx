@@ -14,13 +14,15 @@ export function ClipartPicker({ options, selectedId, onSelect }: ClipartPickerPr
 
   return (
     <div className="mt-5 border-t border-line pt-5">
-      <span className="block text-sm font-semibold text-ink mb-3">Add a clipart (optional)</span>
-      <div className="flex flex-wrap gap-3" role="group" aria-label="Clipart">
+      <span className="block text-sm font-semibold text-ink mb-0.5">Add a decorative element (optional)</span>
+      <p className="text-xs text-ink/55 mb-3">Choose a decorative illustration to accent your frame.</p>
+      <div className="flex flex-wrap gap-3" role="group" aria-label="Decorative elements">
         {options.map((option) => (
           <button
             key={option.id}
             type="button"
             aria-label={option.label}
+            title={`Add decorative ${option.label}`}
             aria-pressed={selectedId === option.id}
             onClick={() => onSelect(selectedId === option.id ? null : option.id)}
             className="flex flex-col items-center gap-1.5 w-16 group"

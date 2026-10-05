@@ -58,7 +58,7 @@ const textFieldFontVariables = [
 ].join(' ');
 
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://bropics.example.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'),
   title: 'KarthysGallery — Personalized Photo Frames',
   description: 'Custom photo frames, personalized and delivered.',
 };

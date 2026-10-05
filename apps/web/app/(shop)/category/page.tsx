@@ -5,9 +5,9 @@ import { getActiveCategories } from '../../../lib/firestore-categories';
 import { Section } from '../../../components/ui/Section';
 
 export const metadata: Metadata = {
-  title: 'Shop all photo frame collections — BroPics',
+  title: 'Shop all photo frame collections — KarthysGallery',
   description:
-    'Browse every BroPics collection of personalized photo frames — pick a size and orientation, upload your photo, and preview it before you buy.',
+    'Browse every KarthysGallery collection of personalized photo frames — pick a size and orientation, upload your photo, and preview it before you buy.',
 };
 
 export default async function CategoryIndexPage() {
@@ -34,7 +34,7 @@ export default async function CategoryIndexPage() {
             Find the frame that fits your space.
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-ink/75 leading-relaxed">
-            Every BroPics frame is personalized and made to order — pick a collection below, choose
+            Every KarthysGallery frame is personalized and made to order — pick a collection below, choose
             your size, and upload the photo you want printed. You will see exactly how it looks
             inside the frame before you pay for it.
           </p>

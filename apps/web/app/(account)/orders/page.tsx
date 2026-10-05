@@ -11,16 +11,39 @@ import { PageSkeleton } from '../../../components/ui/Skeleton';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { Card } from '../../../components/ui/Card';
 import { resolveMediaUrl, getIdTokenSafe } from '../../../lib/resolve-media-url';
-import type { Order, OrderItem } from '@bro-pics/shared';
+import { isOrderInProgress, type Order, type OrderItem } from '@bro-pics/shared';
+import { SUPPORT_EMAIL } from '../../../lib/support-contact';
+import { formatPaise } from '../../../lib/format-price';
 
-function formatPaise(paise: number): string {
-  return (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// What the customer should understand about where this order is, in plain
+// language — never "being prepared" for something that hasn't been paid for.
+function orderBlurb(status: Order['status']): string {
+  switch (status) {
+    case 'pending_payment':
+      return "Payment wasn't completed, so this order isn't confirmed yet. Your items are still in your cart.";
+    case 'delivered':
+      return 'Delivered · We hope your wall loves it.';
+    case 'cancelled':
+      return 'This order was cancelled.';
+    case 'refunded':
+      return 'This order was refunded.';
+    case 'shipped':
+      return 'On its way to you.';
+    case 'replacement_issued':
+      return 'A replacement has been arranged.';
+    default:
+      return 'Your photo is being reviewed and prepared for crafting.';
+  }
 }
 
 export default function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Array<{ id: string; data: Order }> | null>(null);
   const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
+  // First line item's title/qty + how many lines in total, read from the
+  // order's own item snapshot (never the live product, which may have been
+  // renamed or repriced since).
+  const [summaries, setSummaries] = useState<Map<string, { title: string; qty: number; lineCount: number }>>(new Map());
   // [FE-01] A failed list query used to leave `orders` at null forever —
   // an infinite skeleton with no error and no way to retry.
   const [loadError, setLoadError] = useState(false);
@@ -49,14 +72,18 @@ export default function OrdersPage() {
             try {
               const itemsSnapshot = await getDocs(collection(db, 'orders', id, 'items'));
               const firstItem = itemsSnapshot.docs[0]?.data() as OrderItem | undefined;
-              if (!firstItem?.previewPath) return [id, null] as const;
-              return [id, await resolveMediaUrl(firstItem.previewPath, idToken)] as const;
+              const summary = firstItem
+                ? { title: firstItem.title, qty: firstItem.qty, lineCount: itemsSnapshot.docs.length }
+                : null;
+              const thumb = firstItem?.previewPath ? await resolveMediaUrl(firstItem.previewPath, idToken) : null;
+              return [id, thumb, summary] as const;
             } catch {
-              return [id, null] as const;
+              return [id, null, null] as const;
             }
           })
         );
-        setThumbnails(new Map(entries.filter((e): e is [string, string] => e[1] !== null)));
+        setThumbnails(new Map(entries.filter((e): e is readonly [string, string, typeof e[2]] => e[1] !== null).map(([id, url]) => [id, url])));
+        setSummaries(new Map(entries.filter((e) => e[2] !== null).map((e) => [e[0], e[2]!])));
       })
       .catch(() => setLoadError(true));
   }, [uid]);
@@ -84,7 +111,9 @@ export default function OrdersPage() {
   const filteredOrders = orders?.filter((o) => {
     if (filter === 'all') return true;
     if (filter === 'delivered') return o.data.status === 'delivered';
-    return o.data.status !== 'delivered' && o.data.status !== 'cancelled';
+    // 'In progress' = paid and on its way. Unpaid (abandoned/failed payment),
+    // cancelled and refunded orders only appear under 'All orders'.
+    return isOrderInProgress(o.data.status);
   }) ?? [];
 
   return (
@@ -99,7 +128,7 @@ export default function OrdersPage() {
       <div className="mb-6">
         <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">Your framed memories.</h1>
         <p className="text-xs text-ink/60">
-          {user.displayName ? `${user.displayName} · ` : ''}Everything you&apos;ve made personal with BroPics.
+          {user.displayName ? `${user.displayName} · ` : ''}Everything you&apos;ve made personal.
         </p>
       </div>
 
@@ -152,16 +181,10 @@ export default function OrdersPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-2xs font-semibold px-3 py-1 rounded-full whitespace-nowrap border ${
-                    data.status === 'delivered'
-                      ? 'border-green-300 text-green-700 bg-green-50'
-                      : data.status === 'cancelled'
-                      ? 'border-red-300 text-red-700 bg-red-50'
-                      : 'border-line text-ink/80 bg-field'
-                  }`}>
+                  <span className={`text-2xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${STATUS_CHIP_STYLES[data.status]}`}>
                     {statusLabel(data.status)}
                   </span>
-                  <span className="font-display text-base font-bold text-ink">₹{formatPaise(data.total)}</span>
+                  <span className="font-display text-base font-bold text-ink">{formatPaise(data.total)}</span>
                 </div>
               </div>
 
@@ -177,27 +200,38 @@ export default function OrdersPage() {
 
                 <div className="flex-1 min-w-0">
                   <h2 className="font-display text-base font-bold text-ink mb-1">
-                    {data.status === 'delivered' ? 'Your frame is home' : 'Personalised Photo Frame'}
+                    {summaries.get(id)
+                      ? `${summaries.get(id)!.title} × ${summaries.get(id)!.qty}${
+                          summaries.get(id)!.lineCount > 1 ? ` + ${summaries.get(id)!.lineCount - 1} more` : ''
+                        }`
+                      : 'Personalised Photo Frame'}
                   </h2>
-                  <p className="text-xs text-ink/60 mb-4">
-                    {data.status === 'delivered'
-                      ? 'Delivered · We hope your wall loves it.'
-                      : 'Your photo is being reviewed and prepared for crafting.'}
-                  </p>
+                  <p className="text-xs text-ink/60 mb-4">{orderBlurb(data.status)}</p>
 
                   <div className="flex flex-wrap items-center gap-3">
                     <Link
                       href={`/orders/${id}`}
                       className="px-5 py-2 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm"
                     >
-                      Track order
+                      {data.status === 'pending_payment' ? 'View order' : 'Track order'}
                     </Link>
-                    <Link
-                      href={`/orders/${id}/invoice`}
-                      className="px-5 py-2 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
-                    >
-                      View invoice
-                    </Link>
+                    {/* An invoice only exists once payment has been confirmed. */}
+                    {data.paymentStatus === 'paid' && (
+                      <Link
+                        href={`/orders/${id}/invoice`}
+                        className="px-5 py-2 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
+                      >
+                        View invoice
+                      </Link>
+                    )}
+                    {data.status === 'pending_payment' && (
+                      <Link
+                        href="/checkout"
+                        className="px-5 py-2 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
+                      >
+                        Complete payment
+                      </Link>
+                    )}
                     {data.status === 'delivered' && (
                       <Link
                         href={`/orders/${id}`}
@@ -215,7 +249,7 @@ export default function OrdersPage() {
       )}
 
       <p className="mt-8 text-center text-2xs text-ink/50">
-        Need help with an order? Contact hello@bropics.in with your order number.
+        Need help with an order? Contact {SUPPORT_EMAIL} with your order number.
       </p>
     </main>
   );

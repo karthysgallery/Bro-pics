@@ -12,6 +12,10 @@ export interface CartLine {
   // object literal in tests/seed data still typechecks; a line added
   // before this field existed just never gets an Edit link.
   productSlug?: string;
+  // Structured personalization (template v2): which template version the design was made on and
+  // the customer's state — asset IDS and transforms, never image bytes. The server re-verifies it
+  // at checkout (lib/personalization-order.ts); here it is only what the cart remembers.
+  personalization?: { templateId: string; templateVersion: number; state: unknown };
 }
 
 function lineKey(line: CartLine): string {

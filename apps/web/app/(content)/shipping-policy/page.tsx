@@ -5,7 +5,7 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Shipping policy — BroPics',
+  title: 'Shipping policy — KarthysGallery',
   description: 'Dispatch times, delivery estimates, charges and what happens if a parcel goes missing.',
 };
 

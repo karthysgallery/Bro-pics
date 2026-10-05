@@ -7,6 +7,7 @@ import { getFirestore, doc, getDoc, collection, getDocs } from 'firebase/firesto
 import { useAuth } from '../../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../../lib/firebase-client';
 import { PageSkeleton } from '../../../../../components/ui/Skeleton';
+import { getInvoiceSeller, type InvoiceSeller } from '../../../../../lib/invoice-seller';
 import type { Order, OrderItem, Address } from '@bro-pics/shared';
 
 interface InvoicePageProps {
@@ -40,10 +41,18 @@ export default function InvoicePage({ params }: InvoicePageProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+  // Seller identity exactly as the owner saved it in Admin > Store settings
+  // (settings/{key} is world-readable). Nothing is invented: a field the owner
+  // hasn't entered simply isn't printed.
+  const [seller, setSeller] = useState<InvoiceSeller>({ name: 'KarthysGallery' });
 
   useEffect(() => {
     params.then((p) => setOrderId(p.orderId));
   }, [params]);
+
+  useEffect(() => {
+    getInvoiceSeller().then(setSeller);
+  }, []);
 
   useEffect(() => {
     if (!uid || !orderId) return;
@@ -60,6 +69,22 @@ export default function InvoicePage({ params }: InvoicePageProps) {
   if (!order) return <PageSkeleton rows={2} />;
 
   const address = order.addressJson as unknown as Address;
+  const isTestOrder = order.paymentProvider === 'mock';
+
+  // An invoice documents a completed sale; before payment there isn't one.
+  if (order.paymentStatus !== 'paid') {
+    return (
+      <main className="mx-auto w-full max-w-xl px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-bold text-ink mb-2">Invoice not available yet</h1>
+        <p className="text-sm text-ink/70 mb-6">
+          An invoice is issued once payment for order {order.orderNo} is confirmed.
+        </p>
+        <Link href={`/orders/${orderId}`} className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors">
+          Back to order
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 md:px-6 py-6 md:py-8 flex flex-col gap-6 print:py-0 print:max-w-none print:px-0">
@@ -75,7 +100,7 @@ export default function InvoicePage({ params }: InvoicePageProps) {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink mb-1">Tax invoice</h1>
+            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink mb-1">{seller.gstin ? 'Tax invoice' : 'Invoice'}</h1>
             <p className="text-xs text-ink/70">
               {order.invoiceNo ? `Invoice ${order.invoiceNo} · ` : ''}Order {order.orderNo} · {formatPlacedAt(order.placedAt)}
             </p>
@@ -99,27 +124,34 @@ export default function InvoicePage({ params }: InvoicePageProps) {
 
       {/* Main Invoice Sheet */}
       <div className="rounded-3xl border border-line bg-surface p-8 sm:p-10 shadow-sm print:border-none print:shadow-none print:p-0">
+        {isTestOrder && (
+          <p role="status" className="mb-4 rounded-xl border border-gold/50 bg-gold/15 px-3 py-2 text-xs text-ink print:border-ink">
+            <strong className="uppercase tracking-wider">Test order</strong> — placed with the mock payment provider. No money was
+            collected and this is not a valid tax invoice.
+          </p>
+        )}
+
         {/* Header: Company & Customer info */}
         <div className="flex flex-col sm:flex-row justify-between gap-6 pb-6 border-b border-line">
           <div>
-            <h2 className="font-display text-2xl font-bold text-ink mb-1">BroPics</h2>
-            <p className="text-xs text-ink/70">BroPics India Private Limited</p>
-            <p className="text-xs text-ink/70">18, Craft Lane, Bengaluru, Karnataka 560001</p>
-            <p className="text-xs text-ink/70 mt-1">GSTIN 29AALCB1042P1Z8</p>
+            <h2 className="font-display text-2xl font-bold text-ink mb-1">{seller.name}</h2>
+            {seller.legalName && <p className="text-xs text-ink/70">{seller.legalName}</p>}
+            {seller.address && <p className="text-xs text-ink/70">{seller.address}</p>}
+            {seller.gstin && <p className="text-xs text-ink/70 mt-1">GSTIN {seller.gstin}</p>}
           </div>
 
           <div className="sm:text-right">
             <p className="text-2xs font-bold uppercase tracking-wider text-ink/50 mb-1">BILL TO / SHIP TO</p>
             {address ? (
               <>
-                <p className="text-xs font-semibold text-ink">{address.label || 'Recipient'}</p>
+                <p className="text-xs font-semibold text-ink">{order.customerName || address.label || 'Recipient'}</p>
                 <p className="text-xs text-ink/70">
                   {address.line1}{address.line2 ? `, ${address.line2}` : ''}
                 </p>
                 <p className="text-xs text-ink/70">
                   {address.city}, {address.state} {address.pincode}
                 </p>
-                <p className="text-xs text-ink/70 mt-1">Place of supply: {address.state || 'Karnataka'}</p>
+                {address.state && <p className="text-xs text-ink/70 mt-1">Place of supply: {address.state}</p>}
               </>
             ) : (
               <p className="text-xs text-ink/70">Digital order</p>
@@ -179,7 +211,7 @@ export default function InvoicePage({ params }: InvoicePageProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-line text-xs">
           <div className="space-y-1 text-ink/70">
             <p className="font-semibold text-ink">
-              Paid via {order.razorpayPaymentId ? 'Online Payment' : 'UPI / Card'} · {formatPlacedAt(order.placedAt)}
+              {isTestOrder ? 'Test payment (no charge)' : 'Paid online'} · {formatPlacedAt(order.placedAt)}
             </p>
             <p className="text-2xs text-ink/60">
               Reference: {order.razorpayPaymentId ?? order.razorpayOrderId ?? '—'}

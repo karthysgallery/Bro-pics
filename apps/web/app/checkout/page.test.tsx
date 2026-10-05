@@ -17,6 +17,11 @@ vi.mock('../../components/checkout/AddressPicker', () => ({
     return <div data-testid="address-picker" />;
   },
 }));
+const mockFetchQuote = vi.fn().mockResolvedValue(null);
+vi.mock('../../lib/checkout-quote-client', () => ({ fetchCheckoutQuote: (...a: unknown[]) => mockFetchQuote(...a) }));
+const mockGetPaymentMode = vi.fn().mockResolvedValue('razorpay');
+vi.mock('../../lib/payment-mode-client', () => ({ getPaymentModeClient: () => mockGetPaymentMode() }));
+vi.mock('../../lib/gst-settings-client', () => ({ getGstSettingsClient: () => Promise.resolve({ gstEnabled: false, taxRate: 0 }) }));
 vi.mock('../../lib/razorpay-checkout-script', () => ({ loadRazorpayCheckoutScript: vi.fn().mockResolvedValue(undefined) }));
 
 const mockOnSnapshot = vi.fn();
@@ -92,7 +97,10 @@ describe('CheckoutPage', () => {
 
   it('[FE-01] shows an empty-cart state instead of the payment form when the cart is empty', async () => {
     const { useCart } = await import('../../lib/cart-context');
-    vi.mocked(useCart).mockReturnValueOnce({
+    const originalUseCart = vi.mocked(useCart).getMockImplementation()!;
+    // mockReturnValue (not Once): the page re-renders when its async settings
+    // reads resolve, and every one of those renders must see the empty cart.
+    vi.mocked(useCart).mockReturnValue({
       items: [],
       totalPaise: 0,
       totalCount: 0,
@@ -100,10 +108,15 @@ describe('CheckoutPage', () => {
       removeItem: vi.fn(),
       updateQuantity: vi.fn(),
       updateItem: vi.fn(),
+      clearCart: vi.fn(),
     });
-    render(<CheckoutPage />);
-    expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
-    expect(screen.queryByText('Place order')).not.toBeInTheDocument();
+    try {
+      render(<CheckoutPage />);
+      expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
+      expect(screen.queryByText('Place order')).not.toBeInTheDocument();
+    } finally {
+      vi.mocked(useCart).mockImplementation(originalUseCart);
+    }
   });
 
   it('[FE-01] shows an error instead of silently re-enabling the button when create-order throws', async () => {
@@ -119,7 +132,7 @@ describe('CheckoutPage', () => {
   it('calls create-order and opens Razorpay Checkout on "Place order"', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
 
@@ -151,7 +164,7 @@ describe('CheckoutPage', () => {
   it('hides the Place order button once an order has been created, closing the double-submit window', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -163,7 +176,7 @@ describe('CheckoutPage', () => {
   it('subscribes to orders/{orderId} and replaces the cart summary with a confirmation once status flips to paid', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -185,7 +198,7 @@ describe('CheckoutPage', () => {
   it('shows a payment-failed message (not the empty-cart summary as confirmation) when paymentStatus is failed', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -203,7 +216,7 @@ describe('CheckoutPage', () => {
   it('lets the customer retry in place after a failed payment, without a page refresh', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -224,7 +237,7 @@ describe('CheckoutPage', () => {
   it('[FE-18] retrying after a failed payment reuses the SAME idempotency key, not a fresh one — create-order resolves it to the same order', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -239,7 +252,7 @@ describe('CheckoutPage', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     fireEvent.click(await screen.findByText('Place order'));
 
@@ -251,7 +264,7 @@ describe('CheckoutPage', () => {
   it('unsubscribes the order listener on unmount', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     const { unmount } = render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -265,7 +278,7 @@ describe('CheckoutPage', () => {
     const { useAuth } = await import('../../lib/auth-context');
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key' }),
+      json: () => Promise.resolve({ orderId: 'order_1', razorpayOrderId: 'order_rzp_1', amount: 1000, keyId: 'rzp_test_key', paymentProvider: 'razorpay', paymentStatus: 'pending' }),
     });
     const { rerender } = render(<CheckoutPage />);
     fireEvent.click(await screen.findByText('Place order'));
@@ -373,5 +386,75 @@ describe('CheckoutPage coupon UI', () => {
 
     const bodies = mockFetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
     expect(bodies[0].idempotencyKey).toBe(bodies[1].idempotencyKey);
+  });
+
+  describe('server quote', () => {
+    const baseQuote = {
+      empty: false,
+      unavailable: [],
+      lines: [{ variantId: 'v1', personalizationId: 'p1', unitPrice: 2500, qty: 1 }],
+      subtotal: 2500,
+      discount: 0,
+      shipping: 0,
+      total: 2500,
+      taxLines: [],
+      coupon: { requested: false },
+    };
+
+    it('shows the SERVER\'s prices and totals, not the stale price saved in the cart', async () => {
+      // The cart line says ₹10 (unitPriceSnapshot 1000); the catalogue price is now ₹25.
+      mockFetchQuote.mockResolvedValue({ ...baseQuote, taxLines: [{ rate: 18, amount: 381 }] });
+      render(<CheckoutPage />);
+      const summary = (await screen.findByText('Order summary')).parentElement as HTMLElement;
+      await waitFor(() => expect(summary).toHaveTextContent('₹25'));
+      expect(summary).not.toHaveTextContent('₹10');
+      expect(summary).toHaveTextContent('Free'); // shipping from the quote
+      expect(summary).toHaveTextContent('Includes GST (18%)');
+      expect(summary).toHaveTextContent('₹3.81');
+    });
+
+    it('passes the chosen delivery method and coupon to the quote request', async () => {
+      mockFetchQuote.mockResolvedValue(baseQuote);
+      render(<CheckoutPage />);
+      await screen.findByText('Express');
+      fireEvent.click(screen.getByRole('radio', { name: /express/i }));
+      await waitFor(() =>
+        expect(mockFetchQuote).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ deliveryMethod: 'express' }), expect.anything())
+      );
+    });
+
+    it('blocks ordering and says why when the quote reports an unavailable item', async () => {
+      mockFetchQuote.mockResolvedValue({ ...baseQuote, unavailable: [{ variantId: 'v1', reason: 'out_of_stock' }], subtotal: 0, total: 0 });
+      render(<CheckoutPage />);
+      expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /place order/i })).toBeDisabled();
+    });
+
+    it('falls back to the local estimate when the quote cannot be fetched (checkout still works)', async () => {
+      mockFetchQuote.mockResolvedValue(null);
+      render(<CheckoutPage />);
+      expect(await screen.findByText('Standard')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /place order/i })).not.toBeDisabled();
+    });
+
+    it('explains and drops a coupon when create-order says it no longer applies (409 coupon_invalid)', async () => {
+      mockFetchQuote.mockResolvedValue(null);
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ valid: true, discountPaise: 100, freeShipping: false }) }) // Apply
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 409,
+          json: () => Promise.resolve({ code: 'coupon_invalid', reason: 'expired' }),
+        }); // Place order
+      render(<CheckoutPage />);
+      fireEvent.change(await screen.findByPlaceholderText('Enter code'), { target: { value: 'NEW10' } });
+      fireEvent.click(screen.getByText('Apply'));
+      expect(await screen.findByText(/applied/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+      expect(await screen.findByText(/coupon no longer applies/i)).toBeInTheDocument();
+      expect(screen.queryByText(/NEW10.*applied/)).not.toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Enter code')).toBeInTheDocument(); // coupon removed, can re-enter
+    });
   });
 });

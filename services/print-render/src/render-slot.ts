@@ -83,13 +83,24 @@ export async function renderSlotPhoto(input: RenderSlotInput): Promise<Buffer> {
         .toBuffer()
     : photoBuffer;
 
-  const extracted = await sharp(sourceBuffer, { limitInputPixels: false })
+  // The crop is materialized to its own buffer BEFORE rotating/resizing. Chained
+  // as one pipeline (extract -> rotate -> resize), sharp validates the extract
+  // region against the post-rotation dimensions for a rotated, non-square crop and
+  // throws "extract_area: bad extract area" — i.e. a customer who rotated their
+  // photo AND zoomed/panned got a failed print job. (Same sharp quirk as the
+  // extend/extract note above; confirmed against this build by
+  // personalization-crop.test.ts, which checks every rotation pixel-by-pixel.)
+  const cropped = await sharp(sourceBuffer, { limitInputPixels: false })
     .extract({
       left: left + padLeft,
       top: top + padTop,
       width,
       height,
     })
+    .png()
+    .toBuffer();
+
+  const extracted = await sharp(cropped, { limitInputPixels: false })
     .rotate(rotationDeg) // sharp rotates clockwise for a positive degree, matching Konva's convention.
     .resize(targetWidthPx, targetHeightPx, { fit: 'fill' }) // 'fill': cropRect's aspect already matches the slot's, by construction — no letterboxing wanted.
     .ensureAlpha()

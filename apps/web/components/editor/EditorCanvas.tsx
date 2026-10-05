@@ -62,6 +62,9 @@ interface EditorCanvasProps {
   activeSlotIndex: number;
   textFields?: CanvasTextField[];
   clipart?: CanvasClipart | null;
+  // [Requirement 28] Development debug mode overlay showing canvas boundary,
+  // slot aperture geometry, scale, offset, and pixel resolution
+  debugMode?: boolean;
   onTransformChange: (slotIndex: number, transform: { scale: number; offsetX: number; offsetY: number }) => void;
   // [FE-08] A two-finger pinch reports a per-move scale FACTOR (current
   // distance / distance at the last reported move), not an absolute
@@ -82,17 +85,14 @@ interface EditorCanvasProps {
   // personalization rather than one capture per slot, since every slot now
   // renders onto the same persistent canvas at once.
   onCanvasUpdate?: (dataUrl: string | null) => void;
+  // Fires when a slot is clicked or tapped on the canvas to activate it
+  onSelectSlot?: (slotIndex: number) => void;
 }
 
 /**
  * Loads an <img> for `src`, retrying without `crossOrigin: 'anonymous'` if
- * the anonymous load fails — a signed GCS URL needs `crossOrigin: 'anonymous'`
- * to avoid tainting the canvas (which would break the preview-export
- * toDataURL() call), but if the bucket's CORS isn't configured for it, the
- * ANONYMOUS load fails outright rather than just tainting — worse than a
- * tainted canvas, since the customer would see an empty slot. So: try
- * anonymous first, and only fall back to a plain (taint-accepting) load if
- * that fails.
+ * the anonymous load fails. For blob: and data: URLs (local client-side previews),
+ * crossOrigin is skipped entirely since local blobs are same-origin and don't taint.
  */
 function useHtmlImage(src: string | null | undefined): HTMLImageElement | null {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -104,21 +104,28 @@ function useHtmlImage(src: string | null | undefined): HTMLImageElement | null {
     }
     let cancelled = false;
 
+    const isLocal = src.startsWith('blob:') || src.startsWith('data:');
     const anonymousImg = new Image();
-    anonymousImg.crossOrigin = 'anonymous';
+    if (!isLocal) {
+      anonymousImg.crossOrigin = 'anonymous';
+    }
     anonymousImg.onload = () => {
       if (!cancelled) setImage(anonymousImg);
     };
     anonymousImg.onerror = () => {
       if (cancelled) return;
-      const fallbackImg = new Image();
-      fallbackImg.onload = () => {
-        if (!cancelled) setImage(fallbackImg);
-      };
-      fallbackImg.onerror = () => {
-        if (!cancelled) setImage(null);
-      };
-      fallbackImg.src = src;
+      if (!isLocal) {
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          if (!cancelled) setImage(fallbackImg);
+        };
+        fallbackImg.onerror = () => {
+          if (!cancelled) setImage(null);
+        };
+        fallbackImg.src = src;
+      } else {
+        setImage(null);
+      }
     };
     anonymousImg.src = src;
 
@@ -196,8 +203,11 @@ function useImageCache(urls: (string | null | undefined)[]): {
     const wanted = urls.filter((u): u is string => !!u);
     for (const url of wanted) {
       if (cacheRef.current.has(url)) continue;
+      const isLocal = url.startsWith('blob:') || url.startsWith('data:');
       const anonymousImg = new Image();
-      anonymousImg.crossOrigin = 'anonymous';
+      if (!isLocal) {
+        anonymousImg.crossOrigin = 'anonymous';
+      }
       anonymousImg.onload = () => {
         if (cancelled) return;
         cacheRef.current.set(url, capBitmapForMobile(anonymousImg));
@@ -205,13 +215,15 @@ function useImageCache(urls: (string | null | undefined)[]): {
       };
       anonymousImg.onerror = () => {
         if (cancelled) return;
-        const fallbackImg = new Image();
-        fallbackImg.onload = () => {
-          if (cancelled) return;
-          cacheRef.current.set(url, capBitmapForMobile(fallbackImg));
-          setVersion((n) => n + 1);
-        };
-        fallbackImg.src = url;
+        if (!isLocal) {
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => {
+            if (cancelled) return;
+            cacheRef.current.set(url, capBitmapForMobile(fallbackImg));
+            setVersion((n) => n + 1);
+          };
+          fallbackImg.src = url;
+        }
       };
       anonymousImg.src = url;
     }
@@ -368,10 +380,12 @@ export function EditorCanvas({
   activeSlotIndex,
   textFields,
   clipart,
+  debugMode,
   onTransformChange,
   onCanvasUpdate,
   onPinchZoom,
   onPinchRotate,
+  onSelectSlot,
 }: EditorCanvasProps) {
   const mockupImage = useHtmlImage(mockupUrl);
   const overlayImage = useHtmlImage(overlayUrl);
@@ -468,6 +482,51 @@ export function EditorCanvas({
       ctx.drawImage(clipartImage, rect.x, rect.y, rect.width, rect.height);
     }
 
+    // [Requirement 28] Development debug mode overlay
+    if (debugMode) {
+      ctx.save();
+      // 1. Canvas Boundary
+      ctx.strokeStyle = '#00E5FF';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(1, 1, CANVAS_SIZE - 2, CANVAS_SIZE - 2);
+
+      ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
+      ctx.fillRect(4, 4, 230, 22);
+      ctx.fillStyle = '#00E5FF';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(`CANVAS: ${CANVAS_SIZE}x${CANVAS_SIZE} (DPI: 300)`, 8, 19);
+
+      // 2. Slot Boundaries & Geometry info
+      for (const slot of slots) {
+        const canvasRect = fractionRectToCanvasRect(slot.rect, CANVAS_SIZE, CANVAS_SIZE);
+        ctx.strokeStyle = '#FFD600';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+
+        // Header label box
+        const badgeWidth = Math.min(canvasRect.width, 240);
+        const hasPhoto = Boolean(slot.photoUrl);
+        ctx.fillStyle = 'rgba(10, 10, 10, 0.90)';
+        ctx.fillRect(canvasRect.x, canvasRect.y, badgeWidth, hasPhoto ? 48 : 34);
+
+        ctx.fillStyle = '#FFD600';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(`SLOT ${slot.slotIndex + 1} (${(slot.rect.width * 100).toFixed(1)}% × ${(slot.rect.height * 100).toFixed(1)}%)`, canvasRect.x + 6, canvasRect.y + 13);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '9px monospace';
+        ctx.fillText(`Pos: [${slot.rect.x.toFixed(3)}, ${slot.rect.y.toFixed(3)}] · ${Math.round(canvasRect.width)}×${Math.round(canvasRect.height)}px`, canvasRect.x + 6, canvasRect.y + 26);
+
+        if (hasPhoto) {
+          ctx.fillStyle = '#A3E635';
+          ctx.fillText(`Scale: ${slot.scale.toFixed(2)} · Off: (${Math.round(slot.offsetX)}, ${Math.round(slot.offsetY)}) · ${slot.rotationDeg}°`, canvasRect.x + 6, canvasRect.y + 39);
+        }
+      }
+      ctx.restore();
+    }
+
     if (onCanvasUpdate) {
       const hasAnyPhoto = slots.some((s) => s.photoUrl);
       if (!hasAnyPhoto) {
@@ -490,6 +549,7 @@ export function EditorCanvas({
     fontsReady,
     imageCacheVersion,
     activeSlotIndex,
+    debugMode,
     JSON.stringify(slots),
     JSON.stringify(textFields),
     JSON.stringify(clipart),
@@ -514,12 +574,17 @@ export function EditorCanvas({
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!activeSlot?.photoUrl) return;
     const point = canvasPointFromEvent(event);
-    // The FIRST finger must land on the photo (unchanged single-finger
-    // intent) — a second finger completing a pinch can land anywhere on
-    // the canvas, matching how every native pinch-zoom gesture works.
-    if (pointersRef.current.size === 0 && !pointInActiveRect(point)) return;
+    if (!activeSlot?.photoUrl || (pointersRef.current.size === 0 && !pointInActiveRect(point))) {
+      const clickedSlot = slots.find((s) => {
+        const r = fractionRectToCanvasRect(s.rect, CANVAS_SIZE, CANVAS_SIZE);
+        return point.x >= r.x && point.x <= r.x + r.width && point.y >= r.y && point.y <= r.y + r.height;
+      });
+      if (clickedSlot && onSelectSlot) {
+        onSelectSlot(clickedSlot.slotIndex);
+      }
+      return;
+    }
 
     pointersRef.current.set(event.pointerId, point);
     event.currentTarget.setPointerCapture(event.pointerId);

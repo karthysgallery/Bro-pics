@@ -2,11 +2,19 @@
   {
     "origin": [
       "http://localhost:3000",
+      "http://localhost:3001",
       "https://*.web.app",
       "https://*.firebaseapp.com"
     ],
-    "method": ["GET"],
-    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "method": [
+      "GET",
+      "HEAD"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin",
+      "Range"
+    ],
     "maxAgeSeconds": 3600
   }
 ]

@@ -26,8 +26,8 @@ describe('buildOrganizationJsonLd', () => {
   it('[FE-41] builds an Organization entity with a name and contact info', () => {
     const result = buildOrganizationJsonLd();
     expect(result['@type']).toBe('Organization');
-    expect(result.name).toBe('BroPics');
-    expect(result.email).toBe('support@bropics.in');
+    expect(result.name).toBe('KarthysGallery');
+    expect(result.email).toBe('support@karthysgallery.in');
   });
 });
 

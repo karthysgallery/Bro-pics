@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
 import { StatusChip } from '../../../components/admin/StatusChip';
 import { useToast } from '../../../components/ui/Toast';
+import { RatingStars } from '../../../components/ui/RatingStars';
 
 type ReviewStatusTab = 'pending' | 'approved' | 'rejected';
 
@@ -140,11 +141,11 @@ export default function AdminReviewsPage() {
             className="px-3 py-1.5 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
           >
             <option value="all">All Star Ratings</option>
-            <option value="5">★★★★★ (5 Stars)</option>
-            <option value="4">★★★★☆ (4 Stars)</option>
-            <option value="3">★★★☆☆ (3 Stars)</option>
-            <option value="2">★★☆☆☆ (2 Stars)</option>
-            <option value="1">★☆☆☆☆ (1 Star)</option>
+            <option value="5">5 Stars (Highest)</option>
+            <option value="4">4 Stars</option>
+            <option value="3">3 Stars</option>
+            <option value="2">2 Stars</option>
+            <option value="1">1 Star</option>
           </select>
 
           <input
@@ -178,14 +179,11 @@ export default function AdminReviewsPage() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex text-amber-500 text-sm tracking-tighter">
-                    {'★'.repeat(rev.rating)}
-                    {'☆'.repeat(5 - rev.rating)}
-                  </div>
+                  <RatingStars rating={rev.rating} size={14} />
                   <h3 className="text-xs font-bold text-ink">{rev.title}</h3>
                   {rev.isVerified && (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      ✓ Verified Purchase
+                      Verified Purchase
                     </span>
                   )}
                 </div>

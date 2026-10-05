@@ -1,15 +1,18 @@
 'use client';
 
+import { formatPaise } from '../../../../lib/format-price';
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../../lib/auth-context';
 import { StatusChip } from '../../../../components/admin/StatusChip';
 import { RefundModal } from '../../../../components/admin/RefundModal';
+import { PersonalizationSummary } from '../../../../components/admin/PersonalizationSummary';
 import { Timeline, type TimelineEvent } from '../../../../components/admin/Timeline';
 import { FormField } from '../../../../components/admin/AdminForm';
 import { useToast } from '../../../../components/ui/Toast';
-import type { Order, OrderItem, OrderStatus } from '@bro-pics/shared';
+import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
+import { allowedTransitionsFrom, statusLabel, type Order, type OrderItem, type OrderStatus } from '@bro-pics/shared';
 
 interface OrderDetailPageProps {
   params: Promise<{ id: string }>;
@@ -54,6 +57,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
 
   // Workflow actions
   const [nextStatus, setNextStatus] = useState<OrderStatus | ''>('');
+  const [confirmAdvance, setConfirmAdvance] = useState(false);
   const [advanceNote, setAdvanceNote] = useState('');
   const [courierInput, setCourierInput] = useState('');
   const [awbInput, setAwbInput] = useState('');
@@ -102,6 +106,11 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
   // Handle Advance Status
   const handleAdvanceStatus = async () => {
     if (!user || !order || !nextStatus) return;
+    if (nextStatus === 'shipped' && (!courierInput.trim() || !awbInput.trim())) {
+      showToast('Enter the courier and AWB number before marking this order shipped.', 'error');
+      setConfirmAdvance(false);
+      return;
+    }
     setIsAdvancing(true);
 
     try {
@@ -125,7 +134,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
         throw new Error(errData.error || 'Failed to advance order status');
       }
 
-      showToast(`Order #${order.orderNo} advanced to ${nextStatus}`, 'success');
+      showToast(`Order #${order.orderNo} advanced to ${statusLabel(nextStatus)}`, 'success');
       setNextStatus('');
       setAdvanceNote('');
       fetchOrderDetails();
@@ -134,8 +143,12 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
       showToast(msg, 'error');
     } finally {
       setIsAdvancing(false);
+      setConfirmAdvance(false);
     }
   };
+
+  // Moves that can't be quietly undone (or notify the customer) ask first.
+  const requiresConfirmation = nextStatus === 'cancelled' || nextStatus === 'shipped' || nextStatus === 'delivered';
 
   // Save Internal Notes
   const handleSaveNotes = async () => {
@@ -209,12 +222,21 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
     }
   };
 
-  // Convert raw order events into Timeline format
+  // Convert raw order events into Timeline format. Events record who made the
+  // change in `createdBy`: 'system' / 'system_*' for automatic steps, the
+  // customer's uid for their own actions (placing or cancelling), anything
+  // else is a staff member.
+  const describeActor = (createdBy: string | undefined, customerUid: string | undefined): string => {
+    if (!createdBy || createdBy === 'system' || createdBy.startsWith('system_')) return 'System';
+    if (customerUid && createdBy === customerUid) return 'Customer';
+    return `Staff ${createdBy.slice(0, 8)}`;
+  };
+
   const timelineEvents: TimelineEvent[] = events.map((ev: unknown, i: number) => {
     const e = ev as {
       createdAt?: unknown;
       status?: string;
-      actorUid?: string;
+      createdBy?: string;
       note?: string;
       type?: string;
     };
@@ -222,7 +244,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
       id: String(i),
       createdAt: e.createdAt ? String(e.createdAt) : new Date().toISOString(),
       title: e.status ? `Status changed to ${e.status.replace(/_/g, ' ')}` : (e.type || 'Order Event'),
-      actor: e.actorUid ? `Staff: ${e.actorUid.slice(0, 6)}...` : 'System',
+      actor: describeActor(e.createdBy, order?.userId),
       description: e.note,
     };
   });
@@ -237,14 +259,22 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
   }
 
   const address = order.addressJson as {
-    fullName?: string;
+    label?: string | null;
     phone?: string;
-    addressLine1?: string;
-    addressLine2?: string;
+    line1?: string;
+    line2?: string | null;
+    deliveryInstructions?: string | null;
     city?: string;
     state?: string;
     pincode?: string;
   } | undefined;
+
+  // Only the transitions the order state machine actually allows from here
+  // (the server enforces the same table). Refunds go through the refund flow,
+  // not this dropdown.
+  const advanceOptions = allowedTransitionsFrom(order.status).filter(
+    (status) => status !== 'refunded' && status !== 'replacement_issued'
+  );
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -263,7 +293,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             <StatusChip status={order.status} />
             {hasRedDpi && (
               <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-2xs font-bold border border-red-300">
-                ⚠️ Low DPI Photo Hold
+                 Low DPI Photo Hold
               </span>
             )}
           </div>
@@ -278,7 +308,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             onClick={handleResendNotification}
             className="px-3 py-1.5 rounded-xl border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors"
           >
-            ✉️ Resend Email/SMS
+            Resend Email/SMS
           </button>
           <button
             type="button"
@@ -302,28 +332,37 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
 
             <div className="divide-y divide-line">
               {items.map((item, idx) => (
-                <div key={item.id || idx} className="py-3.5 flex items-center justify-between gap-4">
+                <div key={item.id || idx} className="py-3.5">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-14 h-14 rounded-xl border border-line bg-field overflow-hidden shrink-0 flex items-center justify-center">
                       {item.previewPath ? (
                         <img src={`/api/admin/media/preview?path=${encodeURIComponent(item.previewPath)}`} alt="Item Preview" className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-xl">🖼️</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                       )}
                     </div>
                     <div>
                       <h3 className="text-xs font-bold text-ink">{item.title}</h3>
+                      {(item.sizeLabel || item.frameColour || item.material) && (
+                        <p className="text-2xs text-ink/70">
+                          {[item.sizeLabel, item.frameColour, item.material].filter(Boolean).join(' · ')}
+                          {item.sku ? <span className="font-mono text-ink/40"> · {item.sku}</span> : null}
+                        </p>
+                      )}
                       <p className="text-2xs text-ink/50">
-                        Qty: <strong className="text-ink">{item.qty}</strong> × ₹{item.unitPrice}
+                        Qty: <strong className="text-ink">{item.qty}</strong> × {formatPaise(item.unitPrice)}
                       </p>
                     </div>
                   </div>
 
                   <div className="text-right">
                     <span className="text-sm font-bold text-ink">
-                      ₹{item.unitPrice * item.qty}
+                      {formatPaise(item.unitPrice * item.qty)}
                     </span>
                   </div>
+                </div>
+                {item.personalization && <PersonalizationSummary snapshot={item.personalization} />}
                 </div>
               ))}
             </div>
@@ -382,7 +421,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                               download
                               className="px-2 py-1 bg-paper border border-line hover:bg-field rounded text-[10px] font-semibold text-ink"
                             >
-                              📥 Original Photo
+                              Original Photo
                             </a>
                           )}
                           {c.previewUrl && (
@@ -391,7 +430,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                               target="_blank"
                               className="px-2 py-1 bg-paper border border-line hover:bg-field rounded text-[10px] font-semibold text-ink"
                             >
-                              👁️ Preview
+                              Preview
                             </a>
                           )}
                           {c.printUrl && (
@@ -401,7 +440,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                               download
                               className="px-2 py-1 bg-gold text-ink font-bold rounded text-[10px]"
                             >
-                              🖨️ 300 DPI Print File
+                              300 DPI Print File
                             </a>
                           )}
                         </div>
@@ -418,6 +457,12 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
               Payment & Invoicing
             </h2>
+
+            {order.paymentProvider === 'mock' && (
+              <p role="status" className="rounded-xl border border-gold/50 bg-gold/15 px-3 py-2 text-2xs text-ink">
+                <strong className="uppercase tracking-wider">Test payment</strong> — this order went through the mock payment provider. No money was collected.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-field text-2xs">
               <div>
@@ -441,24 +486,24 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             <div className="space-y-1 text-xs text-ink/70 pt-2 border-t border-line">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
-                <span className="font-semibold text-ink">₹{order.subtotal}</span>
+                <span className="font-semibold text-ink">{formatPaise(order.subtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Discount:</span>
-                <span className="font-semibold text-emerald-700">-₹{order.discount}</span>
+                <span className="font-semibold text-emerald-700">-{formatPaise(order.discount)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Shipping:</span>
-                <span className="font-semibold text-ink">₹{order.shipping}</span>
+                <span className="font-semibold text-ink">{formatPaise(order.shipping)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-ink pt-1 border-t border-line">
                 <span>Total Amount:</span>
-                <span className="text-gold-deep">₹{order.total}</span>
+                <span className="text-gold-deep">{formatPaise(order.total)}</span>
               </div>
               {order.paymentMode === 'partial_cod' && (
                 <div className="flex justify-between text-2xs text-amber-800 font-semibold bg-amber-50 p-2 rounded-lg mt-2">
-                  <span>Paid Online: ₹{order.amountPaidOnline}</span>
-                  <span>Due on Delivery (COD): ₹{order.amountDueOnDelivery}</span>
+                  <span>Paid Online: {formatPaise(order.amountPaidOnline)}</span>
+                  <span>Due on Delivery (COD): {formatPaise(order.amountDueOnDelivery)}</span>
                 </div>
               )}
             </div>
@@ -544,6 +589,11 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             </h2>
 
             <div className="space-y-3">
+              {advanceOptions.length === 0 ? (
+                <p className="text-2xs text-ink/60">
+                  This order is {statusLabel(order.status).toLowerCase()} — no further status changes are available.
+                </p>
+              ) : (
               <FormField label="Target Status" required>
                 <select
                   value={nextStatus}
@@ -551,17 +601,14 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                   className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
                 >
                   <option value="">-- Choose Next Status --</option>
-                  <option value="photo_validation">Photo Validation</option>
-                  <option value="print_rendering">Print Rendering</option>
-                  <option value="print_ready">Print Ready</option>
-                  <option value="in_production">In Production</option>
-                  <option value="quality_check">Quality Check</option>
-                  <option value="packed">Packed</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
+                  {advanceOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
                 </select>
               </FormField>
+              )}
 
               {nextStatus === 'shipped' && (
                 <div className="space-y-3 p-3 rounded-xl bg-field border border-line">
@@ -598,8 +645,8 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
 
               <button
                 type="button"
-                onClick={handleAdvanceStatus}
-                disabled={!nextStatus || isAdvancing}
+                onClick={() => (requiresConfirmation ? setConfirmAdvance(true) : handleAdvanceStatus())}
+                disabled={!nextStatus || isAdvancing || (nextStatus === 'shipped' && (!courierInput.trim() || !awbInput.trim()))}
                 className="w-full py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors disabled:opacity-50"
               >
                 {isAdvancing ? 'Advancing...' : 'Advance Order'}
@@ -614,14 +661,19 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             </h2>
 
             <div className="space-y-1 text-ink/80">
-              <span className="font-bold text-ink block">{address?.fullName || 'Customer'}</span>
+              <span className="font-bold text-ink block">{order.customerName || 'Customer'}</span>
               <span className="block font-mono text-2xs">{address?.phone || 'No phone'}</span>
               <p className="pt-1 text-2xs text-ink/70">
-                {address?.addressLine1}
-                {address?.addressLine2 ? `, ${address.addressLine2}` : ''}
+                {address?.line1}
+                {address?.line2 ? `, ${address.line2}` : ''}
                 <br />
                 {address?.city}, {address?.state} - {address?.pincode}
               </p>
+              {address?.deliveryInstructions && (
+                <p className="pt-1 text-2xs text-ink/70">
+                  <strong className="text-ink">Delivery note:</strong> {address.deliveryInstructions}
+                </p>
+              )}
             </div>
           </div>
 
@@ -636,6 +688,21 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
         </div>
       </div>
 
+      <ConfirmDialog
+        isOpen={confirmAdvance}
+        title={nextStatus ? `Mark order as ${statusLabel(nextStatus)}?` : 'Change order status?'}
+        message={
+          nextStatus === 'cancelled'
+            ? `This cancels order #${order.orderNo}. It can't be undone, and the customer is notified.`
+            : `The customer is notified that order #${order.orderNo} is ${nextStatus ? statusLabel(nextStatus).toLowerCase() : 'updated'}. This can't be undone.`
+        }
+        confirmLabel={nextStatus ? `Yes, mark ${statusLabel(nextStatus).toLowerCase()}` : 'Confirm'}
+        tone={nextStatus === 'cancelled' ? 'danger' : 'default'}
+        isLoading={isAdvancing}
+        onConfirm={handleAdvanceStatus}
+        onCancel={() => setConfirmAdvance(false)}
+      />
+
       {/* Refund Modal */}
       <RefundModal
         isOpen={showRefundModal}
@@ -643,6 +710,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
         orderId={order.id}
         orderNo={order.orderNo}
         orderTotal={order.total}
+        paymentProvider={order.paymentProvider}
         onSuccess={fetchOrderDetails}
       />
     </div>

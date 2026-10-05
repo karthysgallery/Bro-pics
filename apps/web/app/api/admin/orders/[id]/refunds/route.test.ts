@@ -189,6 +189,28 @@ describe('POST /api/admin/orders/[id]/refunds', () => {
     expect(response.status).toBe(404);
   });
 
+  it('refunds a MOCK-payment order locally: processed immediately, order flips to refunded, Razorpay never called', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockOrderGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ ...validOrder, paymentProvider: 'mock', razorpayPaymentId: 'pay_mock_order_1' }),
+    });
+    // After this refund is marked processed, the processed total equals the order total.
+    mockRefundsWhereGet
+      .mockResolvedValueOnce({ docs: [] })
+      .mockResolvedValueOnce({ docs: [{ data: () => ({ amount: 105000 }) }] });
+
+    const response = await POST(makeRequest({}), makeParams());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('processed');
+    expect(body.razorpayRefundId).toBe('rfnd_mock_refund_new_1');
+    expect(mockCreateRazorpayRefund).not.toHaveBeenCalled();
+    expect(mockRefundUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'processed', razorpayRefundId: 'rfnd_mock_refund_new_1' }));
+    expect(mockOrderUpdate).toHaveBeenCalledWith({ status: 'refunded' });
+  });
+
   it('marks the refund doc failed and returns 502 when Razorpay throws', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     mockCreateRazorpayRefund.mockRejectedValueOnce(new Error('Razorpay refund failed (500): boom'));

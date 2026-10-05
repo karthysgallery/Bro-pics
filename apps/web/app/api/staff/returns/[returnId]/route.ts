@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
-import { createRazorpayRefund } from '../../../../../lib/razorpay-client';
+import { refundPayment } from '../../../../../lib/payments/refunds';
 import { writeNotification } from '../../../../../lib/notify';
 import { getIdempotencyKeyHeader, findIdempotentResponse, recordIdempotentResponse } from '../../../../../lib/admin-idempotency';
 import { writeAuditLog } from '../../../../../lib/audit-log';
@@ -145,7 +145,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     if (!order.razorpayPaymentId) {
       return NextResponse.json({ error: 'Order has no payment to refund' }, { status: 400 });
     }
-    const refund = await createRazorpayRefund({
+    const refund = await refundPayment(order, {
       paymentId: order.razorpayPaymentId,
       amount: currentReturn.refundAmount,
       notes: { returnId },

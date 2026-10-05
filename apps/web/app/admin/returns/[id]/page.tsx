@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useAuth } from '../../../../lib/auth-context';
 import { formatPaise } from '../../../../lib/format-price';
 import { StatusChip } from '../../../../components/admin/StatusChip';
@@ -35,8 +35,8 @@ interface ReturnDetail {
   };
 }
 
-export default function ReturnDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function ReturnDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { user } = useAuth();
   const [data, setData] = useState<ReturnDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -233,7 +233,7 @@ export default function ReturnDetailPage({ params }: { params: { id: string } })
                       className="w-full h-full object-cover group-hover:scale-105 transition"
                     />
                     <div className="absolute inset-0 bg-void/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-semibold text-cream transition">
-                      🔍 Enlarge
+                      Enlarge
                     </div>
                   </div>
                 ))}
@@ -265,7 +265,7 @@ export default function ReturnDetailPage({ params }: { params: { id: string } })
                         : 'bg-void text-cream border-line hover:border-sand'
                     }`}
                   >
-                    💰 Refund Money
+                    Refund Money
                   </button>
                   <button
                     type="button"
@@ -276,7 +276,7 @@ export default function ReturnDetailPage({ params }: { params: { id: string } })
                         : 'bg-void text-cream border-line hover:border-sand'
                     }`}
                   >
-                    🖼️ Free Remake
+                    Free Remake
                   </button>
                 </div>
               </div>
@@ -384,7 +384,7 @@ export default function ReturnDetailPage({ params }: { params: { id: string } })
               onClick={() => setSelectedPhoto(null)}
               className="absolute top-3 right-3 px-3 py-1 bg-void/80 text-cream rounded-full text-xs font-bold border border-line"
             >
-              ✕ Close
+              Close
             </button>
           </div>
         </div>

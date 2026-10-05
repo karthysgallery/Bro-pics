@@ -123,7 +123,7 @@ export default function PhotoValidationQueuePage() {
           onClick={fetchQueue}
           className="px-4 py-2 rounded-xl text-sm font-medium bg-charcoal hover:bg-tint border border-line text-cream transition flex items-center gap-2"
         >
-          <span>🔄</span> Refresh Queue
+          Refresh Queue
         </button>
       </div>
 
@@ -149,7 +149,7 @@ export default function PhotoValidationQueuePage() {
         </div>
       ) : orders.length === 0 ? (
         <div className="p-12 text-center text-sand/70 bg-paper rounded-2xl border border-line space-y-2">
-          <div className="text-3xl">🎉</div>
+          <div className="text-3xl flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg></div>
           <h3 className="font-semibold text-cream text-base">Photo Validation Queue is Clean</h3>
           <p className="text-xs text-sand/60 max-w-sm mx-auto">
             All customer photos meet resolution thresholds and have passed directly into the print pipeline.
@@ -194,7 +194,7 @@ export default function PhotoValidationQueuePage() {
               {/* Resolution Inspection Badge */}
               <div className="p-3 rounded-xl bg-void/60 border border-line flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-base">⚠️</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 inline"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                   <div>
                     <div className="font-medium text-amber-300">Minimum Slot DPI: {o.minDpi} DPI</div>
                     <div className="text-[10px] text-sand/60">
@@ -218,17 +218,15 @@ export default function PhotoValidationQueuePage() {
                   disabled={processingId === o.id}
                   className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-charcoal hover:bg-tint border border-line text-amber-400 hover:border-amber-400 transition flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <span>✉️</span> Request Re-Upload Link
+                  Request Re-Upload Link
                 </button>
                 <button
                   onClick={() => handleAction(o.id, 'approve')}
                   disabled={processingId === o.id}
                   className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  {processingId === o.id ? (
+                  {processingId === o.id && (
                     <span className="animate-spin inline-block w-3 h-3 border border-void border-t-transparent rounded-full" />
-                  ) : (
-                    <span>✓</span>
                   )}
                   Approve For Print
                 </button>

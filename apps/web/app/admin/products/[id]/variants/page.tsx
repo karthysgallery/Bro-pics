@@ -1,5 +1,6 @@
 'use client';
 
+import { paiseToRupees, rupeesToPaise } from '../../../../../lib/admin-money';
 import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -133,8 +134,9 @@ export default function VariantMatrixPage({ params }: VariantMatrixPageProps) {
                   frameColour: c,
                   variant: found,
                   sku: found.sku,
-                  price: found.price,
-                  compareAtPrice: found.compareAtPrice,
+                  // API values are paise; this grid edits rupees.
+                  price: paiseToRupees(found.price),
+                  compareAtPrice: found.compareAtPrice != null ? paiseToRupees(found.compareAtPrice) : undefined,
                   stockStatus: found.stockStatus,
                   isActive: found.isActive,
                   isCustomized: false,
@@ -323,10 +325,27 @@ export default function VariantMatrixPage({ params }: VariantMatrixPageProps) {
       const existingUpdates = cellsToProcess.filter((c) => c.variant?.id && c.isCustomized);
       const newToCreate = cellsToProcess.filter((c) => !c.variant?.id);
 
+      // Prices are edited in rupees but stored/posted in integer paise. Validate
+      // every row first so a bad price aborts the whole save instead of
+      // half-applying it.
+      const toPaise = (cell: (typeof cellsToProcess)[number]) => {
+        const price = rupeesToPaise(cell.price);
+        if (price === null || price <= 0) {
+          throw new Error(`Enter a selling price above ₹0 for ${cell.sizeLabel} · ${cell.frameColour}`);
+        }
+        const compareAt = cell.compareAtPrice ? rupeesToPaise(cell.compareAtPrice) : undefined;
+        if (compareAt === null) {
+          throw new Error(`Compare-at price is invalid for ${cell.sizeLabel} · ${cell.frameColour}`);
+        }
+        return { price, compareAtPrice: compareAt };
+      };
+      const pricesByCell = new Map<(typeof cellsToProcess)[number], { price: number; compareAtPrice?: number }>();
+      for (const cell of [...existingUpdates, ...newToCreate]) pricesByCell.set(cell, toPaise(cell));
+
       // 1. Update existing variants via PATCH
       for (const item of existingUpdates) {
         if (!item.variant?.id) continue;
-        await fetch(`/api/admin/products/${productId}/variants/${item.variant.id}`, {
+        const patchRes = await fetch(`/api/admin/products/${productId}/variants/${item.variant.id}`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -334,8 +353,7 @@ export default function VariantMatrixPage({ params }: VariantMatrixPageProps) {
           },
           body: JSON.stringify({
             sku: item.sku,
-            price: item.price,
-            compareAtPrice: item.compareAtPrice,
+            ...pricesByCell.get(item),
             stockStatus: item.stockStatus,
             isActive: item.isActive,
             sizeLabel: item.sizeLabel,
@@ -344,6 +362,10 @@ export default function VariantMatrixPage({ params }: VariantMatrixPageProps) {
             frameColour: item.frameColour,
           }),
         });
+        if (!patchRes.ok) {
+          const errData = await patchRes.json().catch(() => null);
+          throw new Error(errData?.error?.message || errData?.error || `Could not save ${item.sizeLabel} · ${item.frameColour}`);
+        }
       }
 
       // 2. Create new variants via POST /bulk
@@ -355,8 +377,7 @@ export default function VariantMatrixPage({ params }: VariantMatrixPageProps) {
             widthIn: item.widthIn,
             heightIn: item.heightIn,
             frameColour: item.frameColour,
-            price: item.price,
-            compareAtPrice: item.compareAtPrice,
+            ...pricesByCell.get(item),
             stockStatus: item.stockStatus,
             isActive: item.isActive,
             material: 'wood',

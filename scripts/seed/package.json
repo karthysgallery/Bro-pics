@@ -9,7 +9,10 @@
     "write-to-firestore": "tsx src/write-to-firestore.ts",
     "create-test-users": "tsx src/create-test-users.ts",
     "set-user-role": "tsx src/set-user-role.ts",
-    "migrate-storage-paths": "tsx src/migrate-storage-paths.ts"
+    "migrate-storage-paths": "tsx src/migrate-storage-paths.ts",
+    "bootstrap-admin": "tsx src/bootstrap-admin.ts",
+    "seed-emulator-users": "tsx src/seed-emulator-users.ts",
+    "audit-live-data": "tsx src/audit-live-data.ts"
   },
   "dependencies": {
     "@bro-pics/shared": "workspace:*",

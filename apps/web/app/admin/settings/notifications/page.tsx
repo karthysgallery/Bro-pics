@@ -186,9 +186,9 @@ export default function AdminNotificationsPage() {
             onClick={() => {
               setEditingTemplate({
                 key: 'order.shipped',
-                subject: 'Your BroPics Frame Order #{{orderId}} has shipped!',
+                subject: 'Your KarthysGallery Frame Order #{{orderId}} has shipped!',
                 body:
-                  'Hello {{customerName}},\n\nYour handcrafted frame has been packaged and handed over to courier. Track your parcel here: {{trackingUrl}}\n\nThank you for choosing BroPics!',
+                  'Hello {{customerName}},\n\nYour handcrafted frame has been packaged and handed over to courier. Track your parcel here: {{trackingUrl}}\n\nThank you for choosing KarthysGallery!',
                 variables: ['orderId', 'customerName', 'trackingUrl', 'courierName'],
               });
               setIsTemplateModalOpen(true);
@@ -210,7 +210,7 @@ export default function AdminNotificationsPage() {
               : 'text-ink/60 hover:text-ink hover:bg-field'
           }`}
         >
-          ✉️ Templates ({templates.length})
+          Templates ({templates.length})
         </button>
         <button
           onClick={() => setActiveTab('logs')}
@@ -220,7 +220,7 @@ export default function AdminNotificationsPage() {
               : 'text-ink/60 hover:text-ink hover:bg-field'
           }`}
         >
-          📬 Delivery Outbox Log ({logs.length})
+          Delivery Outbox Log ({logs.length})
         </button>
       </div>
 
@@ -237,7 +237,7 @@ export default function AdminNotificationsPage() {
             <div className="space-y-4">
               {templates.length === 0 ? (
                 <div className="p-16 text-center text-xs text-ink/50 space-y-2 rounded-2xl border border-line bg-paper">
-                  <span className="text-3xl block">✉️</span>
+                  <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                   <p>No notification templates defined yet.</p>
                 </div>
               ) : (
@@ -294,7 +294,7 @@ export default function AdminNotificationsPage() {
                           }}
                           className="px-3 py-1.5 rounded-lg bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
                         >
-                          Edit Template ✏️
+                          Edit Template
                         </button>
                       </div>
                     </div>
@@ -329,7 +329,7 @@ export default function AdminNotificationsPage() {
               <div className="rounded-2xl border border-line bg-paper shadow-xs overflow-hidden">
                 {logs.length === 0 ? (
                   <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-                    <span className="text-3xl block">📬</span>
+                    <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <p>No outbox log entries found matching filter.</p>
                   </div>
                 ) : (
@@ -380,7 +380,7 @@ export default function AdminNotificationsPage() {
                                   disabled={isResending === log.id}
                                   className="px-2.5 py-1 rounded bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors disabled:opacity-50"
                                 >
-                                  {isResending === log.id ? 'Re-queueing...' : 'Resend 🔁'}
+                                  {isResending === log.id ? 'Re-queueing...' : 'Resend'}
                                 </button>
                               )}
                             </td>
@@ -422,7 +422,7 @@ export default function AdminNotificationsPage() {
               type="text"
               value={editingTemplate?.subject || ''}
               onChange={(e) => setEditingTemplate((p) => ({ ...p, subject: e.target.value }))}
-              placeholder="Your BroPics order #{{orderId}} is on its way!"
+              placeholder="Your KarthysGallery order #{{orderId}} is on its way!"
               className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
             />
           </FormField>

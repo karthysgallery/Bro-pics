@@ -102,8 +102,8 @@ export default function ShipmentsCenterPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-cream">Shipments & Dispatch Hub</h1>
-          <p className="text-sm text-sand/70 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Shipments & Dispatch Hub</h1>
+          <p className="text-sm text-ink/60 mt-1">
             Track outbound parcels, print dispatch manifests for courier pickup handover, and inspect AWB statuses.
           </p>
         </div>
@@ -112,12 +112,12 @@ export default function ShipmentsCenterPage() {
           <button
             onClick={handleGenerateManifest}
             disabled={selectedIds.length === 0 || generatingManifest}
-            className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-sm font-bold bg-gold text-ink hover:bg-gold-deep transition shadow-xs flex items-center gap-2 disabled:opacity-50"
           >
             {generatingManifest ? (
-              <span className="animate-spin inline-block w-4 h-4 border-2 border-void border-t-transparent rounded-full" />
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-ink border-t-transparent rounded-full" />
             ) : (
-              <span>📄</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             )}
             Generate Courier Manifest ({selectedIds.length})
           </button>
@@ -128,8 +128,8 @@ export default function ShipmentsCenterPage() {
         <div
           className={`p-4 rounded-xl border text-sm flex items-center justify-between ${
             message.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
           <span>{message.text}</span>
@@ -140,17 +140,17 @@ export default function ShipmentsCenterPage() {
       )}
 
       {/* Shipments Table */}
-      <div className="rounded-2xl bg-paper border border-line overflow-hidden">
+      <div className="rounded-2xl bg-paper border border-line overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-void/50 text-[11px] font-semibold text-sand uppercase tracking-wider border-b border-line">
+            <thead className="bg-field text-[11px] font-semibold text-ink/70 uppercase tracking-wider border-b border-line">
               <tr>
                 <th className="px-5 py-3 w-10">
                   <input
                     type="checkbox"
                     checked={selectedIds.length > 0 && selectedIds.length === shipments.length}
                     onChange={handleSelectAll}
-                    className="w-4 h-4 rounded border-line text-gold focus:ring-gold bg-void"
+                    className="w-4 h-4 rounded border-line text-gold focus:ring-gold bg-field"
                   />
                 </th>
                 <th className="px-5 py-3">Order #</th>
@@ -162,16 +162,16 @@ export default function ShipmentsCenterPage() {
                 <th className="px-5 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line/60 text-xs">
+            <tbody className="divide-y divide-line text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-sand/60">
+                  <td colSpan={8} className="px-5 py-8 text-center text-ink/50">
                     Loading outbound shipments...
                   </td>
                 </tr>
               ) : shipments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-sand/60">
+                  <td colSpan={8} className="px-5 py-8 text-center text-ink/50">
                     No shipments found in dispatch queue.
                   </td>
                 </tr>
@@ -181,17 +181,17 @@ export default function ShipmentsCenterPage() {
                   return (
                     <tr
                       key={s.id}
-                      className={`hover:bg-tint/30 transition ${isSelected ? 'bg-gold/5' : ''}`}
+                      className={`hover:bg-field/50 transition ${isSelected ? 'bg-gold/10' : ''}`}
                     >
                       <td className="px-5 py-3.5">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelect(s.id)}
-                          className="w-4 h-4 rounded border-line text-gold focus:ring-gold bg-void"
+                          className="w-4 h-4 rounded border-line text-gold focus:ring-gold bg-field"
                         />
                       </td>
-                      <td className="px-5 py-3.5 font-mono font-bold text-cream">
+                      <td className="px-5 py-3.5 font-mono font-semibold text-ink">
                         {s.orderId}
                       </td>
                       <td className="px-5 py-3.5 font-mono">
@@ -200,22 +200,22 @@ export default function ShipmentsCenterPage() {
                             href={s.trackingUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-gold hover:underline flex items-center gap-1"
+                            className="text-gold font-medium hover:underline inline-flex items-center gap-1"
                           >
                             {s.awb} ↗
                           </a>
                         ) : (
-                          <span className="text-cream">{s.awb}</span>
+                          <span className="text-ink">{s.awb}</span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 text-cream/90">{s.courierName}</td>
-                      <td className="px-5 py-3.5 text-sand">
+                      <td className="px-5 py-3.5 font-medium text-ink">{s.courierName}</td>
+                      <td className="px-5 py-3.5 text-ink/80">
                         {s.destinationCity || 'Bengaluru, KA'}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-sand">
+                      <td className="px-5 py-3.5 font-mono text-ink/70">
                         {s.weightGrams ? `${(s.weightGrams / 1000).toFixed(2)} kg` : '1.20 kg'}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-sand/70">
+                      <td className="px-5 py-3.5 font-mono text-ink/60">
                         {new Date(s.createdAt).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -224,7 +224,7 @@ export default function ShipmentsCenterPage() {
                         })}
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300/40">
                           {s.status}
                         </span>
                       </td>

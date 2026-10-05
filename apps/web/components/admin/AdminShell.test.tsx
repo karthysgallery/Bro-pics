@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AdminShell } from './AdminShell';
 
@@ -12,7 +12,15 @@ vi.mock('../../lib/auth-context', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+const mockPaymentMode = vi.fn();
+vi.mock('../../lib/payment-mode-client', () => ({ getPaymentModeClient: () => mockPaymentMode() }));
+
 describe('AdminShell [AFE-01]', () => {
+  beforeEach(() => {
+    mockPaymentMode.mockReset();
+    mockPaymentMode.mockResolvedValue('razorpay');
+  });
+
   it('shows access restricted when user is unauthenticated or not staff/admin', async () => {
     mockUseAuth.mockReturnValue({
       user: null,
@@ -50,7 +58,27 @@ describe('AdminShell [AFE-01]', () => {
     expect(screen.getByText('Products')).toBeInTheDocument();
     expect(screen.getByText('Orders Queue')).toBeInTheDocument();
     expect(screen.getAllByText('ADMIN').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('STAGING')).toBeInTheDocument();
+    // The old hard-coded "STAGING" badge is gone; test-payments only shows when it's true.
+    expect(screen.queryByText('STAGING')).not.toBeInTheDocument();
+    expect(screen.queryByText('TEST PAYMENTS')).not.toBeInTheDocument();
+  });
+
+  it('shows a TEST PAYMENTS badge while the payment provider is mock, so staff never mistake test orders for revenue', async () => {
+    mockPaymentMode.mockResolvedValue('mock');
+    mockUseAuth.mockReturnValue({
+      user: {
+        email: 'admin@karthysgallery.in',
+        getIdTokenResult: () => Promise.resolve({ claims: { role: 'admin' } }),
+      },
+      loading: false,
+      signOut: vi.fn(),
+    });
+    render(
+      <AdminShell>
+        <div data-testid="admin-child" />
+      </AdminShell>
+    );
+    expect(await screen.findByText('TEST PAYMENTS')).toBeInTheDocument();
   });
 
   it('filters navigation items for a scoped role (e.g. staff only sees orders/returns/reviews)', async () => {

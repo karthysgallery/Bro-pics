@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SignedOutNotice } from '../../../../components/account/SignedOutNotice';
-import { OrderStatusTimeline } from '../../../../components/orders/OrderStatusTimeline';
+import { OrderStatusTimeline, STATUS_CHIP_STYLES, statusLabel } from '../../../../components/orders/OrderStatusTimeline';
+import { formatPaise } from '../../../../lib/format-price';
+import { SUPPORT_EMAIL } from '../../../../lib/support-contact';
 import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
 import { useToast } from '../../../../components/ui/Toast';
 import { PageSkeleton } from '../../../../components/ui/Skeleton';
@@ -13,7 +15,7 @@ import { useAuth } from '../../../../lib/auth-context';
 import { useCart } from '../../../../lib/cart-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
 import { getOrCreateSessionId } from '../../../../lib/session-id';
-import type { Order, OrderItem, OrderEvent, Return, ReturnStatus, ReturnReasonCategory } from '@bro-pics/shared';
+import { CUSTOMER_CANCELLABLE_STATUSES, type Order, type OrderItem, type OrderEvent, type Return, type ReturnStatus, type ReturnReasonCategory } from '@bro-pics/shared';
 
 const RETURN_REASON_CATEGORY_LABEL: Record<ReturnReasonCategory, string> = {
   damaged: 'Arrived damaged',
@@ -37,19 +39,9 @@ interface OrderDetailPageProps {
   params: Promise<{ orderId: string }>;
 }
 
-// Cancellation is only offered while an order hasn't reached the point of
-// no real-world return — matches the server-side check in
-// /api/orders/[orderId]/cancel exactly, so the button never offers
-// something the API would then reject.
-const CANCELLABLE_STATUSES = new Set(['pending_payment', 'paid', 'in_production']);
-
 // order.placedAt comes back from the client Firestore SDK as a Timestamp
 // object (with a toDate() method), not a plain Date or ISO string, so this
 // duck-types rather than assuming a specific shape.
-function formatPaise(paise: number): string {
-  return (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
 function formatPlacedAt(value: unknown): string {
   if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: unknown }).toDate === 'function') {
     return (value as { toDate: () => Date }).toDate().toLocaleString('en-IN');
@@ -60,6 +52,75 @@ function formatPlacedAt(value: unknown): string {
     if (!Number.isNaN(d.getTime())) return d.toLocaleString('en-IN');
   }
   return '';
+}
+
+type OrderStatusValue = Order['status'];
+
+// The one-line headline for the status card, by where the order is in its life.
+// Written against the real status set (including the automatic production
+// sub-stages) so nothing falls through to a wrong default.
+function statusHeadline(status: OrderStatusValue): string {
+  switch (status) {
+    case 'pending_payment':
+      return 'Waiting for your payment';
+    case 'paid':
+    case 'payment_confirmed':
+      return 'Payment received — thank you';
+    case 'photo_validation':
+      return "We're checking your photos";
+    case 'print_rendering':
+    case 'print_ready':
+      return 'Your print is being prepared';
+    case 'in_production':
+    case 'quality_check':
+    case 'rework':
+      return 'Your frame is being handcrafted';
+    case 'printed_packed':
+    case 'packed':
+      return 'Packed and ready to ship';
+    case 'shipped':
+      return 'Your frame is on its way.';
+    case 'delivered':
+      return 'Your frame has arrived.';
+    case 'cancelled':
+      return 'This order was cancelled';
+    case 'refunded':
+      return 'This order was refunded';
+    case 'replacement_issued':
+      return 'A replacement is on the way';
+  }
+}
+
+// Statuses before the parcel leaves us — the only time a dispatch estimate means anything.
+const PRE_DISPATCH: ReadonlySet<OrderStatusValue> = new Set([
+  'paid',
+  'payment_confirmed',
+  'photo_validation',
+  'print_rendering',
+  'print_ready',
+  'in_production',
+  'quality_check',
+  'rework',
+  'printed_packed',
+  'packed',
+]);
+
+const PAYMENT_STATUS_LABEL: Record<Order['paymentStatus'], string> = {
+  pending: 'Awaiting payment',
+  paid: 'Paid',
+  failed: 'Payment failed',
+  refunded: 'Refunded',
+};
+
+interface StoredAddress {
+  label?: string | null;
+  line1?: string;
+  line2?: string | null;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  phone?: string;
+  deliveryInstructions?: string | null;
 }
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
@@ -188,7 +249,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   if (!order) return <PageSkeleton rows={2} />;
 
   const hasPendingPaymentEvent = events.some((event) => event.status === 'pending_payment');
-  const isCancellable = CANCELLABLE_STATUSES.has(order.status);
+  const isCancellable = CUSTOMER_CANCELLABLE_STATUSES.includes(order.status);
 
   const handleCancel = async () => {
     if (!orderId || !user) return;
@@ -330,37 +391,40 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         <div>
           <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">Your memories are in good hands.</h1>
           <p className="text-xs text-ink/60">
-            Order {order.orderNo} · Placed {formatPlacedAt(order.placedAt)} · Paid ₹{formatPaise(order.total)}
+            Order {order.orderNo} · Placed {formatPlacedAt(order.placedAt)} · {PAYMENT_STATUS_LABEL[order.paymentStatus]} {formatPaise(order.total)}
           </p>
         </div>
-        <Link
-          href={`/orders/${orderId}/invoice`}
-          className="px-5 py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors w-fit"
-        >
-          View invoice
-        </Link>
+        {order.paymentStatus === 'paid' && (
+          <Link
+            href={`/orders/${orderId}/invoice`}
+            className="px-5 py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors w-fit"
+          >
+            View invoice
+          </Link>
+        )}
       </div>
 
       {/* Milestone Progress Card */}
       <div className="rounded-3xl bg-paper border border-line p-6 md:p-8 mb-8 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
-          <h2 className="font-display text-xl font-bold text-ink">
-            {order.status === 'delivered'
-              ? 'Your frame has arrived.'
-              : order.status === 'shipped'
-              ? 'Your frame is on its way.'
-              : order.status === 'in_production'
-              ? 'Your frame is being handcrafted.'
-              : "We're checking your photos"}
-          </h2>
-          <span className="px-3 py-1 rounded-full border border-line bg-field text-xs font-semibold text-ink">
-            {order.status === 'paid' ? 'Payment confirmed' : order.status === 'in_production' ? 'In production' : order.status === 'shipped' ? 'Shipped' : order.status === 'delivered' ? 'Delivered' : order.status === 'cancelled' ? 'Cancelled' : 'Pending payment'}
+          <h2 className="font-display text-xl font-bold text-ink">{statusHeadline(order.status)}</h2>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_CHIP_STYLES[order.status]}`}>
+            {statusLabel(order.status)}
           </span>
         </div>
 
-        <p className="text-xs text-ink/70 font-medium mb-6">
-          Estimated dispatch: 3-5 working days
-        </p>
+        {order.status === 'pending_payment' && (
+          <p className="text-xs text-ink/70 font-medium mb-6">
+            This order isn&apos;t confirmed until payment is complete.
+            {order.paymentStatus === 'failed' ? ' Your last payment attempt failed.' : ''}{' '}
+            <Link href="/checkout" className="text-accent font-semibold hover:underline">
+              Return to checkout
+            </Link>
+          </p>
+        )}
+        {PRE_DISPATCH.has(order.status) && (
+          <p className="text-xs text-ink/70 font-medium mb-6">Estimated dispatch: 3-5 working days</p>
+        )}
 
         {/* Milestone Steps Bar */}
         <div className="py-4 border-t border-line">
@@ -395,7 +459,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             {events.map((ev, i) => (
               <li key={i} className="flex justify-between">
                 <span>
-                  {ev.status}
+                  {statusLabel(ev.status)}
                   {ev.note ? ` — ${ev.note}` : ''}
                   {ev.courier && <span className="ml-2">{ev.courier}</span>}
                   {ev.awbNumber && <span className="ml-2">{ev.awbNumber}</span>}
@@ -420,7 +484,24 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <li key={i} className="py-4 flex flex-col sm:flex-row gap-4 items-start justify-between">
                     <div>
                       <h3 className="font-display text-base font-bold text-ink">{item.title}</h3>
-                      <p className="text-xs text-ink/60 mt-0.5">Quantity: {item.qty} · ₹{formatPaise(item.unitPrice ?? 0)} each</p>
+                      {(item.sizeLabel || item.frameColour || item.material) && (
+                        <p className="text-xs text-ink/70 mt-0.5">
+                          {[item.sizeLabel, item.frameColour, item.material].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      <p className="text-xs text-ink/60 mt-0.5">Quantity: {item.qty} · {formatPaise(item.unitPrice ?? 0)} each</p>
+                      {item.personalization && (
+                        <p className="text-xs text-ink/60 mt-0.5">
+                          Personalised ·{' '}
+                          {Object.keys(item.personalization.state.slots).length} photo
+                          {Object.keys(item.personalization.state.slots).length === 1 ? '' : 's'}
+                          {Object.values(item.personalization.state.texts)
+                            .map((t) => t.value.trim())
+                            .filter(Boolean)
+                            .map((v) => ` · “${v}”`)
+                            .join('')}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       {order.status === 'delivered' && (
@@ -453,7 +534,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             <div className="p-6 rounded-3xl bg-field border border-line">
               <h3 className="font-display text-base font-bold text-ink mb-2">Need to cancel?</h3>
               <p className="text-xs text-ink/70 mb-4">
-                You can cancel your order before custom crafting begins.
+                You can cancel your order before it is printed and packed.
               </p>
               <button
                 onClick={() => setShowCancelConfirm(true)}
@@ -465,7 +546,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               <ConfirmDialog
                 isOpen={showCancelConfirm}
                 title="Cancel this order?"
-                message="This can't be undone. Your payment will be refunded to your original payment method."
+                message={
+                  order.paymentStatus === 'paid'
+                    ? "This can't be undone. A refund of your payment will be arranged to your original payment method."
+                    : "This can't be undone. You haven't been charged for this order."
+                }
                 confirmLabel="Yes, cancel order"
                 cancelLabel="Keep order"
                 isLoading={isCancelling}
@@ -583,22 +668,70 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           )}
         </div>
 
-        {/* Right: Delivery Info Card */}
+        {/* Right: Delivery + order summary */}
         <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm lg:sticky lg:top-32">
           <h2 className="font-display text-lg font-bold text-ink mb-4">Delivery to</h2>
-          
-          <div className="space-y-1 text-xs text-ink/80 mb-6">
-            <p className="font-bold text-ink">{user.displayName || 'Customer'}</p>
-            {user.phoneNumber && <p>{user.phoneNumber}</p>}
-            {user.email && <p>{user.email}</p>}
-          </div>
+
+          {(() => {
+            const address = order.addressJson as StoredAddress | undefined;
+            return (
+              <div className="space-y-1 text-xs text-ink/80 mb-6">
+                <p className="font-bold text-ink">{order.customerName || user.displayName || 'Customer'}</p>
+                {address?.line1 && (
+                  <p>
+                    {address.line1}
+                    {address.line2 ? `, ${address.line2}` : ''}
+                  </p>
+                )}
+                {address?.city && (
+                  <p>
+                    {address.city}, {address.state} {address.pincode}
+                  </p>
+                )}
+                {(address?.phone || user.phoneNumber) && <p>{address?.phone || user.phoneNumber}</p>}
+                {address?.deliveryInstructions && <p className="text-ink/60">Note: {address.deliveryInstructions}</p>}
+              </div>
+            );
+          })()}
+
+          <h2 className="font-display text-lg font-bold text-ink mb-3">Order summary</h2>
+          <dl className="space-y-1.5 text-xs mb-6">
+            <div className="flex justify-between text-ink/70">
+              <dt>Subtotal</dt>
+              <dd className="font-medium text-ink">{formatPaise(order.subtotal)}</dd>
+            </div>
+            {order.discount > 0 && (
+              <div className="flex justify-between text-accent">
+                <dt>Discount{order.couponId ? ` (${order.couponId})` : ''}</dt>
+                <dd className="font-medium">−{formatPaise(order.discount)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between text-ink/70">
+              <dt>Shipping</dt>
+              <dd className="font-medium text-ink">{order.shipping === 0 ? 'Free' : formatPaise(order.shipping)}</dd>
+            </div>
+            {order.taxLines?.map((tax, i) => (
+              <div key={i} className="flex justify-between text-ink/50 text-2xs">
+                <dt>Includes GST ({tax.rate}%)</dt>
+                <dd>{formatPaise(tax.amount)}</dd>
+              </div>
+            ))}
+            <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-line">
+              <dt className="font-display text-sm font-bold text-ink">Total</dt>
+              <dd className="font-display text-lg font-bold text-ink">{formatPaise(order.total)}</dd>
+            </div>
+            <div className="flex justify-between text-ink/70 pt-1">
+              <dt>Payment</dt>
+              <dd className="font-semibold text-ink">{PAYMENT_STATUS_LABEL[order.paymentStatus]}</dd>
+            </div>
+          </dl>
 
           <div className="pt-4 border-t border-line">
             <p className="text-xs text-ink/60 mb-3">
               Questions about your frame? We&apos;re here to help.
             </p>
             <a
-              href="mailto:hello@bropics.in"
+              href={`mailto:${SUPPORT_EMAIL}`}
               className="block w-full py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-center text-xs font-semibold transition-colors"
             >
               Contact support

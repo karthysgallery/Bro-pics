@@ -6,8 +6,8 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Privacy policy — BroPics',
-  description: 'What BroPics collects, why, how long it is kept, and how to have it deleted.',
+  title: 'Privacy policy — KarthysGallery',
+  description: 'What KarthysGallery collects, why, how long it is kept, and how to have it deleted.',
 };
 
 export async function generateMetadata(): Promise<Metadata> {

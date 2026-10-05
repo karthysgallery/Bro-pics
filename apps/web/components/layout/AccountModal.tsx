@@ -24,8 +24,11 @@ export function AccountModal({ isOpen, onClose }: AccountModalProps) {
             <h2 id="account-modal-title" className="text-lg font-semibold text-ink">Sign in</h2>
             <p className="mt-0.5 text-sm text-ink/60">We&rsquo;ll text you a one-time code.</p>
           </div>
-          <button aria-label="Close sign in" onClick={onClose} className="text-ink/60 hover:text-ink text-lg leading-none">
-            ✕
+          <button aria-label="Close sign in" onClick={onClose} className="p-1 rounded-lg text-ink/60 hover:text-ink hover:bg-tint transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
         <PhoneSignIn onSignedIn={onClose} />

@@ -92,7 +92,7 @@ export default function AdminProductsPage() {
             {p.primaryImageUrl ? (
               <img src={p.primaryImageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-xs text-ink/30">🖼️</div>
+              <div className="w-full h-full flex items-center justify-center text-xs text-ink/30"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
             )}
           </div>
           <div>
@@ -214,7 +214,7 @@ export default function AdminProductsPage() {
         searchPlaceholder="Filter products by title, slug, description…"
         searchValue={search}
         onSearchChange={setSearch}
-        exportFilename="bropics-products.csv"
+        exportFilename="karthysgallery-products.csv"
       />
     </div>
   );

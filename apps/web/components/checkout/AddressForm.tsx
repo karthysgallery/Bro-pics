@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { getFirestore, doc, collection, setDoc } from 'firebase/firestore';
 import { AddressSchema, type Address, type AddressType } from '@bro-pics/shared';
 import { getFirebaseApp } from '../../lib/firebase-client';
+import { INDIAN_STATES_AND_UTS } from '../../lib/indian-states';
 
 interface AddressFormProps {
   userId: string;
@@ -24,6 +25,19 @@ const TYPE_OPTIONS: Array<{ value: AddressType; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
+type FieldName = 'line1' | 'city' | 'state' | 'pincode' | 'phone';
+
+// Indian mobile numbers: 10 digits starting 6-9, optionally written with +91 / 91 / 0.
+// Stored normalised as +91XXXXXXXXXX so every address looks the same to couriers.
+function normalizeMobile(input: string): string | null {
+  const digits = input.replace(/[\s\-().]/g, '');
+  const match = /^(?:\+?91|0)?([6-9]\d{9})$/.exec(digits);
+  return match ? `+91${match[1]}` : null;
+}
+
+const inputClass = (invalid: boolean) =>
+  `rounded-md border px-3 py-2 text-base sm:text-sm text-ink ${invalid ? 'border-alert' : 'border-line'}`;
+
 export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirstAddress = false }: AddressFormProps) {
   const [line1, setLine1] = useState(existingAddress?.line1 ?? '');
   const [line2, setLine2] = useState(existingAddress?.line2 ?? '');
@@ -35,12 +49,27 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
   const [type, setType] = useState<AddressType | ''>(existingAddress?.type ?? '');
   const [country, setCountry] = useState(existingAddress?.country ?? 'India');
   const [deliveryInstructions, setDeliveryInstructions] = useState(existingAddress?.deliveryInstructions ?? '');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // An address saved before the state list existed may hold a value that isn't in
+  // it ("TN", "tamil nadu") — keep it selectable rather than silently blanking it.
+  const stateOptions: string[] = [...INDIAN_STATES_AND_UTS];
+  if (state && !stateOptions.includes(state)) stateOptions.unshift(state);
 
   const handleSave = async () => {
+    if (saving) return;
     setError(null);
-    const db = getFirestore(getFirebaseApp());
-    collection(db, 'users', userId, 'addresses');
+
+    const errors: Partial<Record<FieldName, string>> = {};
+    if (!line1.trim()) errors.line1 = 'Enter your house/flat number and street.';
+    if (!city.trim()) errors.city = 'Enter your city or town.';
+    if (!state.trim()) errors.state = 'Choose your state.';
+    if (!/^\d{6}$/.test(pincode.trim())) errors.pincode = 'Enter a valid 6-digit pincode.';
+    const normalizedPhone = normalizeMobile(phone);
+    if (!normalizedPhone) errors.phone = 'Enter a valid 10-digit mobile number.';
+
     const addressId =
       existingAddress?.id ??
       (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -49,32 +78,54 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
 
     const candidate = {
       id: addressId,
-      label: label || null,
-      line1,
-      line2: line2 || null,
-      city,
-      state,
-      pincode,
-      phone,
+      label: label.trim() || null,
+      line1: line1.trim(),
+      line2: line2.trim() || null,
+      city: city.trim(),
+      state: state.trim(),
+      pincode: pincode.trim(),
+      phone: normalizedPhone ?? phone.trim(),
       isDefault: existingAddress?.isDefault ?? isFirstAddress,
       type: type || null,
-      country: country || null,
-      deliveryInstructions: deliveryInstructions || null,
+      country: country.trim() || null,
+      deliveryInstructions: deliveryInstructions.trim() || null,
     };
 
+    // The shared schema is the final word (it also rejects pincodes the
+    // delivery check can't serve, e.g. 9xxxxx army-postal codes).
     const parsed = AddressSchema.safeParse(candidate);
-    if (!parsed.success) {
-      setError(
-        parsed.error.issues.some((issue) => issue.path[0] === 'pincode')
-          ? 'Enter a valid 6-digit pincode.'
-          : 'Please fill in address line 1, city, state, pincode, and phone.'
-      );
+    if (!parsed.success && !errors.pincode && parsed.error.issues.some((issue) => issue.path[0] === 'pincode')) {
+      errors.pincode = 'Enter a valid 6-digit pincode.';
+    }
+    if (Object.keys(errors).length > 0 || !parsed.success) {
+      setFieldErrors(errors);
+      if (Object.keys(errors).length === 0) setError('Please check the address and try again.');
       return;
     }
+    setFieldErrors({});
 
-    await setDoc(doc(db, 'users', userId, 'addresses', addressId), parsed.data);
-    onSaved(parsed.data);
+    setSaving(true);
+    try {
+      const db = getFirestore(getFirebaseApp());
+      await setDoc(doc(db, 'users', userId, 'addresses', addressId), parsed.data);
+      onSaved(parsed.data);
+    } catch {
+      setError("We couldn't save this address. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const errorProps = (field: FieldName) => ({
+    'aria-invalid': fieldErrors[field] ? true : undefined,
+    'aria-describedby': fieldErrors[field] ? `address-${field}-error` : undefined,
+  });
+  const fieldError = (field: FieldName) =>
+    fieldErrors[field] ? (
+      <p id={`address-${field}-error`} role="alert" className="text-xs text-alert -mt-2">
+        {fieldErrors[field]}
+      </p>
+    ) : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -96,28 +147,79 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
       </div>
 
       <label htmlFor="address-label" className="text-sm font-medium text-ink">Label (optional)</label>
-      <input id="address-label" value={label} onChange={(e) => setLabel(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input id="address-label" value={label} onChange={(e) => setLabel(e.target.value)} className={inputClass(false)} />
 
       <label htmlFor="address-line1" className="text-sm font-medium text-ink">Address line 1</label>
-      <input id="address-line1" value={line1} onChange={(e) => setLine1(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input
+        id="address-line1"
+        value={line1}
+        onChange={(e) => setLine1(e.target.value)}
+        autoComplete="address-line1"
+        className={inputClass(Boolean(fieldErrors.line1))}
+        {...errorProps('line1')}
+      />
+      {fieldError('line1')}
 
       <label htmlFor="address-line2" className="text-sm font-medium text-ink">Address line 2 (optional)</label>
-      <input id="address-line2" value={line2} onChange={(e) => setLine2(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input id="address-line2" value={line2} onChange={(e) => setLine2(e.target.value)} autoComplete="address-line2" className={inputClass(false)} />
 
       <label htmlFor="address-city" className="text-sm font-medium text-ink">City</label>
-      <input id="address-city" value={city} onChange={(e) => setCity(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input
+        id="address-city"
+        value={city}
+        onChange={(e) => setCity(e.target.value)}
+        autoComplete="address-level2"
+        className={inputClass(Boolean(fieldErrors.city))}
+        {...errorProps('city')}
+      />
+      {fieldError('city')}
 
       <label htmlFor="address-state" className="text-sm font-medium text-ink">State</label>
-      <input id="address-state" value={state} onChange={(e) => setState(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <select
+        id="address-state"
+        value={state}
+        onChange={(e) => setState(e.target.value)}
+        autoComplete="address-level1"
+        className={`${inputClass(Boolean(fieldErrors.state))} bg-paper`}
+        {...errorProps('state')}
+      >
+        <option value="">Select your state</option>
+        {stateOptions.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+      {fieldError('state')}
 
       <label htmlFor="address-country" className="text-sm font-medium text-ink">Country</label>
-      <input id="address-country" value={country} onChange={(e) => setCountry(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input id="address-country" value={country} onChange={(e) => setCountry(e.target.value)} autoComplete="country-name" className={inputClass(false)} />
 
       <label htmlFor="address-pincode" className="text-sm font-medium text-ink">Pincode</label>
-      <input id="address-pincode" value={pincode} onChange={(e) => setPincode(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input
+        id="address-pincode"
+        value={pincode}
+        onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        inputMode="numeric"
+        autoComplete="postal-code"
+        maxLength={6}
+        className={inputClass(Boolean(fieldErrors.pincode))}
+        {...errorProps('pincode')}
+      />
+      {fieldError('pincode')}
 
       <label htmlFor="address-phone" className="text-sm font-medium text-ink">Phone</label>
-      <input id="address-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm text-ink" />
+      <input
+        id="address-phone"
+        type="tel"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        inputMode="tel"
+        autoComplete="tel"
+        className={inputClass(Boolean(fieldErrors.phone))}
+        {...errorProps('phone')}
+      />
+      {fieldError('phone')}
 
       <label htmlFor="address-delivery-instructions" className="text-sm font-medium text-ink">Delivery instructions (optional)</label>
       <textarea
@@ -126,17 +228,31 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
         onChange={(e) => setDeliveryInstructions(e.target.value)}
         rows={2}
         placeholder="E.g. leave with the doorman, gate code, landmark…"
-        className="rounded-md border border-line px-3 py-2 text-sm text-ink"
+        className={inputClass(false)}
       />
 
-      {error && <p className="text-sm text-alert">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-alert">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 mt-2">
-        <button onClick={handleSave} className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors">
-          Save address
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-full bg-gold text-ink px-5 py-2.5 text-sm font-semibold hover:bg-gold-deep transition-colors disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save address'}
         </button>
         {onCancel && (
-          <button onClick={onCancel} className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+          >
             Cancel
           </button>
         )}

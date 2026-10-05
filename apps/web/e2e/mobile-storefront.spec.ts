@@ -11,7 +11,7 @@ test.describe('Mobile Storefront Emulation & Gestures [FE-49]', () => {
     await expect(header).toBeVisible();
 
     // 2. Mobile Search Trigger
-    const searchBtn = page.locator('button[aria-label*="search" i], header input[type="search"]');
+    const searchBtn = page.locator('header input[type="search"]:visible, button[aria-label*="search" i]:visible');
     if (await searchBtn.count() > 0) {
       await expect(searchBtn.first()).toBeVisible();
     }

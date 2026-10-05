@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getFirestore, collection, doc, getDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
-import type { Order, Product, User as BroPicsUser } from '@bro-pics/shared';
+import { isOrderInProgress, type Order, type Product, type User as BroPicsUser } from '@bro-pics/shared';
 import { SignedOutNotice } from '../../../components/account/SignedOutNotice';
 import { useAuth } from '../../../lib/auth-context';
 import { getFirebaseApp } from '../../../lib/firebase-client';
@@ -26,12 +26,6 @@ const LINKS = [
   { href: '/account/coupons', label: 'Coupons', desc: 'Available offers and your coupon history' },
   { href: '/account/payment-methods', label: 'Payment methods', desc: 'Supported ways to pay at checkout' },
 ];
-
-// Orders that have been paid for but haven't reached the customer yet —
-// used for the "pending deliveries" count, matching CANCELLABLE-adjacent
-// status sets used elsewhere (e.g. orders/[orderId]/page.tsx's own
-// CANCELLABLE_STATUSES) as the reference for "which statuses mean what."
-const PENDING_DELIVERY_STATUSES = new Set(['paid', 'in_production', 'printed_packed', 'shipped']);
 
 export default function AccountPage() {
   const { user, signOut } = useAuth();
@@ -76,7 +70,7 @@ export default function AccountPage() {
   if (!user) return <SignedOutNotice action="see your account" />;
   if (orders === null || addressCount === null) return <PageSkeleton />;
 
-  const pendingDeliveries = orders.filter((order) => PENDING_DELIVERY_STATUSES.has(order.status));
+  const pendingDeliveries = orders.filter((order) => isOrderInProgress(order.status));
   const recentOrders = orders.slice(0, 3);
 
   return (

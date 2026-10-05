@@ -6,7 +6,7 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Picture quality guide — BroPics',
+  title: 'Picture quality guide — KarthysGallery',
   description: 'What makes a photo print sharply, what the quality reading in the editor means, and how to fix a low reading.',
 };
 

@@ -5,7 +5,7 @@ test.describe('Desktop Storefront & Discovery [FE-48]', () => {
     await page.goto('/');
 
     // Check title and main landmarks
-    await expect(page).toHaveTitle(/BroPics/i);
+    await expect(page).toHaveTitle(/KarthysGallery|KarthysGallery/i);
     const hero = page.locator('section[aria-label="Featured collections"]');
     if (await hero.count() > 0) {
       await expect(hero).toBeVisible();
@@ -14,7 +14,7 @@ test.describe('Desktop Storefront & Discovery [FE-48]', () => {
     // Category navigation
     const header = page.locator('header');
     await expect(header).toBeVisible();
-    const searchInput = header.locator('input[type="search"]');
+    const searchInput = header.locator('input[type="search"]:visible').first();
     if (await searchInput.count() > 0) {
       await expect(searchInput).toBeVisible();
     }
@@ -22,7 +22,7 @@ test.describe('Desktop Storefront & Discovery [FE-48]', () => {
 
   test('category page displays product cards with filters and sort controls', async ({ page }) => {
     await page.goto('/category');
-    await expect(page.locator('h1')).toContainText(/collections|shop/i);
+    await expect(page.locator('h1')).toContainText(/collections|shop|frame/i);
 
     // Filter and sort interactions if on specific category
     const productCards = page.locator('a[href^="/product/"]');
@@ -34,7 +34,7 @@ test.describe('Desktop Storefront & Discovery [FE-48]', () => {
 
   test('search typeahead suggests categories and products', async ({ page }) => {
     await page.goto('/');
-    const searchInput = page.locator('header input[type="search"]');
+    const searchInput = page.locator('header input[type="search"]:visible').first();
     if (await searchInput.count() > 0) {
       await searchInput.click();
       await searchInput.fill('frame');

@@ -302,7 +302,7 @@ export default function AdminMediaLibraryPage() {
 
         <div className="relative flex-1 max-w-xs">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -323,7 +323,7 @@ export default function AdminMediaLibraryPage() {
         </div>
       ) : filteredMedia.length === 0 ? (
         <div className="p-16 border border-line rounded-2xl bg-paper text-center space-y-3">
-          <span className="text-3xl block">🖼️</span>
+          <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
           <p className="text-xs text-ink/60">No media assets found matching your criteria.</p>
           <button
             type="button"
@@ -350,7 +350,7 @@ export default function AdminMediaLibraryPage() {
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-ink/70">
-                    <span className="text-3xl mb-1">🎬</span>
+                    <span className="text-3xl mb-1 flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>
                     <span className="text-2xs font-semibold uppercase">Video</span>
                   </div>
                 )}
@@ -534,7 +534,7 @@ export default function AdminMediaLibraryPage() {
                   className="hidden"
                 />
                 <label htmlFor="media-page-upload" className="cursor-pointer block space-y-2">
-                  <span className="text-3xl block">📁</span>
+                  <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
                   <span className="text-xs font-bold text-ink block">
                     {uploadFile ? uploadFile.name : 'Choose image or video'}
                   </span>

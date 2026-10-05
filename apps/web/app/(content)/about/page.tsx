@@ -5,8 +5,8 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'About us — BroPics',
-  description: 'Who we are, how BroPics frames are made, and what we promise about the print on your wall.',
+  title: 'About us — KarthysGallery',
+  description: 'Who we are, how KarthysGallery frames are made, and what we promise about the print on your wall.',
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -31,7 +31,7 @@ export default async function AboutPage() {
       <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
         <Link href="/" className="hover:text-ink">Home</Link>
         {' / '}
-        <span className="text-ink font-medium">About BroPics</span>
+        <span className="text-ink font-medium">About KarthysGallery</span>
       </nav>
 
       <div className="mb-10">
@@ -39,7 +39,7 @@ export default async function AboutPage() {
           Good memories shouldn&apos;t stay on a phone.
         </h1>
         <p className="text-sm md:text-base text-ink/70">
-          We&apos;re BroPics. We make a beautiful home for the photographs that mean something to you.
+          We&apos;re KarthysGallery. We make a beautiful home for the photographs that mean something to you.
         </p>
       </div>
 
@@ -59,7 +59,7 @@ export default async function AboutPage() {
             Personal by nature. Crafted by hand.
           </h2>
           <p>
-            A family holiday. A wedding afternoon. A wonderfully ordinary day. We started BroPics to make those moments part of everyday life, not just another scroll through the camera roll.
+            A family holiday. A wedding afternoon. A wonderfully ordinary day. We started KarthysGallery to make those moments part of everyday life, not just another scroll through the camera roll.
           </p>
           <p>
             Our frames are made and finished in India. We pair honest materials with archival printing, then check every photo and every corner before it leaves our workshop.

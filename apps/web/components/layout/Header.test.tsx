@@ -78,7 +78,7 @@ describe('Header', () => {
     expect(screen.queryByTestId('account-modal')).not.toBeInTheDocument();
   });
 
-  it('opens the account modal with PhoneSignIn when the sign-in trigger is clicked', () => {
+  it('links directly to /signin when the sign-in trigger is clicked while signed out', () => {
     render(
       <AuthProvider>
         <CartProvider>
@@ -86,9 +86,10 @@ describe('Header', () => {
         </CartProvider>
       </AuthProvider>
     );
-    fireEvent.click(screen.getByLabelText('Sign in'));
-    expect(screen.getByTestId('account-modal')).toBeInTheDocument();
-    expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
+    const signInLink = screen.getByLabelText('Sign in');
+    expect(signInLink.tagName).toBe('A');
+    expect(signInLink).toHaveAttribute('href', '/signin');
+    expect(screen.queryByTestId('account-modal')).not.toBeInTheDocument();
   });
 
   it('links straight to /account (no modal) when signed in', async () => {

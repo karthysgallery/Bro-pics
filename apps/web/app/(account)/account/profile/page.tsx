@@ -89,8 +89,10 @@ export default function ProfilePage() {
       await setDoc(
         doc(db, 'users', user.uid),
         {
-          id: user.uid,
-          phone: user.phoneNumber ?? '',
+          // id and phone are deliberately NOT re-sent: they can never change from
+          // the client (firestore.rules rejects any write that alters them), and
+          // re-sending an Auth phone formatted differently from the stored one
+          // would make the whole save fail.
           displayName,
           firstName: firstName.trim() || null,
           lastName: lastName.trim() || null,

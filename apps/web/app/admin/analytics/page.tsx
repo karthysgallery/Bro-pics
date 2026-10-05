@@ -137,13 +137,13 @@ export default function AdminAnalyticsPage() {
       {/* Domain Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2">
         {[
-          { id: 'sales', label: '📈 Sales & Revenue' },
-          { id: 'products', label: '🖼️ Products & Volume' },
-          { id: 'customers', label: '👥 Customers & LTV' },
-          { id: 'marketing', label: '🎟️ Coupons & Marketing' },
-          { id: 'personalization', label: '🎨 Customization & DPI' },
+          { id: 'sales', label: 'Sales & Revenue' },
+          { id: 'products', label: 'Products & Volume' },
+          { id: 'customers', label: 'Customers & LTV' },
+          { id: 'marketing', label: 'Coupons & Marketing' },
+          { id: 'personalization', label: 'Customization & DPI' },
           { id: 'funnel', label: '⏳ Checkout Funnel' },
-          { id: 'operations', label: '🏭 Operations & QC' },
+          { id: 'operations', label: 'Operations & QC' },
         ].map((tab) => (
           <button
             key={tab.id}

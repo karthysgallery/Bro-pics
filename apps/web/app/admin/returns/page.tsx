@@ -172,7 +172,7 @@ export default function AdminReturnsPage() {
           </div>
         ) : returnsList.length === 0 ? (
           <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block">✨</span>
+            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg></span>
             <p>No returns currently in &quot;{activeTab.replace(/_/g, ' ')}&quot; state.</p>
           </div>
         ) : (
@@ -240,7 +240,7 @@ export default function AdminReturnsPage() {
                             onClick={() => setViewingPhotoUrl(photos[0])}
                             className="px-2 py-1 bg-gold/10 hover:bg-gold/20 text-gold-deep rounded text-2xs font-bold transition-colors"
                           >
-                            📷 View ({photos.length})
+                            View ({photos.length})
                           </button>
                         ) : (
                           <span className="text-2xs text-ink/40 italic">No photos</span>
@@ -395,7 +395,9 @@ export default function AdminReturnsPage() {
           onClose={() => setShowRefundModal(false)}
           orderId={selectedReturn.orderId}
           orderNo={selectedReturn.orderId.slice(0, 8)}
-          orderTotal={Math.round(selectedReturn.refundAmount / 100)}
+          // Paise, like every stored amount — RefundModal formats it as rupees and
+          // converts any typed amount back to paise itself.
+          orderTotal={selectedReturn.refundAmount}
           onSuccess={() => {
             fetchReturns();
             setSelectedReturn(null);

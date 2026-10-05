@@ -26,7 +26,7 @@ import { getPageBySlug, getActiveFaqs } from './firestore-content';
 const pageDoc = {
   id: 'page_about',
   slug: 'about',
-  title: 'About BroPics',
+  title: 'About KarthysGallery',
   bodyHtml: '<p>Hello</p>',
   seo: {},
   isPublished: true,
@@ -43,7 +43,7 @@ describe('getPageBySlug', () => {
   it('[FE-28] returns the parsed page when published', async () => {
     mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => pageDoc }] });
     const page = await getPageBySlug('about');
-    expect(page?.title).toBe('About BroPics');
+    expect(page?.title).toBe('About KarthysGallery');
     expect(page?.bodyHtml).toBe('<p>Hello</p>');
   });
 

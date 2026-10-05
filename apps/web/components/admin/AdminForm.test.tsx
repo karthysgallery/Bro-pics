@@ -42,3 +42,75 @@ describe('AdminForm & SaveBar [AFE-02, AFE-32]', () => {
     expect(mockReset).toHaveBeenCalled();
   });
 });
+
+describe('FormField accessibility', () => {
+  it('associates the label with a native input so it is announced and clickable', () => {
+    render(
+      <FormField label="Selling Price (₹)" required>
+        <input type="number" />
+      </FormField>
+    );
+    const input = screen.getByLabelText(/Selling Price/);
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveAttribute('aria-required', 'true');
+  });
+
+  it('works for select and textarea too', () => {
+    render(
+      <>
+        <FormField label="Reason">
+          <select>
+            <option>A</option>
+          </select>
+        </FormField>
+        <FormField label="Notes">
+          <textarea />
+        </FormField>
+      </>
+    );
+    expect(screen.getByLabelText('Reason')).toBeInTheDocument();
+    expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+  });
+
+  it('keeps an id the caller already set and uses it for the label', () => {
+    render(
+      <FormField label="SKU">
+        <input id="sku-field" />
+      </FormField>
+    );
+    expect(screen.getByLabelText('SKU')).toHaveAttribute('id', 'sku-field');
+  });
+
+  it('marks the control invalid and links the error message', () => {
+    render(
+      <FormField label="Name" error="Name is required">
+        <input />
+      </FormField>
+    );
+    const input = screen.getByLabelText('Name');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    const message = screen.getByRole('alert');
+    expect(message).toHaveTextContent('Name is required');
+    expect(input.getAttribute('aria-describedby')).toBe(message.id);
+  });
+
+  it('links the hint when there is no error', () => {
+    render(
+      <FormField label="Slug" hint="Used in the URL">
+        <input />
+      </FormField>
+    );
+    const input = screen.getByLabelText('Slug');
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveTextContent('Used in the URL');
+  });
+
+  it('does not touch custom component children', () => {
+    const Custom = () => <div data-testid="custom">custom control</div>;
+    render(
+      <FormField label="Picker">
+        <Custom />
+      </FormField>
+    );
+    expect(screen.getByTestId('custom')).not.toHaveAttribute('id');
+  });
+});

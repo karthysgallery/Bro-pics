@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, type FormEvent } from 'react';
+import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode, type FormEvent } from 'react';
 
 interface SaveBarProps {
   isDirty: boolean;
@@ -74,6 +74,8 @@ interface FormFieldProps {
   className?: string;
 }
 
+const NATIVE_CONTROLS = new Set(['input', 'select', 'textarea']);
+
 export function FormField({
   label,
   required = false,
@@ -82,16 +84,44 @@ export function FormField({
   children,
   className = '',
 }: FormFieldProps) {
+  const generatedId = useId();
+
+  // When the child is a plain <input>/<select>/<textarea>, tie the label to it
+  // (htmlFor/id) and surface required/invalid/hint state to assistive tech.
+  // Custom components and compound children are left untouched — they are
+  // responsible for their own labelling.
+  let controlId = generatedId;
+  let control: ReactNode = children;
+  if (isValidElement(children) && typeof children.type === 'string' && NATIVE_CONTROLS.has(children.type)) {
+    const existingId = (children.props as { id?: string }).id;
+    controlId = existingId ?? generatedId;
+    const describedBy = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined;
+    control = cloneElement(children as ReactElement<Record<string, unknown>>, {
+      id: controlId,
+      ...(required && { 'aria-required': true }),
+      ...(error && { 'aria-invalid': true }),
+      ...(describedBy && { 'aria-describedby': describedBy }),
+    });
+  }
+
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-ink">
-          {label} {required && <span className="text-gold">*</span>}
+        <label htmlFor={controlId} className="text-xs font-semibold text-ink">
+          {label} {required && <span className="text-gold" aria-hidden="true">*</span>}
         </label>
-        {hint && <span className="text-2xs text-ink/50">{hint}</span>}
+        {hint && (
+          <span id={`${controlId}-hint`} className="text-2xs text-ink/50">
+            {hint}
+          </span>
+        )}
       </div>
-      {children}
-      {error && <span className="text-2xs text-alert font-medium">{error}</span>}
+      {control}
+      {error && (
+        <span id={`${controlId}-error`} role="alert" className="text-2xs text-alert font-medium">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

@@ -4,16 +4,11 @@ import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { writeNotification } from '../../../../../lib/notify';
-import { OrderEventSchema, RefundSchema, logger, type OrderStatus } from '@bro-pics/shared';
+import { OrderEventSchema, RefundSchema, logger, CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
 }
-
-// Matches the order lifecycle's "before production starts" rule — once an
-// order is printed/packed, cancelling it no longer prevents any real-world
-// cost, so it's not offered past this point.
-const CANCELLABLE_STATUSES: OrderStatus[] = ['pending_payment', 'paid', 'in_production'];
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
@@ -44,7 +39,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       if (order.userId !== userId) {
         throw new NotFoundError();
       }
-      if (!CANCELLABLE_STATUSES.includes(order.status)) {
+      if (!CUSTOMER_CANCELLABLE_STATUSES.includes(order.status)) {
         throw new NotCancellableError(order.status);
       }
       orderNo = order.orderNo;

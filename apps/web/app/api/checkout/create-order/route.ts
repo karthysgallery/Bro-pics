@@ -3,13 +3,14 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
-import { getShippingSettings, getGstSettings } from '../../../../lib/firestore-settings';
-import { priceCartLines, calculateSubtotal, calculateShipping, type CartLineInput } from '../../../../lib/checkout-calc';
-import { findVariantById } from '../../../../lib/variant-lookup';
-import { findCouponByCode } from '../../../../lib/coupon-lookup';
-import { computeEligibleSubtotal } from '../../../../lib/coupon-eligibility';
-import { createRazorpayOrder } from '../../../../lib/razorpay-client';
+import type { CartLineInput } from '../../../../lib/checkout-calc';
+import { computeOrderPricing } from '../../../../lib/order-pricing';
+import { buildLineSnapshot, PersonalizationRejectedError } from '../../../../lib/personalization-order';
+import { getPaymentProvider } from '../../../../lib/payments/provider-factory';
+import { PaymentNotConfiguredError } from '../../../../lib/payments/types';
 import { checkRateLimit } from '../../../../lib/rate-limit';
+import { createHash } from 'node:crypto';
+import { stateFingerprint } from '@bro-pics/shared';
 import {
   generateOrderNo,
   OrderSchema,
@@ -17,8 +18,6 @@ import {
   OrderEventSchema,
   AddressSchema,
   DeliveryMethodSchema,
-  calculateCouponDiscount,
-  splitGstFromInclusiveTotal,
   type CounterTransaction,
 } from '@bro-pics/shared';
 
@@ -47,8 +46,40 @@ function isMalformedCartLine(item: CartLineInput): boolean {
     // cart line (it's either a real string or the field is simply absent),
     // so a null here can only come from a hand-crafted write to this
     // owner-writable doc, same threat model as a stray number/object.
-    (item.previewPath !== undefined && typeof item.previewPath !== 'string')
+    (item.previewPath !== undefined && typeof item.previewPath !== 'string') ||
+    // personalization is optional, but if present it must at least be shaped like a claim —
+    // its CONTENT is validated (and rebuilt from server data) by buildLineSnapshot below.
+    (item.personalization !== undefined &&
+      (typeof item.personalization !== 'object' ||
+        item.personalization === null ||
+        typeof item.personalization.templateId !== 'string' ||
+        !Number.isInteger(item.personalization.templateVersion)))
   );
+}
+
+// Shape returned both for a fresh order and for an idempotent retry of one.
+// `keyId` is only ever the PUBLIC Razorpay key id, and only for orders that
+// were actually created through Razorpay.
+function existingOrderResponse(order: {
+  id: string;
+  orderNo?: string;
+  status: string;
+  paymentStatus?: string;
+  paymentProvider?: 'mock' | 'razorpay';
+  razorpayOrderId?: string;
+  total: number;
+}) {
+  const provider = order.paymentProvider ?? 'razorpay';
+  return {
+    orderId: order.id,
+    orderNo: order.orderNo,
+    razorpayOrderId: order.razorpayOrderId,
+    amount: order.total,
+    paymentProvider: provider,
+    keyId: provider === 'razorpay' ? process.env.RAZORPAY_KEY_ID ?? null : null,
+    status: order.status,
+    paymentStatus: order.paymentStatus ?? 'pending',
+  };
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -87,37 +118,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     deliveryMethod = parsedMethod.data;
   }
 
-  const db = getFirestore(getAdminApp());
-
-  // [BE-13] A double-click on "Place Order," a retried request after a
-  // network blip, or the customer closing/failing the Razorpay modal and
-  // clicking "Place Order" again all reuse the SAME idempotencyKey (the
-  // client generates it once per checkout attempt and keeps it stable
-  // across retries of that attempt — see checkout/page.tsx). Finding a
-  // still-pending order under this key returns it as-is: the same
-  // razorpayOrderId is handed back so the customer's retry opens the SAME
-  // Razorpay order rather than minting a new one and abandoning the first.
-  // An already-paid order under this key means the retry arrived after
-  // payment had already gone through — reported distinctly so the client
-  // doesn't show a payment modal for something already completed.
-  if (idempotencyKey) {
-    const existingSnapshot = await db
-      .collection('orders')
-      .where('userId', '==', userId)
-      .where('idempotencyKey', '==', idempotencyKey)
-      .limit(1)
-      .get();
-    if (!existingSnapshot.empty) {
-      const existing = existingSnapshot.docs[0].data() as { id: string; status: string; razorpayOrderId?: string; total: number };
-      if (existing.status === 'paid') {
-        return NextResponse.json({ error: 'This order has already been paid for', code: 'already_paid', orderId: existing.id }, { status: 409 });
-      }
+  // Payment mode is decided by SERVER config only (PAYMENT_PROVIDER), never
+  // by anything in the request body — a client-supplied flag used to be able
+  // to mark an order paid. Resolved before any Firestore write so a
+  // misconfigured deploy fails fast and consumes no order number.
+  let paymentProvider;
+  try {
+    paymentProvider = getPaymentProvider();
+  } catch (err) {
+    if (err instanceof PaymentNotConfiguredError) {
+      console.error('Payment provider misconfigured:', err.message);
       return NextResponse.json(
-        { orderId: existing.id, razorpayOrderId: existing.razorpayOrderId, amount: existing.total, keyId: process.env.RAZORPAY_KEY_ID },
-        { status: 200 }
+        { error: 'Payments are temporarily unavailable. Please try again later.', code: 'payments_unavailable' },
+        { status: 503 }
       );
     }
+    throw err;
   }
+
+  const db = getFirestore(getAdminApp());
 
   const cartDoc = await db.collection('carts').doc(userId).get();
   let cartItems = (cartDoc.exists ? (cartDoc.data() as { items: CartLineInput[] }).items : []) ?? [];
@@ -156,67 +175,144 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: `Unknown addressId: ${addressId}` }, { status: 400 });
   }
 
-  // One lookup per distinct variant
-  const uniqueVariantIds = [...new Set(cartItems.map((item) => item.variantId))];
-  const variantEntries = await Promise.all(
-    uniqueVariantIds.map(async (variantId) => [variantId, await findVariantById(db, variantId)] as const)
-  );
-  const variantsById = new Map(variantEntries.filter(([, variant]) => variant !== null) as [string, NonNullable<(typeof variantEntries)[number][1]>][]);
-
-  const { priced, unavailable } = priceCartLines(cartItems, variantsById);
-  if (unavailable.length > 0) {
-    return NextResponse.json({ unavailable }, { status: 409 });
+  // Snapshot who is ordering (address has a phone but no name). Best-effort:
+  // an unreadable profile must never block a paid checkout.
+  let customerName: string | undefined;
+  try {
+    const profile = await db.collection('users').doc(userId).get();
+    const displayName = profile.exists ? (profile.data() as { displayName?: unknown } | undefined)?.displayName : undefined;
+    if (typeof displayName === 'string' && displayName.trim().length > 0) customerName = displayName.trim();
+  } catch (err) {
+    console.warn('Could not read the customer profile for the order snapshot:', err);
   }
 
-  const subtotal = calculateSubtotal(priced);
-  const shippingSettings = await getShippingSettings();
-  const shipping = calculateShipping(subtotal, shippingSettings, deliveryMethod);
-  const gstSettings = await getGstSettings();
+  // Every number below comes from computeOrderPricing — the same function the
+  // checkout page's quote and coupon check use — so what was shown is what is charged.
+  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode, deliveryMethod });
+  if (pricing.unavailable.length > 0) {
+    return NextResponse.json({ unavailable: pricing.unavailable }, { status: 409 });
+  }
+  // A coupon the customer asked for that no longer applies must be SAID, not
+  // silently dropped: they would otherwise pay more than the page told them.
+  if (pricing.coupon.requested && !pricing.coupon.applied) {
+    return NextResponse.json(
+      { error: 'That coupon can no longer be applied to this order.', code: 'coupon_invalid', reason: pricing.coupon.reason },
+      { status: 409 }
+    );
+  }
+  const { priced, subtotal, discount, total, taxLines } = pricing;
+  const effectiveShipping = pricing.shipping;
+  const appliedCouponId = pricing.coupon.requested && pricing.coupon.applied ? pricing.coupon.code : undefined;
 
-  let discount = 0;
-  let appliedCouponId: string | undefined;
-  let effectiveShipping = shipping;
+  // The line title is a snapshot too, and must come from the catalogue, not
+  // from text the browser put in the cart line. Falls back to the cart title
+  // only if the product doc is somehow gone.
+  const distinctProductIds = [...new Set(priced.map((line) => line.productId))];
+  const productSnaps = await Promise.all(distinctProductIds.map((id) => db.collection('products').doc(id).get()));
+  const titleByProductId = new Map<string, string>();
+  productSnaps.forEach((snap, index) => {
+    const title = snap.exists ? (snap.data() as { title?: unknown } | undefined)?.title : undefined;
+    if (typeof title === 'string' && title.length > 0) titleByProductId.set(distinctProductIds[index], title);
+  });
+  for (const line of priced) {
+    line.title = titleByProductId.get(line.productId) ?? line.title;
+  }
 
-  if (couponCode) {
-    const coupon = await findCouponByCode(db, couponCode);
-    if (coupon) {
-      let perUserOk = true;
-      if (coupon.perUserLimit) {
-        const usedSnapshot = await db
-          .collection('orders')
-          .where('userId', '==', userId)
-          .where('couponId', '==', coupon.code)
-          .where('paymentStatus', '==', 'paid')
-          .get();
-        perUserOk = usedSnapshot.size < coupon.perUserLimit;
-      }
-      if (perUserOk) {
-        const eligibleSubtotal = await computeEligibleSubtotal(db, priced, coupon);
-        const result = calculateCouponDiscount(eligibleSubtotal, coupon, new Date(), userId);
-        if (result.valid) {
-          discount = result.discountPaise;
-          appliedCouponId = coupon.code;
-          if (coupon.type === 'free_ship') {
-            effectiveShipping = 0;
-          }
-        }
+  // Verify every referenced customization belongs to the caller BEFORE any
+  // side effect (order-number counter, provider order, writes): rejecting
+  // here must not burn an order number or open a payment session.
+  const uniquePersonalizationIds = [...new Set(priced.map((line) => line.personalizationId))];
+  const customizationSnapshots = await Promise.all(
+    uniquePersonalizationIds.map((pid) => db.collection('customizations').where('personalizationId', '==', pid).get())
+  );
+  for (const snapshot of customizationSnapshots) {
+    for (const doc of snapshot.docs) {
+      if (doc.data().userId !== userId) {
+        return NextResponse.json({ error: 'One or more items in your cart could not be found' }, { status: 404 });
       }
     }
   }
 
-  const total = subtotal - discount + effectiveShipping;
+  // Personalization claimed on a line becomes a verified snapshot, or the order is refused —
+  // before any side effect. (Lines without it — legacy per-slot customizations, or items
+  // that aren't personalized — are untouched.)
+  const personalizationFp = new Map<string, string>();
+  for (const line of priced) {
+    const cartLine = cartItems.find((c) => c.variantId === line.variantId && c.personalizationId === line.personalizationId);
+    if (!cartLine?.personalization) continue;
+    try {
+      const snapshot = await buildLineSnapshot(db, userId, cartLine.personalization);
+      line.personalization = snapshot;
+      personalizationFp.set(`${line.variantId}|${line.personalizationId}`, stateFingerprint(snapshot.state));
+    } catch (err) {
+      if (err instanceof PersonalizationRejectedError) {
+        return NextResponse.json(
+          { error: err.message, code: 'personalization_invalid', reason: err.code, ...(err.details && { details: err.details }) },
+          { status: 409 }
+        );
+      }
+      throw err;
+    }
+  }
 
-  const taxLines = gstSettings.gstEnabled
-    ? [
-        {
-          ...(gstSettings.gstin && { gstin: gstSettings.gstin }),
-          rate: gstSettings.taxRate,
-          amount: splitGstFromInclusiveTotal(total, gstSettings.taxRate).gstAmountPaise,
-        },
-      ]
-    : [];
+  // [BE-13] Idempotency. The client keeps ONE key per checkout attempt, so a
+  // double-click, a network retry, or "Place order" again after a dismissed or
+  // failed payment window all arrive under the same key. What that key may
+  // resolve to depends on whether anything changed in between:
+  //  - already paid          -> 409 (never show a payment window twice)
+  //  - same priced inputs    -> hand back the SAME pending order/payment session
+  //  - different inputs      -> the customer edited their cart, address, coupon
+  //                             or delivery method since the last attempt; that
+  //                             older pending order is superseded (cancelled)
+  //                             and a fresh order is created for what they have
+  //                             NOW — paying the stale one would ship the wrong
+  //                             thing to the wrong place.
+  const inputsHash = fingerprintOrder({
+    priced: priced.map((l) => ({ ...l, personalizationFp: personalizationFp.get(`${l.variantId}|${l.personalizationId}`) })),
+    address,
+    couponId: appliedCouponId ?? null,
+    deliveryMethod,
+    subtotal,
+    discount,
+    shipping: effectiveShipping,
+    total,
+  });
+  type PriorOrder = {
+    id: string;
+    orderNo?: string;
+    status: string;
+    paymentStatus?: string;
+    paymentProvider?: 'mock' | 'razorpay';
+    razorpayOrderId?: string;
+    total: number;
+    inputsHash?: string;
+  };
+  const supersededOrderIds: string[] = [];
+  if (idempotencyKey) {
+    const priorSnapshot = await db
+      .collection('orders')
+      .where('userId', '==', userId)
+      .where('idempotencyKey', '==', idempotencyKey)
+      .limit(10)
+      .get();
+    const prior = priorSnapshot.docs.map((doc) => doc.data() as PriorOrder);
 
-  // Step 1: generate the order number in its own short transaction
+    const paid = prior.find((o) => o.paymentStatus === 'paid');
+    if (paid) {
+      return NextResponse.json({ error: 'This order has already been paid for', code: 'already_paid', orderId: paid.id }, { status: 409 });
+    }
+    const sameInputs = prior.find((o) => o.status === 'pending_payment' && o.inputsHash === inputsHash);
+    if (sameInputs) {
+      return NextResponse.json(existingOrderResponse(sameInputs), { status: 200 });
+    }
+    for (const o of prior) {
+      if (o.status === 'pending_payment') supersededOrderIds.push(o.id);
+    }
+  }
+
+  // Generate the order number in its own short transaction. No timestamp
+  // fallback: a second, possibly-colliding numbering scheme is worse than
+  // telling the customer to retry.
   let orderNo: string;
   try {
     orderNo = await db.runTransaction(async (transaction) => {
@@ -232,46 +328,50 @@ export async function POST(request: Request): Promise<NextResponse> {
       return generateOrderNo(adapter, new Date().getFullYear());
     });
   } catch (err) {
-    console.warn('Counter transaction fallback to timestamp order number:', err);
-    orderNo = `BP-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`;
+    console.error('Order number generation failed:', err);
+    return NextResponse.json({ error: 'Could not place your order. Please try again.' }, { status: 503 });
   }
 
-  // Step 2: create Razorpay order or mock payment
-  const hasRazorpay = !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
-  let isMock = !hasRazorpay || body?.isMock === true;
-  let razorpayOrderId = `order_mock_${Date.now()}`;
-
-  if (hasRazorpay && !isMock) {
-    try {
-      const rzp = await createRazorpayOrder({ amount: total, currency: 'INR', receipt: orderNo });
-      razorpayOrderId = rzp.id;
-    } catch (err) {
-      console.warn('Razorpay order creation failed, falling back to mock payment:', err);
-      isMock = true;
-    }
+  // Open the payment session with the configured provider. The order is
+  // ALWAYS created pending_payment — it only becomes paid through the same
+  // settlement pipeline the Razorpay webhook uses (see
+  // /api/checkout/mock-payment for the mock provider's side of that).
+  let createdPayment;
+  try {
+    createdPayment = await paymentProvider.createPayment({ amount: total, receipt: orderNo });
+  } catch (err) {
+    console.error(`Payment provider "${paymentProvider.name}" failed to create a payment:`, err);
+    return NextResponse.json(
+      { error: 'Could not start payment. Please try again.', code: 'payment_provider_error' },
+      { status: 502 }
+    );
   }
 
-  const orderStatus = isMock ? 'paid' : 'pending_payment';
-  const paymentStatus = isMock ? 'paid' : 'pending';
-
-  // Step 3: write the order + order items as a plain batch
-  const orderRef = db.collection('orders').doc();
+  // With an idempotencyKey the order id is deterministic, and the order doc
+  // is written with create() (fails if it exists). The query above is a fast
+  // path; this is what actually makes two simultaneous submits safe — the
+  // loser gets ALREADY_EXISTS and is handed the winner's order.
+  const orderRef = idempotencyKey
+    ? db.collection('orders').doc(deterministicOrderId(userId, `${idempotencyKey}:${inputsHash}`))
+    : db.collection('orders').doc();
   const order = OrderSchema.parse({
     id: orderRef.id,
     orderNo,
     userId,
-    status: orderStatus,
-    paymentStatus: paymentStatus,
+    status: 'pending_payment',
+    paymentStatus: 'pending',
     subtotal,
     discount,
     shipping: effectiveShipping,
     total,
     addressJson: address,
     productIds: [...new Set(priced.map((line) => line.productId))],
-    razorpayOrderId,
+    ...(customerName && { customerName }),
+    paymentProvider: paymentProvider.name,
+    razorpayOrderId: createdPayment.providerOrderId,
     placedAt: new Date(),
     deliveryMethod,
-    ...(idempotencyKey && { idempotencyKey }),
+    ...(idempotencyKey && { idempotencyKey, inputsHash }),
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,
@@ -280,7 +380,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   });
 
   const batch = db.batch();
-  batch.set(orderRef, order);
+  batch.create(orderRef, order);
 
   const initialEventRef = orderRef.collection('events').doc();
   batch.set(
@@ -296,22 +396,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
   );
 
-  if (isMock) {
-    const paidEventRef = orderRef.collection('events').doc();
+  for (const staleId of supersededOrderIds) {
+    const staleRef = db.collection('orders').doc(staleId);
+    batch.update(staleRef, { status: 'cancelled' });
+    const staleEventRef = staleRef.collection('events').doc();
     batch.set(
-      paidEventRef,
+      staleEventRef,
       OrderEventSchema.parse({
-        id: paidEventRef.id,
-        status: 'paid',
-        note: 'Mock payment successful',
+        id: staleEventRef.id,
+        status: 'cancelled',
+        note: 'Superseded by a newer checkout',
         courier: null,
         awbNumber: null,
         createdAt: new Date().toISOString(),
-        createdBy: 'system_mock',
+        createdBy: 'system_checkout',
       })
     );
-    // Clear server-side cart
-    batch.set(db.collection('carts').doc(userId), { items: [] }, { merge: true });
   }
 
   for (const line of priced) {
@@ -319,36 +419,82 @@ export async function POST(request: Request): Promise<NextResponse> {
     batch.set(itemRef, OrderItemSchema.parse({ ...line, id: itemRef.id }));
   }
 
-  const uniquePersonalizationIds = [...new Set(priced.map((line) => line.personalizationId))];
-  const customizationSnapshots = await Promise.all(
-    uniquePersonalizationIds.map((pid) => db.collection('customizations').where('personalizationId', '==', pid).get())
-  );
-
   for (const snapshot of customizationSnapshots) {
     for (const doc of snapshot.docs) {
-      const data = doc.data();
-      if (!data.userId || data.userId === userId) {
-        batch.update(doc.ref, {
-          userId,
-          status: 'ordered',
-        });
+      if (doc.data().status === 'draft') {
+        batch.update(doc.ref, { status: 'ordered' });
       }
     }
   }
 
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (idempotencyKey && isAlreadyExistsError(err)) {
+      const winner = await orderRef.get();
+      if (winner.exists) {
+        const data = winner.data() as Parameters<typeof existingOrderResponse>[0];
+        if (data.paymentStatus === 'paid') {
+          return NextResponse.json({ error: 'This order has already been paid for', code: 'already_paid', orderId: data.id }, { status: 409 });
+        }
+        return NextResponse.json(existingOrderResponse(data), { status: 200 });
+      }
+    }
+    throw err;
+  }
 
   return NextResponse.json(
     {
       orderId: orderRef.id,
       orderNo,
-      razorpayOrderId,
+      razorpayOrderId: createdPayment.providerOrderId,
       amount: total,
-      keyId: process.env.RAZORPAY_KEY_ID || null,
-      isMock,
-      status: orderStatus,
-      paymentStatus,
+      paymentProvider: paymentProvider.name,
+      keyId: createdPayment.publicKey,
+      status: 'pending_payment',
+      paymentStatus: 'pending',
     },
     { status: 200 }
   );
+}
+
+function deterministicOrderId(userId: string, idempotencyKey: string): string {
+  return createHash('sha256').update(`${userId}:${idempotencyKey}`).digest('hex').slice(0, 28);
+}
+
+// Everything that makes one checkout a different purchase from another. Prices
+// are included on purpose: if a price moved between attempts, the retry must
+// be a new order at the new price, not a revived order at the old one.
+function fingerprintOrder(input: {
+  priced: Array<{ variantId: string; personalizationId: string; qty: number; unitPrice: number; personalizationFp?: string }>;
+  address: Record<string, unknown>;
+  couponId: string | null;
+  deliveryMethod: string;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  total: number;
+}): string {
+  const lines = input.priced
+    .map((l) => `${l.variantId}|${l.personalizationId}|${l.qty}|${l.unitPrice}|${l.personalizationFp ?? ''}`)
+    .sort();
+  const addressKeys = Object.keys(input.address).sort();
+  const address = addressKeys.map((k) => `${k}=${JSON.stringify(input.address[k])}`);
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        lines,
+        address,
+        coupon: input.couponId,
+        delivery: input.deliveryMethod,
+        totals: [input.subtotal, input.discount, input.shipping, input.total],
+      })
+    )
+    .digest('hex');
+}
+
+// gRPC ALREADY_EXISTS (6) as surfaced by the Admin SDK on a failed create().
+function isAlreadyExistsError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === 6 || code === 'already-exists' || code === 'ALREADY_EXISTS';
 }

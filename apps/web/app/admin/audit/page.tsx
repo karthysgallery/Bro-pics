@@ -89,7 +89,7 @@ export default function AuditTrailPage() {
             onClick={handleExportCsv}
             className="px-4 py-2 rounded-xl text-sm font-semibold bg-charcoal hover:bg-tint border border-line text-cream flex items-center gap-2 transition"
           >
-            <span>📥</span> Export Audit CSV
+            Export Audit CSV
           </button>
         </div>
       </div>
@@ -224,9 +224,7 @@ export default function AuditTrailPage() {
               <button
                 onClick={() => setSelectedLog(null)}
                 className="text-sand hover:text-cream text-lg"
-              >
-                ✕
-              </button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
 
             <div className="space-y-2">

@@ -6,8 +6,8 @@ import { getPageBySlug } from '../../../lib/firestore-content';
 import { contentPageMetadata } from '../../../lib/content-page-metadata';
 
 const FALLBACK_METADATA: Metadata = {
-  title: 'Contact — BroPics',
-  description: 'Reach BroPics about an order, a photo, or a question before you buy.',
+  title: 'Contact — KarthysGallery',
+  description: 'Reach KarthysGallery about an order, a photo, or a question before you buy.',
 };
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
@@ -42,8 +42,10 @@ export default async function ContactPage() {
         {/* WhatsApp Card */}
         <div className="rounded-3xl bg-paper border border-line p-8 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 text-2xl font-bold">
-              💬
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
             </div>
             <h2 className="font-display text-xl font-bold text-ink mb-2">WhatsApp</h2>
             <p className="text-xs text-ink/70 leading-relaxed mb-6">
@@ -54,17 +56,24 @@ export default async function ContactPage() {
             href={`https://wa.me/${WHATSAPP_NUMBER}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm w-fit"
+            className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-semibold transition-colors shadow-sm w-fit"
           >
-            Message on WhatsApp →
+            <span>Message on WhatsApp</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
           </a>
         </div>
 
         {/* Email Card */}
         <div className="rounded-3xl bg-paper border border-line p-8 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4 text-2xl font-bold">
-              ✉️
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M22 6l-10 7L2 6" />
+              </svg>
             </div>
             <h2 className="font-display text-xl font-bold text-ink mb-2">Email</h2>
             <p className="text-xs text-ink/70 leading-relaxed mb-6">

@@ -58,3 +58,44 @@ export function isValidStatusTransition(from: OrderStatus, to: OrderStatus): boo
 export function allowedTransitionsFrom(from: OrderStatus): OrderStatus[] {
   return [...TRANSITIONS[from]];
 }
+
+/**
+ * Statuses from which a CUSTOMER may cancel their own order: everything
+ * before the item is physically printed/packed. Includes the automatic
+ * sub-stages (payment_confirmed → photo_validation → print_rendering →
+ * print_ready) that every paid order passes through within seconds of
+ * payment — an allow-list of just ['paid', 'in_production'] meant a
+ * customer could effectively never cancel an order they had just paid for.
+ * Single source for the cancel API route and the order-detail UI, so the
+ * button never offers something the API would reject (or vice versa).
+ * Every entry has 'cancelled' as a legal transition above.
+ */
+export const CUSTOMER_CANCELLABLE_STATUSES: readonly OrderStatus[] = [
+  'pending_payment',
+  'paid',
+  'payment_confirmed',
+  'photo_validation',
+  'print_rendering',
+  'print_ready',
+  'in_production',
+];
+
+const CLOSED_OR_UNPAID_STATUSES: readonly OrderStatus[] = [
+  'pending_payment',
+  'delivered',
+  'cancelled',
+  'refunded',
+  'replacement_issued',
+];
+
+/**
+ * True for an order that has been paid for and is still on its way to the
+ * customer (anything from payment_confirmed through shipped, including every
+ * internal production sub-stage). NOT true for an order still awaiting
+ * payment, or one that is delivered/cancelled/refunded. One definition so
+ * the order list filter and the account dashboard count can't drift apart
+ * the way two hand-written status lists already had.
+ */
+export function isOrderInProgress(status: OrderStatus): boolean {
+  return !CLOSED_OR_UNPAID_STATUSES.includes(status);
+}

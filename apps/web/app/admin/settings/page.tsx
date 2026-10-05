@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth-context';
 import { FormField, SaveBar } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
+import { DEFAULT_SHIPPING_SETTINGS } from '../../../lib/checkout-calc';
+import { paiseToRupees, rupeesToPaise } from '../../../lib/admin-money';
+
+// A GSTIN is 15 characters: 2-digit state code, 10-char PAN, entity digit, 'Z', checksum.
+const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 type SettingsTab = 'store' | 'shipping' | 'gst' | 'payments' | 'seo' | 'announcement';
 
@@ -12,6 +17,8 @@ interface StoreSettings {
   supportPhone: string;
   processingDays: number;
   description?: string;
+  legalName?: string;
+  address?: string;
 }
 
 interface ShippingSettings {
@@ -61,18 +68,30 @@ export default function AdminSettingsPage() {
   const [isDirty, setIsDirty] = useState(false);
 
   // Settings states
+  // Starting values are what the storefront itself uses when nothing has been
+  // saved yet — never invented placeholders. A form that pre-fills made-up data
+  // (a sample GSTIN, phone number or UPI id) turns one careless Save into
+  // published, customer-visible "settings".
   const [store, setStore] = useState<StoreSettings>({
-    name: 'BroPics Frame Studio',
-    supportPhone: '+91 98765 43210',
+    name: 'KarthysGallery',
+    supportPhone: '',
     processingDays: 3,
-    description: 'Bespoke custom photo framing crafted with premium archival materials.',
+    description: '',
+    legalName: '',
+    address: '',
   });
 
+  // The form edits RUPEES; the API stores integer PAISE. Converted at the
+  // load/save boundary below, so the numbers in these inputs are always rupees.
   const [shipping, setShipping] = useState<ShippingSettings>({
-    freeShippingThreshold: 1499,
-    flatShippingCharge: 99,
-    expressShippingCharge: 249,
+    freeShippingThreshold: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.freeShippingThreshold),
+    flatShippingCharge: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.flatShippingCharge),
+    expressShippingCharge: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.expressShippingCharge),
   });
+
+  // Tabs whose settings could not be read. Saving over a failed read would
+  // overwrite real configuration with this page's defaults, so Save is blocked.
+  const [loadFailed, setLoadFailed] = useState<Partial<Record<SettingsTab, boolean>>>({});
 
   const [couriers, setCouriers] = useState<CourierConfig[]>([
     {
@@ -93,29 +112,29 @@ export default function AdminSettingsPage() {
   ]);
 
   const [gst, setGst] = useState<GstSettings>({
-    gstEnabled: true,
-    taxRate: 18,
-    gstin: '29ABCDE1234F1Z5',
+    gstEnabled: false,
+    taxRate: 0,
+    gstin: '',
   });
 
   const [payments, setPayments] = useState<PaymentsSettings>({
     codEnabled: false,
     acceptedMethods: ['card', 'upi', 'netbanking', 'wallet'],
-    upiId: 'bropics@icici',
+    upiId: '',
   });
 
   const [seo, setSeo] = useState<SeoSettings>({
-    defaultTitle: 'BroPics - Premium Custom Photo Frames & Gallery Walls',
+    defaultTitle: 'KarthysGallery - Premium Custom Photo Frames & Gallery Walls',
     defaultDescription:
       'Turn your favorite moments into handcrafted photo frames. Archival paper, anti-glare glass, and sustainably sourced wood frames.',
-    ogImagePath: '/images/og-default.jpg',
+    ogImagePath: null,
   });
 
   const [announcement, setAnnouncement] = useState<AnnouncementBarSettings>({
-    message: '🎉 Free Standard Delivery on all orders above ₹1,499 across India!',
-    linkUrl: '/products',
-    linkText: 'Shop Frames',
-    isActive: true,
+    message: '',
+    linkUrl: '',
+    linkText: '',
+    isActive: false,
   });
 
   // Fetch all settings
@@ -142,13 +161,28 @@ export default function AdminSettingsPage() {
         fetch('/api/admin/settings/seo', { headers }),
       ]);
 
+      const failed: Partial<Record<SettingsTab, boolean>> = {
+        store: !storeRes.ok,
+        shipping: !shipRes.ok || !courierRes.ok,
+        gst: !gstRes.ok,
+        payments: !payRes.ok,
+        seo: !seoRes.ok,
+      };
+      setLoadFailed(failed);
+
       if (storeRes.ok) {
         const d = await storeRes.json();
-        if (d.value) setStore(d.value);
+        if (d.value) setStore((prev) => ({ ...prev, ...d.value }));
       }
       if (shipRes.ok) {
         const d = await shipRes.json();
-        if (d.value) setShipping(d.value);
+        if (d.value) {
+          setShipping({
+            freeShippingThreshold: paiseToRupees(d.value.freeShippingThreshold),
+            flatShippingCharge: paiseToRupees(d.value.flatShippingCharge),
+            expressShippingCharge: paiseToRupees(d.value.expressShippingCharge),
+          });
+        }
       }
       if (courierRes.ok) {
         const d = await courierRes.json();
@@ -189,19 +223,42 @@ export default function AdminSettingsPage() {
         'Content-Type': 'application/json',
       };
 
+      if (loadFailed[activeTab]) {
+        throw new Error('These settings could not be loaded, so saving is blocked to avoid overwriting them. Reload the page and try again.');
+      }
+
       if (activeTab === 'store') {
+        if (!store.name.trim() || !store.supportPhone.trim()) {
+          throw new Error('Store name and customer support phone are required.');
+        }
         const res = await fetch('/api/admin/settings/store', {
           method: 'PUT',
           headers,
-          body: JSON.stringify(store),
+          body: JSON.stringify({
+            ...store,
+            name: store.name.trim(),
+            supportPhone: store.supportPhone.trim(),
+            legalName: store.legalName?.trim() || undefined,
+            address: store.address?.trim() || undefined,
+          }),
         });
         if (!res.ok) throw new Error('Failed to save store settings');
       } else if (activeTab === 'shipping') {
+        const threshold = rupeesToPaise(shipping.freeShippingThreshold);
+        const flat = rupeesToPaise(shipping.flatShippingCharge);
+        const express = rupeesToPaise(shipping.expressShippingCharge);
+        if (threshold === null || flat === null || express === null) {
+          throw new Error('Enter valid shipping amounts in rupees (0 or more).');
+        }
         const [sRes, cRes] = await Promise.all([
           fetch('/api/admin/settings/shipping', {
             method: 'PUT',
             headers,
-            body: JSON.stringify(shipping),
+            body: JSON.stringify({
+              freeShippingThreshold: threshold,
+              flatShippingCharge: flat,
+              expressShippingCharge: express,
+            }),
           }),
           fetch('/api/admin/settings/courier', {
             method: 'PUT',
@@ -211,10 +268,19 @@ export default function AdminSettingsPage() {
         ]);
         if (!sRes.ok || !cRes.ok) throw new Error('Failed to save shipping settings');
       } else if (activeTab === 'gst') {
+        const gstin = (gst.gstin ?? '').trim().toUpperCase();
+        if (gst.gstEnabled) {
+          if (!(gst.taxRate > 0 && gst.taxRate <= 100)) {
+            throw new Error('Enter a GST rate above 0%.');
+          }
+          if (!GSTIN_PATTERN.test(gstin)) {
+            throw new Error('Enter your real 15-character GSTIN before turning GST on.');
+          }
+        }
         const res = await fetch('/api/admin/settings/gst', {
           method: 'PUT',
           headers,
-          body: JSON.stringify(gst),
+          body: JSON.stringify({ gstEnabled: gst.gstEnabled, taxRate: gst.taxRate, ...(gstin && { gstin }) }),
         });
         if (!res.ok) throw new Error('Failed to save GST settings');
       } else if (activeTab === 'payments') {
@@ -264,12 +330,12 @@ export default function AdminSettingsPage() {
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2">
         {[
-          { id: 'store', label: '🏪 Store Profile' },
-          { id: 'shipping', label: '🚚 Shipping & Couriers' },
-          { id: 'gst', label: '🧾 GST & Invoicing' },
-          { id: 'payments', label: '💳 Payment Methods' },
-          { id: 'seo', label: '🔍 Global SEO' },
-          { id: 'announcement', label: '📢 Announcement Bar' },
+          { id: 'store', label: 'Store Profile' },
+          { id: 'shipping', label: 'Shipping & Couriers' },
+          { id: 'gst', label: 'GST & Invoicing' },
+          { id: 'payments', label: 'Payment Methods' },
+          { id: 'seo', label: 'Global SEO' },
+          { id: 'announcement', label: 'Announcement Bar' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -293,6 +359,17 @@ export default function AdminSettingsPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {loadFailed[activeTab] && (
+            <div role="alert" className="p-3 rounded-xl border border-red-300 bg-red-50 text-red-800 text-xs">
+              Couldn&apos;t load these settings from the server, so the values below are not the saved ones. Saving is
+              disabled to avoid overwriting your configuration —{' '}
+              <button type="button" onClick={fetchSettings} className="underline font-semibold">
+                try again
+              </button>
+              .
+            </div>
+          )}
+
           {/* Store Profile Tab */}
           {activeTab === 'store' && (
             <div className="p-6 rounded-2xl border border-line bg-paper shadow-xs space-y-5">
@@ -345,6 +422,32 @@ export default function AdminSettingsPage() {
                     }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
                     required
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField label="Legal Business Name" hint="Printed as the seller on tax invoices. Leave blank until confirmed.">
+                  <input
+                    type="text"
+                    value={store.legalName || ''}
+                    onChange={(e) => {
+                      setStore((p) => ({ ...p, legalName: e.target.value }));
+                      setIsDirty(true);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
+                  />
+                </FormField>
+
+                <FormField label="Registered Business Address" hint="Printed on tax invoices.">
+                  <input
+                    type="text"
+                    value={store.address || ''}
+                    onChange={(e) => {
+                      setStore((p) => ({ ...p, address: e.target.value }));
+                      setIsDirty(true);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
                   />
                 </FormField>
               </div>
@@ -534,9 +637,7 @@ export default function AdminSettingsPage() {
                             setIsDirty(true);
                           }}
                           className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 text-xs font-bold transition-colors"
-                        >
-                          ✕
-                        </button>
+                        ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                       </div>
                     </div>
                   ))}
@@ -645,7 +746,7 @@ export default function AdminSettingsPage() {
                       setPayments((p) => ({ ...p, upiId: e.target.value.toLowerCase() }));
                       setIsDirty(true);
                     }}
-                    placeholder="bropics@icici"
+                    placeholder="karthysgallery@upi"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-mono focus:border-gold focus:outline-none"
                   />
                 </FormField>
@@ -739,7 +840,7 @@ export default function AdminSettingsPage() {
                     setAnnouncement((p) => ({ ...p, message: e.target.value }));
                     setIsDirty(true);
                   }}
-                  placeholder="🎉 Free Standard Delivery on all orders above ₹1,499!"
+                  placeholder="Free Standard Delivery on all orders above ₹1,499!"
                   className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
                   required
                 />

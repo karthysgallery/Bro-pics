@@ -34,6 +34,9 @@ async function securityHeaders() {
 }
 
 const nextConfig: NextConfig = {
+  // Lets a second dev server (e.g. the emulator-backed QA one) run beside the
+  // main one without fighting over the same .next folder.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   transpilePackages: ['@bro-pics/shared'],
   headers: securityHeaders,
   // sharp ships a native .node binary — webpacking it into the API route

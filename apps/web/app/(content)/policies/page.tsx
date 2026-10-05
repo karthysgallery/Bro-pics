@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useShippingSettings } from '../../../lib/use-shipping-settings';
+import { formatPaise } from '../../../lib/format-price';
 
 type TabKey = 'shipping' | 'privacy' | 'terms' | 'personalisation';
 
@@ -14,6 +16,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 
 export default function PoliciesPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('shipping');
+  const shipping = useShippingSettings();
 
   return (
     <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
@@ -61,7 +64,7 @@ export default function PoliciesPage() {
               <section>
                 <h2 className="font-display text-lg font-bold text-ink mb-2">Shipping in India</h2>
                 <p className="text-xs sm:text-sm text-ink/80 leading-relaxed">
-                  We deliver across serviceable Indian PIN codes. Standard shipping is free on orders above ₹1,999; otherwise ₹99. Personalised frames usually dispatch 3–5 working days after photo approval. Your delivery estimate appears at checkout.
+                  We deliver across serviceable Indian PIN codes. Standard shipping is free on orders above {formatPaise(shipping.freeShippingThreshold)}; otherwise {formatPaise(shipping.flatShippingCharge)}. Personalised frames usually dispatch 3–5 working days after photo approval. Your delivery estimate appears at checkout.
                 </p>
               </section>
 
@@ -110,7 +113,7 @@ export default function PoliciesPage() {
               <section>
                 <h2 className="font-display text-lg font-bold text-ink mb-2">Terms of service</h2>
                 <p className="text-xs sm:text-sm text-ink/80 leading-relaxed">
-                  By accessing BroPics and placing an order, you agree to our terms of service. You certify that you own the rights or have appropriate permissions to print any images submitted for personalisation.
+                  By accessing KarthysGallery and placing an order, you agree to our terms of service. You certify that you own the rights or have appropriate permissions to print any images submitted for personalisation.
                 </p>
               </section>
               <section>
@@ -146,7 +149,7 @@ export default function PoliciesPage() {
           <div className="rounded-3xl border border-line bg-surface p-6 shadow-sm">
             <h3 className="font-display text-sm font-bold text-ink mb-2">Questions?</h3>
             <p className="text-xs text-ink font-medium">
-              <a href="mailto:hello@bropics.in" className="hover:underline">hello@bropics.in</a>
+              <a href="mailto:support@karthysgallery.in" className="hover:underline">support@karthysgallery.in</a>
             </p>
             <p className="text-2xs text-ink/60 mt-2">
               BroPics India Private Limited · Bengaluru, Karnataka

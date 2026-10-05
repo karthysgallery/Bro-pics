@@ -314,12 +314,12 @@ export default function FrameTemplatesPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-cream">Frame Templates Canvas</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-ink">Frame Templates Canvas</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold/10 text-gold border border-gold/30">
               v{version} (Active)
             </span>
           </div>
-          <p className="text-sm text-sand/70 mt-1">
+          <p className="text-sm text-ink/60 mt-1">
             Visual slot layout, normalized geometry, DPI calculations, and 300 DPI test-render engine.
           </p>
         </div>
@@ -328,24 +328,20 @@ export default function FrameTemplatesPage() {
           <button
             onClick={handleTestRender}
             disabled={testing || !selectedVariantId}
-            className="px-4 py-2 rounded-xl text-sm font-medium bg-charcoal hover:bg-tint border border-line text-cream flex items-center gap-2 transition disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-sm font-medium bg-field hover:bg-paper border border-line text-ink flex items-center gap-2 transition disabled:opacity-50"
           >
-            {testing ? (
+            {testing && (
               <span className="animate-spin inline-block w-4 h-4 border-2 border-gold border-t-transparent rounded-full" />
-            ) : (
-              <span>⚡</span>
             )}
             Run Test Render
           </button>
           <button
             onClick={handleSaveVersion}
             disabled={saving || !selectedVariantId}
-            className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-sm font-bold bg-gold text-ink hover:bg-gold-deep transition shadow-xs flex items-center gap-2 disabled:opacity-50"
           >
-            {saving ? (
+            {saving && (
               <span className="animate-spin inline-block w-4 h-4 border-2 border-void border-t-transparent rounded-full" />
-            ) : (
-              <span>💾</span>
             )}
             Publish New Version
           </button>
@@ -370,13 +366,13 @@ export default function FrameTemplatesPage() {
       {/* Product & Variant Pickers */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-paper border border-line">
         <div>
-          <label className="block text-xs font-semibold text-sand uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-ink/70 uppercase tracking-wider mb-2">
             Select Product
           </label>
           <select
             value={selectedProductId}
             onChange={(e) => setSelectedProductId(e.target.value)}
-            className="w-full bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream focus:border-gold focus:outline-none"
+            className="w-full bg-field border border-line rounded-xl px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none"
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -387,13 +383,13 @@ export default function FrameTemplatesPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-sand uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-ink/70 uppercase tracking-wider mb-2">
             Select Frame Variant (Size × Colour)
           </label>
           <select
             value={selectedVariantId}
             onChange={(e) => setSelectedVariantId(e.target.value)}
-            className="w-full bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream focus:border-gold focus:outline-none"
+            className="w-full bg-field border border-line rounded-xl px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none"
             disabled={variants.length === 0}
           >
             {variants.map((v) => (
@@ -411,19 +407,19 @@ export default function FrameTemplatesPage() {
         <div className="lg:col-span-8 space-y-4">
           <div className="p-6 rounded-2xl bg-paper border border-line flex flex-col items-center justify-center min-h-[480px]">
             <div className="w-full flex items-center justify-between mb-4">
-              <span className="text-xs text-sand font-mono uppercase">
+              <span className="text-xs text-ink/70 font-mono uppercase">
                 Interactive Canvas Preview ({currentVariant?.sizeLabel || 'Standard'})
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleAddSlot}
-                  className="px-3 py-1 text-xs rounded-lg bg-tint border border-line hover:border-gold text-cream transition"
+                  className="px-3 py-1 text-xs font-medium rounded-lg bg-field border border-line hover:border-gold text-ink transition"
                 >
                   + Add Slot
                 </button>
                 <button
                   onClick={handleAddTextZone}
-                  className="px-3 py-1 text-xs rounded-lg bg-tint border border-line hover:border-gold text-cream transition"
+                  className="px-3 py-1 text-xs font-medium rounded-lg bg-field border border-line hover:border-gold text-ink transition"
                 >
                   + Add Text Zone
                 </button>
@@ -554,12 +550,12 @@ export default function FrameTemplatesPage() {
           {currentSlot && (
             <div className="p-5 rounded-2xl bg-paper border border-line space-y-4">
               <div className="flex items-center justify-between border-b border-line pb-3">
-                <h3 className="text-sm font-semibold text-cream">
+                <h3 className="text-sm font-semibold text-ink">
                   Slot #{currentSlot.slotIndex + 1} Properties
                 </h3>
                 <button
                   onClick={() => handleRemoveSlot(selectedSlotIndex!)}
-                  className="text-xs text-rose-400 hover:text-rose-300 transition"
+                  className="text-xs text-rose-500 hover:text-rose-600 font-medium transition"
                 >
                   Delete Slot
                 </button>
@@ -567,72 +563,72 @@ export default function FrameTemplatesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">X Position (%)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">X Position (%)</label>
                   <input
                     type="number"
                     value={currentSlot.x}
                     onChange={(e) => handleUpdateSlot('x', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Y Position (%)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Y Position (%)</label>
                   <input
                     type="number"
                     value={currentSlot.y}
                     onChange={(e) => handleUpdateSlot('y', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Width (%)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Width (%)</label>
                   <input
                     type="number"
                     value={currentSlot.width}
                     onChange={(e) => handleUpdateSlot('width', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Height (%)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Height (%)</label>
                   <input
                     type="number"
                     value={currentSlot.height}
                     onChange={(e) => handleUpdateSlot('height', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-line">
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Width (mm)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Width (mm)</label>
                   <input
                     type="number"
                     value={currentSlot.widthMm}
                     onChange={(e) => handleUpdateSlot('widthMm', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Height (mm)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Height (mm)</label>
                   <input
                     type="number"
                     value={currentSlot.heightMm}
                     onChange={(e) => handleUpdateSlot('heightMm', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] text-sand/70 mb-1">Mask Asset URL (Optional)</label>
+                <label className="block text-[11px] font-medium text-ink/70 mb-1">Mask Asset URL (Optional)</label>
                 <input
                   type="text"
                   placeholder="https://.../mask.png"
                   value={currentSlot.maskUrl || ''}
                   onChange={(e) => handleUpdateSlot('maskUrl', e.target.value)}
-                  className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none font-mono"
+                  className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -642,32 +638,32 @@ export default function FrameTemplatesPage() {
           {currentZone && (
             <div className="p-5 rounded-2xl bg-paper border border-line space-y-4">
               <div className="flex items-center justify-between border-b border-line pb-3">
-                <h3 className="text-sm font-semibold text-cream">Text Zone Properties</h3>
+                <h3 className="text-sm font-semibold text-ink">Text Zone Properties</h3>
                 <button
                   onClick={() => handleRemoveTextZone(currentZone.id)}
-                  className="text-xs text-rose-400 hover:text-rose-300 transition"
+                  className="text-xs text-rose-500 hover:text-rose-600 font-medium transition"
                 >
                   Delete Zone
                 </button>
               </div>
 
               <div>
-                <label className="block text-[11px] text-sand/70 mb-1">Placeholder Text</label>
+                <label className="block text-[11px] font-medium text-ink/70 mb-1">Placeholder Text</label>
                 <input
                   type="text"
                   value={currentZone.placeholder || ''}
                   onChange={(e) => handleUpdateTextZone('placeholder', e.target.value)}
-                  className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                  className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Font Family</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Font Family</label>
                   <select
                     value={currentZone.fontFamily}
                     onChange={(e) => handleUpdateTextZone('fontFamily', e.target.value)}
-                    className="w-full bg-void border border-line rounded-lg px-2 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   >
                     <option value="Inter">Inter (Sans)</option>
                     <option value="Playfair Display">Playfair Display (Serif)</option>
@@ -676,32 +672,32 @@ export default function FrameTemplatesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Font Size (pt)</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Font Size (pt)</label>
                   <input
                     type="number"
                     value={currentZone.fontSize}
                     onChange={(e) => handleUpdateTextZone('fontSize', parseInt(e.target.value, 10) || 16)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Max Characters</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Max Characters</label>
                   <input
                     type="number"
                     value={currentZone.maxChars || 40}
                     onChange={(e) => handleUpdateTextZone('maxChars', parseInt(e.target.value, 10) || 40)}
-                    className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-sand/70 mb-1">Text Alignment</label>
+                  <label className="block text-[11px] font-medium text-ink/70 mb-1">Text Alignment</label>
                   <select
                     value={currentZone.alignment}
                     onChange={(e) => handleUpdateTextZone('alignment', e.target.value as any)}
-                    className="w-full bg-void border border-line rounded-lg px-2 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                    className="w-full bg-field border border-line rounded-lg px-2 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                   >
                     <option value="left">Left</option>
                     <option value="center">Center</option>
@@ -714,38 +710,38 @@ export default function FrameTemplatesPage() {
 
           {/* Global Frame & Mat Parameters */}
           <div className="p-5 rounded-2xl bg-paper border border-line space-y-4">
-            <h3 className="text-sm font-semibold text-cream border-b border-line pb-3">
+            <h3 className="text-sm font-semibold text-ink border-b border-line pb-3">
               Frame Physical Bounds
             </h3>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-sand/70 mb-1">Bleed Margin (mm)</label>
+                <label className="block text-[11px] font-medium text-ink/70 mb-1">Bleed Margin (mm)</label>
                 <input
                   type="number"
                   value={bleedMm}
                   onChange={(e) => setBleedMm(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                  className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-sand/70 mb-1">Mat Inset (px)</label>
+                <label className="block text-[11px] font-medium text-ink/70 mb-1">Mat Inset (px)</label>
                 <input
                   type="number"
                   value={matInset}
                   onChange={(e) => setMatInset(parseInt(e.target.value, 10) || 0)}
-                  className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none"
+                  className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] text-sand/70 mb-1">Mockup Overlay Asset</label>
+              <label className="block text-[11px] font-medium text-ink/70 mb-1">Mockup Overlay Asset</label>
               <input
                 type="text"
                 value={mockupUrl}
                 onChange={(e) => setMockupUrl(e.target.value)}
-                className="w-full bg-void border border-line rounded-lg px-2.5 py-1.5 text-xs text-cream focus:border-gold focus:outline-none font-mono"
+                className="w-full bg-field border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:border-gold focus:outline-none font-mono"
               />
             </div>
           </div>

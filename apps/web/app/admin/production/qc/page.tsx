@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPaise } from '../../../../lib/format-price';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../../lib/auth-context';
@@ -7,6 +8,7 @@ import { StatusChip } from '../../../../components/admin/StatusChip';
 import { AdminModal } from '../../../../components/admin/AdminModal';
 import { FormField } from '../../../../components/admin/AdminForm';
 import { useToast } from '../../../../components/ui/Toast';
+import { AdminIcon } from '../../../../components/admin/AdminIcon';
 import type { Order, OrderItem } from '@bro-pics/shared';
 
 const QC_CHECKLIST_ITEMS = [
@@ -194,7 +196,9 @@ export default function QualityCheckStationPage() {
 
       {qcOrders.length === 0 ? (
         <div className="p-16 border border-line rounded-2xl bg-paper text-center space-y-3">
-          <span className="text-4xl block">🛡️</span>
+          <div className="flex justify-center mb-1">
+            <AdminIcon name="shield" size={36} className="text-accent" />
+          </div>
           <h2 className="text-base font-bold text-ink">All QC Inspections Complete</h2>
           <p className="text-xs text-ink/50 max-w-md mx-auto">
             There are currently no orders waiting in the Quality Check station queue.
@@ -227,7 +231,7 @@ export default function QualityCheckStationPage() {
                         <StatusChip status={o.status} size="sm" />
                       </div>
                       <div className="flex items-center justify-between text-2xs text-ink/60 mt-1">
-                        <span>₹{o.total}</span>
+                        <span>{formatPaise(o.total)}</span>
                         <span className="capitalize">{o.deliveryMethod || 'standard'}</span>
                       </div>
                     </div>
@@ -272,12 +276,12 @@ export default function QualityCheckStationPage() {
                             {item.previewPath ? (
                               <img src={`/api/admin/media/preview?path=${encodeURIComponent(item.previewPath)}`} alt={item.title} className="w-full h-full object-cover" />
                             ) : (
-                              <span>🖼️</span>
+                              <AdminIcon name="image" size={20} className="text-ink/30" />
                             )}
                           </div>
                           <div className="min-w-0 flex-1 text-2xs">
                             <h4 className="font-bold text-ink truncate">{item.title}</h4>
-                            <p className="text-ink/60">Unit: ₹{item.unitPrice}</p>
+                            <p className="text-ink/60">Unit: {formatPaise(item.unitPrice)}</p>
                             <p className="text-ink/50 font-mono">Qty: {item.qty}</p>
                           </div>
                         </div>
@@ -330,18 +334,20 @@ export default function QualityCheckStationPage() {
                   <button
                     type="button"
                     onClick={() => setShowFailModal(true)}
-                    className="px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition-colors"
                   >
-                    ❌ FAIL QC & Send to Rework
+                    <AdminIcon name="close" size={14} />
+                    <span>Fail QC & Send to Rework</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handlePassQC}
                     disabled={!isAllChecked || isSubmitting}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-md disabled:opacity-40 disabled:bg-gray-400"
+                    className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-md disabled:opacity-40 disabled:bg-gray-400"
                   >
-                    {isSubmitting ? 'Submitting...' : '✓ PASS Inspection (Move to Packed)'}
+                    <AdminIcon name="check" size={14} />
+                    <span>{isSubmitting ? 'Submitting...' : 'Pass Inspection (Move to Packed)'}</span>
                   </button>
                 </div>
               </div>

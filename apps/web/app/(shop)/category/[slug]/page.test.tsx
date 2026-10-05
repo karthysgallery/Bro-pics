@@ -20,7 +20,7 @@ import { generateMetadata } from './page';
 const mockCategory = {
   id: 'cat_frames', name: 'Frames & Wall Décor', slug: 'frames-wall-decor', parentId: null,
   image: '/placeholders/categories/frames.svg', sortOrder: 1, isActive: true,
-  seo: { title: 'Frames & Wall Décor | BroPics', description: 'Shop our frame collection.' },
+  seo: { title: 'Frames & Wall Décor | KarthysGallery', description: 'Shop our frame collection.' },
 };
 
 describe('category generateMetadata', () => {
@@ -32,7 +32,7 @@ describe('category generateMetadata', () => {
       searchParams: Promise.resolve({}),
     });
 
-    expect(metadata.title).toBe('Frames & Wall Décor | BroPics');
+    expect(metadata.title).toBe('Frames & Wall Décor | KarthysGallery');
     expect(metadata.description).toBe('Shop our frame collection.');
     expect(metadata.openGraph?.images).toEqual(['/placeholders/categories/frames.svg']);
   });
@@ -45,7 +45,7 @@ describe('category generateMetadata', () => {
       searchParams: Promise.resolve({}),
     });
 
-    expect(metadata.title).toBe('Frames & Wall Décor | BroPics');
+    expect(metadata.title).toBe('Frames & Wall Décor | KarthysGallery');
   });
 
   it('returns fallback metadata when the category does not exist', async () => {
@@ -54,7 +54,7 @@ describe('category generateMetadata', () => {
       params: Promise.resolve({ slug: 'missing' }),
       searchParams: Promise.resolve({}),
     });
-    expect(metadata.title).toBe('Category Not Found | BroPics');
+    expect(metadata.title).toBe('Category Not Found | KarthysGallery');
   });
 
   it('[FE-42] does not noindex a bare category URL or one with a single facet', async () => {
@@ -95,7 +95,7 @@ describe('category generateMetadata', () => {
 
   it('[FE-42] falls back to settings/seo.ogImagePath only when the category has no image of its own', async () => {
     vi.mocked(getSeoSettings).mockResolvedValueOnce({
-      defaultTitle: 'BroPics',
+      defaultTitle: 'KarthysGallery',
       defaultDescription: 'Personalized photo frames.',
       ogImagePath: 'seo/default-og.jpg',
     });
@@ -110,7 +110,7 @@ describe('category generateMetadata', () => {
 
   it('[FE-42] never overrides a category\'s own real image with the settings fallback', async () => {
     vi.mocked(getSeoSettings).mockResolvedValueOnce({
-      defaultTitle: 'BroPics',
+      defaultTitle: 'KarthysGallery',
       defaultDescription: 'Personalized photo frames.',
       ogImagePath: 'seo/default-og.jpg',
     });

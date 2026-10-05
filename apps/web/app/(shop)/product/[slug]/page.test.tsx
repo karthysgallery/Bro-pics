@@ -25,7 +25,7 @@ const mockProduct = {
   shortDesc: 'A test frame', descriptionHtml: '<p>Test</p>', highlights: [], howItWorks: [],
   careText: '', basePrice: 10000, isActive: true, isFeatured: false, badges: [],
   dispatchDaysMin: 3, dispatchDaysMax: 5, photoSlots: 1, allowsTextPersonalization: false,
-  seo: { title: 'Test Frame | BroPics', description: 'Shop the test frame.' },
+  seo: { title: 'Test Frame | KarthysGallery', description: 'Shop the test frame.' },
   createdAt: new Date(), updatedAt: new Date(),
   availableSizes: [], availableColours: [], availableMaterials: [],
   minPrice: 10000, maxPrice: 10000, occasionTags: [], inStock: true,
@@ -41,7 +41,7 @@ describe('generateMetadata', () => {
 
     const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
 
-    expect(metadata.title).toBe('Test Frame | BroPics');
+    expect(metadata.title).toBe('Test Frame | KarthysGallery');
     expect(metadata.description).toBe('Shop the test frame.');
     expect(metadata.openGraph?.images).toEqual(['/placeholders/products/test-1.svg']);
   });
@@ -49,12 +49,12 @@ describe('generateMetadata', () => {
   it('returns fallback metadata when the product does not exist', async () => {
     vi.mocked(getProductBySlug).mockResolvedValue(null);
     const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'missing' }), searchParams: Promise.resolve({}) });
-    expect(metadata.title).toBe('Product Not Found | BroPics');
+    expect(metadata.title).toBe('Product Not Found | KarthysGallery');
   });
 
   it('[FE-42] falls back to settings/seo.ogImagePath only when the product has no primaryImageUrl of its own', async () => {
     vi.mocked(getSeoSettings).mockResolvedValueOnce({
-      defaultTitle: 'BroPics',
+      defaultTitle: 'KarthysGallery',
       defaultDescription: 'Personalized photo frames.',
       ogImagePath: 'seo/default-og.jpg',
     });
@@ -68,7 +68,7 @@ describe('generateMetadata', () => {
 
   it('[FE-42] never overrides a product\'s own real image with the settings fallback', async () => {
     vi.mocked(getSeoSettings).mockResolvedValueOnce({
-      defaultTitle: 'BroPics',
+      defaultTitle: 'KarthysGallery',
       defaultDescription: 'Personalized photo frames.',
       ogImagePath: 'seo/default-og.jpg',
     });

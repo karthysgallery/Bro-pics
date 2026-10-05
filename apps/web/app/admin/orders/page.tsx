@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPaise } from '../../../lib/format-price';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -207,14 +208,14 @@ export default function AdminOrdersPage() {
             href="/admin/production"
             className="px-3.5 py-2 rounded-xl border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors"
           >
-            🏭 Production Queue ↗
+            Production Queue ↗
           </Link>
           <button
             type="button"
             onClick={handleExportCSV}
             className="px-3.5 py-2 rounded-xl border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors flex items-center gap-1.5"
           >
-            <span>📥 Export CSV</span>
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
@@ -241,7 +242,7 @@ export default function AdminOrdersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-            🔍
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input
             type="text"
@@ -289,7 +290,7 @@ export default function AdminOrdersPage() {
           </div>
         ) : orders.length === 0 ? (
           <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block">📦</span>
+            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
             <p>No orders found matching the criteria.</p>
           </div>
         ) : (
@@ -353,7 +354,7 @@ export default function AdminOrdersPage() {
                       </td>
 
                       <td className="p-3 font-bold text-ink">
-                        ₹{o.total}
+                        {formatPaise(o.total)}
                       </td>
 
                       <td className="p-3">

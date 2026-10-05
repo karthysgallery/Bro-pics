@@ -324,7 +324,7 @@ export default function AdminTeamSettingsPage() {
             onClick={() => setShowMatrix(!showMatrix)}
             className="px-3.5 py-2 rounded-xl bg-field hover:bg-field-hover border border-line text-xs font-bold text-ink transition-colors"
           >
-            {showMatrix ? 'Hide RBAC Matrix' : 'View Permissions Matrix 📋'}
+            {showMatrix ? 'Hide RBAC Matrix' : 'View Permissions Matrix'}
           </button>
           <button
             onClick={() => {
@@ -345,13 +345,13 @@ export default function AdminTeamSettingsPage() {
         <div className="p-6 rounded-2xl border border-gold/30 bg-gold/5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-ink uppercase tracking-wider flex items-center gap-2">
-              <span>🔐</span> Role-Based Access Control (RBAC) Matrix
+              Role-Based Access Control (RBAC) Matrix
             </h2>
             <button
               onClick={() => setShowMatrix(false)}
               className="text-xs text-ink/60 hover:text-ink font-bold"
             >
-              ✕ Close
+              Close
             </button>
           </div>
 
@@ -402,7 +402,7 @@ export default function AdminTeamSettingsPage() {
             </div>
           ) : staffList.length === 0 ? (
             <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-              <span className="text-3xl block">👥</span>
+              <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
               <p>No staff accounts registered yet.</p>
             </div>
           ) : (
@@ -469,7 +469,7 @@ export default function AdminTeamSettingsPage() {
                           }}
                           className="px-2.5 py-1 rounded bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
                         >
-                          Change Role ✏️
+                          Change Role
                         </button>
 
                         {m.uid !== user?.uid && (
@@ -497,7 +497,7 @@ export default function AdminTeamSettingsPage() {
       {/* Direct User Phone Lookup & Role Assignment */}
       <div className="p-6 rounded-2xl border border-line bg-paper shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-line pb-2 flex items-center gap-2">
-          <span>🔍</span> Look up Existing User Account by Phone
+          Look up Existing User Account by Phone
         </h2>
         <p className="text-xs text-ink/60">
           Find any existing customer or staff member by their registered phone number to directly update their staff role.
@@ -573,7 +573,7 @@ export default function AdminTeamSettingsPage() {
           <div className="space-y-4">
             <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2 text-xs">
               <span className="text-emerald-600 font-bold block">
-                ✓ Staff Invitation Created Successfully!
+                Staff Invitation Created Successfully!
               </span>
               <p className="text-ink/80">
                 Share this secure invitation token or onboarding link with{' '}
@@ -616,7 +616,7 @@ export default function AdminTeamSettingsPage() {
                 type="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@bropics.com"
+                placeholder="colleague@karthysgallery.in"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
                 required
               />
@@ -675,7 +675,7 @@ export default function AdminTeamSettingsPage() {
                   {ROLE_LABELS[r].title}
                 </option>
               ))}
-              <option value="remove">🚫 Revoke All Staff Privileges (Demote to Customer)</option>
+              <option value="remove">Revoke All Staff Privileges (Demote to Customer)</option>
             </select>
           </FormField>
 

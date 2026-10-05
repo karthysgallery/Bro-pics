@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import OrderDetailPage from './page';
 
 vi.mock('../../../../lib/auth-context', () => ({
@@ -64,9 +64,12 @@ describe('OrderDetailPage', () => {
     render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_1' })} />);
 
     expect(await screen.findByText('Classic Wooden Frame')).toBeInTheDocument();
-    const statusEls = await screen.findAllByText(/paid|shipped/);
-    // 'paid' event should render before 'shipped' event, per the oldest-first ordering
-    expect(statusEls[0].textContent).toContain('paid');
+    // The activity history lists events oldest-first, using the customer-facing
+    // status labels (not raw snake_case ids).
+    const history = (await screen.findByText('Activity history')).parentElement as HTMLElement;
+    const rows = within(history).getAllByRole('listitem');
+    expect(rows[1].textContent).toContain('Payment confirmed');
+    expect(rows[rows.length - 1].textContent).toContain('Shipped');
     expect(await screen.findByText('BlueDart')).toBeInTheDocument();
     expect(await screen.findByText('BD123')).toBeInTheDocument();
 
@@ -124,7 +127,8 @@ describe('OrderDetailPage', () => {
 
     render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_3' })} />);
 
-    await screen.findByText('pending_payment');
+    const history = (await screen.findByText('Activity history')).parentElement as HTMLElement;
+    expect(within(history).getByText('Awaiting payment')).toBeInTheDocument();
     expect(screen.queryByText('Order placed')).not.toBeInTheDocument();
   });
 
@@ -268,5 +272,109 @@ describe('OrderDetailPage', () => {
       previewPath: 'previews/order_5/item_1.jpg',
       productSlug: 'classic-wooden-frame',
     });
+  });
+
+  describe('customer-facing status, delivery and totals', () => {
+    function loadOrder(over: Record<string, unknown>) {
+      mockGetDoc.mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          orderNo: 'BP-2026-00009',
+          status: 'print_rendering',
+          paymentStatus: 'paid',
+          subtotal: 159800,
+          discount: 20000,
+          couponId: 'FIRST15',
+          shipping: 0,
+          total: 139800,
+          taxLines: [{ rate: 18, amount: 21325 }],
+          customerName: 'Asha Raman',
+          addressJson: { line1: '12 MG Road', line2: 'Anna Nagar', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+919000000002', deliveryInstructions: 'Ring twice' },
+          placedAt: { toDate: () => new Date('2026-10-05T10:00:00.000Z') },
+          ...over,
+        }),
+      });
+      mockGetDocs
+        .mockResolvedValueOnce({
+          docs: [{ data: () => ({ id: 'i1', title: 'Classic Wooden Photo Frame', qty: 2, unitPrice: 79900, sizeLabel: '8x12 in', frameColour: 'Black', material: 'Solid wood' }) }],
+        })
+        .mockResolvedValueOnce({ docs: [] });
+      render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_9' })} />);
+    }
+
+    it('never calls a paid order in an automatic production stage "Pending payment"', async () => {
+      loadOrder({ status: 'print_rendering' });
+      expect(await screen.findByText('Your print is being prepared')).toBeInTheDocument();
+      expect(screen.queryByText('Pending payment')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Preparing your print').length).toBeGreaterThan(0);
+    });
+
+    it('shows a cancelled order as cancelled, not as "checking your photos"', async () => {
+      loadOrder({ status: 'cancelled' });
+      expect(await screen.findByText('This order was cancelled')).toBeInTheDocument();
+      expect(screen.queryByText("We're checking your photos")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Estimated dispatch/)).not.toBeInTheDocument();
+    });
+
+    it('does not say "Paid" or offer an invoice for an unpaid order, and links back to checkout', async () => {
+      loadOrder({ status: 'pending_payment', paymentStatus: 'pending', total: 159800, discount: 0, taxLines: [] });
+      expect(await screen.findByText('Waiting for your payment')).toBeInTheDocument();
+      expect(screen.getAllByText(/Awaiting payment/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/· Paid /)).not.toBeInTheDocument();
+      expect(screen.queryByText('View invoice')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Return to checkout' })).toHaveAttribute('href', '/checkout');
+    });
+
+    it('shows the delivery address from the order snapshot, with name, phone and note', async () => {
+      loadOrder({});
+      expect(await screen.findByText('Asha Raman')).toBeInTheDocument();
+      expect(screen.getByText(/12 MG Road, Anna Nagar/)).toBeInTheDocument();
+      expect(screen.getByText(/Chennai, Tamil Nadu 600001/)).toBeInTheDocument();
+      expect(screen.getByText('+919000000002')).toBeInTheDocument();
+      expect(screen.getByText(/Ring twice/)).toBeInTheDocument();
+    });
+
+    it('shows the price breakdown from the order snapshot: subtotal, discount, shipping, GST, total, payment', async () => {
+      loadOrder({});
+      const summary = (await screen.findByText('Order summary')).parentElement as HTMLElement;
+      expect(within(summary).getByText('₹1,598')).toBeInTheDocument(); // subtotal
+      expect(within(summary).getByText('Discount (FIRST15)')).toBeInTheDocument();
+      expect(within(summary).getByText('−₹200')).toBeInTheDocument();
+      expect(within(summary).getByText('Free')).toBeInTheDocument();
+      expect(within(summary).getByText('Includes GST (18%)')).toBeInTheDocument();
+      expect(within(summary).getByText('₹1,398')).toBeInTheDocument(); // total
+      expect(within(summary).getByText('Paid')).toBeInTheDocument();
+    });
+
+    it('shows the purchased variant (size · colour · material) frozen on the line item', async () => {
+      loadOrder({});
+      expect(await screen.findByText('8x12 in · Black · Solid wood')).toBeInTheDocument();
+    });
+
+    it('only promises a refund when the order was actually paid', async () => {
+      loadOrder({ status: 'print_ready', paymentStatus: 'paid' });
+      fireEvent.click(await screen.findByText('Cancel order'));
+      expect(await screen.findByText(/refund of your payment will be arranged/i)).toBeInTheDocument();
+    });
+
+    it('tells an unpaid customer they have not been charged when cancelling', async () => {
+      loadOrder({ status: 'pending_payment', paymentStatus: 'pending' });
+      fireEvent.click(await screen.findByText('Cancel order'));
+      expect(await screen.findByText(/haven't been charged/i)).toBeInTheDocument();
+    });
+  });
+
+  it('mentions the personalization on a personalised line: photo count and the customer\'s text', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ orderNo: 'BP-2026-00044', status: 'print_rendering', paymentStatus: 'paid', subtotal: 1000, discount: 0, shipping: 0, total: 1000, taxLines: [], addressJson: {}, placedAt: { toDate: () => new Date('2026-10-05T10:00:00.000Z') } }),
+    });
+    mockGetDocs
+      .mockResolvedValueOnce({
+        docs: [{ data: () => ({ id: 'i1', title: 'Names frame', qty: 1, unitPrice: 1000, personalization: { state: { slots: { photo_01: {}, photo_02: {} }, texts: { name: { value: 'Asha & Ravi' } } } } }) }],
+      })
+      .mockResolvedValueOnce({ docs: [] });
+    render(<OrderDetailPage params={Promise.resolve({ orderId: 'order_44' })} />);
+    expect(await screen.findByText(/Personalised · 2 photos · “Asha & Ravi”/)).toBeInTheDocument();
   });
 });

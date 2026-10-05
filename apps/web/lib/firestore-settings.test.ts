@@ -75,10 +75,10 @@ describe('[FE-42] getSeoSettings', () => {
   it('returns the stored defaultTitle/defaultDescription/ogImagePath', async () => {
     mockGet.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.', ogImagePath: 'seo/og.jpg' }),
+      data: () => ({ defaultTitle: 'KarthysGallery', defaultDescription: 'Personalized photo frames.', ogImagePath: 'seo/og.jpg' }),
     });
     expect(await getSeoSettings()).toEqual({
-      defaultTitle: 'BroPics',
+      defaultTitle: 'KarthysGallery',
       defaultDescription: 'Personalized photo frames.',
       ogImagePath: 'seo/og.jpg',
     });
@@ -87,10 +87,10 @@ describe('[FE-42] getSeoSettings', () => {
   it('omits ogImagePath when not set, rather than including an empty string', async () => {
     mockGet.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.' }),
+      data: () => ({ defaultTitle: 'KarthysGallery', defaultDescription: 'Personalized photo frames.' }),
     });
     const result = await getSeoSettings();
-    expect(result).toEqual({ defaultTitle: 'BroPics', defaultDescription: 'Personalized photo frames.' });
+    expect(result).toEqual({ defaultTitle: 'KarthysGallery', defaultDescription: 'Personalized photo frames.' });
     expect('ogImagePath' in (result ?? {})).toBe(false);
   });
 });
