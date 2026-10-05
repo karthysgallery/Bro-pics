@@ -29,6 +29,23 @@ describe('DEFAULT_PREVIEW_SCENES', () => {
 });
 
 describe('layoutFrameInScene', () => {
+  it('never lets a big frame run off the photo, in any scene', () => {
+    for (const scene of DEFAULT_PREVIEW_SCENES) {
+      const stageHeight = 1 / (scene.backdrop.type === 'photo' ? scene.backdrop.aspect : 1);
+      for (const inches of [{ widthIn: 24, heightIn: 36 }, { widthIn: 40, heightIn: 60 }, { widthIn: 36, heightIn: 24 }]) {
+        const aspect = inches.widthIn / inches.heightIn;
+        const r = layoutFrameInScene(scene, aspect, inches);
+        const { x, y, anchor } = scene.frame;
+        expect(x - r.width / 2).toBeGreaterThanOrEqual(-1e-9);
+        expect(x + r.width / 2).toBeLessThanOrEqual(1 + 1e-9);
+        const top = anchor === 'bottom' ? y * stageHeight - r.height : y * stageHeight - r.height / 2;
+        const bottom = anchor === 'bottom' ? y * stageHeight : y * stageHeight + r.height / 2;
+        expect(top).toBeGreaterThanOrEqual(-1e-9);
+        expect(bottom).toBeLessThanOrEqual(stageHeight + 1e-9);
+      }
+    }
+  });
+
   it('draws a bigger frame bigger and a smaller one smaller, in proportion', () => {
     const small = layoutFrameInScene(wall, 5 / 7, { widthIn: 5, heightIn: 7 });
     const large = layoutFrameInScene(wall, 24 / 36, { widthIn: 24, heightIn: 36 });

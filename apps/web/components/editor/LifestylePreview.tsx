@@ -183,6 +183,10 @@ export function LifestylePreview({ imageUrl, frameInches = null, scenes = DEFAUL
   const standing = frame.anchor === 'bottom';
   const light = scene.light ?? DEFAULT_LIGHT;
   const frameWidthPx = layout.width * stage.width;
+  // The glass catches the light on the side it comes from: point the sheen
+  // from the light towards the side the shadow falls on.
+  const shadowRad = (light.angleDeg * Math.PI) / 180;
+  const sheenAngle = Math.round(((Math.atan2(Math.cos(shadowRad), -Math.sin(shadowRad)) * 180) / Math.PI + 360) % 360);
 
   const rotations = [
     frame.rotateX ? `rotateX(${frame.rotateX}deg)` : '',
@@ -259,8 +263,7 @@ export function LifestylePreview({ imageUrl, frameInches = null, scenes = DEFAUL
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0"
                 style={{
-                  background:
-                    'linear-gradient(115deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 36%, rgba(255,255,255,0) 64%, rgba(255,255,255,0.1) 100%)',
+                  background: `linear-gradient(${sheenAngle}deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 36%, rgba(255,255,255,0) 64%, rgba(255,255,255,0.1) 100%)`,
                   mixBlendMode: 'screen',
                 }}
               />

@@ -144,12 +144,15 @@ export const DEFAULT_PREVIEW_SCENES: PreviewScene[] = [
       type: 'photo',
       src: '/scenes/table.jpg',
       aspect: 4 / 3,
-      credit: 'Photo: NordWood Themes on Unsplash',
+      credit: 'Photo: Suzanne Rushton on Unsplash',
     },
-    stageWidthIn: 30,
-    frame: { x: 0.5, y: 0.595, anchor: 'bottom', maxFraction: 0.5 },
-    light: { angleDeg: 55, strength: 0.5 },
-    minFraction: 0.18,
+    // A 42in dresser; the frame leans against the wall in the gap between the
+    // vase and the stacked books, lit by the lamp on the right.
+    stageWidthIn: 52,
+    frame: { x: 0.49, y: 0.633, anchor: 'bottom', maxFraction: 0.5 },
+    light: { angleDeg: 150, strength: 0.55 },
+    tone: { brightness: 1, warmth: 0.06 },
+    minFraction: 0.16,
   },
 ];
 
@@ -158,11 +161,18 @@ export interface FrameInches {
   heightIn: number;
 }
 
+/** Width / height of a scene's stage. */
+export function sceneAspect(scene: PreviewScene): number {
+  return scene.backdrop.type === 'photo' ? scene.backdrop.aspect : 1;
+}
+
 /**
- * Size of the frame in a scene as fractions of the (square) stage. With known
- * dimensions the frame is drawn at its real proportion of the scene; without
- * them it fills the scene's maximum. It is always kept inside `maxFraction`
- * with its own aspect ratio, and never shrinks below a legible minimum.
+ * Size of the frame in a scene, both as fractions of the stage WIDTH. With
+ * known dimensions the frame is drawn at its real proportion of the scene;
+ * without them it fills the scene's maximum. It is kept inside `maxFraction`
+ * with its own aspect ratio and never shrinks below a legible minimum, and
+ * finally it always fits inside the stage around its anchor: a big frame on a
+ * small table is shown as large as the photo allows, never cut off.
  */
 export function layoutFrameInScene(
   scene: PreviewScene,
@@ -191,6 +201,16 @@ export function layoutFrameInScene(
   const min = scene.minFraction ?? 0.15;
   if (Math.max(width, height) < min) {
     const k = min / Math.max(width, height);
+    width *= k;
+    height *= k;
+  }
+  // Room around the anchor, in the same units (fractions of the stage width).
+  const stageHeight = 1 / sceneAspect(scene);
+  const { x, y, anchor } = scene.frame;
+  const roomWidth = 2 * Math.min(x, 1 - x) * 0.96;
+  const roomHeight = (anchor === 'bottom' ? y : 2 * Math.min(y, 1 - y)) * stageHeight * 0.94;
+  if (width > roomWidth || height > roomHeight) {
+    const k = Math.min(roomWidth / width, roomHeight / height);
     width *= k;
     height *= k;
   }
