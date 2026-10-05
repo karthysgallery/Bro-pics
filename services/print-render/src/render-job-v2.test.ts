@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import sharp from 'sharp';
 import { buildOrderSnapshot, createEmptyState, setSlotPhoto } from '@bro-pics/shared';
 import { singlePhotoTemplate, threePhotoTemplate } from '@bro-pics/shared/src/personalization/test-fixtures';
-import { renderPrintJob, type RenderJobDependencies } from './render-job';
+import { printScale, renderPrintJob, type RenderJobDependencies } from './render-job';
 
 const solid = (r: number, g: number, b: number) => sharp({ create: { width: 300, height: 300, channels: 3, background: { r, g, b } } }).png().toBuffer();
 
@@ -14,7 +14,7 @@ function fakeDeps(snapshot: ReturnType<typeof buildOrderSnapshot> | null, over: 
     completeJobAndAdvanceOrder: vi.fn(async (_id, path) => { calls.complete.push(path); }),
     getPrintJob: vi.fn().mockResolvedValue({ orderId: 'o1', itemId: 'i1', personalizationId: 'pz1' }),
     getOrderItem: vi.fn().mockResolvedValue({ variantId: 'v1' }),
-    getVariant: vi.fn(async () => { calls.legacyTouched = true; return null; }),
+    getVariant: vi.fn(async () => null),
     getCustomizationsForPersonalization: vi.fn(async () => { calls.legacyTouched = true; return []; }),
     getFrameTemplate: vi.fn(async () => { calls.legacyTouched = true; return null; }),
     getUpload: vi.fn(async (id: string) => (id === 'up_1' ? { originalPath: 'upload/u/up_1.jpg' } : null)),
@@ -46,6 +46,21 @@ describe('renderPrintJob for template-v2 items', () => {
     const i = (Math.round(info.height / 2) * info.width + Math.round(info.width / 2)) * 4;
     expect([data[i], data[i + 1], data[i + 2]]).toEqual([200, 40, 40]);
   }, 60_000);
+
+  it('prints a design sold in a bigger frame at that frame\'s full resolution', async () => {
+    const t = singlePhotoTemplate; // 2400 × 3600 = 8 × 12 in
+    const { deps, calls } = fakeDeps(snapshotFor(t), { getVariant: vi.fn(async () => ({ printWidthPx: 3600, printHeightPx: 5400 })) });
+    await renderPrintJob(deps, 'job1');
+    const meta = await sharp(calls.upload[0].buffer).metadata();
+    expect([meta.width, meta.height]).toEqual([3600, 5400]);
+  }, 60_000);
+
+  it('works out the print scale from the variant, turned to the design and never below 1', () => {
+    expect(printScale({ width: 2400, height: 3600 }, { printWidthPx: 5400, printHeightPx: 3600 })).toBe(1.5);
+    expect(printScale({ width: 2400, height: 3600 }, { printWidthPx: 1200, printHeightPx: 1800 })).toBe(1);
+    expect(printScale({ width: 3000, height: 3000 }, { printWidthPx: 3600, printHeightPx: 5400 })).toBe(1.2);
+    expect(printScale({ width: 2400, height: 3600 }, null)).toBe(1);
+  });
 
   it('loads customer photos via the upload record and template art via the media library', async () => {
     const { deps } = fakeDeps(snapshotFor(singlePhotoTemplate));
@@ -80,7 +95,8 @@ describe('renderPrintJob for template-v2 items', () => {
   it('items WITHOUT a snapshot still take the legacy path (unchanged behaviour)', async () => {
     const { deps, calls } = fakeDeps(null);
     await expect(renderPrintJob(deps, 'job1')).rejects.toThrow(/Variant v1 not found/);
-    expect(calls.legacyTouched).toBe(true);
+    expect(deps.getVariant).toHaveBeenCalledWith('v1');
+    expect(calls.complete).toEqual([]);
     void threePhotoTemplate;
   });
 

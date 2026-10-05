@@ -76,6 +76,22 @@ export interface RenderJobDependencies {
 }
 
 /**
+ * How much to enlarge a template's canvas so it fills the purchased frame's
+ * print area (turned to the canvas orientation, aspect kept). Never below 1:
+ * a smaller frame still gets the full-resolution file.
+ */
+export function printScale(
+  canvas: { width: number; height: number },
+  variant: { printWidthPx: number; printHeightPx: number } | null
+): number {
+  if (!variant || variant.printWidthPx <= 0 || variant.printHeightPx <= 0) return 1;
+  let { printWidthPx: w, printHeightPx: h } = variant;
+  const portraitCanvas = canvas.height > canvas.width;
+  if (w !== h && canvas.width !== canvas.height && h > w !== portraitCanvas) [w, h] = [h, w];
+  return Math.max(1, Math.min(w / canvas.width, h / canvas.height));
+}
+
+/**
  * The glue between BE-16's pure renderPrintFile and BE-17's job-state
  * machine [BE-18]: leases the job, assembles every input renderPrintFile
  * needs from Firestore/Storage, renders, uploads the result, and advances
@@ -125,8 +141,12 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
           return deps.loadTemplateAsset(assetId);
         },
       };
-      // scale 1 = the template's own canvas = print resolution; preview-only (unprinted) layers stay out.
-      const printBuffer = await renderTemplate({ template: snapshot.template, state: snapshot.state, assets, scale: 1, includeUnprinted: false });
+      // The same design can be sold in several frame sizes: print at the size bought (the
+      // variant's 300-DPI pixels), never below the template's own canvas. Preview-only
+      // (unprinted) layers stay out.
+      const variant = await deps.getVariant(orderItem.variantId);
+      const scale = printScale(snapshot.template.canvas, variant);
+      const printBuffer = await renderTemplate({ template: snapshot.template, state: snapshot.state, assets, scale, includeUnprinted: false });
       const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');
       await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath);
       return;
