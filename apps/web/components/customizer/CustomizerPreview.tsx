@@ -54,7 +54,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto }: Custo
     const timer = setTimeout(async () => {
       const design = customizer.exportDesign(1400, true);
       if (!design) return; // a photo is still loading; this runs again once it has
-      const framed = await frameDesign(design, variant.frameColour, printWidthIn);
+      const framed = await frameDesign(design, printWidthIn);
       if (alive) setRoomImage(framed ?? design);
     }, 250);
     return () => {
@@ -62,7 +62,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto }: Custo
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, state, customizer.render.version, variant.frameColour, printWidthIn, photoCount]);
+  }, [view, state, customizer.render.version, printWidthIn, photoCount]);
 
   const activeSlot = template.photoSlots.find((s) => s.id === activeSlotId) ?? null;
   const activePhoto = activeSlotId ? state.slots[activeSlotId] : undefined;
