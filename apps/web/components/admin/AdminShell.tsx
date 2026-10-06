@@ -635,14 +635,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main Workspace Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Desktop: the sidebar stays put under the top bar and scrolls on its own. */}
+      <div className="flex-1 flex overflow-hidden md:overflow-visible">
         {/* Sidebar Navigation */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-paper border-r border-line transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 pt-14 md:pt-0 flex flex-col ${
+          className={`fixed inset-y-0 left-0 z-40 w-64 bg-paper border-r border-line transform transition-transform duration-200 ease-in-out md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:self-start md:translate-x-0 pt-14 md:pt-0 flex flex-col ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-4">
             {NAV_GROUPS.map((group) => {
               const visibleItems = group.items.filter((item) => {
                 if (!item.permission) return true;
