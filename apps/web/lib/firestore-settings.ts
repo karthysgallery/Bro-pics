@@ -100,19 +100,26 @@ export async function getSeoSettings(): Promise<{ defaultTitle: string; defaultD
 // Defaults to null — no admin UI wrote settings/header before ABE-24, so
 // the header keeps its own hardcoded extra menu items (see Header.tsx)
 // until an admin deliberately configures this.
-export async function getHeaderSettings(): Promise<{ navLinks: { label: string; href: string }[] } | null> {
+export interface HeaderSettings {
+  navLinks: { label: string; href: string }[];
+  showCategories: boolean;
+  logoMediaId: string | null;
+}
+
+export async function getHeaderSettings(): Promise<HeaderSettings | null> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('header').get();
   if (!doc.exists) return null;
 
   const data = doc.data();
-  const navLinks = data?.navLinks;
-  if (!Array.isArray(navLinks)) return null;
+  const navLinks = Array.isArray(data?.navLinks) ? data.navLinks : [];
   return {
     navLinks: navLinks.filter(
-      (l): l is { label: string; href: string } =>
-        l && typeof l.label === 'string' && l.label.length > 0 && typeof l.href === 'string' && l.href.length > 0
+      (l: unknown): l is { label: string; href: string } =>
+        !!l && typeof (l as { label?: unknown }).label === 'string' && (l as { label: string }).label.length > 0 && typeof (l as { href?: unknown }).href === 'string' && (l as { href: string }).href.length > 0
     ),
+    showCategories: data?.showCategories !== false,
+    logoMediaId: typeof data?.logoMediaId === 'string' && data.logoMediaId.length > 0 ? data.logoMediaId : null,
   };
 }
 
@@ -122,6 +129,7 @@ export async function getHeaderSettings(): Promise<{ navLinks: { label: string; 
 export async function getFooterSettings(): Promise<{
   columns: { title: string; links: { label: string; href: string }[] }[];
   socialLinks: { platform: string; url: string }[];
+  tagline?: string;
 } | null> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('footer').get();
@@ -130,8 +138,9 @@ export async function getFooterSettings(): Promise<{
   const data = doc.data();
   const columns = Array.isArray(data?.columns) ? data.columns : [];
   const socialLinks = Array.isArray(data?.socialLinks) ? data.socialLinks : [];
-  if (columns.length === 0 && socialLinks.length === 0) return null;
-  return { columns, socialLinks };
+  const tagline = typeof data?.tagline === 'string' && data.tagline.trim() ? data.tagline.trim() : undefined;
+  if (columns.length === 0 && socialLinks.length === 0 && !tagline) return null;
+  return { columns, socialLinks, ...(tagline && { tagline }) };
 }
 
 // [FE-27] Same convention, for the footer's/contact page's "contact us"

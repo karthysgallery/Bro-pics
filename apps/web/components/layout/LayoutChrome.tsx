@@ -17,10 +17,11 @@ import { FestiveEffect } from '../theme/FestiveEffect';
 interface LayoutChromeProps {
   categories: Category[];
   announcementBar?: { text: string; link?: string } | null;
-  headerSettings?: { navLinks: { label: string; href: string }[] } | null;
+  headerSettings?: { navLinks: { label: string; href: string }[]; showCategories?: boolean; logoMediaId?: string | null } | null;
   footerSettings?: {
     columns: { title: string; links: { label: string; href: string }[] }[];
     socialLinks: { platform: string; url: string }[];
+    tagline?: string;
   } | null;
   storeSettings?: { name: string; supportPhone: string } | null;
   /** Decorations of the theme the shop is showing (festivals); none for the Everyday theme. */
@@ -64,7 +65,14 @@ export function LayoutChrome({
           text={themeDecor?.bannerText || announcementBar?.text || defaultAnnouncement}
           link={themeDecor?.bannerText ? themeDecor.bannerLink : announcementBar?.link}
         />
-        <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
+        <Header
+          categories={categories}
+          onCartClick={() => setIsCartOpen(true)}
+          extraNavLinks={headerSettings?.navLinks}
+          showCategories={headerSettings?.showCategories ?? true}
+          logoSrc={headerSettings?.logoMediaId ? `/api/media/${encodeURIComponent(headerSettings.logoMediaId)}/image?w=480` : null}
+          storeName={storeSettings?.name}
+        />
       </div>
       {themeDecor && <FestiveBand motif={themeDecor.motif} />}
       {themeDecor && <FestiveEffect effect={themeDecor.effect} />}

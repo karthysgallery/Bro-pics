@@ -4,11 +4,12 @@ interface FooterProps {
   settings?: {
     columns: { title: string; links: { label: string; href: string }[] }[];
     socialLinks: { platform: string; url: string }[];
+    tagline?: string;
   } | null;
   supportPhone?: string;
 }
 
-const defaultLinks = [
+export const DEFAULT_FOOTER_LINKS = [
   { label: 'About us', href: '/about' },
   { label: 'How it works', href: '/how-it-works' },
   { label: 'FAQ', href: '/faq' },
@@ -31,7 +32,7 @@ export function Footer({ settings = null, supportPhone }: FooterProps = {}) {
       ? settings.columns
           .flatMap((column) => column.links)
           .filter((link, i, all) => all.findIndex((other) => other.href === link.href) === i)
-      : defaultLinks;
+      : DEFAULT_FOOTER_LINKS;
 
   // A placeholder "#" is not a profile; showing it would be a dead link.
   const socialLinks = (settings?.socialLinks ?? []).filter((s) => s.url && s.url !== '#');
@@ -44,7 +45,7 @@ export function Footer({ settings = null, supportPhone }: FooterProps = {}) {
             <Link href="/" className="font-display text-lg font-bold leading-none tracking-snug">
               KarthysGallery
             </Link>
-            <p className="mt-2 text-[13px] text-ink/55">Your photos, beautifully framed. Made in India.</p>
+            <p className="mt-2 text-[13px] text-ink/55">{settings?.tagline ?? 'Your photos, beautifully framed. Made in India.'}</p>
           </div>
 
           {(socialLinks.length > 0 || supportPhone) && (

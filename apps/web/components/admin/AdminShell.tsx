@@ -297,6 +297,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Website',
     items: [
       { label: 'Festival Themes', href: '/admin/themes', permission: 'settings:write', icon: 'theme' },
+      { label: 'Header & Footer', href: '/admin/navigation', permission: 'settings:write', icon: 'pages' },
       { label: 'Homepage', href: '/admin/homepage', permission: 'content:read', icon: 'homepage' },
       { label: 'Pages', href: '/admin/pages', permission: 'content:read', icon: 'pages' },
       { label: 'Videos', href: '/admin/videos', permission: 'content:read', icon: 'videos' },

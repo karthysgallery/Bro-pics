@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { isSafeHref } from '@bro-pics/shared';
 
 interface AnnouncementBarProps {
   text?: string;
@@ -33,7 +34,7 @@ export function AnnouncementBar({
     <div
       role="img"
       aria-label={displayText}
-      className="w-full h-8 sm:h-8.5 flex items-center overflow-hidden bg-[#0A1120]"
+      className="w-full h-8 sm:h-8.5 flex items-center overflow-hidden bg-accent-dark"
     >
       <div className="flex w-max animate-announcement-marquee" aria-hidden="true">
         {/* Track Group 1 */}
@@ -78,7 +79,7 @@ export function AnnouncementBar({
       aria-label="Announcements"
       className="relative w-full bg-accent-dark text-white overflow-hidden select-none border-b border-white/10 z-30"
     >
-      {link ? (
+      {link && isSafeHref(link) ? (
         <Link
           href={link}
           className="block hover:opacity-95 transition-opacity"

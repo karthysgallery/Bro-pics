@@ -14,9 +14,14 @@ interface HeaderProps {
   categories: Category[];
   onCartClick: () => void;
   extraNavLinks?: { label: string; href: string }[];
+  /** List each top-level category in the menu (admin setting, default on). */
+  showCategories?: boolean;
+  /** A logo image chosen in the admin; the text logo shows when there is none. */
+  logoSrc?: string | null;
+  storeName?: string;
 }
 
-export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) {
+export function Header({ categories, onCartClick, extraNavLinks, showCategories = true, logoSrc = null, storeName }: HeaderProps) {
   const { totalCount } = useCart();
   const { user } = useAuth();
   const pathname = usePathname();
@@ -38,7 +43,7 @@ export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) 
 
   const navLinks = [
     { href: '/category', label: 'Shop all' },
-    ...topLevel.map((c) => ({ href: `/category/${c.slug}`, label: c.name })),
+    ...(showCategories ? topLevel.map((c) => ({ href: `/category/${c.slug}`, label: c.name })) : []),
     ...(extraNavLinks && extraNavLinks.length > 0
       ? extraNavLinks
       : [
@@ -81,15 +86,22 @@ export function Header({ categories, onCartClick, extraNavLinks }: HeaderProps) 
         {/* Wordmark & tagline */}
         <Link
           href="/"
-          aria-label="KarthysGallery home"
+          aria-label={`${storeName ?? 'KarthysGallery'} home`}
           className="shrink-0 flex flex-col justify-center leading-none mr-auto md:mr-0 group"
         >
-          <span className="font-display text-[1.2rem] sm:text-xl md:text-[1.35rem] font-bold tracking-snug text-ink leading-tight">
-            Karthys<span className="text-gold group-hover:text-gold-deep transition-colors">Gallery</span>
-          </span>
-          <span className="text-[10px] text-ink/50 font-normal leading-none tracking-wide mt-0.5">
-            frames for a brighter you
-          </span>
+          {logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoSrc} alt={storeName ?? 'KarthysGallery'} className="h-9 w-auto max-w-[180px] object-contain sm:h-10" />
+          ) : (
+            <>
+              <span className="font-display text-[1.2rem] sm:text-xl md:text-[1.35rem] font-bold tracking-snug text-ink leading-tight">
+                Karthys<span className="text-gold group-hover:text-gold-deep transition-colors">Gallery</span>
+              </span>
+              <span className="text-[10px] text-ink/50 font-normal leading-none tracking-wide mt-0.5">
+                frames for a brighter you
+              </span>
+            </>
+          )}
         </Link>
 
         {/* Desktop in-header search bar (Amazon/Flipkart pattern) */}

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
 import './globals.css';
 import type { Category } from '@bro-pics/shared';
 import { AuthProvider } from '../lib/auth-context';
@@ -8,9 +9,9 @@ import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
-import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings } from '../lib/firestore-settings';
+import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings } from '../lib/firestore-settings';
 import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
-import { buildOrganizationJsonLd } from '../lib/structured-data';
+import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
 // One UI typeface for the whole interface. Manrope holds up at the 11–14px
@@ -58,11 +59,22 @@ const textFieldFontVariables = [
   josefinSans.variable,
 ].join(' ');
 
-export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'),
-  title: 'KarthysGallery — Personalized Photo Frames',
-  description: 'Custom photo frames, personalized and delivered.',
-};
+const FALLBACK_TITLE = 'KarthysGallery — Personalized Photo Frames';
+const FALLBACK_DESCRIPTION = 'Custom photo frames, personalized and delivered.';
+
+/** Site-wide title, description and share image come from Admin > Settings > SEO when set. */
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getSeoSettings().catch(() => null);
+  const title = seo?.defaultTitle || FALLBACK_TITLE;
+  const description = seo?.defaultDescription || FALLBACK_DESCRIPTION;
+  const ogImage = resolveOgImage('', seo);
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'),
+    title,
+    description,
+    openGraph: { title, description, ...(ogImage && { images: [ogImage] }) },
+  };
+}
 
 export const viewport = {
   width: 'device-width',
@@ -90,17 +102,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // absent doc or a read error — Header.tsx/Footer.tsx already treat
   // null as "use my own hardcoded defaults", same as announcementBar
   // above.
-  let headerSettings: { navLinks: { label: string; href: string }[] } | null = null;
+  let headerSettings: Awaited<ReturnType<typeof getHeaderSettings>> = null;
   try {
     headerSettings = await getHeaderSettings();
   } catch (error) {
     console.error('Failed to load header settings:', error);
   }
 
-  let footerSettings: {
-    columns: { title: string; links: { label: string; href: string }[] }[];
-    socialLinks: { platform: string; url: string }[];
-  } | null = null;
+  let footerSettings: Awaited<ReturnType<typeof getFooterSettings>> = null;
   try {
     footerSettings = await getFooterSettings();
   } catch (error) {

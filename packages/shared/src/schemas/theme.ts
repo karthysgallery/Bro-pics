@@ -7,6 +7,13 @@ import { z } from 'zod';
  * follows the calendar. Stored as settings/theme.
  */
 
+/** A link that is a page on this site ("/…") or an http(s) address — never javascript: or data:. */
+export function isSafeHref(value: string): boolean {
+  const v = value.trim();
+  return /^\/(?!\/)/.test(v) || /^https?:\/\//i.test(v);
+}
+export const SafeHrefSchema = z.string().trim().min(1).max(300).refine(isSafeHref, 'Use a page on this shop (starting with /) or an https:// address');
+
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a 6-digit hex colour like #FCA311');
 
 /** The colour roles every storefront component is built from (see tailwind.config.ts). */
@@ -41,7 +48,7 @@ export const ThemeDecorSchema = z.object({
   effect: z.enum(THEME_EFFECTS).default('none'),
   /** Festive message shown in the announcement bar while the theme is on. */
   bannerText: z.string().max(140).optional(),
-  bannerLink: z.string().max(300).optional(),
+  bannerLink: SafeHrefSchema.optional(),
 });
 export type ThemeDecor = z.infer<typeof ThemeDecorSchema>;
 

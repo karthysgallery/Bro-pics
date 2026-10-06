@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ThemeSettingsSchema } from '@bro-pics/shared';
+import { SafeHrefSchema, ThemeSettingsSchema } from '@bro-pics/shared';
 
 /**
  * [ABE-24] One schema per `settings/{key}` doc this generic route knows
@@ -109,7 +109,11 @@ export const SettingsSeoSchema = z
 
 export const SettingsHeaderSchema = z
   .object({
-    navLinks: z.array(z.object({ label: z.string().min(1), href: z.string().min(1) })),
+    navLinks: z.array(z.object({ label: z.string().min(1), href: SafeHrefSchema })).max(12),
+    // Show each top-level category in the menu automatically (default on).
+    showCategories: z.boolean().optional(),
+    // A logo image from the media library; the text logo shows when unset.
+    logoMediaId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).nullable().optional(),
   })
   .strict();
 
@@ -118,10 +122,12 @@ export const SettingsFooterSchema = z
     columns: z.array(
       z.object({
         title: z.string().min(1),
-        links: z.array(z.object({ label: z.string().min(1), href: z.string().min(1) })),
+        links: z.array(z.object({ label: z.string().min(1), href: SafeHrefSchema })),
       })
     ),
-    socialLinks: z.array(z.object({ platform: z.string().min(1), url: z.string().min(1) })),
+    socialLinks: z.array(z.object({ platform: z.string().min(1), url: SafeHrefSchema })),
+    // The short line under the shop name.
+    tagline: z.string().max(160).optional(),
   })
   .strict();
 

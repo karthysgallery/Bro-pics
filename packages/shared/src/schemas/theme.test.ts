@@ -57,3 +57,12 @@ describe('festival themes', () => {
     expect(indiaDate(new Date('2026-10-24T19:00:00Z'))).toBe('2026-10-25');
   });
 });
+
+describe('safe links', () => {
+  it('allows site pages and http(s) addresses only', async () => {
+    const { isSafeHref, SafeHrefSchema } = await import('./theme');
+    for (const ok of ['/how-it-works', '/category/diwali?x=1', 'https://instagram.com/k', 'http://example.com']) expect(isSafeHref(ok), ok).toBe(true);
+    for (const bad of ['javascript:alert(1)', ' JavaScript:alert(1)', 'data:text/html,x', '//evil.com', 'evil.com', 'vbscript:x']) expect(isSafeHref(bad), bad).toBe(false);
+    expect(SafeHrefSchema.safeParse('javascript:alert(1)').success).toBe(false);
+  });
+});
