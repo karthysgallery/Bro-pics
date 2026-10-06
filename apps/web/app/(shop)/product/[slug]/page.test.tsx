@@ -43,7 +43,7 @@ describe('generateMetadata', () => {
 
     expect(metadata.title).toBe('Test Frame | KarthysGallery');
     expect(metadata.description).toBe('Shop the test frame.');
-    expect(metadata.openGraph?.images).toEqual(['/placeholders/products/test-1.svg']);
+    expect(metadata.openGraph?.images).toEqual([expect.objectContaining({ url: '/placeholders/products/test-1.svg' })]);
   });
 
   it('returns fallback metadata when the product does not exist', async () => {
@@ -63,7 +63,7 @@ describe('generateMetadata', () => {
     });
 
     const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
-    expect(metadata.openGraph?.images).toEqual(['https://storage.example.com/seo/default-og.jpg']);
+    expect(metadata.openGraph?.images).toEqual([expect.objectContaining({ url: 'https://storage.example.com/seo/default-og.jpg' })]);
   });
 
   it('[FE-42] never overrides a product\'s own real image with the settings fallback', async () => {
@@ -77,6 +77,6 @@ describe('generateMetadata', () => {
     });
 
     const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-frame' }), searchParams: Promise.resolve({}) });
-    expect(metadata.openGraph?.images).toEqual(['/placeholders/products/test-1.svg']);
+    expect(metadata.openGraph?.images).toEqual([expect.objectContaining({ url: '/placeholders/products/test-1.svg' })]);
   });
 });

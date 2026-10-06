@@ -74,7 +74,15 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'),
     title,
     description,
-    openGraph: { title, description, ...(ogImage && { images: [ogImage] }) },
+    openGraph: { type: 'website', siteName: 'KarthysGallery', locale: 'en_IN', title, description, ...(ogImage && { images: [ogImage] }) },
+    twitter: { card: 'summary_large_image', title, description, ...(ogImage && { images: [ogImage] }) },
+    // Proves site ownership to Google Search Console and Bing (Admin > Settings > SEO).
+    ...((seo?.googleVerification || seo?.bingVerification) && {
+      verification: {
+        ...(seo?.googleVerification && { google: seo.googleVerification }),
+        ...(seo?.bingVerification && { other: { 'msvalidate.01': seo.bingVerification } }),
+      },
+    }),
   };
 }
 

@@ -1053,7 +1053,7 @@ export function ProductDetailClient({
           template={template}
           variant={selectedVariant}
           media={galleryMedia}
-          productTitle={product.title}
+          productTitle={product.seo?.imageAlt || product.title}
           previewDataUrl={previewDataUrl}
           activeSlotIndex={activeSlotIndex}
           slots={slots}
@@ -1085,7 +1085,7 @@ export function ProductDetailClient({
         />
       ) : (
         <div className="rounded-2xl bg-paper border border-line p-4 md:p-5">
-          <Gallery media={galleryMedia} productTitle={product.title} />
+          <Gallery media={galleryMedia} productTitle={product.seo?.imageAlt || product.title} />
         </div>
       )}
       </div>

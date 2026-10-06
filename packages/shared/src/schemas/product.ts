@@ -29,6 +29,14 @@ export const ProductSchema = z.object({
   seo: z.object({
     title: z.string().optional(),
     description: z.string().optional(),
+    // The search phrase this product page is written to rank for (e.g. "vijay photo frame").
+    focusKeyword: z.string().optional(),
+    // Other phrases people search for this product (also used by the shop's own search).
+    keywords: z.array(z.string()).optional(),
+    // Describes the main product photo for Google Images and screen readers.
+    imageAlt: z.string().optional(),
+    // Keep this page out of search engines (e.g. a temporary or duplicate product).
+    noindex: z.boolean().optional(),
   }),
   createdAt: z.date(),
   updatedAt: z.date(),

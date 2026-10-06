@@ -1,4 +1,4 @@
-import type { Review } from '@bro-pics/shared';
+import type { Product, ProductMedia, Review, Variant } from '@bro-pics/shared';
 import { SUPPORT_EMAIL } from './support-contact';
 import { buildPublicMediaUrl } from './media-public-url';
 
@@ -72,4 +72,75 @@ export function buildProductReviewsJsonLd(reviews: Review[]) {
       reviewBody: review.body,
       name: review.title,
     }));
+}
+
+/** Absolute URL for an image path (Google needs full addresses). */
+function absoluteUrl(url: string): string {
+  return /^https?:\/\//.test(url) ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+/**
+ * The Product structured data Google reads for rich results (price, stock,
+ * stars, images). Price ranges become an AggregateOffer across all sizes.
+ */
+export function buildProductJsonLd(input: {
+  product: Pick<Product, 'title' | 'slug' | 'shortDesc' | 'primaryImageUrl' | 'ratingAverage' | 'ratingCount' | 'seo'>;
+  variants: Pick<Variant, 'sku' | 'price' | 'stockStatus'>[];
+  media: Pick<ProductMedia, 'type' | 'url'>[];
+  reviews: Review[];
+  categoryName?: string;
+  now?: Date;
+}) {
+  const { product, variants, media, reviews } = input;
+  const seo = product.seo ?? {};
+  const url = `${SITE_URL}/product/${product.slug}`;
+  const images = [...new Set([product.primaryImageUrl, ...media.filter((m) => m.type === 'image').map((m) => m.url)].filter(Boolean))]
+    .slice(0, 8)
+    .map(absoluteUrl);
+  const inStock = variants.some((v) => v.stockStatus === 'in_stock');
+  const availability = inStock ? 'https://schema.org/InStock' : variants.some((v) => v.stockStatus === 'backorder') ? 'https://schema.org/BackOrder' : 'https://schema.org/OutOfStock';
+  const prices = variants.map((v) => v.price / 100);
+  const validUntil = new Date((input.now ?? new Date()).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const keywords = [seo.focusKeyword, ...(seo.keywords ?? [])].filter((k): k is string => Boolean(k && k.trim()));
+  const productReviews = buildProductReviewsJsonLd(reviews);
+  const seller = { '@type': 'Organization', name: 'KarthysGallery' };
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: seo.description || product.shortDesc,
+    url,
+    ...(images.length > 0 && { image: images }),
+    ...(variants[0]?.sku && { sku: variants[0].sku }),
+    brand: { '@type': 'Brand', name: 'KarthysGallery' },
+    ...(input.categoryName && { category: input.categoryName }),
+    ...(keywords.length > 0 && { keywords: keywords.join(', ') }),
+    ...(product.ratingCount > 0 && { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.ratingAverage, reviewCount: product.ratingCount } }),
+    ...(productReviews.length > 0 && { review: productReviews }),
+    ...(prices.length > 0 && {
+      offers:
+        prices.length > 1 && Math.min(...prices) !== Math.max(...prices)
+          ? {
+              '@type': 'AggregateOffer',
+              priceCurrency: 'INR',
+              lowPrice: Math.min(...prices).toFixed(2),
+              highPrice: Math.max(...prices).toFixed(2),
+              offerCount: prices.length,
+              availability,
+              url,
+              seller,
+            }
+          : {
+              '@type': 'Offer',
+              price: prices[0].toFixed(2),
+              priceCurrency: 'INR',
+              priceValidUntil: validUntil,
+              itemCondition: 'https://schema.org/NewCondition',
+              availability,
+              url,
+              seller,
+            },
+    }),
+  };
 }

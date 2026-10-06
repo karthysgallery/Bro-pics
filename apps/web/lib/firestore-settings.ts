@@ -82,7 +82,7 @@ export async function getGstSettings(): Promise<{ gstEnabled: boolean; taxRate: 
 // as every other `*Path` field in this codebase), resolved by the
 // caller via `buildPublicMediaUrl` — this function stays a plain data
 // reader, not an image-URL builder.
-export async function getSeoSettings(): Promise<{ defaultTitle: string; defaultDescription: string; ogImagePath?: string } | null> {
+export async function getSeoSettings(): Promise<{ defaultTitle: string; defaultDescription: string; ogImagePath?: string; googleVerification?: string; bingVerification?: string } | null> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('seo').get();
   if (!doc.exists) return null;
@@ -93,6 +93,8 @@ export async function getSeoSettings(): Promise<{ defaultTitle: string; defaultD
     defaultTitle: data.defaultTitle,
     defaultDescription: data.defaultDescription,
     ...(typeof data.ogImagePath === 'string' && data.ogImagePath.length > 0 && { ogImagePath: data.ogImagePath }),
+    ...(typeof data.googleVerification === 'string' && data.googleVerification && { googleVerification: data.googleVerification }),
+    ...(typeof data.bingVerification === 'string' && data.bingVerification && { bingVerification: data.bingVerification }),
   };
 }
 

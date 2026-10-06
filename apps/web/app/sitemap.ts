@@ -1,11 +1,11 @@
 import type { MetadataRoute } from 'next';
-import { getAllActiveProductSlugs } from '../lib/firestore-product-detail';
+import { getSitemapProducts } from '../lib/firestore-product-detail';
 import { getActiveCategories } from '../lib/firestore-categories';
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [productSlugs, categories] = await Promise.all([getAllActiveProductSlugs(), getActiveCategories()]);
+  const [products, categories] = await Promise.all([getSitemapProducts(), getActiveCategories()]);
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${baseUrl}/`, changeFrequency: 'daily', priority: 1 },
@@ -26,10 +26,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/terms`, changeFrequency: 'yearly', priority: 0.2 },
   ];
 
-  const productRoutes: MetadataRoute.Sitemap = productSlugs.map((slug) => ({
-    url: `${baseUrl}/product/${slug}`,
+  // Product pages carry their last change and main photo, so search engines
+  // re-read edited products sooner and can list the photo in image search.
+  const productRoutes: MetadataRoute.Sitemap = products.map((p) => ({
+    url: `${baseUrl}/product/${p.slug}`,
     changeFrequency: 'weekly',
     priority: 0.8,
+    ...(p.updatedAt && { lastModified: p.updatedAt }),
+    ...(p.image && { images: [/^https?:\/\//.test(p.image) ? p.image : `${baseUrl}${p.image}`] }),
   }));
 
   const categoryRoutes: MetadataRoute.Sitemap = categories.map((category) => ({

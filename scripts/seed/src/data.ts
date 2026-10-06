@@ -9,7 +9,7 @@ export const seedCategories: Category[] = [
     image: '/placeholders/categories/frames.svg',
     sortOrder: 1,
     isActive: true,
-    seo: { title: 'Frames & Wall Décor | BroPics', description: 'Personalized photo frames for every wall.' },
+    seo: { title: 'Frames & Wall Décor | KarthysGallery', description: 'Personalized photo frames for every wall.' },
   },
   {
     id: 'cat_canvas',
@@ -19,7 +19,7 @@ export const seedCategories: Category[] = [
     image: '/placeholders/categories/canvas.svg',
     sortOrder: 2,
     isActive: true,
-    seo: { title: 'Canvas Prints | BroPics', description: 'Gallery-wrapped canvas prints of your favourite photo.' },
+    seo: { title: 'Canvas Prints | KarthysGallery', description: 'Gallery-wrapped canvas prints of your favourite photo.' },
   },
   {
     id: 'cat_collage',
@@ -29,7 +29,7 @@ export const seedCategories: Category[] = [
     image: '/placeholders/categories/collage.svg',
     sortOrder: 3,
     isActive: true,
-    seo: { title: 'Collage & Combo Sets | BroPics', description: 'Multi-photo collage sets for a whole story.' },
+    seo: { title: 'Collage & Combo Sets | KarthysGallery', description: 'Multi-photo collage sets for a whole story.' },
   },
   {
     id: 'cat_gifts',
@@ -39,7 +39,7 @@ export const seedCategories: Category[] = [
     image: '/placeholders/categories/gifts.svg',
     sortOrder: 4,
     isActive: true,
-    seo: { title: 'Personalized Gifts | BroPics', description: 'Photo mugs, desk frames, and everyday keepsakes.' },
+    seo: { title: 'Personalized Gifts | KarthysGallery', description: 'Photo mugs, desk frames, and everyday keepsakes.' },
   },
 ];
 
@@ -297,7 +297,7 @@ export const seedProducts: Product[] = productInputs.map((input) => {
     dispatchDaysMax: 5,
     photoSlots: input.photoSlots,
     allowsTextPersonalization: TEXT_PERSONALIZATION_PRODUCT_IDS.has(input.id),
-    seo: { title: `${input.title} | BroPics`, description: input.shortDesc },
+    seo: { title: `${input.title} | KarthysGallery`, description: input.shortDesc },
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     availableSizes: [...new Set(input.variants.map((v) => v.sizeLabel))],
@@ -700,7 +700,7 @@ export const seedHomepageSections: HomepageSection[] = [
     id: 'sec_why_us',
     type: 'why_us',
     title: 'Made with care. Kept for years.',
-    subtitle: 'We believe the best things in a home are personal. Every BroPics frame is finished by hand in India, with archival prints and materials chosen to make your memories last.',
+    subtitle: 'We believe the best things in a home are personal. Every KarthysGallery frame is finished by hand in India, with archival prints and materials chosen to make your memories last.',
     image: '/banners/artisan-framing-craft.jpg',
     mobileImage: '/banners/artisan-framing-craft.jpg',
     link: '',

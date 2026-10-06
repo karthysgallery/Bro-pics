@@ -11,12 +11,12 @@ export interface ProductSearchFields {
   searchTokens: string[];
 }
 
-export function buildProductSearchFields(title: string, shortDesc: string): ProductSearchFields {
+export function buildProductSearchFields(title: string, shortDesc: string, keywords: readonly string[] = []): ProductSearchFields {
   return {
     titleLower: title.toLowerCase(),
     searchTokens: [
       ...new Set(
-        `${title} ${shortDesc}`
+        `${title} ${shortDesc} ${keywords.join(' ')}`
           .toLowerCase()
           .split(/\s+/)
           .filter((token) => token.length > 2)

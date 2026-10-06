@@ -16,7 +16,7 @@ import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
-import { buildBreadcrumbList, buildProductReviewsJsonLd, resolveOgImage } from '../../../../lib/structured-data';
+import { buildBreadcrumbList, buildProductJsonLd, resolveOgImage } from '../../../../lib/structured-data';
 import { getSeoSettings, getSiteText } from '../../../../lib/firestore-settings';
 import { DEFAULT_SITE_TEXT } from '@bro-pics/shared';
 
@@ -50,14 +50,30 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   // product photo.
   const seoSettings = await getSeoSettings().catch(() => null);
   const ogImage = resolveOgImage(product.primaryImageUrl, seoSettings);
+  const seo = product.seo ?? {};
+  const title = seo.title || `${product.title} | KarthysGallery`;
+  const description = seo.description || product.shortDesc;
+  const keywords = [seo.focusKeyword, ...(seo.keywords ?? [])].filter((k): k is string => Boolean(k && k.trim()));
+  const images = ogImage ? [{ url: ogImage, alt: seo.imageAlt || product.title }] : undefined;
   return {
-    title: product.seo.title ?? `${product.title} | KarthysGallery`,
-    description: product.seo.description ?? product.shortDesc,
+    title,
+    description,
+    ...(keywords.length > 0 && { keywords }),
     alternates: { canonical: `/product/${product.slug}` },
+    ...(seo.noindex && { robots: { index: false, follow: true } }),
     openGraph: {
-      title: product.seo.title ?? product.title,
-      description: product.seo.description ?? product.shortDesc,
-      ...(ogImage && { images: [ogImage] }),
+      type: 'website',
+      siteName: 'KarthysGallery',
+      url: `/product/${product.slug}`,
+      title: seo.title || product.title,
+      description,
+      ...(images && { images }),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: seo.title || product.title,
+      description,
+      ...(images && { images: images.map((i) => i.url) }),
     },
   };
 }
@@ -79,34 +95,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   const siteText = await getSiteText().catch(() => DEFAULT_SITE_TEXT);
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
-  // [FE-41] `review` was the one field this Product JSON-LD didn't
-  // already carry despite `reviews` being right here — an omission, not
-  // a deliberate choice (aggregateRating already summarized the same
-  // data these individual entries source from).
-  const productReviews = buildProductReviewsJsonLd(reviews);
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.title,
-    description: product.shortDesc,
-    image: product.primaryImageUrl,
-    aggregateRating:
-      product.ratingCount > 0
-        ? { '@type': 'AggregateRating', ratingValue: product.ratingAverage, reviewCount: product.ratingCount }
-        : undefined,
-    review: productReviews.length > 0 ? productReviews : undefined,
-    offers: defaultVariant
-      ? {
-          '@type': 'Offer',
-          price: (defaultVariant.price / 100).toFixed(2),
-          priceCurrency: 'INR',
-          availability:
-            defaultVariant.stockStatus === 'in_stock'
-              ? 'https://schema.org/InStock'
-              : 'https://schema.org/OutOfStock',
-        }
-      : undefined,
-  };
+  const jsonLd = buildProductJsonLd({ product, variants, media, reviews, categoryName: category?.name });
 
   // [FE-41] Mirrors the visible breadcrumb `<nav>` below exactly — same
   // trail, same labels, same hrefs — so the two can never show a

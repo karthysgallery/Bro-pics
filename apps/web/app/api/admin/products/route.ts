@@ -124,7 +124,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     inStock: false,
     ratingAverage: 0,
     ratingCount: 0,
-    ...buildProductSearchFields(body.title, body.shortDesc),
+    ...buildProductSearchFields(body.title, body.shortDesc, body.seo?.keywords ?? []),
     primaryImageUrl: '',
     hoverImageUrl: null,
   });

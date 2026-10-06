@@ -7,6 +7,7 @@ import { useAuth } from '../../../../lib/auth-context';
 import { FormField, SaveBar } from '../../../../components/admin/AdminForm';
 import { StatusChip } from '../../../../components/admin/StatusChip';
 import { ConfirmModal } from '../../../../components/admin/AdminModal';
+import { ProductSeoPanel, type ProductSeoValue } from '../../../../components/admin/ProductSeoPanel';
 import { useToast } from '../../../../components/ui/Toast';
 import type { Product, Category } from '@bro-pics/shared';
 
@@ -45,8 +46,10 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
   const [allowsTextPersonalization, setAllowsTextPersonalization] = useState(false);
   const [dispatchDaysMin, setDispatchDaysMin] = useState(2);
   const [dispatchDaysMax, setDispatchDaysMax] = useState(4);
-  const [seoTitle, setSeoTitle] = useState('');
-  const [seoDesc, setSeoDesc] = useState('');
+  const [seo, setSeo] = useState<ProductSeoValue>({ seoTitle: '', seoDesc: '', focusKeyword: '', keywords: [], imageAlt: '', noindex: false });
+  // Read-only inputs to the SEO check (edited elsewhere).
+  const [descriptionHtml, setDescriptionHtml] = useState('');
+  const [hasImage, setHasImage] = useState(false);
 
   // Auto-generate slug from title for new products
   const handleTitleChange = (newTitle: string) => {
@@ -107,8 +110,16 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
             setAllowsTextPersonalization(Boolean(p.allowsTextPersonalization));
             setDispatchDaysMin(p.dispatchDaysMin || 2);
             setDispatchDaysMax(p.dispatchDaysMax || 4);
-            setSeoTitle(p.seo?.title || '');
-            setSeoDesc(p.seo?.description || '');
+            setSeo({
+              seoTitle: p.seo?.title || '',
+              seoDesc: p.seo?.description || '',
+              focusKeyword: p.seo?.focusKeyword || '',
+              keywords: p.seo?.keywords ?? [],
+              imageAlt: p.seo?.imageAlt || '',
+              noindex: Boolean(p.seo?.noindex),
+            });
+            setDescriptionHtml(p.descriptionHtml || '');
+            setHasImage(Boolean(p.primaryImageUrl));
           }
         })
         .catch((err) => showToast(err.message, 'error'))
@@ -147,8 +158,12 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
         dispatchDaysMin: Number(dispatchDaysMin),
         dispatchDaysMax: Number(dispatchDaysMax),
         seo: {
-          title: seoTitle.trim() || undefined,
-          description: seoDesc.trim() || undefined,
+          title: seo.seoTitle.trim() || undefined,
+          description: seo.seoDesc.trim() || undefined,
+          focusKeyword: seo.focusKeyword.trim() || undefined,
+          keywords: seo.keywords.length > 0 ? seo.keywords : undefined,
+          imageAlt: seo.imageAlt.trim() || undefined,
+          noindex: seo.noindex || undefined,
         },
       };
 
@@ -467,27 +482,12 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
         )}
 
         {activeTab === 'seo' && (
-          <div className="space-y-4">
-            <FormField label="SEO Meta Title" hint="Leave blank to use Product Title | KarthysGallery">
-              <input
-                type="text"
-                value={seoTitle}
-                onChange={(e) => { setSeoTitle(e.target.value); setIsDirty(true); }}
-                placeholder="Personalized Photo Frames Online | KarthysGallery"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
-              />
-            </FormField>
-
-            <FormField label="SEO Meta Description">
-              <textarea
-                rows={3}
-                value={seoDesc}
-                onChange={(e) => { setSeoDesc(e.target.value); setIsDirty(true); }}
-                placeholder="Buy custom photo frames online with instant live preview and 300 DPI high-resolution prints."
-                className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
-              />
-            </FormField>
-          </div>
+          <ProductSeoPanel
+            value={seo}
+            onChange={(next) => { setSeo((prev) => ({ ...prev, ...next })); setIsDirty(true); }}
+            product={{ title, slug, shortDesc, descriptionHtml, hasImage }}
+            onSlugChange={(next) => { setSlug(next); setIsDirty(true); }}
+          />
         )}
 
         {activeTab === 'publishing' && (

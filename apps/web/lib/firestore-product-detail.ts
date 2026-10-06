@@ -87,6 +87,26 @@ export async function getAllActiveProductSlugs(): Promise<string[]> {
   return snapshot.docs.map((doc) => (doc.data() as Product).slug);
 }
 
+export interface SitemapProduct {
+  slug: string;
+  updatedAt?: Date;
+  image?: string;
+}
+
+/** Live products for the sitemap: address, last change and main photo; products hidden from search are left out. */
+export async function getSitemapProducts(): Promise<SitemapProduct[]> {
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('products').where('isActive', '==', true).get();
+  return snapshot.docs
+    .map((doc) => doc.data() as Product & { updatedAt?: { toDate?: () => Date } | Date })
+    .filter((p) => !p.seo?.noindex)
+    .map((p) => {
+      const raw = p.updatedAt as { toDate?: () => Date } | Date | undefined;
+      const updatedAt = raw instanceof Date ? raw : typeof raw?.toDate === 'function' ? raw.toDate() : undefined;
+      return { slug: p.slug, ...(updatedAt && { updatedAt }), ...(p.primaryImageUrl && { image: p.primaryImageUrl }) };
+    });
+}
+
 export async function getCategoryById(categoryId: string): Promise<Category | null> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('categories').doc(categoryId).get();

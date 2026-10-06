@@ -49,6 +49,8 @@ interface SeoSettings {
   defaultTitle: string;
   defaultDescription: string;
   ogImagePath?: string | null;
+  googleVerification?: string;
+  bingVerification?: string;
 }
 
 interface AnnouncementBarSettings {
@@ -800,6 +802,31 @@ export default function AdminSettingsPage() {
                     setIsDirty(true);
                   }}
                   placeholder="/images/og-default.jpg"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-mono focus:border-gold focus:outline-none"
+                />
+              </FormField>
+
+              <FormField label="Google Search Console verification code" hint='In Search Console choose "HTML tag" and paste only the code inside content="…"'>
+                <input
+                  type="text"
+                  value={seo.googleVerification || ''}
+                  onChange={(e) => {
+                    setSeo((p) => ({ ...p, googleVerification: e.target.value.trim() }));
+                    setIsDirty(true);
+                  }}
+                  placeholder="e.g. 4d2Xyz-Ab12cD..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-mono focus:border-gold focus:outline-none"
+                />
+              </FormField>
+
+              <FormField label="Bing Webmaster verification code (optional)">
+                <input
+                  type="text"
+                  value={seo.bingVerification || ''}
+                  onChange={(e) => {
+                    setSeo((p) => ({ ...p, bingVerification: e.target.value.trim() }));
+                    setIsDirty(true);
+                  }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-mono focus:border-gold focus:outline-none"
                 />
               </FormField>

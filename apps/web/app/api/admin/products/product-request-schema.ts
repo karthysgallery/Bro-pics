@@ -31,7 +31,17 @@ export const CreateProductBodySchema = z
     photoSlots: z.number().int().positive().default(1),
     allowsTextPersonalization: z.boolean().default(false),
     hsnCode: z.string().optional(),
-    seo: z.object({ title: z.string().optional(), description: z.string().optional() }).default({}),
+    seo: z
+      .object({
+        title: z.string().trim().max(120).optional(),
+        description: z.string().trim().max(320).optional(),
+        focusKeyword: z.string().trim().max(80).optional(),
+        keywords: z.array(z.string().trim().min(1).max(80)).max(15).optional(),
+        imageAlt: z.string().trim().max(160).optional(),
+        noindex: z.boolean().optional(),
+      })
+      .strict()
+      .default({}),
     faq: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })).default([]),
     status: z.enum(['draft', 'published', 'archived']).default('draft'),
     relatedProductIds: z.array(z.string()).max(8).default([]),

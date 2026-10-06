@@ -70,10 +70,10 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   // Recompute the search fields whenever the inputs they're derived from
   // change — otherwise a retitled product keeps stale titleLower/
   // searchTokens and silently falls out of (or wrongly stays in) search.
-  if (body.title || body.shortDesc) {
+  if (body.title || body.shortDesc || body.seo?.keywords) {
     Object.assign(
       update,
-      buildProductSearchFields(body.title ?? current.title, body.shortDesc ?? current.shortDesc)
+      buildProductSearchFields(body.title ?? current.title, body.shortDesc ?? current.shortDesc, body.seo?.keywords ?? current.seo?.keywords ?? [])
     );
   }
 

@@ -72,3 +72,46 @@ describe('[FE-42] resolveOgImage', () => {
     expect(resolveOgImage('', {})).toBeUndefined();
   });
 });
+
+import { buildProductJsonLd } from './structured-data';
+
+describe('buildProductJsonLd', () => {
+  const product = {
+    title: 'Thalapathy Vijay Photo Frame',
+    slug: 'vijay-photo-frame',
+    shortDesc: 'A frame for every fan.',
+    primaryImageUrl: '/p/vijay.jpg',
+    ratingAverage: 4.8,
+    ratingCount: 12,
+    seo: { description: 'Buy a Vijay photo frame online.', focusKeyword: 'vijay photo frame', keywords: ['thalapathy frame'] },
+  };
+
+  it('gives Google brand, images, keywords, stars and a price range across sizes', () => {
+    const ld = buildProductJsonLd({
+      product,
+      variants: [
+        { sku: 'VJ-8', price: 79900, stockStatus: 'in_stock' },
+        { sku: 'VJ-12', price: 129900, stockStatus: 'out_of_stock' },
+      ],
+      media: [{ type: 'image', url: 'https://cdn.example.com/2.jpg' }, { type: 'video', url: '/v.mp4' }],
+      reviews: [],
+      categoryName: 'Frames',
+    });
+    expect(ld).toMatchObject({
+      '@type': 'Product',
+      description: 'Buy a Vijay photo frame online.',
+      sku: 'VJ-8',
+      brand: { name: 'KarthysGallery' },
+      category: 'Frames',
+      keywords: 'vijay photo frame, thalapathy frame',
+      aggregateRating: { ratingValue: 4.8, reviewCount: 12 },
+      offers: { '@type': 'AggregateOffer', lowPrice: '799.00', highPrice: '1299.00', offerCount: 2, availability: 'https://schema.org/InStock' },
+    });
+    expect((ld as { image: string[] }).image).toEqual([expect.stringMatching(/^https?:\/\/.+\/p\/vijay\.jpg$/), 'https://cdn.example.com/2.jpg']);
+  });
+
+  it('uses a single Offer with a validity date when there is one price', () => {
+    const ld = buildProductJsonLd({ product, variants: [{ sku: 'VJ-8', price: 79900, stockStatus: 'in_stock' }], media: [], reviews: [], now: new Date('2026-10-06T00:00:00Z') });
+    expect(ld.offers).toMatchObject({ '@type': 'Offer', price: '799.00', priceValidUntil: '2027-10-06', itemCondition: 'https://schema.org/NewCondition' });
+  });
+});

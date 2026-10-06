@@ -104,6 +104,9 @@ export const SettingsSeoSchema = z
     defaultTitle: z.string().min(1),
     defaultDescription: z.string().min(1),
     ogImagePath: z.string().nullable().optional(),
+    // Search Console / Bing Webmaster site-ownership codes (the content="…" value only).
+    googleVerification: z.string().trim().regex(/^[A-Za-z0-9_-]{0,100}$/, 'Paste only the code from the content="…" part').optional(),
+    bingVerification: z.string().trim().regex(/^[A-Za-z0-9_-]{0,100}$/, 'Paste only the code from the content="…" part').optional(),
   })
   .strict();
 
