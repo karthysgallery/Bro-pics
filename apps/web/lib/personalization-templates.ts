@@ -124,8 +124,9 @@ export async function saveDraft(db: Firestore, id: string, version: number, temp
       throw new TemplateStateError(`${id}@v${version} is ${status} and can no longer be edited; create a new version instead.`);
     }
     const next: PersonalizationTemplate = { ...parsedTemplate, status, publishedAt: undefined };
-    tx.set(ref, plain(next));
+    // Firestore transactions must finish every read before the first write.
     const all = await tx.get(db.collection(ROOT).doc(id).collection('versions'));
+    tx.set(ref, plain(next));
     const versions = all.docs.map((d) => (Number(d.id) === version ? next : PersonalizationTemplateSchema.parse(d.data())));
     await writeSummary(db, tx, id, versions, now);
     return next;
@@ -155,8 +156,8 @@ export async function transitionStatus(
     }
     if (to === 'published') assertPublishable(current, options.validate); // throws a readable list
     const next: PersonalizationTemplate = { ...current, status: to, ...(to === 'published' && { publishedAt: now.toISOString() }) };
-    tx.set(ref, plain(next));
     const all = await tx.get(db.collection(ROOT).doc(id).collection('versions'));
+    tx.set(ref, plain(next));
     const versions = all.docs.map((d) => (Number(d.id) === version ? next : PersonalizationTemplateSchema.parse(d.data())));
     await writeSummary(db, tx, id, versions, now);
     return next;

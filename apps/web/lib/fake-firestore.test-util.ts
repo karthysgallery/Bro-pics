@@ -35,7 +35,11 @@ export function createFakeFirestore() {
     async runTransaction(fn: (tx: any) => Promise<unknown>) {
       const writes: Array<() => void> = [];
       const tx = {
-        get: (ref: any) => ref.get(),
+        // Like real Firestore: every read must come before the first write.
+        get: (ref: any) => {
+          if (writes.length > 0) throw new Error('Firestore transactions require all reads to be executed before all writes.');
+          return ref.get();
+        },
         set: (ref: any, data: Data) => { writes.push(() => store.set(ref.path, clone(data))); },
         update: (ref: any, data: Data) => { writes.push(() => store.set(ref.path, { ...(store.get(ref.path) ?? {}), ...clone(data) })); },
       };
