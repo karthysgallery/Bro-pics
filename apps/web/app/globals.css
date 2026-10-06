@@ -438,3 +438,46 @@ details > summary::-webkit-details-marker {
 @media (prefers-reduced-motion: reduce) {
   .festive-effect { display: none; }
 }
+
+/* Festival decorations (components/theme/*). */
+@keyframes festive-bulb {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px currentColor); }
+  50% { opacity: 0.45; filter: none; }
+}
+@keyframes festive-flame {
+  0%, 100% { transform: scale(1, 1) rotate(-2deg); }
+  50% { transform: scale(0.9, 1.08) rotate(2deg); }
+}
+@keyframes festive-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes festive-swing {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes festive-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes festive-burst {
+  0% { transform: scale(0.1); opacity: 0; }
+  12% { opacity: 1; }
+  45% { transform: scale(1); opacity: 0.9; }
+  70%, 100% { transform: scale(1.12); opacity: 0; }
+}
+@keyframes festive-rise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  10% { opacity: 1; }
+  50% { transform: translate3d(var(--drift, 0), -55vh, 0); }
+  100% { transform: translate3d(0, -115vh, 0); opacity: 0; }
+}
+.festive-bulb { animation: festive-bulb 2.4s ease-in-out infinite; }
+.festive-flame { animation: festive-flame 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.festive-glow { animation: festive-glow 2.8s ease-in-out infinite; }
+.festive-swing { animation: festive-swing 5s ease-in-out infinite; transform-origin: 50% 0; }
+.festive-spin-slow { animation: festive-spin 60s linear infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+.festive-burst { animation: festive-burst 3s ease-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+.festive-rise { animation-name: festive-rise; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .festive-bulb, .festive-flame, .festive-glow, .festive-swing, .festive-spin-slow, .festive-burst { animation: none; }
+}

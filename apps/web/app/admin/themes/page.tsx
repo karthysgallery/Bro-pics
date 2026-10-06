@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   THEME_EFFECTS,
+  THEME_GARLANDS,
+  THEME_GREETING_ART,
+  THEME_HANGINGS,
   THEME_MOTIFS,
   THEME_PRESETS,
   ThemeSettingsSchema,
@@ -11,12 +14,14 @@ import {
   resolveActiveTheme,
   themeCssVariables,
   themeReadabilityIssues,
+  upgradeThemeSettings,
   type StoreTheme,
   type ThemeColors,
   type ThemeSettings,
 } from '@bro-pics/shared';
 import { useAdminApi } from '../../../components/admin/template-builder/use-admin-api';
 import { FestiveBand } from '../../../components/theme/FestiveBand';
+import { FestiveGarland } from '../../../components/theme/FestiveGarland';
 
 const COLOR_FIELDS: Array<{ key: keyof ThemeColors; label: string }> = [
   { key: 'field', label: 'Page background' },
@@ -44,6 +49,30 @@ const EFFECT_LABEL: Record<(typeof THEME_EFFECTS)[number], string> = {
   snow: 'Gentle snow',
   petals: 'Falling petals',
   confetti: 'Confetti',
+  lanterns: 'Floating sky lanterns',
+  fireworks: 'Fireworks',
+};
+const GARLAND_LABEL: Record<(typeof THEME_GARLANDS)[number], string> = {
+  none: 'No garland',
+  marigold: 'Marigold garland',
+  thoranam: 'Mango-leaf thoranam',
+  'string-lights': 'Twinkling string lights',
+  bunting: 'Party bunting',
+  'diya-row': 'Row of lit diyas',
+};
+const HANGING_LABEL: Record<(typeof THEME_HANGINGS)[number], string> = {
+  none: 'Nothing hanging',
+  lanterns: 'Akash kandil lanterns',
+  baubles: 'Christmas baubles',
+  stars: 'Golden stars',
+  bells: 'Bells',
+};
+const ART_LABEL: Record<(typeof THEME_GREETING_ART)[number], string> = {
+  none: 'No picture',
+  rangoli: 'Rangoli with diya',
+  'pongal-pot': 'Pongal pot',
+  tree: 'Christmas tree',
+  fireworks: 'Fireworks',
 };
 
 const formatDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
@@ -62,13 +91,21 @@ function ThemePreview({ theme }: { theme: StoreTheme }) {
         </span>
         <span className="h-3 w-14 rounded-full bg-tint" />
       </div>
-      <div className="scale-y-75">
-        <FestiveBand motif={theme.decor.motif} />
-      </div>
+      {theme.decor.garland !== 'none' ? (
+        <div className="h-6 overflow-hidden">
+          <div className="origin-top scale-[0.6]" style={{ width: '166%', marginLeft: '-33%' }}>
+            <FestiveGarland garland={theme.decor.garland} overlay={false} />
+          </div>
+        </div>
+      ) : (
+        <div className="scale-y-75">
+          <FestiveBand motif={theme.decor.motif} />
+        </div>
+      )}
       <div className="grid grid-cols-[1.2fr_1fr] gap-2 p-3">
         <div className="space-y-1.5">
-          <div className="text-[13px] font-bold leading-tight">Every memory deserves a frame</div>
-          <div className="text-[9px] text-ink/60">Personalised frames, made in India</div>
+          <div className="text-[13px] font-bold leading-tight">{theme.decor.greeting?.title ?? 'Every memory deserves a frame'}</div>
+          <div className="line-clamp-2 text-[9px] text-ink/60">{theme.decor.greeting?.subtitle ?? 'Personalised frames, made in India'}</div>
           <div className="flex gap-1.5 pt-1">
             <span className="rounded-full bg-gold px-2.5 py-1 text-[9px] font-semibold text-ink">Find your frame</span>
             <span className="rounded-full border border-line bg-paper px-2 py-1 text-[9px] text-accent">How it works</span>
@@ -95,7 +132,7 @@ export default function FestivalThemesPage() {
   const load = useCallback(async () => {
     try {
       const res = await api<{ value: unknown }>('/api/admin/settings/theme');
-      const parsed = ThemeSettingsSchema.safeParse(res.value);
+      const parsed = ThemeSettingsSchema.safeParse(upgradeThemeSettings(res.value));
       const value = parsed.success ? parsed.data : defaultThemeSettings();
       setSaved(value);
       setDraft(value);
@@ -211,7 +248,8 @@ export default function FestivalThemesPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-ink">{t.name}</h2>
                   <p className="text-2xs text-ink/55">
-                    {MOTIF_LABEL[t.decor.motif]} · {EFFECT_LABEL[t.decor.effect]}
+                    {t.decor.garland !== 'none' ? GARLAND_LABEL[t.decor.garland] : MOTIF_LABEL[t.decor.motif]} · {EFFECT_LABEL[t.decor.effect]}
+                    {t.decor.hanging !== 'none' && ` · ${HANGING_LABEL[t.decor.hanging]}`}
                   </p>
                 </div>
                 {showing && <span className="rounded-full bg-ink px-2 py-0.5 text-2xs font-semibold text-paper">Showing</span>}
@@ -342,27 +380,92 @@ export default function FestivalThemesPage() {
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <label className="block space-y-1">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Ornament under the header</span>
-                <select value={editing.decor.motif} onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, motif: e.target.value as StoreTheme['decor']['motif'] } })} className="h-9 w-full rounded-lg border border-line bg-white px-2 text-sm text-ink">
-                  {THEME_MOTIFS.map((m) => (
-                    <option key={m} value={m}>
-                      {MOTIF_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Animation</span>
-                <select value={editing.decor.effect} onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, effect: e.target.value as StoreTheme['decor']['effect'] } })} className="h-9 w-full rounded-lg border border-line bg-white px-2 text-sm text-ink">
-                  {THEME_EFFECTS.map((m) => (
-                    <option key={m} value={m}>
-                      {EFFECT_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {(
+                [
+                  ['garland', 'Garland under the header', THEME_GARLANDS, GARLAND_LABEL],
+                  ['hanging', 'Hanging at the sides (large screens)', THEME_HANGINGS, HANGING_LABEL],
+                  ['effect', 'Moving effect', THEME_EFFECTS, EFFECT_LABEL],
+                  ['motif', 'Thin pattern band (when no garland)', THEME_MOTIFS, MOTIF_LABEL],
+                ] as const
+              ).map(([field, label, options, labels]) => (
+                <label key={field} className="block space-y-1">
+                  <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">{label}</span>
+                  <select
+                    value={editing.decor[field]}
+                    onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, [field]: e.target.value } })}
+                    className="h-9 w-full rounded-lg border border-line bg-white px-2 text-sm text-ink"
+                  >
+                    {options.map((m) => (
+                      <option key={m} value={m}>
+                        {(labels as Record<string, string>)[m]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             </div>
+
+            <fieldset className="space-y-2 rounded-xl border border-line p-3">
+              <legend className="px-1 text-2xs font-semibold uppercase tracking-wide text-ink/55">Homepage greeting</legend>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editing.decor.greeting)}
+                  onChange={(e) =>
+                    updateTheme(editing.id, {
+                      decor: { ...editing.decor, greeting: e.target.checked ? preset?.decor.greeting ?? { title: `Happy ${editing.name}`, art: 'none' } : undefined },
+                    })
+                  }
+                  className="h-4 w-4 accent-[#14213D]"
+                />
+                Show a festive greeting at the top of the homepage
+              </label>
+              {editing.decor.greeting && (
+                <div className="space-y-2">
+                  {(
+                    [
+                      ['title', 'Title', 60, 'Happy Diwali'],
+                      ['subtitle', 'Message', 160, 'Gift the glow of a moment they love'],
+                      ['ctaLabel', 'Button label', 30, 'Shop Diwali gifts'],
+                      ['ctaHref', 'Button link', 300, '/category'],
+                    ] as const
+                  ).map(([field, label, max, placeholder]) => (
+                    <label key={field} className="block space-y-1">
+                      <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">{label}</span>
+                      <input
+                        value={editing.decor.greeting?.[field] ?? ''}
+                        maxLength={max}
+                        placeholder={placeholder}
+                        onChange={(e) =>
+                          updateTheme(editing.id, {
+                            decor: {
+                              ...editing.decor,
+                              greeting: { ...editing.decor.greeting!, [field]: field === 'title' ? e.target.value : e.target.value || undefined },
+                            },
+                          })
+                        }
+                        className="h-9 w-full rounded-lg border border-line bg-white px-2.5 text-sm text-ink"
+                      />
+                    </label>
+                  ))}
+                  <label className="block space-y-1">
+                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Picture</span>
+                    <select
+                      value={editing.decor.greeting.art}
+                      onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, greeting: { ...editing.decor.greeting!, art: e.target.value as (typeof THEME_GREETING_ART)[number] } } })}
+                      className="h-9 w-full rounded-lg border border-line bg-white px-2 text-sm text-ink"
+                    >
+                      {THEME_GREETING_ART.map((a) => (
+                        <option key={a} value={a}>
+                          {ART_LABEL[a]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+            </fieldset>
+
             <label className="block space-y-1">
               <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Festive message in the top bar (optional)</span>
               <input

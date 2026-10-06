@@ -58,8 +58,33 @@ export function FestiveEffect({ effect }: { effect: ThemeDecor['effect'] }) {
             </svg>
           );
         }
+        if (effect === 'lanterns') {
+          // Sky lanterns drifting up with a warm glow.
+          return (
+            <span key={i} className="festive-rise absolute -bottom-16" style={{ ...common, animationDuration: `${p.duration * 1.6}s` }}>
+              <svg width={p.size * 2} height={p.size * 2.6} viewBox="0 0 20 26">
+                <ellipse cx="10" cy="13" rx="10" ry="12" fill="#FDE68A" opacity="0.25" />
+                <path d="M4 4 Q10 1 16 4 L14.5 20 Q10 22 5.5 20 Z" fill="#F59E0B" opacity="0.85" />
+                <path d="M6 6 Q10 4 14 6 L13 18 Q10 19.5 7 18 Z" fill="#FCD34D" opacity="0.8" />
+                <circle cx="10" cy="19" r="1.4" fill="#FFF7D6" />
+              </svg>
+            </span>
+          );
+        }
+        if (effect === 'fireworks') {
+          const colors = ['#FACC15', '#F472B6', '#60A5FA', 'rgb(var(--color-gold))'];
+          return (
+            <svg key={i} className="festive-burst absolute" viewBox="-20 -20 40 40" style={{ left: `${p.left}%`, top: `${(p.left * 13) % 60 + 4}%`, width: p.size * 6, height: p.size * 6, animationDelay: `${p.delay}s`, animationDuration: `${3 + (p.duration % 3)}s` }}>
+              {Array.from({ length: 12 }, (_, k) => {
+                const a = (k / 12) * Math.PI * 2;
+                return <line key={k} x1={Math.cos(a) * 5} y1={Math.sin(a) * 5} x2={Math.cos(a) * 17} y2={Math.sin(a) * 17} stroke={colors[p.hue]} strokeWidth="1.6" strokeLinecap="round" />;
+              })}
+            </svg>
+          );
+        }
         if (effect === 'snow') {
-          return <span key={i} className="festive-fall absolute -top-4 rounded-full" style={{ ...common, width: p.size * 0.7, height: p.size * 0.7, background: 'rgb(var(--color-accent) / 0.18)' }} />;
+          // White flakes with a soft shadow, so they show on a light page too.
+          return <span key={i} className="festive-fall absolute -top-4 rounded-full bg-white" style={{ ...common, width: p.size * 0.75, height: p.size * 0.75, boxShadow: '0 0 3px rgb(var(--color-accent) / 0.35)' }} />;
         }
         if (effect === 'petals') {
           return <span key={i} className="festive-fall absolute -top-4" style={{ ...common, width: p.size, height: p.size * 0.6, borderRadius: '60% 0 60% 0', background: i % 2 ? 'rgb(var(--color-gold) / 0.75)' : 'rgb(var(--color-gold-deep) / 0.6)' }} />;

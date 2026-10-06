@@ -66,3 +66,21 @@ describe('safe links', () => {
     expect(SafeHrefSchema.safeParse('javascript:alert(1)').success).toBe(false);
   });
 });
+
+describe('upgrading saved themes', () => {
+  it('gives an old saved festival the new decorations but keeps the admin’s choices', async () => {
+    const { upgradeThemeSettings, ThemeSettingsSchema, defaultThemeSettings } = await import('./theme');
+    const old = defaultThemeSettings();
+    const saved = JSON.parse(JSON.stringify(old));
+    for (const t of saved.themes) t.decor = { motif: 'diya', effect: 'sparkles', bannerText: 'My own Diwali text' };
+    saved.themes.find((t: { id: string }) => t.id === 'diwali').colors.gold = '#F5A30B';
+    const parsed = ThemeSettingsSchema.parse(upgradeThemeSettings(saved));
+    const diwali = parsed.themes.find((t) => t.id === 'diwali')!;
+    expect(diwali.decor).toMatchObject({ garland: 'marigold', hanging: 'lanterns', effect: 'sparkles', bannerText: 'My own Diwali text' });
+    expect(diwali.decor.greeting?.title).toBe('Happy Diwali');
+    // Already-new settings are left alone.
+    const fresh = defaultThemeSettings();
+    fresh.themes[1].decor = { ...fresh.themes[1].decor, garland: 'none' };
+    expect((upgradeThemeSettings(fresh) as typeof fresh).themes[1].decor.garland).toBe('none');
+  });
+});

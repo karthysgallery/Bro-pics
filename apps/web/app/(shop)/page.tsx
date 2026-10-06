@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { resolveActiveTheme } from '@bro-pics/shared';
+import { getThemeSettings } from '../../lib/firestore-settings';
+import { FestiveGreeting } from '../../components/theme/FestiveGreeting';
 import dynamic from 'next/dynamic';
 import type { HomepageSection } from '@bro-pics/shared';
 import {
@@ -48,7 +51,14 @@ function trustTitle(title: string): string | undefined {
 // Reordering the homepage is therefore an admin action, not a code change —
 // which is the whole point of the section architecture.
 export default async function HomePage() {
-  const [sections, categories] = await Promise.all([getActiveHomepageSections(), getActiveCategories()]);
+  const [sections, categories, themeSettings] = await Promise.all([
+    getActiveHomepageSections(),
+    getActiveCategories(),
+    getThemeSettings().catch(() => null),
+  ]);
+  // The festival on show (if any) greets visitors at the top of the homepage.
+  const theme = themeSettings ? resolveActiveTheme(themeSettings) : null;
+  const greeting = theme && theme.id !== 'default' ? theme.decor.greeting : undefined;
 
   // Every hero_slider doc becomes one poster in the single carousel at the
   // top. The band is drawn at the position of the first hero section and
@@ -128,6 +138,7 @@ export default async function HomePage() {
 
   return (
     <div>
+      {greeting && <FestiveGreeting greeting={greeting} />}
       {/* Keyed by position as well as id: the `id` field comes from seeded
           data and duplicates across documents have been seen in practice,
           which React would otherwise treat as the same node. */}

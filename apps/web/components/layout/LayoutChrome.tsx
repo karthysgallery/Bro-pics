@@ -13,6 +13,8 @@ import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping
 import type { ThemeDecor } from '@bro-pics/shared';
 import { FestiveBand } from '../theme/FestiveBand';
 import { FestiveEffect } from '../theme/FestiveEffect';
+import { FestiveGarland } from '../theme/FestiveGarland';
+import { FestiveHanging } from '../theme/FestiveHanging';
 
 interface LayoutChromeProps {
   categories: Category[];
@@ -61,6 +63,7 @@ export function LayoutChrome({
   return (
     <>
       <div className="sticky top-0 z-40 w-full shadow-xs">
+        {themeDecor && <FestiveGarland garland={themeDecor.garland} />}
         <AnnouncementBar
           text={themeDecor?.bannerText || announcementBar?.text || defaultAnnouncement}
           link={themeDecor?.bannerText ? themeDecor.bannerLink : announcementBar?.link}
@@ -74,7 +77,12 @@ export function LayoutChrome({
           storeName={storeSettings?.name}
         />
       </div>
-      {themeDecor && <FestiveBand motif={themeDecor.motif} />}
+      {themeDecor && themeDecor.garland === 'none' && <FestiveBand motif={themeDecor.motif} />}
+      {themeDecor && (
+        <div className="relative h-0">
+          <FestiveHanging hanging={themeDecor.hanging} />
+        </div>
+      )}
       {themeDecor && <FestiveEffect effect={themeDecor.effect} />}
       <main>{children}</main>
       <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />

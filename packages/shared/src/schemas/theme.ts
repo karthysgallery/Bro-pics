@@ -39,16 +39,35 @@ export const ThemeColorsSchema = z.object({
 export type ThemeColors = z.infer<typeof ThemeColorsSchema>;
 
 export const THEME_MOTIFS = ['none', 'diya', 'kolam', 'star', 'sparkle', 'sugarcane'] as const;
-export const THEME_EFFECTS = ['none', 'sparkles', 'snow', 'petals', 'confetti'] as const;
+/** The festive garland strung under the header. */
+export const THEME_GARLANDS = ['none', 'marigold', 'thoranam', 'string-lights', 'bunting', 'diya-row'] as const;
+/** Ornaments hanging down at the page edges (large screens). */
+export const THEME_HANGINGS = ['none', 'lanterns', 'baubles', 'stars', 'bells'] as const;
+export const THEME_EFFECTS = ['none', 'sparkles', 'snow', 'petals', 'confetti', 'lanterns', 'fireworks'] as const;
+/** The picture on the homepage greeting banner. */
+export const THEME_GREETING_ART = ['none', 'rangoli', 'pongal-pot', 'tree', 'fireworks'] as const;
+
+export const ThemeGreetingSchema = z.object({
+  title: z.string().trim().min(1).max(60),
+  subtitle: z.string().trim().max(160).optional(),
+  ctaLabel: z.string().trim().max(30).optional(),
+  ctaHref: SafeHrefSchema.optional(),
+  art: z.enum(THEME_GREETING_ART).default('none'),
+});
+export type ThemeGreeting = z.infer<typeof ThemeGreetingSchema>;
 
 export const ThemeDecorSchema = z.object({
-  /** Pattern for the thin ornamental band under the header. */
+  /** A thin ornament band under the header (simpler alternative to a garland). */
   motif: z.enum(THEME_MOTIFS).default('none'),
+  garland: z.enum(THEME_GARLANDS).default('none'),
+  hanging: z.enum(THEME_HANGINGS).default('none'),
   /** Gentle animation over the page (off for visitors who ask for reduced motion). */
   effect: z.enum(THEME_EFFECTS).default('none'),
   /** Festive message shown in the announcement bar while the theme is on. */
   bannerText: z.string().max(140).optional(),
   bannerLink: SafeHrefSchema.optional(),
+  /** A decorated greeting at the top of the homepage. */
+  greeting: ThemeGreetingSchema.optional(),
 });
 export type ThemeDecor = z.infer<typeof ThemeDecorSchema>;
 
@@ -96,13 +115,26 @@ export const DEFAULT_THEME_COLORS: ThemeColors = {
 };
 
 export const THEME_PRESETS: readonly StoreTheme[] = [
-  { id: 'default', name: 'Everyday', colors: DEFAULT_THEME_COLORS, decor: { motif: 'none', effect: 'none' }, schedule: null },
+  { id: 'default', name: 'Everyday', colors: DEFAULT_THEME_COLORS, decor: { motif: 'none', garland: 'none', hanging: 'none', effect: 'none' }, schedule: null },
   {
     id: 'diwali',
     name: 'Diwali',
     // Marigold and deep maroon on a warm diya-lit cream.
     colors: { field: '#FFF7EC', paper: '#FFFFFF', tint: '#FBE8CF', line: '#EED3AE', ink: '#2A0F0A', gold: '#F5A30B', goldDeep: '#D98706', accent: '#7A1E1E', accentDark: '#4C0F0F' },
-    decor: { motif: 'diya', effect: 'sparkles', bannerText: 'Happy Diwali! Light up their walls with memories' },
+    decor: {
+      motif: 'none',
+      garland: 'marigold',
+      hanging: 'lanterns',
+      effect: 'lanterns',
+      bannerText: 'Happy Diwali! Light up their walls with memories',
+      greeting: {
+        title: 'Happy Diwali',
+        subtitle: 'Gift the glow of a moment they love. Festive frames, made by hand and delivered in time for the festival.',
+        ctaLabel: 'Shop Diwali gifts',
+        ctaHref: '/category',
+        art: 'rangoli',
+      },
+    },
     schedule: null,
   },
   {
@@ -110,7 +142,20 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
     name: 'Pongal',
     // Turmeric, sugarcane green and the white of a kolam.
     colors: { field: '#FFFBEF', paper: '#FFFFFF', tint: '#F6EDCB', line: '#E7D9A6', ink: '#1F2A12', gold: '#E8B008', goldDeep: '#C79500', accent: '#2F6B2A', accentDark: '#1C4519' },
-    decor: { motif: 'kolam', effect: 'petals', bannerText: 'Pongalo Pongal! Frame this harvest season together' },
+    decor: {
+      motif: 'none',
+      garland: 'thoranam',
+      hanging: 'none',
+      effect: 'petals',
+      bannerText: 'Pongalo Pongal! Frame this harvest season together',
+      greeting: {
+        title: 'Pongalo Pongal!',
+        subtitle: 'A harvest of happy faces deserves a place on the wall. Frame the family moments of this Thai Pongal.',
+        ctaLabel: 'Frame your family',
+        ctaHref: '/category',
+        art: 'pongal-pot',
+      },
+    },
     schedule: null,
   },
   {
@@ -118,7 +163,20 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
     name: 'Christmas',
     // Holly red and evergreen, with warm gold buttons.
     colors: { field: '#F8F6F1', paper: '#FFFFFF', tint: '#ECF2EC', line: '#D6E0D6', ink: '#10140F', gold: '#F2C14E', goldDeep: '#D9A62E', accent: '#A4161A', accentDark: '#165B33' },
-    decor: { motif: 'star', effect: 'snow', bannerText: 'Merry Christmas! Gifts they will keep forever' },
+    decor: {
+      motif: 'none',
+      garland: 'string-lights',
+      hanging: 'baubles',
+      effect: 'snow',
+      bannerText: 'Merry Christmas! Gifts they will keep forever',
+      greeting: {
+        title: 'Merry Christmas',
+        subtitle: 'The gift that outlasts the season: their favourite photo, framed and ready to unwrap.',
+        ctaLabel: 'Find a Christmas gift',
+        ctaHref: '/category',
+        art: 'tree',
+      },
+    },
     schedule: null,
   },
   {
@@ -126,7 +184,20 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
     name: 'New Year',
     // Midnight indigo and champagne.
     colors: { field: '#F7F6FB', paper: '#FFFFFF', tint: '#ECEAF4', line: '#DAD6E8', ink: '#0E0B1F', gold: '#E6C26E', goldDeep: '#C9A24B', accent: '#2B2A6B', accentDark: '#17164A' },
-    decor: { motif: 'sparkle', effect: 'confetti', bannerText: 'Happy New Year! Start it with your best memories' },
+    decor: {
+      motif: 'none',
+      garland: 'bunting',
+      hanging: 'stars',
+      effect: 'fireworks',
+      bannerText: 'Happy New Year! Start it with your best memories',
+      greeting: {
+        title: 'Happy New Year',
+        subtitle: 'Turn last year’s best moments into this year’s favourite wall. New year, new frames.',
+        ctaLabel: 'Start the year framed',
+        ctaHref: '/category',
+        art: 'fireworks',
+      },
+    },
     schedule: null,
   },
 ];
@@ -134,6 +205,30 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
 /** What the site uses before an admin has ever saved theme settings. */
 export function defaultThemeSettings(): ThemeSettings {
   return { mode: 'schedule', activeThemeId: 'default', themes: THEME_PRESETS.map((t) => ({ ...t, colors: { ...t.colors }, decor: { ...t.decor } })) };
+}
+
+/**
+ * Theme settings saved before garlands, hanging ornaments and greetings
+ * existed: built-in festivals pick up the new decorations from their preset,
+ * while everything the admin chose (colours, message, dates, effect) is kept.
+ */
+export function upgradeThemeSettings(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { themes?: unknown }).themes)) return raw;
+  const themes = (raw as { themes: Array<Record<string, unknown>> }).themes.map((t) => {
+    const preset = THEME_PRESETS.find((p) => p.id === t?.id);
+    const decor = (t?.decor ?? {}) as Record<string, unknown>;
+    if (!preset || 'garland' in decor || 'hanging' in decor || 'greeting' in decor) return t;
+    return {
+      ...t,
+      decor: {
+        ...decor,
+        garland: preset.decor.garland,
+        hanging: preset.decor.hanging,
+        ...(preset.decor.greeting && { greeting: preset.decor.greeting }),
+      },
+    };
+  });
+  return { ...(raw as object), themes };
 }
 
 /** Today's date in India (YYYY-MM-DD), the calendar schedules are written in. */
