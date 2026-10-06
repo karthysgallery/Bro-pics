@@ -1044,7 +1044,10 @@ export function ProductDetailClient({
           </div>
         </div>
       )}
-    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-6 lg:gap-8 items-start' : 'grid md:grid-cols-2 gap-4 md:gap-5'}>
+    <div className={showInlineEditor ? 'grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-6 lg:gap-8 items-start' : 'grid md:grid-cols-2 gap-4 md:gap-5 md:items-start'}>
+      {/* Desktop: the preview stays in view while the details on the right
+          scroll past, then moves on with the page once the details end. */}
+      <div className="min-w-0 lg:sticky lg:top-24 md:self-start">
       {showInlineEditor && selectedVariant ? (
         <PersonalizationPreview
           template={template}
@@ -1085,6 +1088,7 @@ export function ProductDetailClient({
           <Gallery media={galleryMedia} productTitle={product.title} />
         </div>
       )}
+      </div>
       <BuyBox
         product={product}
         variants={variants}
