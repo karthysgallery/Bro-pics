@@ -79,6 +79,13 @@ describe('POST /api/admin/media', () => {
     expect(body.media.url).toBe('https://public.example.com/public/media/abc.jpg');
   });
 
+  it('accepts and stores the file size the upload screens send', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    const response = await POST(makePostRequest({ ...validBody, sizeBytes: 204800 }));
+    expect(response.status).toBe(201);
+    expect(mockMediaSet).toHaveBeenCalledWith(expect.objectContaining({ sizeBytes: 204800 }));
+  });
+
   it('writes an audit log entry on success', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     await POST(makePostRequest(validBody));

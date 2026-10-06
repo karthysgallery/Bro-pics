@@ -6,6 +6,8 @@ export const CreateMediaAssetBodySchema = z
     type: z.enum(['image', 'video']),
     width: z.number().int().positive().optional(),
     height: z.number().int().positive().optional(),
+    // Sent by both upload screens (the media library and the picker).
+    sizeBytes: z.number().int().nonnegative().optional(),
     alt: z.string().default(''),
     tags: z.array(z.string()).default([]),
   })
