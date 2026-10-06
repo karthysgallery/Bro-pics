@@ -51,6 +51,8 @@ const EFFECT_LABEL: Record<(typeof THEME_EFFECTS)[number], string> = {
   confetti: 'Confetti',
   lanterns: 'Floating sky lanterns',
   fireworks: 'Fireworks',
+  colors: 'Holi colours',
+  hearts: 'Floating hearts',
 };
 const GARLAND_LABEL: Record<(typeof THEME_GARLANDS)[number], string> = {
   none: 'No garland',
@@ -59,6 +61,8 @@ const GARLAND_LABEL: Record<(typeof THEME_GARLANDS)[number], string> = {
   'string-lights': 'Twinkling string lights',
   bunting: 'Party bunting',
   'diya-row': 'Row of lit diyas',
+  tricolor: 'Tricolour pennants',
+  hearts: 'Heart garland',
 };
 const HANGING_LABEL: Record<(typeof THEME_HANGINGS)[number], string> = {
   none: 'Nothing hanging',
@@ -66,6 +70,8 @@ const HANGING_LABEL: Record<(typeof THEME_HANGINGS)[number], string> = {
   baubles: 'Christmas baubles',
   stars: 'Golden stars',
   bells: 'Bells',
+  hearts: 'Hearts',
+  crescents: 'Crescent moons & stars',
 };
 const ART_LABEL: Record<(typeof THEME_GREETING_ART)[number], string> = {
   none: 'No picture',
@@ -73,7 +79,31 @@ const ART_LABEL: Record<(typeof THEME_GREETING_ART)[number], string> = {
   'pongal-pot': 'Pongal pot',
   tree: 'Christmas tree',
   fireworks: 'Fireworks',
+  holi: 'Holi colours',
+  dandiya: 'Dandiya sticks',
+  lamps: 'Agal vilakku lamps',
+  modak: 'Modaks',
+  pookalam: 'Onam pookalam',
+  rakhi: 'Rakhi',
+  crescent: 'Crescent moon',
+  flag: 'Indian flag',
+  heart: 'Heart',
+  frame: 'Family photo frame',
+  kolam: 'Kolam',
+  peacock: 'Peacock feather',
 };
+
+const NATIONAL = new Set(['independence-day', 'republic-day']);
+const SPECIAL_DAYS = new Set(['valentines-day', 'mothers-day', 'fathers-day', 'new-year']);
+type Filter = 'all' | 'scheduled' | 'festivals' | 'national' | 'special' | 'own';
+const FILTERS: Array<[Filter, string]> = [
+  ['all', 'All'],
+  ['scheduled', 'On or scheduled'],
+  ['festivals', 'Festivals'],
+  ['national', 'National days'],
+  ['special', 'Special days'],
+  ['own', 'Your own'],
+];
 
 const formatDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
@@ -127,6 +157,7 @@ export default function FestivalThemesPage() {
   const [draft, setDraft] = useState<ThemeSettings | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -236,8 +267,32 @@ export default function FestivalThemesPage() {
         ))}
       </fieldset>
 
+      <div role="group" aria-label="Show themes" className="flex flex-wrap gap-2">
+        {FILTERS.map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+            className={`h-8 rounded-full border px-3.5 text-xs font-semibold ${filter === id ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink/70 hover:border-ink/50'}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {draft.themes.map((t) => {
+        {draft.themes
+          .filter((t) => {
+            const isPreset = THEME_PRESETS.some((p) => p.id === t.id);
+            if (filter === 'all') return true;
+            if (filter === 'scheduled') return Boolean(t.schedule) || t.id === previewNow.id;
+            if (filter === 'own') return !isPreset;
+            if (filter === 'national') return NATIONAL.has(t.id);
+            if (filter === 'special') return SPECIAL_DAYS.has(t.id);
+            return isPreset && t.id !== 'default' && !NATIONAL.has(t.id) && !SPECIAL_DAYS.has(t.id);
+          })
+          .map((t) => {
           const showing = previewNow.id === t.id;
           const isChosen = draft.activeThemeId === t.id;
           const upcoming = t.schedule && t.schedule.end >= today;

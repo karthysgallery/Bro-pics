@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { ThemeDecor } from '@bro-pics/shared';
 
 /** Akash kandil: a star-shaped paper lantern with a warm glow and tassels. */
@@ -58,6 +59,33 @@ function Bell() {
   );
 }
 
+function HangingHeart({ hue }: { hue: number }) {
+  return (
+    <svg width="44" height="42" viewBox="0 0 20 19">
+      <path d="M10 18 C 3 12, 0 8, 0 5 C 0 2, 2.5 0, 5 0 C 7 0, 9 1.2, 10 3 C 11 1.2, 13 0, 15 0 C 17.5 0, 20 2, 20 5 C 20 8, 17 12, 10 18 Z" fill={hue ? 'rgb(var(--color-accent))' : '#F43F5E'} />
+      <ellipse cx="5.5" cy="5" rx="2" ry="2.8" fill="#fff" opacity="0.35" transform="rotate(-30 5.5 5)" />
+    </svg>
+  );
+}
+
+/** A crescent moon with a star, as hung for Eid. */
+function Crescent() {
+  const id = `crescent-${useId().replace(/:/g, '')}`;
+  return (
+    <svg width="46" height="50" viewBox="0 0 46 50">
+      <circle cx="22" cy="26" r="20" fill="rgb(var(--color-gold))" opacity="0.15" className="festive-glow" />
+      <defs>
+        <mask id={id}>
+          <rect width="46" height="50" fill="#fff" />
+          <circle cx="29" cy="22" r="16" fill="#000" />
+        </mask>
+      </defs>
+      <circle cx="20" cy="26" r="18" fill="rgb(var(--color-gold))" mask={`url(#${id})`} />
+      <path d="M36 18 L37.6 22.2 L42 22.4 L38.5 25.1 L39.8 29.4 L36 26.9 L32.2 29.4 L33.5 25.1 L30 22.4 L34.4 22.2 Z" fill="rgb(var(--color-gold))" />
+    </svg>
+  );
+}
+
 const STRINGS = [70, 120, 46];
 
 /**
@@ -68,7 +96,19 @@ const STRINGS = [70, 120, 46];
 export function FestiveHanging({ hanging }: { hanging: ThemeDecor['hanging'] }) {
   if (hanging === 'none') return null;
   const ornament = (i: number) =>
-    hanging === 'lanterns' ? <Lantern hue={i % 2} /> : hanging === 'baubles' ? <Bauble hue={i % 2} /> : hanging === 'stars' ? <Star /> : <Bell />;
+    hanging === 'lanterns' ? (
+      <Lantern hue={i % 2} />
+    ) : hanging === 'baubles' ? (
+      <Bauble hue={i % 2} />
+    ) : hanging === 'stars' ? (
+      <Star />
+    ) : hanging === 'hearts' ? (
+      <HangingHeart hue={i % 2} />
+    ) : hanging === 'crescents' ? (
+      i % 2 ? <Star /> : <Crescent />
+    ) : (
+      <Bell />
+    );
   // Each side fills the empty margin beside the 1280px page, so nothing hangs over content.
   const side = (align: 'left' | 'right') => (
     <div className={`absolute top-0 flex w-[calc((100vw-1280px)/2)] justify-center gap-4 ${align === 'left' ? 'left-0' : 'right-0 flex-row-reverse'}`}>

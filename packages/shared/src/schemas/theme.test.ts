@@ -84,3 +84,15 @@ describe('upgrading saved themes', () => {
     expect((upgradeThemeSettings(fresh) as typeof fresh).themes[1].decor.garland).toBe('none');
   });
 });
+
+describe('new festivals', () => {
+  it('appear in settings that were saved before they existed, without touching saved ones', async () => {
+    const { upgradeThemeSettings, ThemeSettingsSchema, THEME_PRESETS } = await import('./theme');
+    const saved = { mode: 'manual', activeThemeId: 'christmas', themes: THEME_PRESETS.slice(0, 5).map((t) => ({ ...t, name: `${t.name}!` })) };
+    const parsed = ThemeSettingsSchema.parse(upgradeThemeSettings(saved));
+    expect(parsed.themes.map((t) => t.id)).toEqual(THEME_PRESETS.map((t) => t.id));
+    expect(parsed.themes.find((t) => t.id === 'christmas')?.name).toBe('Christmas!');
+    expect(parsed.themes.find((t) => t.id === 'holi')?.decor.effect).toBe('colors');
+    expect(THEME_PRESETS).toHaveLength(20);
+  });
+});

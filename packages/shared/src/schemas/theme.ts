@@ -40,12 +40,30 @@ export type ThemeColors = z.infer<typeof ThemeColorsSchema>;
 
 export const THEME_MOTIFS = ['none', 'diya', 'kolam', 'star', 'sparkle', 'sugarcane'] as const;
 /** The festive garland strung under the header. */
-export const THEME_GARLANDS = ['none', 'marigold', 'thoranam', 'string-lights', 'bunting', 'diya-row'] as const;
+export const THEME_GARLANDS = ['none', 'marigold', 'thoranam', 'string-lights', 'bunting', 'diya-row', 'tricolor', 'hearts'] as const;
 /** Ornaments hanging down at the page edges (large screens). */
-export const THEME_HANGINGS = ['none', 'lanterns', 'baubles', 'stars', 'bells'] as const;
-export const THEME_EFFECTS = ['none', 'sparkles', 'snow', 'petals', 'confetti', 'lanterns', 'fireworks'] as const;
+export const THEME_HANGINGS = ['none', 'lanterns', 'baubles', 'stars', 'bells', 'hearts', 'crescents'] as const;
+export const THEME_EFFECTS = ['none', 'sparkles', 'snow', 'petals', 'confetti', 'lanterns', 'fireworks', 'colors', 'hearts'] as const;
 /** The picture on the homepage greeting banner. */
-export const THEME_GREETING_ART = ['none', 'rangoli', 'pongal-pot', 'tree', 'fireworks'] as const;
+export const THEME_GREETING_ART = [
+  'none',
+  'rangoli',
+  'pongal-pot',
+  'tree',
+  'fireworks',
+  'holi',
+  'dandiya',
+  'lamps',
+  'modak',
+  'pookalam',
+  'rakhi',
+  'crescent',
+  'flag',
+  'heart',
+  'frame',
+  'kolam',
+  'peacock',
+] as const;
 
 export const ThemeGreetingSchema = z.object({
   title: z.string().trim().min(1).max(60),
@@ -92,7 +110,7 @@ export const ThemeSettingsSchema = z
     /** 'schedule': the calendar decides; 'manual': `activeThemeId` stays on until changed. */
     mode: z.enum(['schedule', 'manual']),
     activeThemeId: z.string().min(1),
-    themes: z.array(StoreThemeSchema).min(1).max(24),
+    themes: z.array(StoreThemeSchema).min(1).max(48),
   })
   .strict()
   .refine((s) => s.themes.some((t) => t.id === 'default'), { message: 'The Default theme cannot be removed' })
@@ -200,6 +218,216 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
     },
     schedule: null,
   },
+  {
+    id: 'holi',
+    name: 'Holi',
+    colors: { field: '#FFF8FB', paper: '#FFFFFF', tint: '#FCE7F3', line: '#F5CFE4', ink: '#1E1024', gold: '#F7B32B', goldDeep: '#E39A0C', accent: '#8E1F6B', accentDark: '#5B1245' },
+    decor: {
+      motif: 'none',
+      garland: 'bunting',
+      hanging: 'none',
+      effect: 'colors',
+      bannerText: 'Happy Holi! Fill their walls with colour',
+      greeting: { title: 'Happy Holi', subtitle: 'Bright days deserve a bright frame. Frame the colours, the laughter and the people you play Holi with.', ctaLabel: 'Frame your colours', ctaHref: '/category', art: 'holi' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'navratri',
+    name: 'Navratri',
+    colors: { field: '#FFF7F0', paper: '#FFFFFF', tint: '#FDEBDD', line: '#F3D3BA', ink: '#2A0D15', gold: '#F59E0B', goldDeep: '#D97706', accent: '#9D174D', accentDark: '#63102F' },
+    decor: {
+      motif: 'none',
+      garland: 'marigold',
+      hanging: 'bells',
+      effect: 'sparkles',
+      bannerText: 'Shubh Navratri! Nine nights of memories to frame',
+      greeting: { title: 'Shubh Navratri', subtitle: 'Garba nights, dandiya and family pooja: nine nights of moments worth keeping on the wall.', ctaLabel: 'Frame the festivities', ctaHref: '/category', art: 'dandiya' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'durga-puja',
+    name: 'Durga Puja',
+    colors: { field: '#FFFAF5', paper: '#FFFFFF', tint: '#FBE9E4', line: '#EFD3CB', ink: '#250A0A', gold: '#E9B949', goldDeep: '#CB9A28', accent: '#B91C1C', accentDark: '#7A1010' },
+    decor: {
+      motif: 'none',
+      garland: 'marigold',
+      hanging: 'bells',
+      effect: 'sparkles',
+      bannerText: 'Shubho Pujo! Keep the pandal memories close',
+      greeting: { title: 'Shubho Pujo', subtitle: 'From pandal hopping to dhunuchi naach, frame the Durga Puja moments your family loves.', ctaLabel: 'Shop Puja gifts', ctaHref: '/category', art: 'lamps' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'ganesh-chaturthi',
+    name: 'Ganesh Chaturthi',
+    colors: { field: '#FFF8EE', paper: '#FFFFFF', tint: '#FCEBD3', line: '#F1D4AE', ink: '#2A1206', gold: '#F59E0B', goldDeep: '#D97706', accent: '#9A3412', accentDark: '#64220B' },
+    decor: {
+      motif: 'none',
+      garland: 'marigold',
+      hanging: 'bells',
+      effect: 'petals',
+      bannerText: 'Ganpati Bappa Morya! Festive frames for every home',
+      greeting: { title: 'Ganpati Bappa Morya', subtitle: 'Welcome Bappa home with the memories that matter. Festive frames, made by hand for your celebration.', ctaLabel: 'Shop festive frames', ctaHref: '/category', art: 'modak' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'onam',
+    name: 'Onam',
+    colors: { field: '#FFFCF2', paper: '#FFFFFF', tint: '#F6EED5', line: '#E9DCB2', ink: '#1B1F12', gold: '#E3B341', goldDeep: '#C4962A', accent: '#2F6B2A', accentDark: '#1D451A' },
+    decor: {
+      motif: 'none',
+      garland: 'thoranam',
+      hanging: 'none',
+      effect: 'petals',
+      bannerText: 'Happy Onam! Frame the sadhya, the pookalam and the family',
+      greeting: { title: 'Happy Onam', subtitle: "The pookalam, the sadhya and everyone around the table: frame this Onam's best moments.", ctaLabel: 'Frame your Onam', ctaHref: '/category', art: 'pookalam' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'raksha-bandhan',
+    name: 'Raksha Bandhan',
+    colors: { field: '#FFF7F9', paper: '#FFFFFF', tint: '#FCE6EC', line: '#F2CBD6', ink: '#2A0F1A', gold: '#F4B740', goldDeep: '#DB9A1C', accent: '#B4235A', accentDark: '#7A153C' },
+    decor: {
+      motif: 'none',
+      garland: 'bunting',
+      hanging: 'none',
+      effect: 'sparkles',
+      bannerText: 'Happy Raksha Bandhan! A gift for your sibling they will keep',
+      greeting: { title: 'Happy Raksha Bandhan', subtitle: 'Say it with a frame: the childhood photos, the silly ones and the ones that still make you smile.', ctaLabel: 'Find a rakhi gift', ctaHref: '/category', art: 'rakhi' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'eid',
+    name: 'Eid',
+    colors: { field: '#F7FBF8', paper: '#FFFFFF', tint: '#E6F2EA', line: '#CDE3D5', ink: '#0C1A15', gold: '#E2B54F', goldDeep: '#C3962E', accent: '#0F5B45', accentDark: '#0A3D2F' },
+    decor: {
+      motif: 'none',
+      garland: 'string-lights',
+      hanging: 'crescents',
+      effect: 'sparkles',
+      bannerText: 'Eid Mubarak! Gifts of memories for the whole family',
+      greeting: { title: 'Eid Mubarak', subtitle: 'Share the joy of Eid with a gift that lasts: family moments, beautifully framed.', ctaLabel: 'Shop Eid gifts', ctaHref: '/category', art: 'crescent' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'janmashtami',
+    name: 'Krishna Janmashtami',
+    colors: { field: '#F5FAFC', paper: '#FFFFFF', tint: '#E1F0F5', line: '#C9E1EA', ink: '#0A1A22', gold: '#E9B949', goldDeep: '#C9992A', accent: '#0E5E7E', accentDark: '#083B50' },
+    decor: {
+      motif: 'none',
+      garland: 'marigold',
+      hanging: 'bells',
+      effect: 'petals',
+      bannerText: 'Happy Janmashtami! Frame your little Krishna',
+      greeting: { title: 'Happy Janmashtami', subtitle: 'Little Krishnas, makhan and matki: frame the sweetest moments of the celebration.', ctaLabel: 'Frame your little Krishna', ctaHref: '/category', art: 'peacock' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'karthigai-deepam',
+    name: 'Karthigai Deepam',
+    colors: { field: '#FFF8EC', paper: '#FFFFFF', tint: '#FCE9CF', line: '#F0D2A8', ink: '#26120A', gold: '#F59E0B', goldDeep: '#D97706', accent: '#7C2D12', accentDark: '#4F1C0B' },
+    decor: {
+      motif: 'none',
+      garland: 'diya-row',
+      hanging: 'none',
+      effect: 'sparkles',
+      bannerText: 'Karthigai Deepam wishes! Light up your walls with memories',
+      greeting: { title: 'Karthigai Deepam', subtitle: 'Rows of agal vilakku and a home full of light. Frame the glow of this Karthigai.', ctaLabel: 'Shop festive frames', ctaHref: '/category', art: 'lamps' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'tamil-new-year',
+    name: 'Tamil New Year',
+    colors: { field: '#FFFBEF', paper: '#FFFFFF', tint: '#F3EFCF', line: '#E4DCA8', ink: '#1C2010', gold: '#EBB51F', goldDeep: '#C99510', accent: '#3F6212', accentDark: '#26400A' },
+    decor: {
+      motif: 'none',
+      garland: 'thoranam',
+      hanging: 'none',
+      effect: 'petals',
+      bannerText: 'Puthandu Vazhthukkal! Start the year with your best memories',
+      greeting: { title: 'Puthandu Vazhthukkal', subtitle: 'A new year, a fresh kolam and the family together. Frame the moments that begin it.', ctaLabel: 'Start the year framed', ctaHref: '/category', art: 'kolam' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'independence-day',
+    name: 'Independence Day',
+    colors: { field: '#FFFDF8', paper: '#FFFFFF', tint: '#FFF1E2', line: '#F2DEC4', ink: '#0B1426', gold: '#FF9933', goldDeep: '#E67E10', accent: '#0B3D91', accentDark: '#06204D' },
+    decor: {
+      motif: 'none',
+      garland: 'tricolor',
+      hanging: 'none',
+      effect: 'confetti',
+      bannerText: 'Happy Independence Day! Jai Hind',
+      greeting: { title: 'Happy Independence Day', subtitle: 'Celebrate the freedom to make memories. Frame the moments that make you proud.', ctaLabel: 'Shop now', ctaHref: '/category', art: 'flag' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'republic-day',
+    name: 'Republic Day',
+    colors: { field: '#FFFDF8', paper: '#FFFFFF', tint: '#EEF5EC', line: '#D7E5D3', ink: '#0B1426', gold: '#FF9933', goldDeep: '#E67E10', accent: '#138808', accentDark: '#0B5A05' },
+    decor: {
+      motif: 'none',
+      garland: 'tricolor',
+      hanging: 'none',
+      effect: 'confetti',
+      bannerText: 'Happy Republic Day! Jai Hind',
+      greeting: { title: 'Happy Republic Day', subtitle: 'Proud of where we come from. Frame the family moments that make us who we are.', ctaLabel: 'Shop now', ctaHref: '/category', art: 'flag' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'valentines-day',
+    name: "Valentine's Day",
+    colors: { field: '#FFF7F8', paper: '#FFFFFF', tint: '#FDE5EA', line: '#F5C9D3', ink: '#2A0A12', gold: '#F9A8C4', goldDeep: '#F17FA7', accent: '#B3123A', accentDark: '#7A0B27' },
+    decor: {
+      motif: 'none',
+      garland: 'hearts',
+      hanging: 'hearts',
+      effect: 'hearts',
+      bannerText: "Happy Valentine's Day! Frame your love story",
+      greeting: { title: "Happy Valentine's Day", subtitle: 'Your love story deserves pride of place. Frame the photos only the two of you understand.', ctaLabel: 'Find a love gift', ctaHref: '/category', art: 'heart' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'mothers-day',
+    name: "Mother's Day",
+    colors: { field: '#FFF8F6', paper: '#FFFFFF', tint: '#FBE7E4', line: '#F1CCC6', ink: '#2B1418', gold: '#F4B6A6', goldDeep: '#EC9883', accent: '#9F3A54', accentDark: '#6B2337' },
+    decor: {
+      motif: 'none',
+      garland: 'bunting',
+      hanging: 'hearts',
+      effect: 'petals',
+      bannerText: "Happy Mother's Day! Give Amma a memory to keep",
+      greeting: { title: "Happy Mother's Day", subtitle: 'For the one who kept every photo: give her one framed, to keep forever.', ctaLabel: 'Gift Amma a frame', ctaHref: '/category', art: 'frame' },
+    },
+    schedule: null,
+  },
+  {
+    id: 'fathers-day',
+    name: "Father's Day",
+    colors: { field: '#F6F7FA', paper: '#FFFFFF', tint: '#E7EAF1', line: '#D2D8E4', ink: '#0F1724', gold: '#E0B866', goldDeep: '#C49A40', accent: '#1E3A5F', accentDark: '#11243D' },
+    decor: {
+      motif: 'none',
+      garland: 'bunting',
+      hanging: 'stars',
+      effect: 'confetti',
+      bannerText: "Happy Father's Day! A gift Appa will actually keep",
+      greeting: { title: "Happy Father's Day", subtitle: "Frame his favourite photo: the one he'd never ask for, but will look at every day.", ctaLabel: 'Gift Appa a frame', ctaHref: '/category', art: 'frame' },
+    },
+    schedule: null,
+  },
 ];
 
 /** What the site uses before an admin has ever saved theme settings. */
@@ -228,6 +456,10 @@ export function upgradeThemeSettings(raw: unknown): unknown {
       },
     };
   });
+  // Festivals added to the shop since the settings were saved appear too.
+  for (const preset of THEME_PRESETS) {
+    if (!themes.some((t) => t?.id === preset.id)) themes.push(JSON.parse(JSON.stringify(preset)));
+  }
   return { ...(raw as object), themes };
 }
 

@@ -82,6 +82,18 @@ export function FestiveEffect({ effect }: { effect: ThemeDecor['effect'] }) {
             </svg>
           );
         }
+        if (effect === 'colors') {
+          // Soft clouds of Holi colour drifting down.
+          const gulal = ['#EC4899', '#22C55E', '#F59E0B', '#3B82F6', '#A855F7'];
+          return <span key={i} className="festive-fall absolute -top-10 rounded-full blur-md" style={{ ...common, width: p.size * 4, height: p.size * 4, background: gulal[i % gulal.length], opacity: 0.35 }} />;
+        }
+        if (effect === 'hearts') {
+          return (
+            <svg key={i} className="festive-rise absolute -bottom-10" style={{ ...common, width: p.size * 1.6, height: p.size * 1.5 }} viewBox="0 0 20 19">
+              <path d="M10 18 C 3 12, 0 8, 0 5 C 0 2, 2.5 0, 5 0 C 7 0, 9 1.2, 10 3 C 11 1.2, 13 0, 15 0 C 17.5 0, 20 2, 20 5 C 20 8, 17 12, 10 18 Z" fill={i % 2 ? 'rgb(var(--color-accent) / 0.55)' : 'rgb(244 63 94 / 0.5)'} />
+            </svg>
+          );
+        }
         if (effect === 'snow') {
           // White flakes with a soft shadow, so they show on a light page too.
           return <span key={i} className="festive-fall absolute -top-4 rounded-full bg-white" style={{ ...common, width: p.size * 0.75, height: p.size * 0.75, boxShadow: '0 0 3px rgb(var(--color-accent) / 0.35)' }} />;

@@ -154,12 +154,63 @@ function diyaRow() {
   return <>{items}</>;
 }
 
+/** Saffron, white and green pennants, as strung for Independence and Republic Day. */
+function tricolor() {
+  const colors = ['#FF9933', '#FFFFFF', '#138808'];
+  const items: JSX.Element[] = [];
+  let n = 0;
+  for (let i = 0; i < SWAGS; i++) {
+    for (let k = 1; k <= 6; k++, n++) {
+      const [x, y] = along(i, k / 7, 12);
+      const [x2, y2] = along(i, k / 7 + 0.05, 12);
+      const angle = (Math.atan2(y2 - y, x2 - x) * 180) / Math.PI;
+      items.push(
+        <g key={n} transform={`translate(${x} ${y}) rotate(${angle})`}>
+          <path d="M-7 0 L7 0 L0 16 Z" fill={colors[n % 3]} stroke="#cbd5e1" strokeWidth="0.6" />
+          {n % 3 === 1 && <circle cx="0" cy="5" r="2" fill="none" stroke="#000080" strokeWidth="0.7" />}
+        </g>
+      );
+    }
+  }
+  return (
+    <>
+      {rope(12, '#64748b', 1)}
+      {items}
+    </>
+  );
+}
+
+function Heart({ x, y, size, fill }: { x: number; y: number; size: number; fill: string }) {
+  const s = size / 20;
+  return <path transform={`translate(${x - 10 * s} ${y}) scale(${s})`} d="M10 18 C 3 12, 0 8, 0 5 C 0 2, 2.5 0, 5 0 C 7 0, 9 1.2, 10 3 C 11 1.2, 13 0, 15 0 C 17.5 0, 20 2, 20 5 C 20 8, 17 12, 10 18 Z" fill={fill} />;
+}
+
+function heartGarland() {
+  const fills = ['rgb(var(--color-accent))', 'rgb(var(--color-gold))', '#F43F5E', 'rgb(var(--color-gold-deep))'];
+  const items: JSX.Element[] = [];
+  let n = 0;
+  for (let i = 0; i < SWAGS; i++) {
+    for (let k = 1; k <= 6; k++, n++) {
+      const [x, y] = along(i, k / 7, 14);
+      items.push(<Heart key={n} x={x} y={y - 1} size={n % 2 ? 12 : 15} fill={fills[n % fills.length]} />);
+    }
+  }
+  return (
+    <>
+      {rope(14, '#be7c8f', 1)}
+      {items}
+    </>
+  );
+}
+
 const RENDER: Record<Exclude<ThemeDecor['garland'], 'none'>, () => JSX.Element> = {
   marigold: marigoldGarland,
   thoranam,
   'string-lights': stringLights,
   bunting,
   'diya-row': diyaRow,
+  tricolor,
+  hearts: heartGarland,
 };
 
 const HEIGHT: Record<Exclude<ThemeDecor['garland'], 'none'>, number> = {
@@ -168,6 +219,8 @@ const HEIGHT: Record<Exclude<ThemeDecor['garland'], 'none'>, number> = {
   'string-lights': 42,
   bunting: 38,
   'diya-row': 30,
+  tricolor: 36,
+  hearts: 36,
 };
 
 /** `overlay`: hangs over the top of the page from the header (the shop); otherwise takes its own space (previews). */

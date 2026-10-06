@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { isSafeHref, type ThemeGreeting } from '@bro-pics/shared';
+import { CrescentArt, DandiyaArt, FlagArt, FrameArt, HeartArt, HoliArt, KolamArt, LampsArt, ModakArt, PeacockArt, PookalamArt, RakhiArt } from './FestiveArt';
 
 /** A rangoli mandala around a lit diya. */
 function Rangoli() {
@@ -134,7 +135,24 @@ function Fireworks() {
   );
 }
 
-const ART = { rangoli: Rangoli, 'pongal-pot': PongalPot, tree: Tree, fireworks: Fireworks } as const;
+const ART: Record<Exclude<ThemeGreeting['art'], 'none'>, () => JSX.Element> = {
+  rangoli: Rangoli,
+  'pongal-pot': PongalPot,
+  tree: Tree,
+  fireworks: Fireworks,
+  holi: HoliArt,
+  dandiya: DandiyaArt,
+  lamps: LampsArt,
+  modak: ModakArt,
+  pookalam: PookalamArt,
+  rakhi: RakhiArt,
+  crescent: CrescentArt,
+  flag: FlagArt,
+  heart: HeartArt,
+  frame: FrameArt,
+  kolam: KolamArt,
+  peacock: PeacockArt,
+};
 
 /**
  * The festival's greeting card at the top of the homepage: the theme's dark
