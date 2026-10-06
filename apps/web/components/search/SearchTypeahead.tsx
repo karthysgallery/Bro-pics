@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Category } from '@bro-pics/shared';
@@ -110,12 +109,12 @@ export function SearchTypeahead({
   placeholder = 'Search for frames, gifts and more...',
 }: SearchTypeaheadProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [isFocused, setIsFocused] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [popularSearches, setPopularSearches] = useState<string[]>(DEFAULT_POPULAR_SEARCHES);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -124,25 +123,41 @@ export function SearchTypeahead({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const mobileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
+  /** Closes the dropdown (and, on phones, the keyboard). The typed text stays. */
+  const closeDropdown = useCallback(() => {
+    setIsFocused(false);
+    setHighlightedIndex(-1);
+    inputRef.current?.blur();
   }, []);
 
-  // Lock body scroll when mobile search modal is open
+  // One dropdown for every screen size: it closes when the shopper taps or
+  // tabs anywhere outside the search, and whenever the page changes (a
+  // product or result was opened), so it never stays over the next page.
   useEffect(() => {
-    if (isMobileOpen) {
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prevOverflow;
-      };
-    }
-  }, [isMobileOpen]);
+    if (!isFocused) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) closeDropdown();
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setIsFocused(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('focusin', onFocusIn);
+    };
+  }, [isFocused, closeDropdown]);
+
+  useEffect(() => {
+    setIsFocused(false);
+    setHighlightedIndex(-1);
+    // Keep the words on the results page; anywhere else start with an empty box.
+    if (!pathname?.startsWith('/search')) setQuery('');
+  }, [pathname]);
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -209,8 +224,7 @@ export function SearchTypeahead({
     e.preventDefault();
     if (query.trim().length === 0) return;
     saveRecentSearch(query.trim());
-    setIsFocused(false);
-    setIsMobileOpen(false);
+    closeDropdown();
     if (scope) {
       router.push(`/category/${scope}?q=${encodeURIComponent(query.trim())}`);
       return;
@@ -221,8 +235,7 @@ export function SearchTypeahead({
   const handleSelectQuery = (term: string) => {
     saveRecentSearch(term);
     setQuery(term);
-    setIsFocused(false);
-    setIsMobileOpen(false);
+    closeDropdown();
     router.push(`/search?q=${encodeURIComponent(term)}`);
   };
 
@@ -262,9 +275,7 @@ export function SearchTypeahead({
       e.preventDefault();
       if (isTyping) {
         const suggestion = suggestions[highlightedIndex];
-        setIsFocused(false);
-        setIsMobileOpen(false);
-        setSuggestions([]);
+        closeDropdown();
         router.push(`/product/${suggestion.slug}`);
       } else if (showRecent) {
         handleSelectQuery(recentSearches[highlightedIndex]);
@@ -272,17 +283,13 @@ export function SearchTypeahead({
         handleSelectQuery(popularSearches[highlightedIndex]);
       }
     } else if (e.key === 'Escape') {
-      setIsFocused(false);
-      setIsMobileOpen(false);
-      setSuggestions([]);
-      setHighlightedIndex(-1);
-      inputRef.current?.blur();
+      closeDropdown();
     }
   };
 
   return (
-    <div className="relative w-full">
-      {/* ── DESKTOP & TABLET IN-HEADER SEARCH BAR ── */}
+    <div ref={containerRef} className="relative w-full">
+      {/* ── IN-HEADER SEARCH BAR (all screen sizes) ── */}
       <form onSubmit={handleSubmit} className="relative w-full">
         <div
           className={`flex items-center gap-2 rounded-full border transition-all duration-200 pl-3.5 pr-1.5 py-1.5 ${
@@ -317,29 +324,17 @@ export function SearchTypeahead({
             aria-label="Search products"
             placeholder={placeholder}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                refreshRecentSearches();
-                setIsMobileOpen(true);
-              }
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setIsFocused(true);
             }}
             onFocus={() => {
               refreshRecentSearches();
-              if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                setIsMobileOpen(true);
-              } else {
-                setIsFocused(true);
-              }
+              setIsFocused(true);
             }}
+            onClick={() => setIsFocused(true)}
             onKeyDown={handleKeyDown}
-            onBlur={() => {
-              // Delay blur so clicks inside the floating dropdown fire
-              setTimeout(() => {
-                setIsFocused(false);
-              }, 220);
-            }}
-            className="flex-1 min-w-0 bg-transparent text-base md:text-[13.5px] text-ink placeholder:text-ink/50 focus:outline-none py-1 h-9 md:h-auto"
+            className="flex-1 min-w-0 bg-transparent text-base md:text-[13.5px] text-ink placeholder:text-ink/50 focus:outline-none py-1 h-9 md:h-auto appearance-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
           />
 
           {isLoading && (
@@ -396,11 +391,11 @@ export function SearchTypeahead({
         </div>
       </form>
 
-      {/* ── FLOATING DESKTOP SEARCH DROPDOWN ── */}
-      {(isFocused || suggestions.length > 0 || categorySuggestions.length > 0) && (
+      {/* ── SEARCH DROPDOWN (same on phone and desktop) ── */}
+      {isFocused && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 bg-[#FAF8F5] border border-line rounded-2xl mt-2 py-3 z-50 shadow-2xl shadow-ink/15 overflow-hidden backdrop-blur-md max-h-[85vh] overflow-y-auto"
+          className="absolute top-full left-0 right-0 bg-[#FAF8F5] border border-line rounded-2xl mt-2 py-3 z-50 shadow-2xl shadow-ink/15 overflow-hidden max-h-[70vh] md:max-h-[85vh] overflow-y-auto overscroll-contain"
         >
           {/* 1. WHILE TYPING: Live Results (Categories, Suggestions, Products) */}
           {isTyping && (
@@ -416,7 +411,7 @@ export function SearchTypeahead({
                       <Link
                         key={category.id}
                         href={`/category/${category.slug}`}
-                        onClick={() => setIsFocused(false)}
+                        onClick={closeDropdown}
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-paper border border-line/70 hover:border-ink/50 text-xs font-medium text-ink transition-colors"
                       >
                         <span className="relative w-5 h-5 rounded-md overflow-hidden bg-tint border border-line/40 shrink-0">
@@ -459,7 +454,7 @@ export function SearchTypeahead({
                         href={`/product/${suggestion.slug}`}
                         onClick={() => {
                           saveRecentSearch(suggestion.title);
-                          setIsFocused(false);
+                          closeDropdown();
                         }}
                         onMouseEnter={() => setHighlightedIndex(index)}
                         className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${
@@ -500,7 +495,7 @@ export function SearchTypeahead({
                   href={`/search?q=${encodeURIComponent(query.trim())}`}
                   onClick={() => {
                     saveRecentSearch(query.trim());
-                    setIsFocused(false);
+                    closeDropdown();
                   }}
                   className="flex items-center justify-between text-xs font-semibold text-ink hover:text-accent transition-colors py-1.5 px-2 rounded-lg bg-paper border border-line/70"
                 >
@@ -584,7 +579,7 @@ export function SearchTypeahead({
               {/* SECTION B: Popular Searches (Both New and Returning Users) */}
               <div className="px-3.5 pt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/50 mb-2">
-                  Popular searches
+                  Top searches
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {popularSearches.map((popular) => (
@@ -624,7 +619,7 @@ export function SearchTypeahead({
                       href={`/product/${item.slug}`}
                       onClick={() => {
                         saveRecentSearch(item.title);
-                        setIsFocused(false);
+                        closeDropdown();
                       }}
                       className="group shrink-0 w-[145px] sm:w-[155px] snap-start bg-paper rounded-xl border border-line/70 p-2 hover:border-ink/50 hover:shadow-xs transition-all flex flex-col justify-between"
                     >
@@ -673,360 +668,6 @@ export function SearchTypeahead({
         </div>
       )}
 
-      {/* ── MOBILE SEARCH MODAL (Portaled to document.body to avoid stacking context & blur traps) ── */}
-      {isMounted && isMobileOpen && createPortal(
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Search"
-          className="fixed inset-0 z-[100] bg-[#FAF8F5] flex flex-col md:hidden animate-in fade-in duration-150"
-        >
-          {/* Top Bar with Back Arrow, Search Input Pill, and Search Button */}
-          <div className="px-3 py-2.5 bg-paper border-b border-line flex items-center gap-2 shrink-0 shadow-xs">
-            <button
-              type="button"
-              aria-label="Close search"
-              onClick={() => {
-                setIsMobileOpen(false);
-                setQuery('');
-              }}
-              className="w-10 h-10 -ml-1 flex items-center justify-center rounded-full text-ink/70 hover:text-ink hover:bg-tint active:scale-95 transition-all shrink-0"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-            </button>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (query.trim().length > 0) {
-                  handleSelectQuery(query.trim());
-                }
-              }}
-              className="flex-1 flex items-center gap-2"
-            >
-              <div className="flex-1 relative flex items-center bg-[#FAF8F5] border border-line rounded-full px-3.5 h-11 focus-within:border-gold focus-within:bg-paper focus-within:ring-2 focus-within:ring-gold/20 shadow-2xs transition-all">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-ink/40 shrink-0 mr-2"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="M20 20l-3.5-3.5" />
-                </svg>
-
-                <input
-                  ref={mobileInputRef}
-                  type="search"
-                  autoFocus
-                  placeholder="Search frames, gifts..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="w-full bg-transparent text-base text-ink placeholder:text-ink/50 focus:outline-none appearance-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
-                />
-
-                {query.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery('');
-                      setSuggestions([]);
-                      mobileInputRef.current?.focus();
-                    }}
-                    aria-label="Clear search"
-                    className="w-6 h-6 flex items-center justify-center rounded-full bg-line/80 text-ink/70 hover:bg-line hover:text-ink transition-colors shrink-0 ml-1"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="shrink-0 h-11 px-4 rounded-full bg-gold hover:bg-gold-deep text-ink text-xs font-bold uppercase tracking-wider flex items-center justify-center shadow-xs active:scale-95 transition-all"
-              >
-                Search
-              </button>
-            </form>
-          </div>
-
-          {/* Mobile Overlay Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-            {/* Live Typing Suggestions */}
-            {isTyping && (
-              <div className="space-y-4">
-                {isLoading && (
-                  <div className="flex items-center justify-center py-6">
-                    <span className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-
-                {/* Category matches */}
-                {categorySuggestions.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/40 mb-2">
-                      Matching Categories
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {categorySuggestions.map((cat) => (
-                        <Link
-                          key={cat.id}
-                          href={`/category/${cat.slug}`}
-                          onClick={() => {
-                            setIsMobileOpen(false);
-                            setIsFocused(false);
-                          }}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-paper border border-line text-xs font-medium text-ink hover:border-gold transition-colors"
-                        >
-                          <span>{cat.name}</span>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink/40">
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Product results */}
-                {suggestions.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/40">
-                        Products ({suggestions.length})
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {suggestions.map((suggestion) => (
-                        <Link
-                          key={suggestion.id}
-                          href={`/product/${suggestion.slug}`}
-                          onClick={() => {
-                            saveRecentSearch(suggestion.title);
-                            setIsMobileOpen(false);
-                            setIsFocused(false);
-                          }}
-                          className="flex items-center gap-3 p-2.5 rounded-xl bg-paper border border-line/70 hover:border-gold active:bg-tint transition-all"
-                        >
-                          <span className="relative w-12 h-12 rounded-lg bg-tint overflow-hidden shrink-0 border border-line/40">
-                            {suggestion.image ? (
-                              <Image src={suggestion.image} alt="" fill sizes="48px" className="object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink/20">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                                  <circle cx="9" cy="9" r="2" />
-                                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                                </svg>
-                              </div>
-                            )}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm text-ink truncate">{suggestion.title}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {suggestion.pricePaise && (
-                                <p className="text-xs font-bold text-accent">{formatPaise(suggestion.pricePaise)}</p>
-                              )}
-                              {suggestion.rating && (
-                                <span className="flex items-center gap-0.5 text-2xs font-semibold text-ink/70">
-                                  <span className="text-gold text-[10px]">★</span>
-                                  {suggestion.rating}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink/30 shrink-0">
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
-                        </Link>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSelectQuery(query.trim())}
-                      className="w-full mt-3 py-3 rounded-xl bg-paper border border-line text-center text-xs font-bold uppercase tracking-wider text-ink hover:bg-tint transition-colors"
-                    >
-                      View all results for &ldquo;{query}&rdquo; →
-                    </button>
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {noResults && (
-                  <div className="space-y-6 pt-4">
-                    <div className="text-center py-6 px-4 bg-paper rounded-2xl border border-line/70">
-                      <p className="text-sm font-semibold text-ink">No exact matches for &ldquo;{query}&rdquo;</p>
-                      <p className="text-xs text-ink/50 mt-1">Check for typos or try one of the popular searches below.</p>
-                    </div>
-
-                    {/* Fallback popular searches */}
-                    <div>
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-ink uppercase tracking-wider mb-2.5">
-                        <span className="text-gold text-sm">✦</span>
-                        <span>Popular Searches</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {popularSearches.map((pop) => (
-                          <button
-                            key={pop}
-                            type="button"
-                            onClick={() => handleSelectQuery(pop)}
-                            className="px-3.5 py-2 rounded-full bg-paper border border-line text-xs font-medium text-ink shadow-2xs hover:border-gold active:scale-95 transition-all"
-                          >
-                            {pop}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Empty Input: Recent, Popular, Categories & Best Sellers */}
-            {!isTyping && (
-              <>
-                {/* 1. Recent Searches */}
-                {recentSearches.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-ink uppercase tracking-wider">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink/50">
-                          <circle cx="12" cy="12" r="10" />
-                          <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                        <span>Recent Searches</span>
-                      </div>
-                      <button type="button" onClick={clearAllRecent} className="text-xs text-ink/50 hover:text-ink underline">
-                        Clear all
-                      </button>
-                    </div>
-                    <div className="space-y-1.5">
-                      {recentSearches.map((term) => (
-                        <div
-                          key={term}
-                          onClick={() => handleSelectQuery(term)}
-                          className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-paper border border-line/70 hover:border-gold/60 text-sm font-medium text-ink cursor-pointer active:bg-tint transition-colors"
-                        >
-                          <span className="truncate">{term}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => removeSingleRecent(term, e)}
-                            className="text-ink/40 hover:text-ink p-1 -mr-1"
-                            aria-label={`Remove ${term}`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Popular Searches */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-ink uppercase tracking-wider mb-2.5">
-                    <span className="text-gold text-sm">✦</span>
-                    <span>Popular Searches</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {popularSearches.map((pop) => (
-                      <button
-                        key={pop}
-                        type="button"
-                        onClick={() => handleSelectQuery(pop)}
-                        className="px-3.5 py-2 rounded-full bg-paper border border-line text-xs font-medium text-ink shadow-2xs hover:border-gold active:scale-95 transition-all"
-                      >
-                        {pop}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 3. Browse Categories */}
-                {categories.length > 0 && (
-                  <div>
-                    <div className="text-xs font-bold text-ink uppercase tracking-wider mb-2.5">
-                      Browse Categories
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {categories.slice(0, 6).map((cat) => (
-                        <Link
-                          key={cat.id}
-                          href={`/category/${cat.slug}`}
-                          onClick={() => {
-                            setIsMobileOpen(false);
-                            setIsFocused(false);
-                          }}
-                          className="flex items-center gap-2 p-2.5 rounded-xl bg-paper border border-line/70 hover:border-gold active:bg-tint transition-all"
-                        >
-                          <span className="text-xs font-semibold text-ink truncate">{cat.name}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. Best Selling Frames */}
-                <div>
-                  <div className="text-xs font-bold text-ink uppercase tracking-wider mb-2.5">
-                    Best Selling Frames
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
-                    {BEST_SELLING_FRAMES.map((item) => (
-                      <Link
-                        key={item.id}
-                        href={`/product/${item.slug}`}
-                        onClick={() => {
-                          saveRecentSearch(item.title);
-                          setIsMobileOpen(false);
-                          setIsFocused(false);
-                        }}
-                        className="shrink-0 w-[140px] snap-start bg-paper rounded-xl border border-line p-2.5 hover:border-gold active:scale-[0.98] transition-all !flex !flex-col justify-between"
-                      >
-                        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-tint mb-2 shrink-0">
-                          <Image
-                            src={item.image ?? '/placeholders/products/classic-wooden-frame-1.jpg'}
-                            alt=""
-                            fill
-                            sizes="140px"
-                            className="object-cover"
-                          />
-                        </div>
-                        <div className="w-full">
-                          <p className="text-xs font-semibold text-ink truncate">{item.title}</p>
-                          <div className="mt-1 flex items-center justify-between w-full">
-                            <p className="text-xs font-bold text-accent">{formatPaise(item.pricePaise ?? 4999)}</p>
-                            {item.rating && (
-                              <span className="flex items-center gap-0.5 text-2xs font-semibold text-ink/75">
-                                <span className="text-gold text-[10px]">★</span>
-                                {item.rating}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

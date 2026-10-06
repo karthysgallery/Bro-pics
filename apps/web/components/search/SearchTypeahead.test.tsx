@@ -76,7 +76,7 @@ describe('SearchTypeahead', () => {
     render(<SearchTypeahead />);
     fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
     await waitFor(() => expect(screen.getByText('birthday frame')).toBeInTheDocument());
-    expect(screen.getByText('Popular searches')).toBeInTheDocument();
+    expect(screen.getByText('Top searches')).toBeInTheDocument();
   });
 
   it('shows both recent searches and popular searches when returning user focuses input', async () => {
@@ -91,7 +91,7 @@ describe('SearchTypeahead', () => {
     render(<SearchTypeahead />);
     fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
     await waitFor(() => expect(screen.getByText('photo frame')).toBeInTheDocument());
-    expect(screen.getByText('Popular searches')).toBeInTheDocument();
+    expect(screen.getByText('Top searches')).toBeInTheDocument();
   });
 
   it('[FE-31] shows a category suggestion with a thumbnail alongside product suggestions', async () => {
@@ -112,5 +112,30 @@ describe('SearchTypeahead', () => {
     const categoryLink = screen.getByRole('link', { name: /Wooden Frames/ });
     expect(categoryLink).toHaveAttribute('href', '/category/wooden-frames');
     expect(categoryLink.querySelector('img')).toBeInTheDocument();
+  });
+
+  it('opens in place (no separate page) and closes once a product is chosen', async () => {
+    render(<SearchTypeahead />);
+    const input = screen.getByPlaceholderText('Search for frames, gifts and more...');
+    fireEvent.focus(input);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Best Selling Frames')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'classic' } });
+    await waitFor(() => expect(screen.getByText('Classic Wooden Frame')).toBeInTheDocument(), { timeout: 1000 });
+    fireEvent.click(screen.getByRole('option', { name: 'Classic Wooden Frame' }));
+    expect(screen.queryByText('Classic Wooden Frame')).not.toBeInTheDocument();
+  });
+
+  it('closes when the shopper taps outside the search', async () => {
+    render(
+      <div>
+        <SearchTypeahead />
+        <p>page</p>
+      </div>
+    );
+    fireEvent.focus(screen.getByPlaceholderText('Search for frames, gifts and more...'));
+    expect(screen.getByText('Best Selling Frames')).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByText('page'));
+    expect(screen.queryByText('Best Selling Frames')).not.toBeInTheDocument();
   });
 });
