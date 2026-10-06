@@ -7,15 +7,18 @@ const config: Config = {
       colors: {
         // Black & Gold Elegance — warm palette.
         // Role names, not colour names: palette survives rebrand.
-        ink: '#000000',        // Black — all text
-        paper: '#FFFFFF',      // White — cards and raised surfaces
-        field: '#FAF8F4',      // The page itself — warm alabaster
-        tint: '#EFEBE4',       // Quiet bands, image tiles, search field
-        line: '#E0DAD1',       // Borders — a step darker than tint
-        gold: '#FCA311',       // Primary accent — CTA buttons
-        'gold-deep': '#E08F00',// Gold hover/pressed
-        accent: '#14213D',     // Prussian Blue — links, focus ring
-        'accent-dark': '#0B1428',
+        // Storefront colour roles come from CSS variables so an admin-chosen
+        // theme (festivals — see packages/shared/src/schemas/theme.ts) can
+        // repaint the whole site. Defaults live in app/globals.css :root.
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',               // All text
+        paper: 'rgb(var(--color-paper) / <alpha-value>)',           // Cards and raised surfaces
+        field: 'rgb(var(--color-field) / <alpha-value>)',           // The page itself
+        tint: 'rgb(var(--color-tint) / <alpha-value>)',             // Quiet bands, image tiles, search field
+        line: 'rgb(var(--color-line) / <alpha-value>)',             // Borders
+        gold: 'rgb(var(--color-gold) / <alpha-value>)',             // Primary accent — CTA buttons
+        'gold-deep': 'rgb(var(--color-gold-deep) / <alpha-value>)', // Gold hover/pressed
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',         // Links, focus ring
+        'accent-dark': 'rgb(var(--color-accent-dark) / <alpha-value>)',
         alert: '#A35A08',      // Errors — deepened gold (no red in palette)
 
         // Admin-only legacy tokens (do NOT use in storefront)

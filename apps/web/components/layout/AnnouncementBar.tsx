@@ -44,7 +44,7 @@ export function AnnouncementBar({
                 {item}
               </span>
               <span
-                className="text-[#FCA311] text-xs select-none font-bold"
+                className="text-gold text-xs select-none font-bold"
                 aria-hidden="true"
               >
                 ✦
@@ -61,7 +61,7 @@ export function AnnouncementBar({
                 {item}
               </span>
               <span
-                className="text-[#FCA311] text-xs select-none font-bold"
+                className="text-gold text-xs select-none font-bold"
                 aria-hidden="true"
               >
                 ✦
@@ -76,7 +76,7 @@ export function AnnouncementBar({
   return (
     <aside
       aria-label="Announcements"
-      className="relative w-full bg-[#0B1428] text-white overflow-hidden select-none border-b border-white/10 z-30"
+      className="relative w-full bg-accent-dark text-white overflow-hidden select-none border-b border-white/10 z-30"
     >
       {link ? (
         <Link

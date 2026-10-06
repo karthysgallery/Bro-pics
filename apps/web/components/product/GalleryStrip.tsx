@@ -40,7 +40,7 @@ export function GalleryStrip({ media, productTitle }: GalleryStripProps) {
             }`}
           >
             {item.type === 'video' ? (
-              <div className="w-full h-full bg-[#0B1428] text-white flex items-center justify-center text-sm">
+              <div className="w-full h-full bg-accent-dark text-white flex items-center justify-center text-sm">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>

@@ -344,7 +344,7 @@ export function PhotoCropModal({
         </div>
 
         {/* Modal Body / Crop Viewport Area */}
-        <div className="p-4 sm:p-6 flex flex-col items-center justify-center bg-[#F7F5F0] overflow-hidden">
+        <div className="p-4 sm:p-6 flex flex-col items-center justify-center bg-field overflow-hidden">
           {/* Aspect-ratio constrained viewport representing the exact slot cutout */}
           <div className="relative w-full max-w-[420px] max-h-[50vh] flex items-center justify-center">
             <div

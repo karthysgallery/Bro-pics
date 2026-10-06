@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { requirePermission } from '../../../../../lib/require-permission';
@@ -76,6 +77,14 @@ export async function PUT(request: Request, { params }: RouteParams): Promise<Ne
   // announcement-bar route: each settings doc is one small config, not a
   // resource with independently PATCHable fields.
   await db.collection('settings').doc(key).set(parsed.data);
+  // Shop pages are cached; a new theme (or header/footer/SEO) should show right away.
+  if (key === 'theme' || key === 'header' || key === 'footer' || key === 'seo' || key === 'store') {
+    try {
+      revalidatePath('/', 'layout');
+    } catch {
+      // Outside a Next.js request (tests) there is nothing to revalidate.
+    }
+  }
 
   await writeAuditLog(db, {
     actorUid: permission.uid,

@@ -23,7 +23,7 @@ export default function DesignSystemPage() {
   const [simulatedQuery, setSimulatedQuery] = useState('wedding');
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-ink py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-field text-ink py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       {/* Top Banner */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-line/80 pb-6">
@@ -94,25 +94,25 @@ export default function DesignSystemPage() {
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line/70">
+              <div className="p-4 rounded-2xl bg-field border border-line/70">
                 <span className="text-xs font-bold uppercase tracking-wider text-gold">Emotional & Warm</span>
                 <p className="text-2xs sm:text-xs text-ink/70 mt-1 leading-relaxed">
                   Celebrates real human memories with tactile materials, real wood, and archival mats.
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line/70">
+              <div className="p-4 rounded-2xl bg-field border border-line/70">
                 <span className="text-xs font-bold uppercase tracking-wider text-ink">Minimal & Clean</span>
                 <p className="text-2xs sm:text-xs text-ink/70 mt-1 leading-relaxed">
                   Generous whitespace, quiet borders, and no gratuitous gradients or rounded bubbles.
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line/70">
+              <div className="p-4 rounded-2xl bg-field border border-line/70">
                 <span className="text-xs font-bold uppercase tracking-wider text-ink">Zero Emojis</span>
                 <p className="text-2xs sm:text-xs text-ink/70 mt-1 leading-relaxed">
                   Strictly professional SVG line icons (Lucide-style) with consistent stroke widths.
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line/70">
+              <div className="p-4 rounded-2xl bg-field border border-line/70">
                 <span className="text-xs font-bold uppercase tracking-wider text-ink">Mobile-First</span>
                 <p className="text-2xs sm:text-xs text-ink/70 mt-1 leading-relaxed">
                   Touch targets $\ge$ 44px, full-width search drawer, and touch-scrollable carousels.
@@ -125,16 +125,16 @@ export default function DesignSystemPage() {
           <div className="bg-paper rounded-3xl border border-line p-6 sm:p-8 shadow-xs">
             <h2 className="font-display text-xl font-bold text-ink mb-4">Design Tokens: Curated Palette</h2>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-              <div className="rounded-2xl border border-line overflow-hidden bg-[#FAF8F5]">
-                <div className="h-16 bg-[#FAF8F5] border-b border-line/70" />
+              <div className="rounded-2xl border border-line overflow-hidden bg-field">
+                <div className="h-16 bg-field border-b border-line/70" />
                 <div className="p-3 text-2xs">
                   <p className="font-bold text-ink">Canvas / Ivory</p>
                   <p className="text-ink/50 font-mono">#FAF8F5</p>
                   <p className="text-ink/40 mt-1">Warm off-white base</p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-line overflow-hidden bg-[#FCFBF8]">
-                <div className="h-16 bg-[#FFFFFF] border-b border-line/70" />
+              <div className="rounded-2xl border border-line overflow-hidden bg-field">
+                <div className="h-16 bg-paper border-b border-line/70" />
                 <div className="p-3 text-2xs">
                   <p className="font-bold text-ink">Paper / Surface</p>
                   <p className="text-ink/50 font-mono">#FFFFFF</p>
@@ -232,7 +232,7 @@ export default function DesignSystemPage() {
               <select
                 value={authState}
                 onChange={(e) => setAuthState(e.target.value as typeof authState)}
-                className="text-xs font-medium bg-[#FAF8F5] border border-line rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-ink cursor-pointer"
+                className="text-xs font-medium bg-field border border-line rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-ink cursor-pointer"
               >
                 <option value="default">Default</option>
                 <option value="focus">Focus State</option>
@@ -259,7 +259,7 @@ export default function DesignSystemPage() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
                   <div className="relative z-10 font-display text-xl font-bold text-white">
-                    Karthys<span className="text-[#FCA311]">Gallery</span>
+                    Karthys<span className="text-gold">Gallery</span>
                   </div>
                   <div className="relative z-10 max-w-md text-white">
                     <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold mb-2">
@@ -518,7 +518,7 @@ export default function DesignSystemPage() {
 
                 {/* Step 1 Preview */}
                 {simForgotStep === 1 && (
-                  <div className="space-y-4 p-5 rounded-2xl bg-[#FAF8F5] border border-line/70">
+                  <div className="space-y-4 p-5 rounded-2xl bg-field border border-line/70">
                     <div>
                       <h4 className="font-display text-base font-bold text-ink">Reset your password</h4>
                       <p className="text-xs text-ink/60 mt-0.5">
@@ -541,7 +541,7 @@ export default function DesignSystemPage() {
 
                 {/* Step 2 Preview */}
                 {simForgotStep === 2 && (
-                  <div className="space-y-4 p-5 rounded-2xl bg-[#FAF8F5] border border-line/70">
+                  <div className="space-y-4 p-5 rounded-2xl bg-field border border-line/70">
                     <div>
                       <h4 className="font-display text-base font-bold text-ink">Enter verification code</h4>
                       <p className="text-xs text-ink/60 mt-0.5">
@@ -574,7 +574,7 @@ export default function DesignSystemPage() {
 
                 {/* Step 3 Preview */}
                 {simForgotStep === 3 && (
-                  <div className="space-y-4 p-5 rounded-2xl bg-[#FAF8F5] border border-line/70">
+                  <div className="space-y-4 p-5 rounded-2xl bg-field border border-line/70">
                     <div>
                       <h4 className="font-display text-base font-bold text-ink">Create new password</h4>
                       <p className="text-xs text-ink/60 mt-0.5">Choose a strong password with letters and numbers.</p>
@@ -610,7 +610,7 @@ export default function DesignSystemPage() {
 
                 {/* Step 4 Preview */}
                 {simForgotStep === 4 && (
-                  <div className="space-y-4 p-6 rounded-2xl bg-[#FAF8F5] border border-line/70 text-center">
+                  <div className="space-y-4 p-6 rounded-2xl bg-field border border-line/70 text-center">
                     <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -673,7 +673,7 @@ export default function DesignSystemPage() {
                   type="text"
                   value={simulatedQuery}
                   onChange={(e) => setSimulatedQuery(e.target.value)}
-                  className="px-2.5 py-1 text-xs border border-line rounded-lg bg-[#FAF8F5]"
+                  className="px-2.5 py-1 text-xs border border-line rounded-lg bg-field"
                 />
               </div>
             )}
@@ -682,7 +682,7 @@ export default function DesignSystemPage() {
           {/* Interactive Floating Search Panel Display */}
           <div className="max-w-2xl mx-auto">
             {searchMode !== 'mobile' ? (
-              <div className="bg-[#FAF8F5] border border-line rounded-2xl shadow-xl p-4 divide-y divide-line/60">
+              <div className="bg-field border border-line rounded-2xl shadow-xl p-4 divide-y divide-line/60">
                 {/* Search Bar Representation */}
                 <div className="pb-3 flex items-center gap-2.5 px-3 py-2 rounded-full bg-paper border border-ink shadow-sm">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink/50">
@@ -842,13 +842,13 @@ export default function DesignSystemPage() {
               <div className="w-[375px] mx-auto bg-paper rounded-[32px] border-4 border-ink shadow-2xl p-4 flex flex-col min-h-[580px]">
                 <div className="flex items-center gap-2 pb-3 border-b border-line">
                   <span className="text-xs font-bold text-ink">&larr;</span>
-                  <input type="search" placeholder="Search frames, gifts..." className="w-full h-9 px-3 rounded-full border border-line bg-[#FAF8F5] text-xs" />
+                  <input type="search" placeholder="Search frames, gifts..." className="w-full h-9 px-3 rounded-full border border-line bg-field text-xs" />
                 </div>
                 <div className="py-4 space-y-4">
                   <p className="text-2xs font-bold uppercase tracking-wider text-ink/50">Popular Searches</p>
                   <div className="flex flex-wrap gap-1.5">
                     {DEFAULT_POPULAR_SEARCHES.slice(0, 4).map((p) => (
-                      <span key={p} className="px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-line text-2xs font-medium">
+                      <span key={p} className="px-2.5 py-1 rounded-full bg-field border border-line text-2xs font-medium">
                         {p}
                       </span>
                     ))}
@@ -860,7 +860,7 @@ export default function DesignSystemPage() {
                     </p>
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                       {BEST_SELLING_FRAMES.slice(0, 2).map((item) => (
-                        <div key={item.id} className="w-36 shrink-0 bg-[#FAF8F5] p-2 rounded-xl border border-line">
+                        <div key={item.id} className="w-36 shrink-0 bg-field p-2 rounded-xl border border-line">
                           <div className="relative aspect-square w-full rounded bg-tint mb-1 overflow-hidden">
                             <Image src={item.image ?? '/placeholders/products/classic-wooden-frame-1.jpg'} alt="" fill sizes="140px" className="object-cover" />
                           </div>
@@ -890,7 +890,7 @@ export default function DesignSystemPage() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-field border border-line flex flex-col justify-between">
                 <div>
                   <span className="w-6 h-6 rounded-full bg-ink text-paper text-xs font-bold flex items-center justify-center mb-2">1</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-ink">User Clicks Search</h4>
@@ -903,7 +903,7 @@ export default function DesignSystemPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-field border border-line flex flex-col justify-between">
                 <div>
                   <span className="w-6 h-6 rounded-full bg-ink text-paper text-xs font-bold flex items-center justify-center mb-2">2</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-ink">User Discovers or Types</h4>
@@ -916,7 +916,7 @@ export default function DesignSystemPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-field border border-line flex flex-col justify-between">
                 <div>
                   <span className="w-6 h-6 rounded-full bg-ink text-paper text-xs font-bold flex items-center justify-center mb-2">3</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-ink">Click Product Card</h4>
@@ -929,7 +929,7 @@ export default function DesignSystemPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-line flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-field border border-line flex flex-col justify-between">
                 <div>
                   <span className="w-6 h-6 rounded-full bg-gold text-ink text-xs font-bold flex items-center justify-center mb-2">4</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-ink">Live Personalization</h4>
@@ -954,7 +954,7 @@ export default function DesignSystemPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Buttons */}
-              <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-line space-y-3">
+              <div className="p-5 rounded-2xl bg-field border border-line space-y-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-ink/50">Buttons & Touch Targets</span>
                 <div className="flex flex-wrap gap-2.5 items-center pt-2">
                   <button type="button" className="px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-semibold shadow-xs">
@@ -970,7 +970,7 @@ export default function DesignSystemPage() {
               </div>
 
               {/* Badges & Indicators */}
-              <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-line space-y-3">
+              <div className="p-5 rounded-2xl bg-field border border-line space-y-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-ink/50">Badges & Quality Signals</span>
                 <div className="flex flex-wrap gap-2 items-center pt-2">
                   <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">

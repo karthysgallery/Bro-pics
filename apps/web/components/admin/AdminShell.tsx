@@ -29,6 +29,35 @@ interface NavGroup {
 
 function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className?: string }) {
   switch (name) {
+    case 'theme':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z" />
+          <circle cx="7.5" cy="11" r="1" />
+          <circle cx="10" cy="7" r="1" />
+          <circle cx="15" cy="7.5" r="1" />
+        </svg>
+      );
+    case 'homepage':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+        </svg>
+      );
+    case 'pages':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
+          <path d="M14 3v5h5M8 13h8M8 17h6" />
+        </svg>
+      );
+    case 'videos':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="14" height="14" rx="2" />
+          <path d="m17 10 4-2.5v9L17 14" />
+        </svg>
+      );
     case 'dashboard':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -262,6 +291,15 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Customers',
     items: [
       { label: 'Customer Directory', href: '/admin/customers', permission: 'customers:read', icon: 'customers' },
+    ],
+  },
+  {
+    group: 'Website',
+    items: [
+      { label: 'Festival Themes', href: '/admin/themes', permission: 'settings:write', icon: 'theme' },
+      { label: 'Homepage', href: '/admin/homepage', permission: 'content:read', icon: 'homepage' },
+      { label: 'Pages', href: '/admin/pages', permission: 'content:read', icon: 'pages' },
+      { label: 'Videos', href: '/admin/videos', permission: 'content:read', icon: 'videos' },
     ],
   },
   {

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Storefront colour roles (the Everyday theme). A festival theme overrides
+   these from the root layout; the admin always keeps the Everyday colours. */
+:root {
+  --color-field: 250 248 244;
+  --color-paper: 255 255 255;
+  --color-tint: 239 235 228;
+  --color-line: 224 218 209;
+  --color-ink: 0 0 0;
+  --color-gold: 252 163 17;
+  --color-gold-deep: 224 143 0;
+  --color-accent: 20 33 61;
+  --color-accent-dark: 11 20 40;
+}
+
 /* ================================================================
    DESIGN SYSTEM — KarthysGallery
    Warm minimalist: cream field, black ink, gold accent.
@@ -407,4 +421,20 @@ details > summary::-webkit-details-marker {
   .reel-close {
     animation: none;
   }
+}
+
+/* Festival theme animations (components/theme/FestiveEffect.tsx). */
+@keyframes festive-fall {
+  0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0), 110vh, 0) rotate(300deg); opacity: 0.2; }
+}
+@keyframes festive-twinkle {
+  0%, 100% { transform: scale(0.4); opacity: 0; }
+  50% { transform: scale(1); opacity: 0.85; }
+}
+.festive-fall { animation-name: festive-fall; animation-timing-function: linear; animation-iteration-count: infinite; }
+.festive-twinkle { animation-name: festive-twinkle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .festive-effect { display: none; }
 }

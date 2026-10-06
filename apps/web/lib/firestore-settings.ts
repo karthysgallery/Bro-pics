@@ -1,6 +1,7 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
 import { DEFAULT_SHIPPING_SETTINGS } from './checkout-calc';
+import { ThemeSettingsSchema, defaultThemeSettings, type ThemeSettings } from '@bro-pics/shared';
 
 export async function getAnnouncementBarSettings(): Promise<{
   text: string;
@@ -159,4 +160,17 @@ export async function getPopularSearches(): Promise<string[]> {
   const terms = data?.popularSearches;
   if (!Array.isArray(terms)) return [];
   return terms.filter((t): t is string => typeof t === 'string' && t.length > 0);
+}
+
+/**
+ * Festival/everyday theme settings (settings/theme). Before an admin has ever
+ * saved them — or if the stored doc no longer parses — the built-in presets
+ * are used with the Everyday theme on, so the shop always has a valid look.
+ */
+export async function getThemeSettings(): Promise<ThemeSettings> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('theme').get();
+  if (!doc.exists) return defaultThemeSettings();
+  const parsed = ThemeSettingsSchema.safeParse(doc.data());
+  return parsed.success ? parsed.data : defaultThemeSettings();
 }

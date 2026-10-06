@@ -295,7 +295,7 @@ export function SearchTypeahead({
           className={`flex items-center gap-2 rounded-full border transition-all duration-200 pl-3.5 pr-1.5 py-1.5 ${
             isFocused
               ? 'bg-paper border-ink/80 shadow-md ring-2 ring-ink/10'
-              : 'bg-[#FAF8F5] border-line/80 hover:border-line focus-within:border-ink/60 focus-within:bg-paper'
+              : 'bg-field border-line/80 hover:border-line focus-within:border-ink/60 focus-within:bg-paper'
           }`}
         >
           <svg
@@ -395,7 +395,7 @@ export function SearchTypeahead({
       {isFocused && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 bg-[#FAF8F5] border border-line rounded-2xl mt-2 py-3 z-50 shadow-2xl shadow-ink/15 overflow-hidden max-h-[70vh] md:max-h-[85vh] overflow-y-auto overscroll-contain"
+          className="absolute top-full left-0 right-0 bg-field border border-line rounded-2xl mt-2 py-3 z-50 shadow-2xl shadow-ink/15 overflow-hidden max-h-[70vh] md:max-h-[85vh] overflow-y-auto overscroll-contain"
         >
           {/* 1. WHILE TYPING: Live Results (Categories, Suggestions, Products) */}
           {isTyping && (

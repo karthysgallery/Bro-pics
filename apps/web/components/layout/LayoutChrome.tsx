@@ -10,6 +10,9 @@ import { WhatsAppButton } from './WhatsAppButton';
 import { AnnouncementBar } from './AnnouncementBar';
 import { ConsentBanner } from './ConsentBanner';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
+import type { ThemeDecor } from '@bro-pics/shared';
+import { FestiveBand } from '../theme/FestiveBand';
+import { FestiveEffect } from '../theme/FestiveEffect';
 
 interface LayoutChromeProps {
   categories: Category[];
@@ -20,6 +23,8 @@ interface LayoutChromeProps {
     socialLinks: { platform: string; url: string }[];
   } | null;
   storeSettings?: { name: string; supportPhone: string } | null;
+  /** Decorations of the theme the shop is showing (festivals); none for the Everyday theme. */
+  themeDecor?: ThemeDecor | null;
   children: ReactNode;
 }
 
@@ -29,6 +34,7 @@ export function LayoutChrome({
   headerSettings = null,
   footerSettings = null,
   storeSettings = null,
+  themeDecor = null,
   children,
 }: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -55,11 +61,13 @@ export function LayoutChrome({
     <>
       <div className="sticky top-0 z-40 w-full shadow-xs">
         <AnnouncementBar
-          text={announcementBar?.text ?? defaultAnnouncement}
-          link={announcementBar?.link}
+          text={themeDecor?.bannerText || announcementBar?.text || defaultAnnouncement}
+          link={themeDecor?.bannerText ? themeDecor.bannerLink : announcementBar?.link}
         />
         <Header categories={categories} onCartClick={() => setIsCartOpen(true)} extraNavLinks={headerSettings?.navLinks} />
       </div>
+      {themeDecor && <FestiveBand motif={themeDecor.motif} />}
+      {themeDecor && <FestiveEffect effect={themeDecor.effect} />}
       <main>{children}</main>
       <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />

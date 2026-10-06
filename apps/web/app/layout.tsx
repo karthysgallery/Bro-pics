@@ -8,7 +8,8 @@ import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
-import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings } from '../lib/firestore-settings';
+import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings } from '../lib/firestore-settings';
+import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
 import { buildOrganizationJsonLd } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
@@ -113,6 +114,21 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     console.error('Failed to load store settings:', error);
   }
 
+  // The theme on show now (a festival, or the Everyday look). Its colours are
+  // set for the shop only: the admin (data-admin-root) keeps the defaults.
+  let theme: StoreTheme | null = null;
+  try {
+    theme = resolveActiveTheme(await getThemeSettings());
+  } catch (error) {
+    console.error('Failed to load theme settings:', error);
+  }
+  const festive = theme && theme.id !== 'default' ? theme : null;
+  const themeCss = festive
+    ? `:root:not(:has([data-admin-root])){${Object.entries(themeCssVariables(festive.colors))
+        .map(([k, v]) => `${k}:${v}`)
+        .join(';')}}`
+    : '';
+
   // [FE-41] One Organization entity for the whole site, rendered once
   // here rather than duplicated per page.
   const organizationJsonLd = buildOrganizationJsonLd();
@@ -120,6 +136,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" className={`${sansFont.variable} ${displayFont.variable} ${textFieldFontVariables}`}>
       <body className="bg-field text-ink font-sans antialiased">
+        {themeCss && <style data-theme={festive!.id} dangerouslySetInnerHTML={{ __html: themeCss }} />}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         <ToastProvider>
           <AuthProvider>
@@ -132,6 +149,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 headerSettings={headerSettings}
                 footerSettings={footerSettings}
                 storeSettings={storeSettings}
+                themeDecor={festive?.decor ?? null}
               >
                 {children}
               </LayoutChrome>

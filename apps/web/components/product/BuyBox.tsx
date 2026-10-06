@@ -182,7 +182,7 @@ export function BuyBox({
   }, [product.title]);
 
   return (
-    <div className="rounded-3xl bg-[#FCFBF8] border border-line/80 p-6 lg:p-7 shadow-xs flex flex-col justify-start">
+    <div className="rounded-3xl bg-field border border-line/80 p-6 lg:p-7 shadow-xs flex flex-col justify-start">
       {/* Figma Bestseller / Featured Badge */}
       {(product.isFeatured || (product.badges && product.badges.length > 0)) && (
         <div className="mb-2.5">

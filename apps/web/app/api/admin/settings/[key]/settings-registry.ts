@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ThemeSettingsSchema } from '@bro-pics/shared';
 
 /**
  * [ABE-24] One schema per `settings/{key}` doc this generic route knows
@@ -135,6 +136,8 @@ export const SETTINGS_REGISTRY = {
   seo: SettingsSeoSchema,
   header: SettingsHeaderSchema,
   footer: SettingsFooterSchema,
+  // Festival themes: colours, decorations and their dates (packages/shared/src/schemas/theme.ts).
+  theme: ThemeSettingsSchema,
 } as const;
 
 export type SettingsKey = keyof typeof SETTINGS_REGISTRY;

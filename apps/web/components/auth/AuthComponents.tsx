@@ -121,7 +121,7 @@ export function AuthInput({
           disabled={disabled}
           aria-invalid={hasError}
           aria-describedby={hasError ? `${id}-error` : helperText ? `${id}-helper` : undefined}
-          className={`w-full h-12 px-4 rounded-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-[#FAF8F5] disabled:cursor-not-allowed ${
+          className={`w-full h-12 px-4 rounded-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-field disabled:cursor-not-allowed ${
             hasError
               ? 'border-red-300 focus:ring-red-200 focus:border-red-400'
               : success
@@ -184,7 +184,7 @@ export function PasswordInput({
           disabled={disabled}
           aria-invalid={hasError}
           aria-describedby={hasError ? `${id}-error` : helperText ? `${id}-helper` : undefined}
-          className={`w-full h-12 pl-4 pr-12 rounded-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-[#FAF8F5] disabled:cursor-not-allowed ${
+          className={`w-full h-12 pl-4 pr-12 rounded-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-field disabled:cursor-not-allowed ${
             hasError
               ? 'border-red-300 focus:ring-red-200 focus:border-red-400'
               : 'border-line focus:ring-gold/20 focus:border-gold'
@@ -270,7 +270,7 @@ export function PhoneInput({
           disabled={disabled}
           aria-invalid={hasError}
           aria-describedby={hasError ? `${id}-error` : helperText ? `${id}-helper` : undefined}
-          className={`flex-1 h-12 px-4 rounded-r-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-[#FAF8F5] disabled:cursor-not-allowed ${
+          className={`flex-1 h-12 px-4 rounded-r-lg border bg-white text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 transition-all duration-150 disabled:opacity-50 disabled:bg-field disabled:cursor-not-allowed ${
             hasError
               ? 'border-red-300 focus:ring-red-200 focus:border-red-400'
               : 'border-line focus:ring-gold/20 focus:border-gold'
@@ -603,7 +603,7 @@ export function OTPInput({
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
           aria-label={`Verification code digit ${i + 1}`}
-          className={`w-11 sm:w-12 h-12 sm:h-13 text-center text-xl font-bold rounded-lg border bg-white text-ink focus:outline-none transition-all duration-150 disabled:opacity-50 disabled:bg-[#FAF8F5] ${
+          className={`w-11 sm:w-12 h-12 sm:h-13 text-center text-xl font-bold rounded-lg border bg-white text-ink focus:outline-none transition-all duration-150 disabled:opacity-50 disabled:bg-field ${
             error
               ? 'border-red-300 focus:ring-2 focus:ring-red-200 focus:border-red-400'
               : 'border-line focus:ring-2 focus:ring-gold/30 focus:border-gold'

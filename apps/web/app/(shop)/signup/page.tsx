@@ -79,7 +79,7 @@ function PasswordRequirements({ password }: { password: string }) {
         <div key={label} className="flex items-center gap-2">
           <span
             className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors duration-200 ${
-              met ? 'bg-emerald-500 text-white' : 'bg-[#E0DAD1] text-transparent'
+              met ? 'bg-emerald-500 text-white' : 'bg-line text-transparent'
             }`}
           >
             <IconCheck className="w-2 h-2" />
@@ -286,7 +286,7 @@ function SignUpContent() {
 
   const inputBase =
     'w-full h-12 min-h-[48px] px-4 rounded-lg border bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 transition-all duration-150';
-  const inputNormal = `${inputBase} border-[#E0DAD1] focus:ring-[#FCA311]/20 focus:border-[#FCA311]`;
+  const inputNormal = `${inputBase} border-line focus:ring-gold/20 focus:border-gold`;
 
   return (
     <div className="min-h-[100dvh] bg-field flex">
@@ -307,7 +307,7 @@ function SignUpContent() {
         <div className="relative z-10 p-8 xl:p-10">
           <Link href="/" className="inline-flex items-center gap-1.5">
             <span className="font-display text-xl font-bold tracking-tight text-white">
-              Karthys<span className="text-[#FCA311]">Gallery</span>
+              Karthys<span className="text-gold">Gallery</span>
             </span>
           </Link>
         </div>
@@ -330,8 +330,8 @@ function SignUpContent() {
               'Museum-grade archival materials',
             ].map((text) => (
               <div key={text} className="flex items-center gap-2.5">
-                <span className="w-4 h-4 rounded-full bg-[#FCA311]/25 flex items-center justify-center">
-                  <IconCheck className="w-2.5 h-2.5 text-[#FCA311]" />
+                <span className="w-4 h-4 rounded-full bg-gold/25 flex items-center justify-center">
+                  <IconCheck className="w-2.5 h-2.5 text-gold" />
                 </span>
                 <span className="text-[12px] text-white/70">{text}</span>
               </div>
@@ -356,7 +356,7 @@ function SignUpContent() {
             <div>
               <Link href="/" className="inline-block">
                 <span className="font-display text-[22px] font-bold tracking-tight text-black">
-                  Karthys<span className="text-[#FCA311]">Gallery</span>
+                  Karthys<span className="text-gold">Gallery</span>
                 </span>
               </Link>
             </div>
@@ -366,7 +366,7 @@ function SignUpContent() {
           <div className="hidden lg:block mb-6">
             <Link href="/" className="inline-block">
               <span className="font-display text-[22px] font-bold tracking-tight text-black">
-                Karthys<span className="text-[#FCA311]">Gallery</span>
+                Karthys<span className="text-gold">Gallery</span>
               </span>
             </Link>
           </div>
@@ -436,7 +436,7 @@ function SignUpContent() {
                     Mobile number <span className="text-red-500">*</span>
                   </label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-[#E0DAD1] bg-[#EFEBE4] text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
+                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-line bg-tint text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
                       +91
                     </span>
                     <input
@@ -452,7 +452,7 @@ function SignUpContent() {
                         clearError();
                       }}
                       placeholder="Enter 10-digit mobile number"
-                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-[#E0DAD1] bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-[#FCA311]/20 focus:border-[#FCA311] transition-all duration-150"
+                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-line bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold transition-all duration-150"
                     />
                   </div>
                   <p className="text-[11px] text-black/45 mt-1">
@@ -511,7 +511,7 @@ function SignUpContent() {
                         clearError();
                       }}
                       placeholder="Create a password"
-                      className={`${inputBase} border-[#E0DAD1] focus:ring-[#FCA311]/20 focus:border-[#FCA311] pr-12`}
+                      className={`${inputBase} border-line focus:ring-gold/20 focus:border-gold pr-12`}
                     />
                     <button
                       type="button"
@@ -558,7 +558,7 @@ function SignUpContent() {
                       className={`${inputBase} pr-12 ${
                         confirmPassword && !passwordsMatch
                           ? 'border-red-300 focus:ring-red-200 focus:border-red-400'
-                          : 'border-[#E0DAD1] focus:ring-[#FCA311]/20 focus:border-[#FCA311]'
+                          : 'border-line focus:ring-gold/20 focus:border-gold'
                       }`}
                     />
                     <button
@@ -584,7 +584,7 @@ function SignUpContent() {
                       }}
                       className="peer sr-only"
                     />
-                    <span className="w-[18px] h-[18px] rounded border border-[#E0DAD1] bg-white peer-checked:bg-black peer-checked:border-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#FCA311]/30 transition-all duration-150 flex items-center justify-center">
+                    <span className="w-[18px] h-[18px] rounded border border-line bg-white peer-checked:bg-black peer-checked:border-black peer-focus-visible:ring-2 peer-focus-visible:ring-gold/30 transition-all duration-150 flex items-center justify-center">
                       {agreeTerms && (
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <polyline points="20 6 9 17 4 12" />
@@ -594,11 +594,11 @@ function SignUpContent() {
                   </span>
                   <span className="text-[12px] sm:text-[13px] text-black/60 leading-relaxed">
                     I agree to the{' '}
-                    <Link href="/terms" className="text-black font-medium underline underline-offset-4 hover:text-[#FCA311] transition-colors">
+                    <Link href="/terms" className="text-black font-medium underline underline-offset-4 hover:text-gold transition-colors">
                       Terms &amp; Conditions
                     </Link>{' '}
                     and{' '}
-                    <Link href="/privacy" className="text-black font-medium underline underline-offset-4 hover:text-[#FCA311] transition-colors">
+                    <Link href="/privacy" className="text-black font-medium underline underline-offset-4 hover:text-gold transition-colors">
                       Privacy Policy
                     </Link>
                   </span>
@@ -700,7 +700,7 @@ function SignUpContent() {
                     type="button"
                     onClick={handleResend}
                     disabled={isLoading}
-                    className="font-semibold text-black hover:text-[#FCA311] transition-colors underline underline-offset-2"
+                    className="font-semibold text-black hover:text-gold transition-colors underline underline-offset-2"
                   >
                     Resend code
                   </button>
@@ -724,7 +724,7 @@ function SignUpContent() {
             Already have an account?{' '}
             <Link
               href={signInHref}
-              className="font-semibold text-black hover:text-[#FCA311] transition-colors underline underline-offset-4 decoration-black/20 hover:decoration-[#FCA311]"
+              className="font-semibold text-black hover:text-gold transition-colors underline underline-offset-4 decoration-black/20 hover:decoration-[#FCA311]"
             >
               Sign in
             </Link>

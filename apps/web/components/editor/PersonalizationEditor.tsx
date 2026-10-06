@@ -269,7 +269,7 @@ export function PersonalizationPreview({
       </div>
 
       {/* Main Preview Container */}
-      <div className="rounded-3xl bg-[#FAF7F2] border border-line/90 p-2 sm:p-4 relative overflow-hidden flex flex-col items-center justify-center shadow-xs w-full aspect-square max-w-[560px] mx-auto min-h-[300px]">
+      <div className="rounded-3xl bg-field border border-line/90 p-2 sm:p-4 relative overflow-hidden flex flex-col items-center justify-center shadow-xs w-full aspect-square max-w-[560px] mx-auto min-h-[300px]">
         {/* DESIGN PREVIEW MODE (Always mounted to keep canvas render active) */}
         <div className={`w-full h-full flex items-center justify-center ${previewMode === 'room' ? 'hidden' : 'block'}`}>
           <EditorCanvasErrorBoundary>

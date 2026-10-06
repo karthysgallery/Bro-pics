@@ -62,8 +62,8 @@ export function PhotoSlotCard({
           isDraggingOver
             ? 'border-accent bg-tint'
             : isActive
-            ? 'border-gold bg-[#FAF7F2]'
-            : 'border-line/80 hover:border-gold hover:bg-[#FCFBF8]'
+            ? 'border-gold bg-field'
+            : 'border-line/80 hover:border-gold hover:bg-field'
         }`}
         onDragOver={(e) => {
           e.preventDefault();

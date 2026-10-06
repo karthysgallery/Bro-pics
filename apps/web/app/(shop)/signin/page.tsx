@@ -237,7 +237,7 @@ function SignInContent() {
         <div className="relative z-10 p-8 xl:p-10">
           <Link href="/" className="inline-flex items-center gap-1.5 group">
             <span className="font-display text-xl font-bold tracking-tight text-white">
-              Karthys<span className="text-[#FCA311]">Gallery</span>
+              Karthys<span className="text-gold">Gallery</span>
             </span>
           </Link>
         </div>
@@ -284,7 +284,7 @@ function SignInContent() {
             <div>
               <Link href="/" className="inline-block">
                 <span className="font-display text-[22px] font-bold tracking-tight text-black">
-                  Karthys<span className="text-[#FCA311]">Gallery</span>
+                  Karthys<span className="text-gold">Gallery</span>
                 </span>
               </Link>
             </div>
@@ -294,7 +294,7 @@ function SignInContent() {
           <div className="hidden lg:block mb-8">
             <Link href="/" className="inline-block">
               <span className="font-display text-[22px] font-bold tracking-tight text-black">
-                Karthys<span className="text-[#FCA311]">Gallery</span>
+                Karthys<span className="text-gold">Gallery</span>
               </span>
             </Link>
           </div>
@@ -312,7 +312,7 @@ function SignInContent() {
                 {isNotRegistered && (
                   <Link
                     href={`/signup?phone=${encodeURIComponent(phone.replace(/\D/g, ''))}${redirectQuery}`}
-                    className="inline-flex items-center gap-1 text-[12px] font-bold text-black mt-2 underline underline-offset-2 hover:text-[#FCA311]"
+                    className="inline-flex items-center gap-1 text-[12px] font-bold text-black mt-2 underline underline-offset-2 hover:text-gold"
                   >
                     Create an account with this number &rarr;
                   </Link>
@@ -356,7 +356,7 @@ function SignInContent() {
                     Mobile number
                   </label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-[#E0DAD1] bg-[#EFEBE4] text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
+                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-line bg-tint text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
                       +91
                     </span>
                     <input
@@ -372,7 +372,7 @@ function SignInContent() {
                         clearError();
                       }}
                       placeholder="Enter 10-digit mobile number"
-                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-[#E0DAD1] bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-[#FCA311]/20 focus:border-[#FCA311] transition-all duration-150"
+                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-line bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold transition-all duration-150"
                     />
                   </div>
                   <p className="text-[11px] text-black/45 mt-1.5">
@@ -399,7 +399,7 @@ function SignInContent() {
               {/* Divider */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                  <div className="w-full border-t border-[#E0DAD1]" />
+                  <div className="w-full border-t border-line" />
                 </div>
                 <div className="relative flex justify-center">
                   <span className="bg-field px-4 text-[11px] uppercase tracking-[0.15em] font-semibold text-black/35">
@@ -415,7 +415,7 @@ function SignInContent() {
                   clearError();
                   setAuthMode('password');
                 }}
-                className="w-full h-12 min-h-[48px] rounded-lg border border-[#E0DAD1] bg-white hover:bg-[#FAF8F4] text-black/80 font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
+                className="w-full h-12 min-h-[48px] rounded-lg border border-line bg-white hover:bg-field text-black/80 font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
               >
                 Sign in with password
               </button>
@@ -506,7 +506,7 @@ function SignInContent() {
                     type="button"
                     onClick={handleResend}
                     disabled={isLoading}
-                    className="font-semibold text-black hover:text-[#FCA311] transition-colors underline underline-offset-2"
+                    className="font-semibold text-black hover:text-gold transition-colors underline underline-offset-2"
                   >
                     Resend code
                   </button>
@@ -560,7 +560,7 @@ function SignInContent() {
                     Mobile number
                   </label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-[#E0DAD1] bg-[#EFEBE4] text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
+                    <span className="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-line bg-tint text-[13px] text-black/70 font-semibold select-none min-h-[48px]">
                       +91
                     </span>
                     <input
@@ -575,7 +575,7 @@ function SignInContent() {
                         clearError();
                       }}
                       placeholder="Enter 10-digit mobile number"
-                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-[#E0DAD1] bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-[#FCA311]/20 focus:border-[#FCA311] transition-all duration-150"
+                      className="flex-1 h-12 min-h-[48px] px-4 rounded-r-lg border border-line bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold transition-all duration-150"
                     />
                   </div>
                 </div>
@@ -608,7 +608,7 @@ function SignInContent() {
                         clearError();
                       }}
                       placeholder="Enter your password"
-                      className="w-full h-12 min-h-[48px] pl-4 pr-12 rounded-lg border border-[#E0DAD1] bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-[#FCA311]/20 focus:border-[#FCA311] transition-all duration-150"
+                      className="w-full h-12 min-h-[48px] pl-4 pr-12 rounded-lg border border-line bg-white text-sm text-black placeholder:text-black/35 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold transition-all duration-150"
                     />
                     <button
                       type="button"
@@ -637,7 +637,7 @@ function SignInContent() {
             Don&rsquo;t have an account?{' '}
             <Link
               href={`/signup${phone || redirectQuery ? `?${[phone ? `phone=${encodeURIComponent(phone.replace(/\D/g, ''))}` : '', redirectQuery.replace(/^&/, '')].filter(Boolean).join('&')}` : ''}`}
-              className="font-semibold text-black hover:text-[#FCA311] transition-colors underline underline-offset-4 decoration-black/20 hover:decoration-[#FCA311]"
+              className="font-semibold text-black hover:text-gold transition-colors underline underline-offset-4 decoration-black/20 hover:decoration-[#FCA311]"
             >
               Create an account
             </Link>
