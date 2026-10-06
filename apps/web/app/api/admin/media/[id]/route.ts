@@ -5,7 +5,7 @@ import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
-import { buildPublicMediaUrl } from '../../../../../lib/media-public-url';
+import { adminMediaUrl } from '../../../../../lib/media-public-url';
 import { UpdateMediaAssetBodySchema } from '../media-request-schema';
 import { logger, type MediaAsset } from '@bro-pics/shared';
 
@@ -73,5 +73,5 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }).catch((error) => logger.error('Failed to write audit log', { mediaId: id, error: String(error) }));
 
   const merged = { ...current, ...update };
-  return NextResponse.json({ media: { ...merged, url: buildPublicMediaUrl(merged.path) } }, { status: 200 });
+  return NextResponse.json({ media: { ...merged, url: adminMediaUrl(merged) } }, { status: 200 });
 }

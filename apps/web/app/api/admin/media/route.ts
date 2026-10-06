@@ -5,7 +5,7 @@ import { requirePermission } from '../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
-import { buildPublicMediaUrl } from '../../../../lib/media-public-url';
+import { adminMediaUrl } from '../../../../lib/media-public-url';
 import { CreateMediaAssetBodySchema } from './media-request-schema';
 import { MediaAssetSchema, logger, type MediaAsset } from '@bro-pics/shared';
 
@@ -59,7 +59,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     details: { path: body.path, type: body.type },
   }).catch((error) => logger.error('Failed to write audit log', { mediaId: ref.id, error: String(error) }));
 
-  return NextResponse.json({ media: { ...asset, url: buildPublicMediaUrl(asset.path) } }, { status: 201 });
+  return NextResponse.json({ media: { ...asset, url: adminMediaUrl(asset) } }, { status: 201 });
 }
 
 /**
@@ -100,7 +100,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const snapshot = await query.limit(LIST_LIMIT).get();
   let media = snapshot.docs.map((doc) => {
     const data = doc.data() as MediaAssetData;
-    return { ...data, url: buildPublicMediaUrl(data.path) };
+    return { ...data, url: adminMediaUrl(data) };
   });
 
   if (q) {

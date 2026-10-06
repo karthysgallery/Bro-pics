@@ -11,6 +11,8 @@ vi.mock('../../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknow
 
 vi.mock('../../../../../lib/media-public-url', () => ({
   buildPublicMediaUrl: (path: string) => `https://public.example.com/${path}`,
+  adminMediaUrl: (a: { id: string; path: string; type: string }) =>
+    a.type === 'image' ? `/api/media/${a.id}/image?w=1200` : `https://public.example.com/${a.path}`,
 }));
 
 const mockMediaGet = vi.fn();

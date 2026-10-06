@@ -14,3 +14,12 @@ export function buildPublicMediaUrl(path: string): string {
   }
   return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media`;
 }
+
+/**
+ * The URL admin screens show a media asset from. Images go through this app's
+ * own image route (read with the server's credentials), so they display even
+ * where Storage's browser-read rules are not open; videos keep the direct link.
+ */
+export function adminMediaUrl(asset: { id: string; path: string; type: string }): string {
+  return asset.type === 'image' ? `/api/media/${encodeURIComponent(asset.id)}/image?w=1200` : buildPublicMediaUrl(asset.path);
+}

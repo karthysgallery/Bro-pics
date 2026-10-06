@@ -11,6 +11,8 @@ vi.mock('../../../../lib/audit-log', () => ({ writeAuditLog: (...args: unknown[]
 
 vi.mock('../../../../lib/media-public-url', () => ({
   buildPublicMediaUrl: (path: string) => `https://public.example.com/${path}`,
+  adminMediaUrl: (a: { id: string; path: string; type: string }) =>
+    a.type === 'image' ? `/api/media/${a.id}/image?w=1200` : `https://public.example.com/${a.path}`,
 }));
 
 const mockMediaSet = vi.fn().mockResolvedValue(undefined);
@@ -76,7 +78,7 @@ describe('POST /api/admin/media', () => {
       expect.objectContaining({ id: 'media_new_1', path: 'public/media/abc.jpg', usageRefs: [], isActive: true })
     );
     const body = await response.json();
-    expect(body.media.url).toBe('https://public.example.com/public/media/abc.jpg');
+    expect(body.media.url).toBe('/api/media/media_new_1/image?w=1200');
   });
 
   it('accepts and stores the file size the upload screens send', async () => {
@@ -118,12 +120,12 @@ describe('GET /api/admin/media', () => {
   it('returns media with derived public urls', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     mockLimit.mockReturnValueOnce({
-      get: vi.fn().mockResolvedValue({ docs: [{ data: () => ({ id: 'media_1', path: 'public/media/a.jpg', alt: 'A cat' }) }] }),
+      get: vi.fn().mockResolvedValue({ docs: [{ data: () => ({ id: 'media_1', type: 'image', path: 'public/media/a.jpg', alt: 'A cat' }) }] }),
     });
     const response = await GET(makeGetRequest());
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.media).toEqual([expect.objectContaining({ id: 'media_1', url: 'https://public.example.com/public/media/a.jpg' })]);
+    expect(body.media).toEqual([expect.objectContaining({ id: 'media_1', url: '/api/media/media_1/image?w=1200' })]);
   });
 
   it('filters by alt text (case-insensitive substring) when q is given', async () => {
@@ -131,7 +133,7 @@ describe('GET /api/admin/media', () => {
     mockLimit.mockReturnValueOnce({
       get: vi.fn().mockResolvedValue({
         docs: [
-          { data: () => ({ id: 'media_1', path: 'public/media/a.jpg', alt: 'A cat playing' }) },
+          { data: () => ({ id: 'media_1', type: 'image', path: 'public/media/a.jpg', alt: 'A cat playing' }) },
           { data: () => ({ id: 'media_2', path: 'public/media/b.jpg', alt: 'A dog sleeping' }) },
         ],
       }),
