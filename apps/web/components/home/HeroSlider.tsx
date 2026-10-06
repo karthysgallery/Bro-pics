@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useSiteText } from '../layout/SiteTextContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { HomepageSection } from '@bro-pics/shared';
@@ -63,6 +64,7 @@ function sectionToSlides(section: HomepageSection, index: number): HeroSlide[] {
  * Desktop: 5-col copy / 7-col image split.
  */
 export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps) {
+  const text = useSiteText();
   const slides = sections.flatMap((section, index) => sectionToSlides(section, index));
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -122,7 +124,7 @@ export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps
 
           <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3">
             <Link href={active.link || '/category'} className="btn-primary btn-press h-12 px-7 text-center">
-              {active.cta ?? 'Find your frame'}
+              {active.cta ?? text.heroPrimaryCta}
             </Link>
             {hasTrustVideos ? (
               <a href="#see-it-made" className="btn-secondary h-12 px-6 text-center">
@@ -130,7 +132,7 @@ export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps
               </a>
             ) : (
               <Link href="/how-it-works" className="btn-secondary h-12 px-6 text-center">
-                See how it works
+                {text.heroSecondaryCta}
               </Link>
             )}
           </div>
@@ -138,11 +140,11 @@ export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps
           <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-ink/60">
             <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true" />
-              Preview your photo in the frame before you pay
+              {text.heroPoint1}
             </li>
             <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true" />
-              Made to order in India
+              {text.heroPoint2}
             </li>
           </ul>
         </div>
@@ -225,19 +227,19 @@ export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps
       <div className="mt-10 pt-7 border-t border-line/50 grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px] text-ink/60">
         {[
           {
-            label: 'Archival-quality prints',
+            label: text.trust1,
             path: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></>,
           },
           {
-            label: 'Handcrafted in India',
+            label: text.trust2,
             path: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
           },
           {
-            label: 'Safe, tracked delivery',
+            label: text.trust3,
             path: <><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></>,
           },
           {
-            label: 'Happiness guaranteed',
+            label: text.trust4,
             path: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>,
           },
         ].map(({ label, path }) => (

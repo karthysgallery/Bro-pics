@@ -1,6 +1,7 @@
 'use client';
 
 import { useContext, useEffect, useState } from 'react';
+import { useSiteText } from '../../../components/layout/SiteTextContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCart, type CartItem } from '../../../lib/cart-context';
@@ -11,6 +12,7 @@ import { AuthContext } from '../../../lib/auth-context';
 import { getShippingSettingsClient } from '../../../lib/shipping-settings-client';
 
 export default function CartPage() {
+  const siteText = useSiteText();
   const { items, updateQuantity, removeItem, totalPaise } = useCart();
   const auth = useContext(AuthContext);
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(new Map());
@@ -226,13 +228,13 @@ export default function CartPage() {
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="M21 15l-5-5L5 21" />
           </svg>
-          <span>Archival-quality prints</span>
+          <span>{siteText.trust1}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
           </svg>
-          <span>Handcrafted in India</span>
+          <span>{siteText.trust2}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
@@ -241,14 +243,14 @@ export default function CartPage() {
             <circle cx="5.5" cy="18.5" r="2.5" />
             <circle cx="18.5" cy="18.5" r="2.5" />
           </svg>
-          <span>Safe, tracked delivery</span>
+          <span>{siteText.trust3}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <path d="M9 12l2 2 4-4" />
           </svg>
-          <span>Happiness guaranteed</span>
+          <span>{siteText.trust4}</span>
         </div>
       </div>
     </div>

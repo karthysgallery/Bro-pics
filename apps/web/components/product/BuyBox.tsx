@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
+import { useSiteText } from '../layout/SiteTextContext';
 import { VariantSelector } from './VariantSelector';
 import { DeliveryTimeline } from './DeliveryTimeline';
 import { RatingStars } from '../ui/RatingStars';
@@ -96,6 +97,7 @@ export function BuyBox({
   children,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
+  const text = useSiteText();
   const { addItem, updateItem } = useCart();
   const shippingPromise = freeShippingPromise(useShippingSettings());
 
@@ -209,7 +211,7 @@ export function BuyBox({
             <span className="text-sm text-ink/40 line-through">{formatPaise(compareAtPrice)}</span>
           )}
         </div>
-        <p className="text-xs text-ink/50 mt-0.5">Inclusive of GST · Photo printing included</p>
+        <p className="text-xs text-ink/50 mt-0.5">{text.priceNote}</p>
       </div>
 
       {product.shortDesc && (
@@ -289,7 +291,7 @@ export function BuyBox({
             <span className="transition group-open:rotate-45 text-lg font-light">+</span>
           </summary>
           <div className="pt-2 text-xs text-ink/70 leading-relaxed">
-            {product.careText || 'Solid wood profile, clear acrylic glazing and a museum-style white mount. Dust gently with a soft, dry cloth.'}
+            {product.careText || text.careText}
           </div>
         </details>
         <details className="group py-3 cursor-pointer">
@@ -298,7 +300,7 @@ export function BuyBox({
             <span className="transition group-open:rotate-45 text-lg font-light">+</span>
           </summary>
           <div className="pt-2 text-xs text-ink/70 leading-relaxed">
-            <p>Dispatched in protective shockproof packaging. Free returns or replacement if damaged in transit.</p>
+            <p>{text.returnsText}</p>
           </div>
         </details>
       </div>

@@ -17,7 +17,8 @@ import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
 import { buildBreadcrumbList, buildProductReviewsJsonLd, resolveOgImage } from '../../../../lib/structured-data';
-import { getSeoSettings } from '../../../../lib/firestore-settings';
+import { getSeoSettings, getSiteText } from '../../../../lib/firestore-settings';
+import { DEFAULT_SITE_TEXT } from '@bro-pics/shared';
 
 export const revalidate = 60;
 
@@ -75,6 +76,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     getFrameTemplatesByProductId(product.id),
     getPersonalizationTemplatesByVariant(product, variants),
   ]);
+  const siteText = await getSiteText().catch(() => DEFAULT_SITE_TEXT);
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
   // [FE-41] `review` was the one field this Product JSON-LD didn't
@@ -152,13 +154,13 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="M21 15l-5-5L5 21" />
           </svg>
-          <span>Archival-quality prints</span>
+          <span>{siteText.trust1}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
           </svg>
-          <span>Handcrafted in India</span>
+          <span>{siteText.trust2}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
@@ -167,14 +169,14 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
             <circle cx="5.5" cy="18.5" r="2.5" />
             <circle cx="18.5" cy="18.5" r="2.5" />
           </svg>
-          <span>Safe, tracked delivery</span>
+          <span>{siteText.trust3}</span>
         </div>
         <div className="flex items-center gap-2.5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink flex-shrink-0">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <path d="M9 12l2 2 4-4" />
           </svg>
-          <span>Happiness guaranteed</span>
+          <span>{siteText.trust4}</span>
         </div>
       </div>
 

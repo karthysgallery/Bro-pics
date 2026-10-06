@@ -9,7 +9,9 @@ import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
-import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings } from '../lib/firestore-settings';
+import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings, getSiteText } from '../lib/firestore-settings';
+import { SiteTextProvider } from '../components/layout/SiteTextContext';
+import { DEFAULT_SITE_TEXT, type SiteText } from '@bro-pics/shared';
 import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
@@ -123,6 +125,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     console.error('Failed to load store settings:', error);
   }
 
+  let siteText: SiteText = DEFAULT_SITE_TEXT;
+  try {
+    siteText = await getSiteText();
+  } catch (error) {
+    console.error('Failed to load site text:', error);
+  }
+
   // The theme on show now (a festival, or the Everyday look). Its colours are
   // set for the shop only: the admin (data-admin-root) keeps the defaults.
   let theme: StoreTheme | null = null;
@@ -152,6 +161,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <WishlistSync />
             <NotificationsSync />
             <CartProvider>
+              <SiteTextProvider value={siteText}>
               <LayoutChrome
                 categories={categories}
                 announcementBar={announcementBar}
@@ -162,6 +172,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               >
                 {children}
               </LayoutChrome>
+              </SiteTextProvider>
             </CartProvider>
           </AuthProvider>
         </ToastProvider>
