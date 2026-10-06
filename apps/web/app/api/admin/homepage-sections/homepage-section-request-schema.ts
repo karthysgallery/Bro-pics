@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { HomepageSectionTypeSchema } from '@bro-pics/shared';
+import { HomepageSectionTypeSchema, isSafeHref } from '@bro-pics/shared';
+
+/** Empty, a page on this shop, or an http(s) address — never javascript:/data:. */
+const LinkSchema = z.string().trim().max(300).refine((v) => v === '' || isSafeHref(v), 'Use a page on this shop (starting with /) or an https:// address');
 
 const HeroSlideBodySchema = z.object({
   id: z.string().min(1),
@@ -9,7 +12,7 @@ const HeroSlideBodySchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
   ctaLabel: z.string().optional(),
-  ctaLink: z.string().optional(),
+  ctaLink: LinkSchema.optional(),
   sortOrder: z.number().int().nonnegative(),
 });
 
@@ -36,13 +39,16 @@ export const CreateHomepageSectionBodySchema = z
     subtitle: z.string().default(''),
     image: z.string().default(''),
     mobileImage: z.string().default(''),
-    link: z.string().default(''),
+    link: LinkSchema.default(''),
     sortOrder: z.number().int().nonnegative().default(0),
     startsAt: ScheduleBoundSchema,
     endsAt: ScheduleBoundSchema,
     isActive: z.boolean().default(true),
     config: z.record(z.string(), z.unknown()).default({}),
-    heroSlides: z.array(HeroSlideBodySchema).optional(),
+    heroSlides: z.array(HeroSlideBodySchema).max(8).optional(),
+    // "How it works" steps and "Why us" points (see HomepageSectionSchema).
+    steps: z.array(z.object({ label: z.string().trim().min(1).max(60), desc: z.string().trim().max(240) })).max(6).optional(),
+    valueProps: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
   })
   .strict();
 
