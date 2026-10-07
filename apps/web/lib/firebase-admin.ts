@@ -29,6 +29,14 @@ export function getAdminApp(): App {
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!serviceAccountJson) {
+    // On Google Cloud the site runs as its own service account: Application
+    // Default Credentials, no key file. K_SERVICE = running on Cloud Run;
+    // GOOGLE_ADC=1 = the container build on Cloud Build (reads the catalogue
+    // to pre-render pages, as the Vercel build does). Signing URLs/custom
+    // tokens then goes through the IAM Credentials API (Token Creator on itself).
+    if (process.env.K_SERVICE || process.env.GOOGLE_ADC === '1') {
+      return initializeApp({ storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET });
+    }
     throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set');
   }
 

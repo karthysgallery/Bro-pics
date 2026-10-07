@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 import withBundleAnalyzerInit from '@next/bundle-analyzer';
 
@@ -37,6 +38,13 @@ const nextConfig: NextConfig = {
   // Lets a second dev server (e.g. the emulator-backed QA one) run beside the
   // main one without fighting over the same .next folder.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Container builds (Cloud Run, see apps/web/Dockerfile) set NEXT_OUTPUT=standalone
+  // to get a self-contained server; tracing starts at the monorepo root so the
+  // workspace packages are included. Vercel builds are unaffected.
+  ...(process.env.NEXT_OUTPUT === 'standalone' && {
+    output: 'standalone' as const,
+    outputFileTracingRoot: path.join(__dirname, '../..'),
+  }),
   transpilePackages: ['@bro-pics/shared'],
   headers: securityHeaders,
   // sharp ships a native .node binary — webpacking it into the API route

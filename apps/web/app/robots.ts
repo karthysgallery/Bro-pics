@@ -3,6 +3,10 @@ import type { MetadataRoute } from 'next';
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
 
 export default function robots(): MetadataRoute.Robots {
+  // A temporary preview address must never be crawled (see middleware.ts).
+  if (process.env.SITE_PREVIEW === '1') {
+    return { rules: { userAgent: '*', disallow: '/' } };
+  }
   return {
     rules: {
       userAgent: '*',

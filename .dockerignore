@@ -1,0 +1,13 @@
+# Repository-root build context (apps/web/Dockerfile).
+**/node_modules
+**/.next
+**/.next-*
+**/.env*
+functions/lib
+services/print-render/lib
+scratch
+docs
+.git
+**/*.test.ts
+**/*.test.tsx
+PRODUCTION_READINESS_AUDIT.md

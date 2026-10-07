@@ -18,7 +18,30 @@ import { NextResponse, type NextRequest } from 'next/server';
  * already sets X-Frame-Options for older browsers) — both are kept since
  * CSP is what modern browsers actually honor.
  */
+/**
+ * SITE_PREVIEW=1: a public preview of the shop on a temporary address.
+ * - Nothing is indexed by search engines (it must not compete with the real domain).
+ * - Every way of signing in is refused, so no one can sign in as anyone
+ *   until real WhatsApp OTP is configured. Logging out and "who am I" still work.
+ */
+const PREVIEW_ALLOWED_AUTH = new Set(['/api/auth/logout', '/api/auth/me']);
+
+export function isSignInBlockedInPreview(pathname: string): boolean {
+  if (pathname.startsWith('/api/auth/')) return !PREVIEW_ALLOWED_AUTH.has(pathname.replace(/\/$/, ''));
+  return pathname.startsWith('/api/staff/invite/accept');
+}
+
 export function middleware(request: NextRequest): NextResponse {
+  const preview = process.env.SITE_PREVIEW === '1';
+  if (preview && isSignInBlockedInPreview(request.nextUrl.pathname)) {
+    const blocked = NextResponse.json(
+      { error: 'Sign-in opens soon. You can browse the shop in the meantime.', code: 'auth_disabled' },
+      { status: 503 }
+    );
+    blocked.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return blocked;
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
 
   const csp = [
@@ -40,6 +63,7 @@ export function middleware(request: NextRequest): NextResponse {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy-Report-Only', csp);
+  if (preview) response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   return response;
 }
 
