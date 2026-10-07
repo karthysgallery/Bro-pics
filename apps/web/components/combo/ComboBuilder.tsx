@@ -141,13 +141,13 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
           <div className="h-full rounded-full bg-gold transition-[width]" style={{ width: `${progress.total ? (progress.doneCount / progress.total) * 100 : 0}%` }} />
         </div>
 
-        <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+        <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {frames.map((frame) => {
             const card = cardByItem.get(frame.itemId);
             const saved = draft?.frames[frame.key];
             const done = Boolean(saved);
             return (
-              <li key={frame.key} className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-3">
+              <li key={frame.key} className="flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-paper p-3">
                 <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-tint">
                   {saved?.previewPath ? (
                     <StorageImage path={saved.previewPath} alt={`${frame.label} preview`} fill sizes="80px" className="object-cover" fallback={<div className="h-full w-full bg-tint" />} />

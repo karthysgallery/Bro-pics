@@ -5,7 +5,9 @@ import { getPublishedComboBySlug } from '../../../../../../lib/firestore-combos'
 import { getComboFrameData } from '../../../../../../lib/firestore-combo-detail';
 import { ComboFrameEditor } from '../../../../../../components/combo/ComboFrameEditor';
 
-export const revalidate = 60;
+// A step in a purchase flow: always built from the combo as it is now. A cached page built before an
+// admin edit would start a draft on the old version, which the combo page then discards.
+export const dynamic = 'force-dynamic';
 
 interface FramePageProps {
   params: Promise<{ slug: string; key: string }>;

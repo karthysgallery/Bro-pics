@@ -1232,9 +1232,10 @@ describe('POST /api/checkout/create-order', () => {
       const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'TEN' }));
       const body = await response.json();
 
-      // Nothing was discounted: either the coupon is refused for this cart or the total stays at the combo price.
-      if (response.status === 200) expect(body.amount).toBe(99900 + 5000);
-      else expect(body.code).toBe('coupon_invalid');
+      // A combo is already discounted, so the coupon is refused (said, not silently ignored) and nothing is charged.
+      expect(response.status).toBe(409);
+      expect(body.code).toBe('coupon_invalid');
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
     });
   });
 
