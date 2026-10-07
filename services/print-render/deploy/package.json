@@ -1,0 +1,11 @@
+{
+  "name": "print-render-runtime",
+  "private": true,
+  "type": "module",
+  "description": "Runtime dependencies only. lib/server.js (pnpm bundle) already contains this service's own code and @bro-pics/shared.",
+  "dependencies": {
+    "express": "4.22.2",
+    "firebase-admin": "12.7.0",
+    "sharp": "0.35.4"
+  }
+}

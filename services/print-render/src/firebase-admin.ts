@@ -1,19 +1,22 @@
 import { type App, getApps, initializeApp, cert } from 'firebase-admin/app';
 
-// Same pattern as apps/web/lib/firebase-admin.ts (minus the Next.js-only
-// 'server-only' import, which has no meaning outside a Next.js build) —
-// a Cloud Run service in the same GCP project authenticates the same way.
+/**
+ * On Cloud Run the service runs as its own service account, so Application
+ * Default Credentials are used (no key file). FIREBASE_SERVICE_ACCOUNT_JSON
+ * is still honoured for running outside Google Cloud. The Storage bucket is
+ * required either way: print files must never go to a guessed bucket.
+ */
 export function getAdminApp(): App {
   const existing = getApps();
   if (existing.length > 0) return existing[0];
 
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!serviceAccountJson) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set');
+  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
+  if (!storageBucket) {
+    throw new Error('FIREBASE_STORAGE_BUCKET is not set');
   }
 
-  return initializeApp({
-    credential: cert(JSON.parse(serviceAccountJson)),
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  });
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  return serviceAccountJson
+    ? initializeApp({ credential: cert(JSON.parse(serviceAccountJson)), storageBucket })
+    : initializeApp({ storageBucket });
 }

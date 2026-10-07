@@ -1,0 +1,9 @@
+# Upload only what the Dockerfile needs.
+*
+!Dockerfile
+!deploy/
+!deploy/package.json
+!lib/
+!lib/server.js
+!fonts/
+!fonts/**

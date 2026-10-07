@@ -9,9 +9,12 @@ export interface RenderJobDependencies {
   // called directly so this module stays testable without a real
   // Firestore/Storage connection, mirroring how the payment webhook
   // (functions/src/webhooks/razorpay.ts) abstracts its transaction calls.
-  leaseJob(jobId: string): Promise<void>;
-  failJob(jobId: string, error: string): Promise<void>;
-  completeJobAndAdvanceOrder(jobId: string, renderedFilePath: string): Promise<void>;
+  // leaseJob returns this attempt's number (or nothing, for simple fakes);
+  // failJob/completeJobAndAdvanceOrder only act while that attempt still
+  // holds the lease, so a timed-out worker can't overwrite a retry.
+  leaseJob(jobId: string): Promise<number | void>;
+  failJob(jobId: string, error: string, attempt?: number): Promise<void>;
+  completeJobAndAdvanceOrder(jobId: string, renderedFilePath: string, attempt?: number): Promise<void>;
   getPrintJob(jobId: string): Promise<{ orderId: string; itemId: string; personalizationId: string } | null>;
   getOrderItem(orderId: string, itemId: string): Promise<{ variantId: string } | null>;
   getVariant(variantId: string): Promise<{ printWidthPx: number; printHeightPx: number } | null>;
@@ -113,7 +116,7 @@ export function printScale(
  * logged loose end rather than scope this function needs to close.
  */
 export async function renderPrintJob(deps: RenderJobDependencies, jobId: string): Promise<void> {
-  await deps.leaseJob(jobId);
+  const attempt = (await deps.leaseJob(jobId)) ?? undefined;
 
   const job = await deps.getPrintJob(jobId);
   if (!job) {
@@ -122,7 +125,7 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
     // Still a genuine failure, so it must propagate like every other
     // failure below rather than resolving as if the render succeeded.
     const message = `Print job ${jobId} not found immediately after leasing`;
-    await deps.failJob(jobId, message);
+    await deps.failJob(jobId, message, attempt);
     throw new Error(message);
   }
 
@@ -155,7 +158,7 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
       const scale = printScale(snapshot.template.canvas, variant);
       const printBuffer = await renderTemplate({ template: snapshot.template, state: snapshot.state, assets, scale, includeUnprinted: false });
       const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');
-      await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath);
+      await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath, attempt);
       return;
     }
 
@@ -237,13 +240,13 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
     const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');
 
     await deps.markCustomizationsRendered(customizationIds, renderedFilePath);
-    await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath);
+    await deps.completeJobAndAdvanceOrder(jobId, renderedFilePath, attempt);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (customizationIds.length > 0) {
       await deps.markCustomizationsFailed(customizationIds);
     }
-    await deps.failJob(jobId, message);
+    await deps.failJob(jobId, message, attempt);
     throw error;
   }
 }

@@ -36,6 +36,17 @@ interface RawPrintJobFields {
   status: PrintJobStatus;
   attempts: number;
   nextAttemptAt?: unknown;
+  leaseExpiresAt?: unknown;
+}
+
+/**
+ * Only the worker holding the CURRENT lease may finish a job: a worker
+ * whose lease expired (and was re-leased by a retry) must not overwrite
+ * the newer attempt's result. Callers without an attempt number keep the
+ * old unfenced behaviour.
+ */
+function holdsLease(raw: RawPrintJobFields, attempt: number | undefined): boolean {
+  return attempt === undefined || (raw.status === 'leased' && raw.attempts === attempt);
 }
 
 /**
@@ -84,16 +95,18 @@ export async function createPrintJob(
 export class PrintJobNotLeasableError extends Error {}
 
 /**
- * Claims a job for rendering: only succeeds if the job is queued, or
- * failed with its backoff window elapsed. Bumps attempts and stamps a
- * lease. The in-transaction read is the authoritative check — a second
+ * Claims a job for rendering: only succeeds if the job is queued, failed
+ * with its backoff window elapsed, or leased by a worker whose lease ran
+ * out (it crashed or timed out). Bumps attempts, stamps a lease and
+ * returns this attempt's number — pass it to complete/fail so only the
+ * current lease holder can finish the job. The in-transaction read is the authoritative check — a second
  * concurrent lease attempt on the same job will see the update this one
  * makes and fail Firestore's optimistic-concurrency check, never granting
  * two simultaneous leases on the same job.
  */
-export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationMinutes = 10): Promise<void> {
+export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationMinutes = 10): Promise<number> {
   const ref = db.collection(COLLECTION).doc(jobId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     if (!snap.exists) {
       throw new PrintJobNotLeasableError(`No such print job: ${jobId}`);
@@ -101,7 +114,11 @@ export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationM
     const raw = snap.data() as RawPrintJobFields;
     const now = new Date();
     const nextAttemptAt = toJsDate(raw.nextAttemptAt);
-    const leasable = raw.status === 'queued' || (raw.status === 'failed' && (!nextAttemptAt || nextAttemptAt <= now));
+    const leaseExpiresAt = toJsDate(raw.leaseExpiresAt);
+    const leasable =
+      raw.status === 'queued' ||
+      (raw.status === 'failed' && (!nextAttemptAt || nextAttemptAt <= now)) ||
+      (raw.status === 'leased' && leaseExpiresAt !== undefined && leaseExpiresAt <= now);
     if (!leasable) {
       throw new PrintJobNotLeasableError(`Print job ${jobId} is not leasable (status: ${raw.status})`);
     }
@@ -116,6 +133,7 @@ export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationM
       // explicitly deleted rather than just omitted here.
       ...(nextAttemptAt ? { nextAttemptAt: FieldValue.delete() } : {}),
     });
+    return raw.attempts + 1;
   });
 }
 
@@ -132,12 +150,18 @@ export async function leasePrintJob(db: Firestore, jobId: string, leaseDurationM
  * sibling-jobs query first) that forcing one orchestrator on top wouldn't
  * remove real duplication, just relocate it.
  */
-export async function completePrintJobAndAdvanceOrder(db: Firestore, jobId: string, renderedFilePath: string): Promise<void> {
+export async function completePrintJobAndAdvanceOrder(
+  db: Firestore,
+  jobId: string,
+  renderedFilePath: string,
+  attempt?: number
+): Promise<void> {
   const ref = db.collection(COLLECTION).doc(jobId);
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     if (!snap.exists) return;
-    const raw = snap.data() as { orderId: string };
+    const raw = snap.data() as RawPrintJobFields & { orderId: string };
+    if (!holdsLease(raw, attempt)) return;
     const orderRef = db.collection('orders').doc(raw.orderId);
 
     // Reads-before-writes: every read this transaction needs, including
@@ -170,12 +194,13 @@ export async function completePrintJobAndAdvanceOrder(db: Firestore, jobId: stri
  * MAX_PRINT_JOB_ATTEMPTS has been reached, in which case the job moves to
  * failed_permanent for a human to look at.
  */
-export async function failPrintJob(db: Firestore, jobId: string, error: string): Promise<void> {
+export async function failPrintJob(db: Firestore, jobId: string, error: string, attempt?: number): Promise<void> {
   const ref = db.collection(COLLECTION).doc(jobId);
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     if (!snap.exists) return;
     const raw = snap.data() as RawPrintJobFields;
+    if (!holdsLease(raw, attempt)) return;
     const now = new Date();
     const delayMinutes = backoffMinutesAfterAttempt(raw.attempts);
     const update =

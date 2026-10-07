@@ -1,15 +1,19 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FONT_MAP, FALLBACK_FONTS, fontEntryForKey, fontKeyFromCssVar, type FontEntry } from '@bro-pics/shared';
 import { estimateTextWidth, fitTextToZone, type TextFitResult } from '@bro-pics/shared';
 import { fractionRectToCanvasRect, type Rect } from '@bro-pics/shared';
 
 /**
- * Directory containing the bundled .ttf font files. Resolved relative to
- * this module's location so it works in both ts-node/tsx dev and the
- * built Docker image.
+ * Directory containing the bundled .ttf font files: PRINT_RENDER_FONTS_DIR
+ * when set (the Docker image sets it), otherwise next to this module —
+ * src/../fonts in dev/tests, lib/../fonts in the bundled server. ESM has
+ * no __dirname, so the module's own URL is used.
  */
-const FONTS_DIR = resolve(join(__dirname, '..', 'fonts'));
+const FONTS_DIR = process.env.PRINT_RENDER_FONTS_DIR
+  ? resolve(process.env.PRINT_RENDER_FONTS_DIR)
+  : resolve(join(dirname(fileURLToPath(import.meta.url)), '..', 'fonts'));
 
 // ── XML escaping ─────────────────────────────────────────────────────
 // All user text MUST go through this before embedding in SVG to prevent

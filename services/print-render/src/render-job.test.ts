@@ -13,7 +13,7 @@ async function makeDeps(overrides: Partial<RenderJobDependencies> = {}): Promise
   const mockup = await solidPng(10, 10, [0, 0, 0, 0]);
 
   return {
-    leaseJob: vi.fn().mockResolvedValue(undefined),
+    leaseJob: vi.fn().mockResolvedValue(1),
     failJob: vi.fn().mockResolvedValue(undefined),
     completeJobAndAdvanceOrder: vi.fn().mockResolvedValue(undefined),
     getPrintJob: vi.fn().mockResolvedValue({ orderId: 'order_1', itemId: 'item_1', personalizationId: 'p1' }),
@@ -109,7 +109,7 @@ describe('renderPrintJob', () => {
       'image/png'
     );
     expect(deps.markCustomizationsRendered).toHaveBeenCalledWith(['cust_1'], 'print-files/order_1/item_1/print.png');
-    expect(deps.completeJobAndAdvanceOrder).toHaveBeenCalledWith('order_1_item_1', 'print-files/order_1/item_1/print.png');
+    expect(deps.completeJobAndAdvanceOrder).toHaveBeenCalledWith('order_1_item_1', 'print-files/order_1/item_1/print.png', 1);
     expect(deps.failJob).not.toHaveBeenCalled();
   });
 
@@ -148,7 +148,7 @@ describe('renderPrintJob', () => {
 
     await expect(renderPrintJob(deps, 'order_1_item_1')).rejects.toThrow(/Frame template not found/);
 
-    expect(deps.failJob).toHaveBeenCalledWith('order_1_item_1', expect.stringContaining('Frame template not found'));
+    expect(deps.failJob).toHaveBeenCalledWith('order_1_item_1', expect.stringContaining('Frame template not found'), 1);
     expect(deps.markCustomizationsFailed).toHaveBeenCalledWith(['cust_1']);
     expect(deps.completeJobAndAdvanceOrder).not.toHaveBeenCalled();
   });
@@ -170,7 +170,7 @@ describe('renderPrintJob', () => {
     });
 
     await expect(renderPrintJob(deps, 'order_1_item_1')).rejects.toThrow(/No customizations found/);
-    expect(deps.failJob).toHaveBeenCalledWith('order_1_item_1', expect.stringContaining('No customizations found'));
+    expect(deps.failJob).toHaveBeenCalledWith('order_1_item_1', expect.stringContaining('No customizations found'), 1);
     expect(deps.markCustomizationsFailed).not.toHaveBeenCalled();
   });
 
@@ -220,6 +220,6 @@ describe('renderPrintJob', () => {
       expect.any(Buffer),
       'image/png'
     );
-    expect(deps.completeJobAndAdvanceOrder).toHaveBeenCalledWith('order_1_item_1', 'print-files/order_1/item_1/print.png');
+    expect(deps.completeJobAndAdvanceOrder).toHaveBeenCalledWith('order_1_item_1', 'print-files/order_1/item_1/print.png', 1);
   });
 });

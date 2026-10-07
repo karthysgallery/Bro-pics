@@ -23,13 +23,13 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
 
   return {
     async leaseJob(jobId) {
-      await leasePrintJob(db, jobId);
+      return leasePrintJob(db, jobId);
     },
-    async failJob(jobId, error) {
-      await failPrintJob(db, jobId, error);
+    async failJob(jobId, error, attempt) {
+      await failPrintJob(db, jobId, error, attempt);
     },
-    async completeJobAndAdvanceOrder(jobId, renderedFilePath) {
-      await completePrintJobAndAdvanceOrder(db, jobId, renderedFilePath);
+    async completeJobAndAdvanceOrder(jobId, renderedFilePath, attempt) {
+      await completePrintJobAndAdvanceOrder(db, jobId, renderedFilePath, attempt);
     },
     async getPrintJob(jobId) {
       const snap = await db.collection('printJobs').doc(jobId).get();
@@ -132,7 +132,14 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
     },
     async uploadPrintFile(orderId, itemId, filename, buffer, contentType) {
       const path = `print-files/${orderId}/${itemId}/${filename}`;
-      await bucket.file(path).save(buffer, { contentType });
+      const file = bucket.file(path);
+      await file.save(buffer, { contentType, resumable: false });
+      // Never report success for a file that isn't really there: read the
+      // stored object back and check its size before the job is marked done.
+      const [metadata] = await file.getMetadata();
+      if (Number(metadata.size) !== buffer.length) {
+        throw new Error(`Stored print file ${path} is ${metadata.size} bytes, expected ${buffer.length}`);
+      }
       return path;
     },
     async markCustomizationsRendered(customizationIds, renderedFilePath) {
