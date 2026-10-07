@@ -110,7 +110,7 @@ function useElementWidth() {
 }
 
 /** The finished frame cut out of its paper background, or the original while that is worked out / when it is not possible. */
-function useFrameCutout(imageUrl: string | null, enabled: boolean) {
+export function useFrameCutout(imageUrl: string | null, enabled: boolean) {
   const [cutout, setCutout] = useState<FrameCutout | null>(null);
   const [measuredAspect, setMeasuredAspect] = useState(1);
 
@@ -166,33 +166,28 @@ function shadowFilter(widthPx: number, light: SceneLight, standing: boolean): st
   );
 }
 
-/**
- * The customer's finished frame shown where it will live: on a wall, in a
- * living room, on a table. Scene data lives in `lib/preview-scenes.ts`. The
- * frame is cut out of its background, drawn at its real proportion of the
- * scene, and lit to match: shadows fall away from the photo's light, colour is
- * nudged toward the room, and a glass sheen crosses the picture. A photo shot at
- * an angle can instead give the frame's corners, and the frame is warped onto
- * them with a perspective transform. The same design follows the customer from
- * scene to scene.
- */
-export function LifestylePreview({
-  imageUrl,
-  frameInches = null,
-  scenes = DEFAULT_PREVIEW_SCENES,
-  cutOut = true,
-  emptyMessage = 'Add a photo to see your frame in this room.',
-}: LifestylePreviewProps) {
-  const [sceneId, setSceneId] = useState(scenes[0]?.id ?? '');
-  const [failedPhotos, setFailedPhotos] = useState<ReadonlySet<string>>(new Set());
-  const { url, aspect } = useFrameCutout(imageUrl, cutOut);
-  const stage = useElementWidth();
-  const scene = scenes.find((s) => s.id === sceneId) ?? scenes[0];
+export interface SceneStageProps {
+  scene: PreviewScene;
+  /** The framed design, already cut out (see useFrameCutout); null draws the empty scene. */
+  imageUrl: string | null;
+  /** Width / height of `imageUrl`. */
+  aspect: number;
+  /** Real frame size, so it is drawn at its true proportion of the scene. */
+  frameInches?: FrameInches | null;
+}
 
-  if (!scene) return null;
+/**
+ * One room scene with the framed design placed in it: the backdrop photo (or a
+ * drawn fallback), the frame at its real proportion, a shadow cast away from
+ * the photo's light, colour matched to the room, and a glass sheen. No labels
+ * or controls, so it can be a main view, a thumbnail or a zoomed copy.
+ */
+export function SceneStage({ scene, imageUrl, aspect, frameInches = null }: SceneStageProps) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const stage = useElementWidth();
 
   const placeholder = !imageUrl;
-  const photo = scene.backdrop.type === 'photo' && !failedPhotos.has(scene.id) ? scene.backdrop : null;
+  const photo = scene.backdrop.type === 'photo' && !photoFailed ? scene.backdrop : null;
   const quad = photo && photo.artworkQuad && photo.artworkAspect ? photo : null;
   const layout = layoutFrameInScene(scene, aspect, frameInches);
   const { frame } = scene;
@@ -239,68 +234,94 @@ export function LifestylePreview({
   const stageAspect = photo ? String(photo.aspect) : '1 / 1';
 
   return (
+    <div ref={stage.ref} className="relative w-full" style={{ aspectRatio: stageAspect, perspective: '1200px' }}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo.src}
+          alt=""
+          title={photo.credit}
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setPhotoFailed(true)}
+        />
+      ) : (
+        <ProceduralBackdrop variant={scene.kind} />
+      )}
+
+      {standing && !placeholder && !quad && (
+        <div
+          aria-hidden="true"
+          className="absolute rounded-[50%]"
+          style={{
+            left: `${frame.x * 100}%`,
+            top: `${frame.y * 100}%`,
+            width: `${layout.width * 100 * 0.96}%`,
+            height: `${Math.max(1.6, layout.width * 100 * 0.07)}%`,
+            transform: 'translate(-50%, -50%)',
+            background: `rgba(30,18,6,${(0.5 * light.strength + 0.12).toFixed(2)})`,
+            filter: 'blur(6px)',
+          }}
+        />
+      )}
+
+      {!placeholder && !quad && (
+        <div className="absolute" style={frameStyle}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="Your personalized frame in the scene" className="block h-full w-full" />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `linear-gradient(${sheenAngle}deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 36%, rgba(255,255,255,0) 64%, rgba(255,255,255,0.1) 100%)`,
+              mixBlendMode: 'screen',
+            }}
+          />
+        </div>
+      )}
+
+      {!placeholder && quad && planeSize && quadTransform && (
+        <div
+          className="absolute left-0 top-0"
+          style={{ width: planeSize.w, height: planeSize.h, transformOrigin: '0 0', transform: quadTransform, filter: toneFilter(scene.tone) || undefined }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="Your personalized frame in the scene" className="h-full w-full object-contain" />
+        </div>
+      )}
+
+      {photo?.foregroundSrc && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo.foregroundSrc} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The customer's finished frame shown where it will live: on a wall, in a
+ * living room, on a table. Scene data lives in `lib/preview-scenes.ts`; the
+ * drawing itself is `SceneStage`. The same design follows the customer from
+ * scene to scene.
+ */
+export function LifestylePreview({
+  imageUrl,
+  frameInches = null,
+  scenes = DEFAULT_PREVIEW_SCENES,
+  cutOut = true,
+  emptyMessage = 'Add a photo to see your frame in this room.',
+}: LifestylePreviewProps) {
+  const [sceneId, setSceneId] = useState(scenes[0]?.id ?? '');
+  const { url, aspect } = useFrameCutout(imageUrl, cutOut);
+  const scene = scenes.find((s) => s.id === sceneId) ?? scenes[0];
+
+  if (!scene) return null;
+
+  const placeholder = !imageUrl;
+
+  return (
     <div data-testid="lifestyle-preview" className="flex w-full flex-col gap-3">
       <div className="relative w-full overflow-hidden rounded-2xl border border-line/60 bg-tint">
-        <div ref={stage.ref} className="relative w-full" style={{ aspectRatio: stageAspect, perspective: '1200px' }}>
-          {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={photo.src}
-              alt=""
-              title={photo.credit}
-              className="absolute inset-0 h-full w-full object-cover"
-              onError={() => setFailedPhotos((prev) => new Set(prev).add(scene.id))}
-            />
-          ) : (
-            <ProceduralBackdrop variant={scene.kind} />
-          )}
-
-          {standing && !placeholder && !quad && (
-            <div
-              aria-hidden="true"
-              className="absolute rounded-[50%]"
-              style={{
-                left: `${frame.x * 100}%`,
-                top: `${frame.y * 100}%`,
-                width: `${layout.width * 100 * 0.96}%`,
-                height: `${Math.max(1.6, layout.width * 100 * 0.07)}%`,
-                transform: 'translate(-50%, -50%)',
-                background: `rgba(30,18,6,${(0.5 * light.strength + 0.12).toFixed(2)})`,
-                filter: 'blur(6px)',
-              }}
-            />
-          )}
-
-          {!placeholder && url && !quad && (
-            <div className="absolute" style={frameStyle}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Your personalized frame in the scene" className="block h-full w-full" />
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background: `linear-gradient(${sheenAngle}deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 36%, rgba(255,255,255,0) 64%, rgba(255,255,255,0.1) 100%)`,
-                  mixBlendMode: 'screen',
-                }}
-              />
-            </div>
-          )}
-
-          {!placeholder && url && quad && planeSize && quadTransform && (
-            <div
-              className="absolute left-0 top-0"
-              style={{ width: planeSize.w, height: planeSize.h, transformOrigin: '0 0', transform: quadTransform, filter: toneFilter(scene.tone) || undefined }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Your personalized frame in the scene" className="h-full w-full object-contain" />
-            </div>
-          )}
-
-          {photo?.foregroundSrc && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photo.foregroundSrc} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
-          )}
-        </div>
+        <SceneStage scene={scene} imageUrl={placeholder ? null : url} aspect={aspect} frameInches={frameInches} />
 
         {placeholder && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm font-medium text-ink/55">

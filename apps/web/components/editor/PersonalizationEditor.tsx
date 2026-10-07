@@ -11,9 +11,8 @@ import { PhotoSlotCard } from './PhotoSlotCard';
 import { PhotoCropModal } from './PhotoCropModal';
 import type { CanvasTextField, SlotDrawState } from './EditorCanvas';
 import { resolveFontFamilyForCanvas, DEFAULT_TEXT_FONT_KEY } from '../../lib/text-personalization-options';
-import { GalleryStrip } from '../product/GalleryStrip';
 import { Lightbox } from '../ui/Lightbox';
-import { LifestylePreview } from './LifestylePreview';
+import { PreviewGallery } from './PreviewGallery';
 
 // EditorCanvas draws into a native <canvas> and loads images via `new Image()`,
 // both of which need `window`/`document` — ssr: false keeps it off the server entirely.
@@ -76,11 +75,11 @@ const TEXT_DEBOUNCE_MS = 120;
  * PersonalizationPreview
  * 
  * Renders the left side of the PDP:
- * - Design Preview / View in Room mode toggle
- * - Large live composite frame preview (EditorCanvas or Room mockup)
+ * - One preview gallery (PreviewGallery): the plain frame plus bedroom, hall and
+ *   table rooms, switched by thumbnails. It shows the product's own picture until a
+ *   photo is added, then the customer's design in every view.
  * - Quick adjustments toolbar for the active slot (zoom, rotate, reset, undo, redo)
  * - Preview expand lightbox
- * - GalleryStrip thumbnails underneath
  */
 export function PersonalizationPreview({
   template,
@@ -105,6 +104,7 @@ export function PersonalizationPreview({
   canRedo,
   allowsTextPersonalization,
   variant,
+  fallbackImageUrl,
 }: {
   template: FrameTemplate;
   media: ProductMedia[];
@@ -128,8 +128,9 @@ export function PersonalizationPreview({
   canRedo: boolean;
   allowsTextPersonalization: boolean;
   variant?: Variant | null;
+  /** The product's primary image, used when its gallery has no picture. */
+  fallbackImageUrl?: string | null;
 }) {
-  const [previewMode, setPreviewMode] = useState<'design' | 'room'>('design');
   const [showLightbox, setShowLightbox] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [debouncedTextFields, setDebouncedTextFields] = useState(textFields);
@@ -177,6 +178,11 @@ export function PersonalizationPreview({
 
   const selectedClipart = selectedClipartId ? template.clipartOptions.find((c) => c.id === selectedClipartId) : null;
 
+  // The product's own picture (first photo in its gallery) is what every preview view
+  // shows until the customer has added a photo.
+  const defaultImageUrl = media.find((m) => m.type !== 'video')?.url ?? fallbackImageUrl ?? null;
+  const hasPhoto = slots.size > 0 && previewDataUrl !== null;
+
   // Lifestyle scenes (wall / room / table) are drawn from configuration in
   // lib/preview-scenes.ts, so every customizable frame has them.
   const frameInches =
@@ -184,42 +190,9 @@ export function PersonalizationPreview({
 
   return (
     <div data-testid="personalization-preview" className="flex flex-col gap-3.5">
-      {/* Top Preview Controls: Mode switch + Undo/Redo + Developer Debug Mode */}
+      {/* Top Preview Controls: Developer Debug Mode + Undo/Redo */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          {true ? (
-            <div aria-label="Preview Modes" className="inline-flex items-center p-1 rounded-full bg-paper border border-line shadow-xs">
-              <button
-                type="button"
-                aria-pressed={previewMode === 'design'}
-                onClick={() => setPreviewMode('design')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  previewMode === 'design'
-                    ? 'bg-ink text-paper shadow-xs'
-                    : 'text-ink/70 hover:text-ink'
-                }`}
-              >
-                Design Preview
-              </button>
-              <button
-                type="button"
-                aria-pressed={previewMode === 'room'}
-                onClick={() => setPreviewMode('room')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  previewMode === 'room'
-                    ? 'bg-ink text-paper shadow-xs'
-                    : 'text-ink/70 hover:text-ink'
-                }`}
-              >
-                View in Room
-              </button>
-            </div>
-          ) : (
-            <span className="text-xs font-semibold text-ink/70 uppercase tracking-wider">
-              Live Preview
-            </span>
-          )}
-
           {/* Development Debug Mode Toggle (Requirement #28 - Not visible in production) */}
           {process.env.NODE_ENV !== 'production' && (
             <button
@@ -268,59 +241,56 @@ export function PersonalizationPreview({
         )}
       </div>
 
-      {/* Main Preview Container */}
-      <div className="rounded-3xl bg-field border border-line/90 p-2 sm:p-4 relative overflow-hidden flex flex-col items-center justify-center shadow-xs w-full aspect-square max-w-[560px] mx-auto min-h-[300px]">
-        {/* DESIGN PREVIEW MODE (Always mounted to keep canvas render active) */}
-        <div className={`w-full h-full flex items-center justify-center ${previewMode === 'room' ? 'hidden' : 'block'}`}>
-          <EditorCanvasErrorBoundary>
-            <EditorCanvas
-              mockupUrl={template.mockupUrl}
-              overlayUrl={template.overlayUrl}
-              slots={canvasSlots}
-              activeSlotIndex={activeSlotIndex}
-              textFields={canvasTextFields}
-              clipart={
-                selectedClipart
-                  ? {
-                      assetUrl: selectedClipart.assetUrl,
-                      x: selectedClipart.x,
-                      y: selectedClipart.y,
-                      width: selectedClipart.width,
-                      height: selectedClipart.height,
-                    }
-                  : null
-              }
-              debugMode={debugMode}
-              onTransformChange={onTransformChange}
-              onCanvasUpdate={onCanvasUpdate}
-              onPinchZoom={onZoomStep}
-              onPinchRotate={onRotate}
-              onSelectSlot={onSelectSlot}
-            />
-          </EditorCanvasErrorBoundary>
-        </div>
-
-        {/* LIFESTYLE PREVIEW: wall / living room / table */}
-        {previewMode === 'room' && (
-          <div className="w-full">
-            <LifestylePreview imageUrl={previewDataUrl} frameInches={frameInches} />
-          </div>
-        )}
-
-        {/* Lightbox / Zoom Expand Button */}
-        {previewDataUrl && slots.size > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowLightbox(true)}
-            aria-label="Preview"
-            className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-paper/95 backdrop-blur-xs border border-line/70 text-ink shadow-sm flex items-center justify-center hover:bg-paper hover:scale-105 transition-all"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-            </svg>
-          </button>
-        )}
-      </div>
+      {/* One preview: the plain frame + three rooms. Until a photo is added every view
+          shows the product's own picture; after, all of them show the customer's design. */}
+      <PreviewGallery
+        defaultImageUrl={defaultImageUrl}
+        personalizedImageUrl={previewDataUrl}
+        hasPersonalization={hasPhoto}
+        frameInches={frameInches}
+        alt={productTitle}
+        stageOverlay={
+          hasPhoto ? (
+            <button
+              type="button"
+              onClick={() => setShowLightbox(true)}
+              aria-label="Preview"
+              className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-paper/95 backdrop-blur-xs border border-line/70 text-ink shadow-sm flex items-center justify-center hover:bg-paper hover:scale-105 transition-all"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </button>
+          ) : null
+        }
+      >
+        <EditorCanvasErrorBoundary>
+          <EditorCanvas
+            mockupUrl={template.mockupUrl}
+            overlayUrl={template.overlayUrl}
+            slots={canvasSlots}
+            activeSlotIndex={activeSlotIndex}
+            textFields={canvasTextFields}
+            clipart={
+              selectedClipart
+                ? {
+                    assetUrl: selectedClipart.assetUrl,
+                    x: selectedClipart.x,
+                    y: selectedClipart.y,
+                    width: selectedClipart.width,
+                    height: selectedClipart.height,
+                  }
+                : null
+            }
+            debugMode={debugMode}
+            onTransformChange={onTransformChange}
+            onCanvasUpdate={onCanvasUpdate}
+            onPinchZoom={onZoomStep}
+            onPinchRotate={onRotate}
+            onSelectSlot={onSelectSlot}
+          />
+        </EditorCanvasErrorBoundary>
+      </PreviewGallery>
 
       {/* Quick Adjustments Toolbar for the active slot */}
       {activeSlot && zoomBounds && (
@@ -442,11 +412,8 @@ export function PersonalizationPreview({
         </div>
       )}
 
-      {/* Gallery thumbnail strip */}
-      <GalleryStrip media={media} productTitle={productTitle} />
-
       {/* Lightbox full-size preview modal */}
-      {showLightbox && previewDataUrl && (
+      {showLightbox && previewDataUrl && hasPhoto && (
         <Lightbox src={previewDataUrl} alt="Your personalized preview" onClose={() => setShowLightbox(false)} />
       )}
     </div>

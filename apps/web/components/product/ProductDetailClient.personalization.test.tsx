@@ -876,11 +876,18 @@ describe('ProductDetailClient — inline personalization', () => {
     });
   });
 
-  describe('gallery strip', () => {
-    it('renders a thumbnail for each product media item alongside the live editor', async () => {
+  describe('preview gallery', () => {
+    it('shows four views below the main picture, starting on the product picture, next to the live editor', async () => {
       renderProduct(makeProduct(), [variant], [makeTemplate()]);
       await screen.findByLabelText(/upload a photo/i);
-      expect(screen.getByRole('button', { name: /view product photo 1/i })).toBeInTheDocument();
+      const views = screen.getByRole('group', { name: /preview views/i });
+      expect(within(views).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+        'Frame view',
+        'Bedroom view',
+        'Hall view',
+        'Table view',
+      ]);
+      expect(within(screen.getByTestId('preview-main-picture')).getByRole('img')).toHaveAttribute('src', media[0]!.url);
     });
   });
 });

@@ -346,7 +346,14 @@ describe('Multi-Photo Frame PDP Workflow', () => {
     expect(screen.getByRole('button', { name: /slot 1/i })).toBeInTheDocument();
   });
 
-  it('supports Design Preview and View in Room modes', async () => {
+  it('shows the product picture first, then one gallery of the frame and three rooms that all follow the same photo', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'up_1', sessionId: 'sess_test', originalUrl: '/uploaded.jpg', previewUrl: '/uploaded.jpg', widthPx: 2400, heightPx: 3600,
+        mime: 'image/jpeg', bytes: 1, exifStripped: true, status: 'ready',
+      }),
+    });
     render(
       <CartProvider>
         <ToastProvider>
@@ -360,24 +367,43 @@ describe('Multi-Photo Frame PDP Workflow', () => {
       </CartProvider>
     );
 
-    // Both modes available
-    const designBtn = screen.getByRole('button', { name: /design preview/i });
-    const roomBtn = screen.getByRole('button', { name: /view in room/i });
-    expect(designBtn).toBeInTheDocument();
-    expect(roomBtn).toBeInTheDocument();
+    // The old two-button toggle is gone; one gallery has four views.
+    expect(screen.queryByRole('button', { name: /design preview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /view in room/i })).not.toBeInTheDocument();
+    const views = screen.getByRole('group', { name: /preview views/i });
+    for (const name of ['Frame view', 'Bedroom view', 'Hall view', 'Table view']) {
+      expect(within(views).getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(within(views).getByRole('button', { name: 'Frame view' })).toHaveAttribute('aria-pressed', 'true');
 
-    // Switch to View in Room
-    fireEvent.click(roomBtn);
-    expect(screen.getByTestId('lifestyle-preview')).toBeInTheDocument();
-    // Living room, bedroom, wall and table scenes are offered and switching keeps the preview mounted.
-    const group = screen.getByRole('group', { name: /choose a scene/i });
-    expect(within(group).getByRole('button', { name: 'Living room' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(group).getByRole('button', { name: 'Table' }));
-    expect(within(group).getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('lifestyle-preview')).toBeInTheDocument();
+    // Before any photo: the product's own picture, not a blank frame, and no live editor on screen yet.
+    const first = mockMedia.find((m) => m.type !== 'video')!;
+    const main = screen.getByTestId('preview-main-picture');
+    expect(within(main).getByRole('img')).toHaveAttribute('src', first.url);
 
-    // Switch back to Design Preview
-    fireEvent.click(designBtn);
+    // A room view shows the same product in the room.
+    fireEvent.click(within(views).getByRole('button', { name: 'Bedroom view' }));
+    expect(screen.getByTestId('preview-main-picture')).toHaveAttribute('data-view', 'bedroom');
+    expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', first.url);
+    fireEvent.click(within(views).getByRole('button', { name: 'Hall view' }));
+    expect(screen.getByTestId('preview-main-picture')).toHaveAttribute('data-view', 'hall');
+    fireEvent.click(within(views).getByRole('button', { name: 'Table view' }));
+    expect(screen.getByTestId('preview-main-picture')).toHaveAttribute('data-view', 'table');
+    fireEvent.click(within(views).getByRole('button', { name: 'Frame view' }));
+
+    // Adding a photo switches every view to the customer's design (the mocked canvas reports 'mockPreview').
+    const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(screen.queryByTestId('preview-main-picture')).not.toBeInTheDocument());
     expect(screen.getByTestId('editor-canvas')).toBeInTheDocument();
+
+    fireEvent.click(within(views).getByRole('button', { name: 'Table view' }));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', 'data:image/png;base64,mockPreview')
+    );
+    fireEvent.click(within(views).getByRole('button', { name: 'Bedroom view' }));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', 'data:image/png;base64,mockPreview')
+    );
   });
 });
