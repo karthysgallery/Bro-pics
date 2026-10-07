@@ -593,4 +593,43 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
     vi.doUnmock('firebase/firestore');
     vi.doUnmock('firebase/functions');
   });
+
+  it('never copies a signed-in cart into the guest cart (no doubled qty on reload, nothing left after sign-out)', async () => {
+    vi.resetModules();
+    localStorage.removeItem('bropics_session_id');
+    localStorage.removeItem('bropics_guest_cart');
+    const firestoreMock = makeFirestoreMock();
+    vi.doMock('firebase/firestore', () => firestoreMock);
+    vi.doMock('firebase/functions', () => ({
+      getFunctions: vi.fn(() => ({})),
+      httpsCallable: vi.fn(() => vi.fn().mockResolvedValue(undefined)),
+    }));
+
+    const { CartProvider: SignedInCartProvider, useCart: useSignedInCart } = await import('./cart-context');
+    const { AuthContext: SignedInAuthContext } = await import('./auth-context');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <SignedInAuthContext.Provider value={{ user: { uid: 'user_1' } as never, loading: false, signOut: vi.fn() }}>
+          <SignedInCartProvider>{children}</SignedInCartProvider>
+        </SignedInAuthContext.Provider>
+      );
+    }
+
+    const { result } = renderHook(() => useSignedInCart(), { wrapper: Wrapper });
+    await act(async () => {
+      result.current.addItem({ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 });
+      await Promise.all(firestoreMock.runTransaction.mock.results.map((r) => r.value));
+    });
+    await act(async () => {
+      result.current.updateQuantity('v1', 'p1', 2);
+      await Promise.all(firestoreMock.runTransaction.mock.results.map((r) => r.value));
+    });
+
+    expect(firestoreMock._server.items).toEqual([expect.objectContaining({ personalizationId: 'p1', qty: 2 })]);
+    expect(JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]')).toEqual([]);
+
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
 });

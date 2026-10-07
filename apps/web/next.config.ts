@@ -60,6 +60,10 @@ const nextConfig: NextConfig = {
         hostname: 'storage.googleapis.com',
         pathname: '/bropics-app.firebasestorage.app/**',
       },
+      // Local QA only: signed URLs from the Storage emulator.
+      ...(process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === '1'
+        ? [{ protocol: 'http' as const, hostname: '127.0.0.1', port: '9199', pathname: '/**' }]
+        : []),
     ],
   },
 };

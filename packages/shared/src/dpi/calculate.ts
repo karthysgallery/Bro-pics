@@ -35,21 +35,24 @@ export function calculateEffectiveDpi(
 
 /**
  * DPI from an editor crop rectangle rather than a single zoom factor.
- * cropRect is in the upload's own original pixel space. The tighter
- * (larger) of the width/height zoom ratios wins, since that's the
- * dimension actually constraining print quality when the crop isn't
- * proportional to the upload's aspect ratio. Delegates to the existing,
- * already-tested calculateEffectiveDpi rather than duplicating its math.
+ * cropRect is in the upload's own original pixel space and covers exactly
+ * the pixels that land on the print, so each axis's DPI is simply its crop
+ * size over its print size; the lower of the two is what limits sharpness.
+ *
+ * (This used to turn the crop into one zoom factor and divide BOTH sides
+ * of the upload by it, which under-counted the uncropped side: a 3000x3000
+ * photo filling a 12x18 frame scored 131 DPI instead of 167, and was
+ * blocked from Add to cart.)
  */
 export function effectiveDpiFromCropRect(
-  uploadWidthPx: number,
-  uploadHeightPx: number,
+  _uploadWidthPx: number,
+  _uploadHeightPx: number,
   cropRect: { width: number; height: number },
   printWidthIn: number,
   printHeightIn: number
 ): DpiResult {
-  const cropScale = Math.max(uploadWidthPx / cropRect.width, uploadHeightPx / cropRect.height);
-  return calculateEffectiveDpi(uploadWidthPx, uploadHeightPx, cropScale, printWidthIn, printHeightIn);
+  const effectiveDpi = Math.min(cropRect.width / printWidthIn, cropRect.height / printHeightIn);
+  return { effectiveDpi, tier: dpiTier(effectiveDpi) };
 }
 
 /**

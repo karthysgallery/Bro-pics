@@ -61,6 +61,14 @@ describe('effectiveDpiFromCropRect', () => {
     expect(result.effectiveDpi).toBeCloseTo(150, 0);
   });
 
+  it('counts the uncropped side at full resolution (square photo in a 2:3 slot)', () => {
+    // A 3000x3000 photo covering a 195x248 slot keeps all 3000px of height
+    // and 2359px of width: min(2359/12, 3000/18) = 167 DPI, not 131.
+    const result = effectiveDpiFromCropRect(3000, 3000, { width: 2358.87, height: 3000 }, 12, 18);
+    expect(result.effectiveDpi).toBeCloseTo(166.7, 0);
+    expect(result.tier).toBe('amber');
+  });
+
   it('flags a low-resolution upload as red even with no crop', () => {
     const result = effectiveDpiFromCropRect(800, 1200, { width: 800, height: 1200 }, 8, 12);
     expect(result.tier).toBe('red');

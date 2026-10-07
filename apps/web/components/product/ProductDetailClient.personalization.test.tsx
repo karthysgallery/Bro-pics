@@ -473,14 +473,20 @@ describe('ProductDetailClient — inline personalization', () => {
     });
 
     it('recomputes the DPI tier with the rotation-aware axis swap after a 90-degree rotate', async () => {
-      // A landscape 3000x2000 upload against a 10x8in variant: at cover-fit
-      // scale the crop is a centered 2000x2000 square regardless of
-      // rotation (the canvas slot itself is square), isolating exactly one
-      // variable — whether widthIn/heightIn get axis-swapped for rotation.
-      // Unswapped (0deg): effectiveDpi ≈ 166.67 (amber). Swapped (90deg):
-      // effectiveDpi ≈ 133.33 (red) — crossing the 150 DPI tier boundary.
+      // A 10x8in landscape print with a matching 10:8 slot (200x160 canvas
+      // px) and a 1950x1300 landscape photo. Upright the photo covers the
+      // slot using 1625x1300 of its pixels: 162.5 DPI (amber). Rotated 90
+      // degrees it is now portrait and has to be scaled up to cover the
+      // same landscape slot, using only 1040x1300: 130 DPI (red).
       const dpiVariant: Variant = { ...variant, widthIn: 10, heightIn: 8 };
-      await renderWithOnePhoto({}, dpiVariant, { widthPx: 3000, heightPx: 2000 });
+      mockUploadFetch({ widthPx: 1950, heightPx: 1300 });
+      renderProduct(makeProduct(), [dpiVariant], [
+        makeTemplate({ variantId: dpiVariant.id, printableRects: [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.5, height: 0.4 }] }),
+      ]);
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect((lastEditorCanvasProps?.slots as unknown[])?.length).toBeGreaterThan(0));
 
       expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
       expect(screen.queryByRole('checkbox', { name: /use this photo anyway/i })).not.toBeInTheDocument();

@@ -48,4 +48,13 @@ describe('resolveMediaUrl', () => {
     await resolveMediaUrl('uploads/sess/1/original.jpg', 'tok_abc');
     expect(mockFetch).toHaveBeenCalledWith(expect.any(String), { headers: { Authorization: 'Bearer tok_abc' } });
   });
+
+  it("sends this browser's guest session id so a guest can see their own photos", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: 'https://x' }) });
+    global.fetch = mockFetch as unknown as typeof fetch;
+    localStorage.setItem('bropics_session_id', 'sess');
+    await resolveMediaUrl('uploads/sess/previews/p/slot-0.png');
+    localStorage.removeItem('bropics_session_id');
+    expect(mockFetch).toHaveBeenCalledWith(expect.any(String), { headers: { 'X-Session-Id': 'sess' } });
+  });
 });

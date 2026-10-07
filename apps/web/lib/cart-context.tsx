@@ -136,8 +136,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // and persisting that would risk resurrecting stale items on a later
   // sign-out on the same browser.
   useEffect(() => {
-    writeGuestCart(localItems);
-  }, [localItems]);
+    if (!user) writeGuestCart(localItems);
+  }, [localItems, user]);
 
   useEffect(() => {
     if (!user) {
@@ -165,6 +165,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         reconcile({ sessionId: reconciliationKey, cartItems: localItems, reconciliationId: reconciliationKey })
           .then(() => {
             setLocalItems([]);
+            // The guest copy now lives in the account cart; leaving it in
+            // storage would merge it in again on the next page load.
+            writeGuestCart([]);
             setReconcileSucceeded(true);
             resetSessionId();
           })
@@ -201,6 +204,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     : localItems;
 
   const value = useMemo<CartContextValue>(() => {
+    // Once signed in and reconciled, Firestore is the only copy of the
+    // cart. Mutating the local buffer too would keep a shadow cart that
+    // survives sign-out on a shared browser.
+    const accountOwnsCart = Boolean(user) && reconcileSucceeded;
+    const applyLocal = (mutate: (current: CartItem[]) => CartItem[]) => {
+      if (!accountOwnsCart) setLocalItems(mutate);
+    };
+
     const runFirestoreOp = (mutate: (current: CartItem[]) => CartItem[]) => {
       if (!user) return;
       const db = getFirestore(getFirebaseApp());
@@ -210,7 +221,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
 
     const addItem = (item: CartItem) => {
-      setLocalItems((prev) => mergeOne(prev, item));
+      applyLocal((prev) => mergeOne(prev, item));
       if (user) {
         runFirestoreOp((current) => mergeOne(current, item));
       }
@@ -219,7 +230,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const removeItem = (variantId: string, personalizationId: string) => {
       const filterOut = (current: CartItem[]) =>
         current.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId));
-      setLocalItems(filterOut);
+      applyLocal(filterOut);
       if (user) {
         runFirestoreOp(filterOut);
       }
@@ -230,7 +241,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         current.map((i) =>
           i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
         );
-      setLocalItems(applyQty);
+      applyLocal(applyQty);
       if (user) {
         runFirestoreOp(applyQty);
       }
@@ -250,7 +261,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         current.map((i) =>
           i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, ...updates } : i
         );
-      setLocalItems(applyUpdate);
+      applyLocal(applyUpdate);
       if (user) {
         runFirestoreOp(applyUpdate);
       }
@@ -270,7 +281,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, user]);
+  }, [items, user, reconcileSucceeded]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

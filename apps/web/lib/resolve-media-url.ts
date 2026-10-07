@@ -1,3 +1,13 @@
+import { SESSION_ID_STORAGE_KEY } from './session-id';
+
+function readSessionId(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(SESSION_ID_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 interface TokenSource {
   getIdToken?: () => Promise<string>;
 }
@@ -28,9 +38,14 @@ export async function getIdTokenSafe(user: TokenSource | null | undefined): Prom
  */
 export async function resolveMediaUrl(path: string, idToken?: string | null): Promise<string | null> {
   try {
-    const res = await fetch(`/api/media/url?path=${encodeURIComponent(path)}`, {
-      headers: idToken ? { Authorization: `Bearer ${idToken}` } : undefined,
-    });
+    // A guest owns `uploads/{sessionId}/...` through this browser's session
+    // id, so it has to travel with the request or the guest's own cart
+    // thumbnails are refused.
+    const headers: Record<string, string> = {};
+    if (idToken) headers.Authorization = `Bearer ${idToken}`;
+    const sessionId = readSessionId();
+    if (sessionId) headers['X-Session-Id'] = sessionId;
+    const res = await fetch(`/api/media/url?path=${encodeURIComponent(path)}`, { headers });
     if (!res.ok) return null;
     const body = await res.json();
     return typeof body.url === 'string' ? body.url : null;

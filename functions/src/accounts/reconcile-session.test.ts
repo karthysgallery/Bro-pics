@@ -70,7 +70,7 @@ describe('runReconciliation', () => {
     expect(tx.setCustomizationUserId).toHaveBeenCalledWith('c_1', 'user_1');
   });
 
-  it('merges the incoming cart into an existing cart by summing qty', async () => {
+  it('merges the incoming cart into an existing cart without double-counting the same line', async () => {
     const tx = makeFakeTransaction({
       matchedUploads: [],
       matchedCustomizations: [],
@@ -79,7 +79,7 @@ describe('runReconciliation', () => {
     const incomingCartItems = [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 3 }];
     await runReconciliation(tx, { sessionId: 'sess_1', userId: 'user_1', phone: '+91123', incomingCartItems, reconciliationId: 'recon_1' });
     expect(tx.setCart).toHaveBeenCalledWith('user_1', {
-      items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 5 }],
+      items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 3 }],
     });
   });
 
@@ -167,7 +167,7 @@ describe('runReconciliation', () => {
     });
   });
 
-  it('a retry with a DIFFERENT reconciliationId is treated as a new attempt and merges again (sanity check on the guard)', async () => {
+  it('a retry with a DIFFERENT reconciliationId merges again but never inflates the same line', async () => {
     const tx = makeStatefulFakeTransaction({
       matchedUploads: [],
       matchedCustomizations: [],
@@ -184,7 +184,7 @@ describe('runReconciliation', () => {
 
     const finalCart = await tx.getCart('user_1');
     expect(finalCart).toEqual({
-      items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 4 }],
+      items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 2 }],
     });
   });
 });

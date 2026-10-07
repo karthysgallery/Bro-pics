@@ -1099,8 +1099,14 @@ export function ProductDetailClient({
         onSelectSize={handleSelectSize}
         onSelectColour={handleSelectColour}
         onSelectOrientation={handleSelectOrientation}
-        personalizationReady={showInlineEditor ? completion.complete : true}
-        personalizationReason={showInlineEditor ? completion.reason : undefined}
+        personalizationReady={showInlineEditor ? completion.complete : false}
+        // A size with no frame template can't take a photo, so it can't be
+        // ordered online — say so instead of leaving a silent grey button.
+        personalizationReason={
+          showInlineEditor
+            ? completion.reason
+            : 'This option isn’t ready to order online yet. Please choose another size or finish, or message us on WhatsApp.'
+        }
         submitting={submitting}
         submitError={submitError}
         onAddToCart={showInlineEditor ? handleAddToCart : undefined}

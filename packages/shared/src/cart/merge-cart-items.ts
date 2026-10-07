@@ -23,19 +23,22 @@ function lineKey(line: CartLine): string {
 }
 
 /**
- * Merges two cart-line lists, summing qty for matching
- * (variantId, personalizationId) pairs. Used both when reconciling a local
- * cart into an existing Firestore cart at login (a returning user signing
- * in on a second device) and, potentially, by any future client-side merge
- * path. The incoming line's title/previewPath/unitPriceSnapshot win on a
- * match — incoming is always the more recently-added data.
+ * Merges two cart-line lists by (variantId, personalizationId). Used when
+ * reconciling a local cart into the Firestore cart at sign-in.
+ *
+ * A personalizationId is minted once per Add to cart, so the same pair on
+ * both sides is the SAME line copied (e.g. a browser's leftover copy of a
+ * signed-in cart), never two separate purchases. Quantities are therefore
+ * not added together — that turned 2 into 4 on every signed-in reload —
+ * the larger one is kept. The incoming line's title/previewPath/
+ * unitPriceSnapshot win, since incoming is the more recently-touched copy.
  */
 export function mergeCartItems(existing: CartLine[], incoming: CartLine[]): CartLine[] {
   const merged = new Map<string, CartLine>();
   for (const line of existing) merged.set(lineKey(line), line);
   for (const line of incoming) {
     const current = merged.get(lineKey(line));
-    merged.set(lineKey(line), current ? { ...line, qty: current.qty + line.qty } : line);
+    merged.set(lineKey(line), current ? { ...line, qty: Math.max(current.qty, line.qty) } : line);
   }
   return [...merged.values()];
 }
