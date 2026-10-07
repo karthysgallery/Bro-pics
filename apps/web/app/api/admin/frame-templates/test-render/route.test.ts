@@ -16,7 +16,7 @@ const mockProbeAndStripImage = vi.fn();
 vi.mock('../../../../../lib/image-probe', () => ({ probeAndStripImage: (...args: unknown[]) => mockProbeAndStripImage(...args) }));
 
 const mockRenderPrintFile = vi.fn();
-vi.mock('@bro-pics/print-render/src/render-print-file', () => ({ renderPrintFile: (...args: unknown[]) => mockRenderPrintFile(...args) }));
+vi.mock('@bro-pics/print-render/src/render-legacy-print', () => ({ renderLegacyPrintFile: (...args: unknown[]) => mockRenderPrintFile(...args) }));
 
 const mockTemplateQueryGet = vi.fn();
 const mockWhere = vi.fn(() => ({ where: mockWhere, limit: vi.fn(() => ({ get: mockTemplateQueryGet })) }));
@@ -125,21 +125,23 @@ describe('POST /api/admin/frame-templates/test-render', () => {
     expect(Buffer.from(bytes).toString()).toBe('rendered-png-bytes');
   });
 
-  it('passes the full uncropped photo dimensions as cropRect for every slot, unrotated', async () => {
+  it('renders the paper size with the sample photo centre-cropped to each slot, and never the mockup', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     await POST(makeRequest({ variantId: 'var_1', photo: samplePhoto }));
     expect(mockRenderPrintFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        printWidthPx: 2400,
-        printHeightPx: 3000,
+        paperPx: { width: 2400, height: 3000 },
+        printArtworkBuffer: null,
         slots: [
           expect.objectContaining({
-            cropRect: { x: 0, y: 0, width: 1000, height: 800 },
+            // 1000x800 photo into a square slot -> the centred 800x800.
+            cropRect: { x: 100, y: 0, width: 800, height: 800 },
             rotationDeg: 0,
           }),
         ],
       })
     );
+    expect(mockRenderPrintFile.mock.calls[0]![0]).not.toHaveProperty('mockupBuffer');
   });
 
   it('writes an audit log entry on success', async () => {

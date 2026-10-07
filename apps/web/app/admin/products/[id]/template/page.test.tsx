@@ -136,4 +136,25 @@ describe('AdminTemplateFormPage', () => {
       );
     });
   });
+
+  it('labels the mockup as never printed, warns about unprinted text, and saves slots with their quality settings', async () => {
+    render(<AdminTemplateFormPage params={Promise.resolve({ id: 'prod_1' })} />);
+    await screen.findByText(/Zone #1: Heading/);
+
+    expect(screen.getAllByText(/Shop preview only — never printed/)).toHaveLength(2);
+    expect(screen.getByText(/Printed artwork \(optional\)/)).toBeInTheDocument();
+    // The heading sits below the photo slot (y 0.8-0.9 vs slot ending at 0.9 -> inside), the square slot on 8x12 paper -> margins.
+    const warnings = screen.getByRole('list', { name: 'Print warnings' });
+    expect(warnings).toHaveTextContent(/white margins/);
+
+    fireEvent.change(screen.getAllByLabelText(/Block below \(DPI\)/)[0]!, { target: { value: '180' } });
+    fireEvent.click(await screen.findByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/admin/frame-templates', expect.objectContaining({ method: 'POST' })));
+    const call = mockFetch.mock.calls.find((c) => c[0] === '/api/admin/frame-templates')!;
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.printableRects).toEqual([{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.8, height: 0.8, minDpi: 180 }]);
+    expect(body.printArea).toBeNull();
+    expect(body.printArtworkUrl).toBeNull();
+  });
 });

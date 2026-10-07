@@ -492,6 +492,9 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
             {hasArtwork && (
               <fieldset className="space-y-1.5">
                 <legend className="text-2xs font-semibold uppercase tracking-wide text-ink/55">The design image sits</legend>
+                <p className="text-2xs text-ink/60">
+                  The design image is <strong className="font-semibold text-ink">printed</strong> with the photos and text. Room previews and frame mockups are shop presentation only and are never printed.
+                </p>
                 {(
                   [
                     [true, 'Over the photos (photo areas are transparent windows)'],

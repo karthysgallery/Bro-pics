@@ -14,7 +14,7 @@ import { logger, type FrameTemplate } from '@bro-pics/shared';
 // handler (always server-only), importing a sibling workspace package's
 // pure rendering function directly, the same "direct subpath/package
 // import for a server-only consumer" pattern print-jobs.ts documents.
-import { renderPrintFile } from '@bro-pics/print-render/src/render-print-file';
+import { renderLegacyPrintFile } from '@bro-pics/print-render/src/render-legacy-print';
 
 const MAX_TEST_PHOTO_BYTES = 20 * 1024 * 1024;
 
@@ -102,23 +102,30 @@ export async function POST(request: Request): Promise<NextResponse> {
     return adminApiError(400, 'invalid_request', `Could not process the sample photo: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const [mockupBuffer, overlayBuffer, maskBuffer] = await Promise.all([
-    fetchTemplateAsset(template.mockupUrl),
-    template.overlayUrl ? fetchTemplateAsset(template.overlayUrl) : Promise.resolve(null),
+  // Printed layers only — the mockup and overlay are shop-preview art and
+  // never appear on the paper, so the test print leaves them out too.
+  const [printArtworkBuffer, maskBuffer] = await Promise.all([
+    template.printArtworkUrl ? fetchTemplateAsset(template.printArtworkUrl) : Promise.resolve(null),
     template.maskUrl ? fetchTemplateAsset(template.maskUrl) : Promise.resolve(null),
   ]);
 
-  // Every slot gets the SAME sample photo, uncropped (the full probed
-  // image as its own cropRect) and unrotated — there is no real
+  // Every slot gets the SAME sample photo, centre-cropped to the slot's
+  // shape (as the shop's cover-fit would) and unrotated — there is no real
   // Customization to pull a crop/rotation from; this previews template
   // geometry and zone placement, not a specific customer's edit.
-  const slots = template.printableRects.map((rect) => ({
-    rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-    photoBuffer: probed.strippedBuffer,
-    cropRect: { x: 0, y: 0, width: probed.widthPx, height: probed.heightPx },
-    rotationDeg: 0 as const,
-    maskBuffer,
-  }));
+  const slots = template.printableRects.map((rect) => {
+    const slotAspect = rect.width / rect.height; // the editor canvas is square
+    const photoAspect = probed.widthPx / probed.heightPx;
+    const width = photoAspect > slotAspect ? probed.heightPx * slotAspect : probed.widthPx;
+    const height = photoAspect > slotAspect ? probed.heightPx : probed.widthPx / slotAspect;
+    return {
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      photoBuffer: probed.strippedBuffer,
+      cropRect: { x: (probed.widthPx - width) / 2, y: (probed.heightPx - height) / 2, width, height },
+      rotationDeg: 0 as const,
+      maskBuffer,
+    };
+  });
 
   const textFieldsRaw = formData?.get('textFields');
   let textFieldsInput: Record<string, string> = {};
@@ -150,12 +157,11 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   let renderedBuffer: Buffer;
   try {
-    renderedBuffer = await renderPrintFile({
-      printWidthPx: variant.printWidthPx,
-      printHeightPx: variant.printHeightPx,
+    renderedBuffer = await renderLegacyPrintFile({
+      template: { printableRects: template.printableRects, printArea: template.printArea ?? null },
+      paperPx: { width: variant.printWidthPx, height: variant.printHeightPx },
       slots,
-      mockupBuffer,
-      overlayBuffer,
+      printArtworkBuffer,
       textFields,
     });
   } catch (error) {

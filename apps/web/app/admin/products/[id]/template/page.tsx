@@ -8,7 +8,11 @@ import { MediaPickerModal } from '../../../../../components/admin/MediaPickerMod
 import { StatusChip } from '../../../../../components/admin/StatusChip';
 import { FormField, SaveBar } from '../../../../../components/admin/AdminForm';
 import { useToast } from '../../../../../components/ui/Toast';
-import type { FrameTemplate, TextZone, ClipartOption, Variant, Product } from '@bro-pics/shared';
+import { legacyPrintArea, legacyTemplatePrintWarnings, type FrameTemplate, type TextZone, type ClipartOption, type Variant, type Product } from '@bro-pics/shared';
+
+type PrintableRect = FrameTemplate['printableRects'][number];
+type FractionRect = { x: number; y: number; width: number; height: number };
+const DEFAULT_RECTS: PrintableRect[] = [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.8, height: 0.8 }];
 
 interface TemplateFormPageProps {
   params: Promise<{ id: string }>;
@@ -72,13 +76,17 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
   const [mockupUrl, setMockupUrl] = useState('');
   const [maskUrl, setMaskUrl] = useState('');
   const [overlayUrl, setOverlayUrl] = useState('');
+  // PRINTED layers — what actually goes on the paper.
+  const [printArtworkUrl, setPrintArtworkUrl] = useState('');
+  const [printArea, setPrintArea] = useState<FractionRect | null>(null);
+  const [printableRects, setPrintableRects] = useState<PrintableRect[]>(DEFAULT_RECTS);
   const [textZones, setTextZones] = useState<TextZone[]>([]);
   const [clipartOptions, setClipartOptions] = useState<ClipartOption[]>([]);
   const [bleedMm, setBleedMm] = useState<number>(3);
   const [matInsetMm, setMatInsetMm] = useState<number>(0);
 
   // Media Picker Modal State
-  const [mediaPickerTarget, setMediaPickerTarget] = useState<'mockup' | 'mask' | 'overlay' | { clipartIndex: number } | null>(null);
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<'mockup' | 'mask' | 'overlay' | 'artwork' | { clipartIndex: number } | null>(null);
 
   // Test Render State
   const [testPhotoFile, setTestPhotoFile] = useState<File | null>(null);
@@ -142,6 +150,9 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
           setMockupUrl(current.mockupUrl || '');
           setMaskUrl(current.maskUrl || '');
           setOverlayUrl(current.overlayUrl || '');
+          setPrintArtworkUrl(current.printArtworkUrl || '');
+          setPrintArea(current.printArea ?? null);
+          setPrintableRects(current.printableRects?.length ? current.printableRects : DEFAULT_RECTS);
           setTextZones(current.textZones || []);
           setClipartOptions(current.clipartOptions || []);
           setBleedMm(current.bleedMm ?? 3);
@@ -150,6 +161,9 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
           setMockupUrl('');
           setMaskUrl('');
           setOverlayUrl('');
+          setPrintArtworkUrl('');
+          setPrintArea(null);
+          setPrintableRects(DEFAULT_RECTS);
           setTextZones([]);
           setClipartOptions([]);
           setBleedMm(3);
@@ -165,6 +179,20 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
   useEffect(() => {
     fetchTemplates();
   }, [selectedVariantId]);
+
+  const updateRect = (index: number, patch: Partial<PrintableRect>) => {
+    setPrintableRects((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    setIsDirty(true);
+  };
+
+  const printWarnings = useMemo(
+    () =>
+      activeVariant && printableRects.length > 0
+        ? legacyTemplatePrintWarnings({ printableRects, printArea, textZones }, { widthIn: activeVariant.widthIn, heightIn: activeVariant.heightIn })
+        : [],
+    [activeVariant, printableRects, printArea, textZones]
+  );
+  const effectivePrintArea = printableRects.length > 0 ? legacyPrintArea({ printableRects, printArea }) : null;
 
   // Update text zone
   const updateTextZone = (index: number, patch: Partial<TextZone>) => {
@@ -194,18 +222,15 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
         mockupUrl: mockupUrl.trim(),
         maskUrl: maskUrl.trim() || undefined,
         overlayUrl: overlayUrl.trim() || undefined,
+        printArtworkUrl: printArtworkUrl.trim() || null,
+        printArea,
         textZones,
         clipartOptions,
         bleedMm: Number(bleedMm) || 0,
         matInset: Number(matInsetMm) || 0,
-        printableRects: [
-          {
-            x: 0,
-            y: 0,
-            width: 1,
-            height: 1,
-          },
-        ],
+        // Keep the photo slots exactly as they are (this used to reset them
+        // to the whole canvas on every save).
+        printableRects,
       };
 
       const res = await fetch('/api/admin/frame-templates', {
@@ -270,6 +295,9 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
       setIsDirty(true);
     } else if (mediaPickerTarget === 'overlay') {
       setOverlayUrl(asset.url);
+      setIsDirty(true);
+    } else if (mediaPickerTarget === 'artwork') {
+      setPrintArtworkUrl(asset.url);
       setIsDirty(true);
     } else if (typeof mediaPickerTarget === 'object' && mediaPickerTarget !== null) {
       updateClipart(mediaPickerTarget.clipartIndex, { assetUrl: asset.url });
@@ -562,7 +590,8 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
               {/* Mockup */}
               <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-line bg-field">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-ink block">Mockup Asset</span>
+                  <span className="text-xs font-bold text-ink block">Frame mockup</span>
+                  <span className="text-2xs text-ink/60 block">Shop preview only — never printed (wooden frame, wall, shadows).</span>
                   <span className="text-2xs text-ink/50 font-mono truncate block max-w-sm">
                     {mockupUrl || 'No image selected'}
                   </span>
@@ -579,7 +608,8 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
               {/* Mask */}
               <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-line bg-field">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-ink block">SVG Mask (Optional)</span>
+                  <span className="text-xs font-bold text-ink block">Photo shape mask (optional)</span>
+                  <span className="text-2xs text-ink/60 block">Printed — shapes the customer’s photo.</span>
                   <span className="text-2xs text-ink/50 font-mono truncate block max-w-sm">
                     {maskUrl || 'No mask (uses standard rectangle photo slot)'}
                   </span>
@@ -607,7 +637,8 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
               {/* Overlay */}
               <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-line bg-field">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-ink block">Foreground Overlay (Optional)</span>
+                  <span className="text-xs font-bold text-ink block">Glass / glare overlay (optional)</span>
+                  <span className="text-2xs text-ink/60 block">Shop preview only — never printed.</span>
                   <span className="text-2xs text-ink/50 font-mono truncate block max-w-sm">
                     {overlayUrl || 'No overlay (rendered directly over photo)'}
                   </span>
@@ -625,6 +656,29 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                   <button
                     type="button"
                     onClick={() => setMediaPickerTarget('overlay')}
+                    className="px-3 py-1.5 rounded-lg border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors shrink-0"
+                  >
+                    Choose ↗
+                  </button>
+                </div>
+              </div>
+
+              {/* Printed artwork */}
+              <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-emerald-600/40 bg-emerald-50/40">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-ink block">Printed artwork (optional)</span>
+                  <span className="text-2xs text-ink/60 block">Printed on the paper — borders, quotes, decorations. Transparent where photos show through.</span>
+                  <span className="text-2xs text-ink/50 font-mono truncate block max-w-sm">{printArtworkUrl || 'None — only photos and text are printed'}</span>
+                </div>
+                <div className="flex gap-2">
+                  {printArtworkUrl && (
+                    <button type="button" onClick={() => { setPrintArtworkUrl(''); setIsDirty(true); }} className="text-2xs text-red-600 hover:underline">
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMediaPickerTarget('artwork')}
                     className="px-3 py-1.5 rounded-lg border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors shrink-0"
                   >
                     Choose ↗
@@ -655,6 +709,91 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
               </div>
             </div>
           </div>
+
+          {/* Print area & photo quality */}
+          <section aria-labelledby="print-area-heading" className="rounded-2xl border border-line bg-paper p-6 shadow-xs space-y-4">
+            <h2 id="print-area-heading" className="text-xs font-bold text-ink uppercase tracking-wider">
+              Printed area &amp; photo quality
+            </h2>
+            <p className="text-2xs text-ink/60">
+              Only the printed area goes on the paper{activeVariant ? ` (${activeVariant.widthIn}×${activeVariant.heightIn} in)` : ''}. Values are % of the editor canvas.
+            </p>
+
+            <label className="flex items-center gap-2 text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={printArea === null}
+                onChange={(e) => {
+                  setPrintArea(e.target.checked ? null : effectivePrintArea);
+                  setIsDirty(true);
+                }}
+              />
+              Automatic — the box around all photo slots
+            </label>
+            {printArea && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {(['x', 'y', 'width', 'height'] as const).map((key) => (
+                  <FormField key={key} label={`Printed area ${key} (%)`}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={Math.round(printArea[key] * 1000) / 10}
+                      onChange={(e) => {
+                        setPrintArea({ ...printArea, [key]: Math.min(1, Math.max(0, Number(e.target.value) / 100)) });
+                        setIsDirty(true);
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+                    />
+                  </FormField>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {printableRects.map((rect, idx) => (
+                <div key={rect.slotIndex} className="grid grid-cols-1 sm:grid-cols-[1fr,auto,auto] items-end gap-2.5 p-3 rounded-xl border border-line bg-field/40">
+                  <div className="text-xs text-ink">
+                    <span className="font-bold">Photo {rect.slotIndex + 1}</span>
+                    <span className="block text-2xs text-ink/50">
+                      at {Math.round(rect.x * 100)}%, {Math.round(rect.y * 100)}% · {Math.round(rect.width * 100)}×{Math.round(rect.height * 100)}%
+                    </span>
+                  </div>
+                  <FormField label="Block below (DPI)" hint="Default 150">
+                    <input
+                      type="number"
+                      min={72}
+                      max={600}
+                      placeholder="150"
+                      value={rect.minDpi ?? ''}
+                      onChange={(e) => updateRect(idx, { minDpi: e.target.value ? Number(e.target.value) : undefined })}
+                      className="w-28 px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+                    />
+                  </FormField>
+                  <FormField label="Warn below (DPI)" hint="Default 300">
+                    <input
+                      type="number"
+                      min={100}
+                      max={1200}
+                      placeholder="300"
+                      value={rect.recommendedDpi ?? ''}
+                      onChange={(e) => updateRect(idx, { recommendedDpi: e.target.value ? Number(e.target.value) : undefined })}
+                      className="w-28 px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
+                    />
+                  </FormField>
+                </div>
+              ))}
+            </div>
+
+            {printWarnings.length > 0 && (
+              <ul role="list" aria-label="Print warnings" className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                {printWarnings.map((w) => (
+                  <li key={w} className="text-xs text-amber-900">{w}</li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {/* Section 2: Text Personalization Zones */}
           <div className="rounded-2xl border border-line bg-paper p-6 shadow-xs space-y-4">

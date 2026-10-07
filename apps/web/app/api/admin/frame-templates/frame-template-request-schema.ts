@@ -41,6 +41,8 @@ export const CreateFrameTemplateBodySchema = z
     mockupUrl: z.string().min(1),
     maskUrl: z.string().nullable().default(null),
     overlayUrl: z.string().nullable().default(null),
+    printArtworkUrl: z.string().min(1).nullable().default(null),
+    printArea: z.object({ x: fraction, y: fraction, width: fraction.refine((v) => v > 0), height: fraction.refine((v) => v > 0) }).nullable().default(null),
     printableRects: z
       .array(
         z.object({
@@ -51,6 +53,11 @@ export const CreateFrameTemplateBodySchema = z
           height: fraction,
           widthMm: z.number().positive().optional(),
           heightMm: z.number().positive().optional(),
+          minDpi: z.number().int().min(72).max(600).optional(),
+          recommendedDpi: z.number().int().min(100).max(1200).optional(),
+        })
+        .refine((r) => r.minDpi === undefined || r.recommendedDpi === undefined || r.minDpi <= r.recommendedDpi, {
+          message: 'The block level must not be higher than the warn level',
         })
       )
       .min(1),
