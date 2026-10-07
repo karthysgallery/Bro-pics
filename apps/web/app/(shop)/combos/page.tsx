@@ -36,7 +36,7 @@ export default async function CombosPage() {
                 <Link href={`/combo/${combo.slug}`} className="group block overflow-hidden rounded-3xl border border-line bg-paper transition-colors hover:border-gold">
                   <div className="relative aspect-[4/3] bg-tint">
                     {combo.coverImageUrl && (
-                      <Image src={combo.coverImageUrl} alt={combo.coverImageAlt || combo.name} fill sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw" className="object-cover" />
+                      <Image src={combo.coverImageUrl} alt={combo.coverImageAlt || combo.name} fill sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw" unoptimized={combo.coverImageUrl.startsWith('/api/')} className="object-cover" />
                     )}
                     {combo.badge && <span className="absolute left-3 top-3 rounded-full bg-[#FDE68A] px-3 py-1 text-xs font-semibold text-[#92400E]">{combo.badge}</span>}
                   </div>

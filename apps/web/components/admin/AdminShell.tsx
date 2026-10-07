@@ -261,6 +261,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Products', href: '/admin/products', permission: 'catalogue:read', icon: 'products' },
       { label: 'Categories', href: '/admin/categories', permission: 'catalogue:read', icon: 'categories' },
       { label: 'Collections', href: '/admin/collections', permission: 'catalogue:read', icon: 'collections' },
+      { label: 'Combo Offers', href: '/admin/combos', permission: 'catalogue:read', icon: 'collections' },
       { label: 'Frame Templates', href: '/admin/frame-templates', permission: 'catalogue:read', icon: 'templates' },
       { label: 'Collage Templates', href: '/admin/personalization-templates', permission: 'catalogue:read', icon: 'templates' },
       { label: 'Inventory Matrix', href: '/admin/inventory', permission: 'catalogue:read', icon: 'inventory' },

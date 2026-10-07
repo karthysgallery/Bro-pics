@@ -73,6 +73,7 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
               alt={combo.coverImageAlt || combo.name}
               fill
               priority
+              unoptimized={combo.coverImageUrl.startsWith('/api/')}
               sizes="(min-width: 1024px) 55vw, 100vw"
               className="object-cover"
             />
