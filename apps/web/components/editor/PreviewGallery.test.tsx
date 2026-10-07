@@ -1,6 +1,14 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { PreviewGallery } from './PreviewGallery';
+import { cutOutFrameFromUrl } from '../../lib/frame-cutout';
+
+// jsdom has no canvas, so the frame cut-out is faked: a studio product shot is cut out, a lifestyle photo is not.
+vi.mock('../../lib/frame-cutout', () => ({ cutOutFrameFromUrl: vi.fn() }));
+const studioShot = () => vi.mocked(cutOutFrameFromUrl).mockImplementation(async (url) => ({ url: `cutout:${url}`, aspect: 0.8 }));
+const lifestylePhoto = () => vi.mocked(cutOutFrameFromUrl).mockResolvedValue(null);
+
+beforeEach(() => studioShot());
 
 const PRODUCT = '/placeholders/classic-frame.jpg';
 const DESIGN = 'data:image/png;base64,DESIGN';
@@ -29,17 +37,39 @@ describe('PreviewGallery', () => {
     expect(within(mainPicture()).getByRole('img')).toHaveAttribute('src', PRODUCT);
   });
 
-  it('switches the main view with the thumbnails; the rooms show the same product until a photo is added', () => {
+  it('switches the main view with the thumbnails; the rooms show the same product until a photo is added', async () => {
     renderGallery();
     for (const [name, view] of [['Bedroom view', 'bedroom'], ['Hall view', 'hall'], ['Table view', 'table']] as const) {
       fireEvent.click(within(views()).getByRole('button', { name }));
       expect(within(views()).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
       expect(mainPicture()).toHaveAttribute('data-view', view);
-      expect(within(mainPicture()).getByAltText(/in the scene/i)).toHaveAttribute('src', PRODUCT);
+      // Before a photo this is the product, so it is described as the product, not as the customer's own frame.
+      expect(await within(mainPicture()).findByAltText('Classic frame in the scene')).toHaveAttribute('src', `cutout:${PRODUCT}`);
+      expect(screen.queryByTestId('rooms-await-photo')).not.toBeInTheDocument();
     }
   });
 
-  it('switches every view to the customer’s design as soon as there is one', () => {
+  it('keeps the rooms empty (with a hint) when the product picture is a lifestyle photo, never a room hung inside a room', async () => {
+    lifestylePhoto();
+    const { rerender } = renderGallery();
+    fireEvent.click(within(views()).getByRole('button', { name: 'Bedroom view' }));
+    expect(await screen.findByTestId('rooms-await-photo')).toHaveTextContent(/add your photo/i);
+    expect(within(mainPicture()).queryByAltText(/in the scene/i)).not.toBeInTheDocument();
+    // The Frame view still shows the product picture itself.
+    fireEvent.click(within(views()).getByRole('button', { name: 'Frame view' }));
+    expect(within(mainPicture()).getByRole('img')).toHaveAttribute('src', PRODUCT);
+    // Once there is a customer design it goes into the room, hint gone.
+    fireEvent.click(within(views()).getByRole('button', { name: 'Bedroom view' }));
+    rerender(
+      <PreviewGallery defaultImageUrl={PRODUCT} personalizedImageUrl={DESIGN} hasPersonalization alt="Classic frame">
+        <div data-testid="live-editor" />
+      </PreviewGallery>
+    );
+    expect(await within(mainPicture()).findByAltText(/in the scene/i)).toHaveAttribute('src', expect.stringContaining('DESIGN'));
+    expect(screen.queryByTestId('rooms-await-photo')).not.toBeInTheDocument();
+  });
+
+  it('switches every view to the customer’s design as soon as there is one', async () => {
     const { rerender } = renderGallery();
     rerender(
       <PreviewGallery defaultImageUrl={PRODUCT} personalizedImageUrl={DESIGN} hasPersonalization alt="Classic frame">
@@ -51,7 +81,7 @@ describe('PreviewGallery', () => {
     expect(screen.getByTestId('live-editor').parentElement).toHaveClass('flex');
     for (const name of ['Bedroom view', 'Hall view', 'Table view']) {
       fireEvent.click(within(views()).getByRole('button', { name }));
-      expect(within(mainPicture()).getByAltText(/in the scene/i)).toHaveAttribute('src', DESIGN);
+      expect(await within(mainPicture()).findByAltText('Your personalized frame in the scene')).toHaveAttribute('src', `cutout:${DESIGN}`);
     }
   });
 
@@ -125,13 +155,13 @@ describe('PreviewGallery', () => {
       expect(screen.queryByTestId('zoom-pane')).not.toBeInTheDocument();
     });
 
-    it('magnifies the room view too', () => {
+    it('magnifies the room view too', async () => {
       HTMLElement.prototype.getBoundingClientRect = () => rect as DOMRect;
       renderGallery();
       fireEvent.click(within(views()).getByRole('button', { name: 'Hall view' }));
       const stage = screen.getByTestId('preview-main-picture').parentElement!.parentElement!;
       pointer(stage, 'pointermove', { x: 120, y: 80 });
-      expect(within(screen.getByTestId('zoom-pane')).getByAltText(/in the scene/i)).toHaveAttribute('src', PRODUCT);
+      expect(await within(screen.getByTestId('zoom-pane')).findByAltText(/in the scene/i)).toHaveAttribute('src', `cutout:${PRODUCT}`);
     });
   });
 });

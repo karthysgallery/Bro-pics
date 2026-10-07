@@ -62,19 +62,28 @@ function ViewPicture({
   pictures,
   frameInches,
   alt,
+  personalized,
 }: {
   view: ViewDef;
   scenes: PreviewScene[];
   pictures: Pictures;
   frameInches: FrameInches | null;
   alt: string;
+  /** True once the picture in the rooms is the customer's own design. */
+  personalized: boolean;
 }) {
   const scene = view.sceneId ? scenes.find((s) => s.id === view.sceneId) : undefined;
   if (scene) {
     return (
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-0" style={{ left: `${-(SCENE_WIDTH_PERCENT - 100) / 2}%`, width: `${SCENE_WIDTH_PERCENT}%` }}>
-          <SceneStage scene={scene} imageUrl={pictures.roomUrl} aspect={pictures.roomAspect} frameInches={frameInches} />
+          <SceneStage
+            scene={scene}
+            imageUrl={pictures.roomUrl}
+            aspect={pictures.roomAspect}
+            frameInches={frameInches}
+            imageAlt={personalized ? 'Your personalized frame in the scene' : `${alt} in the scene`}
+          />
         </div>
       </div>
     );
@@ -205,13 +214,17 @@ export function PreviewGallery({
   const product = useFrameCutout(defaultImageUrl, true);
 
   const personalized = hasPersonalization && settledDesign !== null;
+  // Only a product picture whose frame could be cut out is placed in a room. A lifestyle photo
+  // (already a room) would end up as a room hanging on the wall, so the rooms stay empty instead.
+  const productFitsRooms = product.status === 'cutout';
   const pictures: Pictures = useMemo(
     () =>
       personalized
         ? { roomUrl: design.url, roomAspect: design.aspect, plainUrl: settledDesign }
-        : { roomUrl: product.url, roomAspect: product.aspect, plainUrl: defaultImageUrl },
-    [personalized, design.url, design.aspect, settledDesign, product.url, product.aspect, defaultImageUrl]
+        : { roomUrl: productFitsRooms ? product.url : null, roomAspect: product.aspect, plainUrl: defaultImageUrl },
+    [personalized, design.url, design.aspect, settledDesign, productFitsRooms, product.url, product.aspect, defaultImageUrl]
   );
+  const roomsAwaitPhoto = !personalized && !productFitsRooms && product.status !== 'working';
 
   const active = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
   // With no product picture to show yet, the editor's own frame is the plain view (never a blank).
@@ -229,13 +242,21 @@ export function PreviewGallery({
 
             {!showLiveEditor && (
               <div data-testid="preview-main-picture" data-view={active.id} className="absolute inset-0">
-                <ViewPicture view={active} scenes={scenes} pictures={pictures} frameInches={frameInches} alt={alt} />
+                <ViewPicture view={active} scenes={scenes} pictures={pictures} frameInches={frameInches} alt={alt} personalized={personalized} />
               </div>
             )}
 
             {active.sceneId && (
               <span className="absolute left-3 top-3 rounded-full bg-ink/75 px-3 py-1 text-[11px] font-semibold text-paper backdrop-blur-xs">
                 {active.label}
+              </span>
+            )}
+            {active.sceneId && roomsAwaitPhoto && (
+              <span
+                data-testid="rooms-await-photo"
+                className="absolute inset-x-4 bottom-4 rounded-full bg-paper/95 px-4 py-2 text-center text-xs font-semibold text-ink shadow-sm backdrop-blur-xs"
+              >
+                Add your photo to see it here
               </span>
             )}
             {showLiveEditor && stageOverlay}
@@ -246,7 +267,7 @@ export function PreviewGallery({
             enabled
             content={
               <div className="absolute inset-0">
-                <ViewPicture view={active} scenes={scenes} pictures={zoomPictures} frameInches={frameInches} alt="" />
+                <ViewPicture view={active} scenes={scenes} pictures={zoomPictures} frameInches={frameInches} alt="" personalized={personalized} />
               </div>
             }
           />
@@ -270,7 +291,7 @@ export function PreviewGallery({
                   selected ? 'border-ink ring-2 ring-gold shadow-xs' : 'border-line group-hover:border-ink/50'
                 }`}
               >
-                <ViewPicture view={v} scenes={scenes} pictures={pictures} frameInches={frameInches} alt="" />
+                <ViewPicture view={v} scenes={scenes} pictures={pictures} frameInches={frameInches} alt="" personalized={personalized} />
               </span>
               <span className={`text-[11px] font-semibold ${selected ? 'text-ink' : 'text-ink/60'}`}>{v.label}</span>
             </button>

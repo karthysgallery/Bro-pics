@@ -110,12 +110,17 @@ function useElementWidth() {
 }
 
 /** The finished frame cut out of its paper background, or the original while that is worked out / when it is not possible. */
+export type CutoutStatus = 'none' | 'working' | 'cutout' | 'uncut';
+
 export function useFrameCutout(imageUrl: string | null, enabled: boolean) {
   const [cutout, setCutout] = useState<FrameCutout | null>(null);
   const [measuredAspect, setMeasuredAspect] = useState(1);
+  // 'cutout': the frame was isolated; 'uncut': it could not be (e.g. a lifestyle photo, not a plain-background product shot).
+  const [finished, setFinished] = useState(false);
 
   useEffect(() => {
     setCutout(null);
+    setFinished(false);
     if (!imageUrl) return;
     let cancelled = false;
     // Measured independently of the rendered <img>, so a cached image that
@@ -127,7 +132,9 @@ export function useFrameCutout(imageUrl: string | null, enabled: boolean) {
     probe.src = imageUrl;
     if (enabled) {
       cutOutFrameFromUrl(imageUrl).then((result) => {
-        if (!cancelled) setCutout(result);
+        if (cancelled) return;
+        setCutout(result);
+        setFinished(true);
       });
     }
     return () => {
@@ -135,9 +142,12 @@ export function useFrameCutout(imageUrl: string | null, enabled: boolean) {
     };
   }, [imageUrl, enabled]);
 
+  const status: CutoutStatus = !imageUrl ? 'none' : cutout ? 'cutout' : enabled && !finished ? 'working' : 'uncut';
+
   return {
     url: cutout?.url ?? imageUrl,
     aspect: cutout?.aspect ?? measuredAspect,
+    status,
   };
 }
 
@@ -174,6 +184,8 @@ export interface SceneStageProps {
   aspect: number;
   /** Real frame size, so it is drawn at its true proportion of the scene. */
   frameInches?: FrameInches | null;
+  /** Description of the framed picture for screen readers. */
+  imageAlt?: string;
 }
 
 /**
@@ -182,7 +194,7 @@ export interface SceneStageProps {
  * the photo's light, colour matched to the room, and a glass sheen. No labels
  * or controls, so it can be a main view, a thumbnail or a zoomed copy.
  */
-export function SceneStage({ scene, imageUrl, aspect, frameInches = null }: SceneStageProps) {
+export function SceneStage({ scene, imageUrl, aspect, frameInches = null, imageAlt = 'Your personalized frame in the scene' }: SceneStageProps) {
   const [photoFailed, setPhotoFailed] = useState(false);
   const stage = useElementWidth();
 
@@ -267,7 +279,7 @@ export function SceneStage({ scene, imageUrl, aspect, frameInches = null }: Scen
       {!placeholder && !quad && (
         <div className="absolute" style={frameStyle}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="Your personalized frame in the scene" className="block h-full w-full" />
+          <img src={imageUrl} alt={imageAlt} className="block h-full w-full" />
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
@@ -285,7 +297,7 @@ export function SceneStage({ scene, imageUrl, aspect, frameInches = null }: Scen
           style={{ width: planeSize.w, height: planeSize.h, transformOrigin: '0 0', transform: quadTransform, filter: toneFilter(scene.tone) || undefined }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="Your personalized frame in the scene" className="h-full w-full object-contain" />
+          <img src={imageUrl} alt={imageAlt} className="h-full w-full object-contain" />
         </div>
       )}
 

@@ -17,6 +17,9 @@ vi.mock('../editor/EditorCanvas', () => ({
   },
 }));
 
+// jsdom has no canvas: treat the product picture as a lifestyle photo (no frame can be cut out of it).
+vi.mock('../../lib/frame-cutout', () => ({ cutOutFrameFromUrl: vi.fn(async () => null) }));
+
 global.fetch = vi.fn();
 
 vi.mock('../../lib/session-id', () => ({
@@ -381,10 +384,11 @@ describe('Multi-Photo Frame PDP Workflow', () => {
     const main = screen.getByTestId('preview-main-picture');
     expect(within(main).getByRole('img')).toHaveAttribute('src', first.url);
 
-    // A room view shows the same product in the room.
+    // Rooms: in jsdom no frame can be cut out of the product picture (the lifestyle-photo case), so the
+    // rooms stay empty with a hint instead of hanging the product picture on the wall.
     fireEvent.click(within(views).getByRole('button', { name: 'Bedroom view' }));
     expect(screen.getByTestId('preview-main-picture')).toHaveAttribute('data-view', 'bedroom');
-    expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', first.url);
+    expect(await screen.findByTestId('rooms-await-photo')).toBeInTheDocument();
     fireEvent.click(within(views).getByRole('button', { name: 'Hall view' }));
     expect(screen.getByTestId('preview-main-picture')).toHaveAttribute('data-view', 'hall');
     fireEvent.click(within(views).getByRole('button', { name: 'Table view' }));
@@ -401,9 +405,11 @@ describe('Multi-Photo Frame PDP Workflow', () => {
     await waitFor(() =>
       expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', 'data:image/png;base64,mockPreview')
     );
+    expect(screen.queryByTestId('rooms-await-photo')).not.toBeInTheDocument();
     fireEvent.click(within(views).getByRole('button', { name: 'Bedroom view' }));
     await waitFor(() =>
       expect(within(screen.getByTestId('preview-main-picture')).getByAltText(/in the scene/i)).toHaveAttribute('src', 'data:image/png;base64,mockPreview')
     );
+    expect(screen.queryByTestId('rooms-await-photo')).not.toBeInTheDocument();
   });
 });
