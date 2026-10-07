@@ -5,6 +5,7 @@ import type { Product, Variant, ProductMedia, FrameTemplate } from '@bro-pics/sh
 import { ProductDetailClient } from './ProductDetailClient';
 import { CartProvider } from '../../lib/cart-context';
 import { ToastProvider } from '../ui/Toast';
+import { AuthContext } from '../../lib/auth-context';
 import { saveDraft, loadDraft, clearDraft } from '../../lib/personalization-draft';
 
 // The inline editor now lives inside ProductDetailClient (canvas + upload +
@@ -514,6 +515,26 @@ describe('ProductDetailClient — inline personalization', () => {
       });
       expect(screen.getByRole('checkbox', { name: /use this photo anyway/i })).toBeInTheDocument();
     });
+  });
+
+  it("saves a signed-in customer's photo as theirs (sends their ID token with the upload)", async () => {
+    mockUploadFetch();
+    const signedIn = { uid: 'user_1', getIdToken: vi.fn().mockResolvedValue('id-token-1') };
+    render(
+      <AuthContext.Provider value={{ user: signedIn as never, loading: false, signOut: vi.fn() }}>
+        <ToastProvider>
+          <CartProvider>
+            <ProductDetailClient product={makeProduct()} variants={[variant]} media={media} initialTemplatesByVariant={templatesByVariantProp([makeTemplate()])} />
+          </CartProvider>
+        </ToastProvider>
+      </AuthContext.Provider>
+    );
+    const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe('/api/uploads');
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer id-token-1', 'X-Session-Id': expect.any(String) });
   });
 
   describe('text personalization', () => {

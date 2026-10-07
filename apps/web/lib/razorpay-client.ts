@@ -80,3 +80,36 @@ export async function createRazorpayRefund(params: CreateRazorpayRefundParams): 
 
   return (await response.json()) as RazorpayRefund;
 }
+
+export interface RazorpayPayment {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  /** created | authorized | captured | refunded | failed */
+  status: string;
+}
+
+/** Reads a payment straight from Razorpay — the server's own source of truth, never the browser's word. */
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+    headers: { Authorization: getAuthHeader() },
+  });
+  if (!response.ok) {
+    throw new Error(`Razorpay payment lookup failed (${response.status}): ${await response.text()}`);
+  }
+  return (await response.json()) as RazorpayPayment;
+}
+
+/** Captures an authorized payment (accounts without auto-capture). Capturing twice is rejected by Razorpay, so callers check status first. */
+export async function captureRazorpayPayment(paymentId: string, amount: number): Promise<RazorpayPayment> {
+  const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/capture`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: getAuthHeader() },
+    body: JSON.stringify({ amount, currency: 'INR' }),
+  });
+  if (!response.ok) {
+    throw new Error(`Razorpay capture failed (${response.status}): ${await response.text()}`);
+  }
+  return (await response.json()) as RazorpayPayment;
+}

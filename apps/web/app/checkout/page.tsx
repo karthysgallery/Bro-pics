@@ -54,6 +54,7 @@ export default function CheckoutPage() {
   const [selectedAddressPincode, setSelectedAddressPincode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [paymentConfirming, setPaymentConfirming] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -326,11 +327,35 @@ export default function CheckoutPage() {
           // idempotency key), so there is no duplicate and no dead end.
           ondismiss: () => setPlacing(false),
         },
-        handler: () => {
-          // Intentionally does nothing beyond letting the user know payment
-          // is being confirmed — the order-status listener above (driven by
-          // the webhook, the actual source of truth) is what flips the UI
-          // to a real confirmation, not this client-side callback.
+        prefill: { contact: user.phoneNumber ?? undefined },
+        theme: { color: '#c9861a' },
+        // Razorpay hands back a signed result; the server checks the
+        // signature AND reads the payment from Razorpay before settling the
+        // order (the webhook is the backup if this request never arrives).
+        handler: async (result: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          setPaymentConfirming(true);
+          try {
+            const idToken = await user.getIdToken();
+            const verify = await fetch('/api/checkout/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+              body: JSON.stringify({ orderId: newOrderId, ...result }),
+            });
+            const body = await verify.json().catch(() => ({}));
+            if (verify.ok) {
+              setOrderStatus({ status: body.status, paymentStatus: body.paymentStatus, orderNo: body.orderNo ?? resOrderNo });
+              if (body.paymentStatus === 'paid') {
+                clearCart();
+                clearCheckoutIdempotencyKey();
+              }
+            } else if (verify.status !== 202) {
+              setError('We could not confirm this payment yet. If money was taken, it will be confirmed shortly — please do not pay again.');
+            }
+          } catch {
+            setError('We could not confirm this payment yet. If money was taken, it will be confirmed shortly — please do not pay again.');
+          } finally {
+            setPaymentConfirming(false);
+          }
         },
       });
       razorpay.open();
@@ -587,6 +612,9 @@ export default function CheckoutPage() {
                 Some items in your bag are no longer available. Please review your bag before checking out.
               </p>
             )}
+            {paymentConfirming && (
+              <p role="status" className="text-xs text-ink/70 my-2">Payment received — confirming it with Razorpay…</p>
+            )}
             {error && <p className="text-xs text-alert my-2">{error}</p>}
             {isFailed && (
               <div className="flex items-center justify-between gap-3 p-3 bg-alert/10 rounded-xl my-2">
@@ -605,7 +633,7 @@ export default function CheckoutPage() {
             {!isFailed && (
               <button
                 onClick={handlePlaceOrder}
-                disabled={placing || !addressId || hasUnavailableItems}
+                disabled={placing || paymentConfirming || !addressId || hasUnavailableItems}
                 className="mt-2 w-full min-h-[48px] py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
               >
                 {placing ? 'Please wait…' : orderId ? 'Resume payment' : 'Place order'}

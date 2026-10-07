@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { FrameTemplate, PersonalizationTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
 import {
@@ -20,6 +20,8 @@ import { selectGalleryMedia } from '../../lib/gallery-media';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { recordProductView } from '../../lib/recently-viewed';
 import { getOrCreateSessionId } from '../../lib/session-id';
+import { AuthContext } from '../../lib/auth-context';
+import { getIdTokenSafe } from '../../lib/resolve-media-url';
 import { validateSlotsComplete, validateTextFieldsComplete } from '../../lib/editor-validation';
 import { fontFamilyForKey, fontKeyForFamily } from '../../lib/text-personalization-options';
 import { saveDraft, loadDraft, clearDraft, type PersonalizationDraft } from '../../lib/personalization-draft';
@@ -350,7 +352,7 @@ export function ProductDetailClient({
       const restoredEntries = await Promise.all(
         pendingDraft.slots.map(async (draftSlot) => {
           try {
-            const res = await fetch(`/api/uploads/${draftSlot.uploadId}`, { headers: { 'X-Session-Id': sessionId } });
+            const res = await fetch(`/api/uploads/${draftSlot.uploadId}`, { headers: await identityHeaders() });
             if (!res.ok) return null;
             const upload = await res.json();
             if (upload.status !== 'ready' || !upload.previewUrl) return null;
@@ -427,7 +429,7 @@ export function ProductDetailClient({
       try {
         const sessionId = ensureSessionId();
         const res = await fetch(`/api/customizations?personalizationId=${encodeURIComponent(editPersonalizationId)}`, {
-          headers: { 'X-Session-Id': sessionId },
+          headers: await identityHeaders(),
         });
         if (!res.ok) return;
         const body = await res.json();
@@ -446,7 +448,7 @@ export function ProductDetailClient({
         const restoredEntries = await Promise.all(
           customizations.map(async (c) => {
             try {
-              const uploadRes = await fetch(`/api/uploads/${c.uploadId}`, { headers: { 'X-Session-Id': sessionId } });
+              const uploadRes = await fetch(`/api/uploads/${c.uploadId}`, { headers: await identityHeaders() });
               if (!uploadRes.ok) return null;
               const upload = await uploadRes.json();
               if (upload.status !== 'ready' || !upload.previewUrl) return null;
@@ -507,6 +509,14 @@ export function ProductDetailClient({
       sessionIdRef.current = getOrCreateSessionId();
     }
     return sessionIdRef.current;
+  };
+  // A signed-in customer's uploads and designs must be saved as THEIRS
+  // straight away (checkout only accepts the caller's own designs) — not left
+  // as anonymous session docs waiting for the sign-in reconcile to claim them.
+  const auth = useContext(AuthContext);
+  const identityHeaders = async (extra: Record<string, string> = {}): Promise<Record<string, string>> => {
+    const token = await getIdTokenSafe(auth?.user);
+    return { ...extra, 'X-Session-Id': ensureSessionId(), ...(token && { Authorization: `Bearer ${token}` }) };
   };
   const uploadPromisesRef = useRef<Map<number, Promise<string | null>>>(new Map());
 
@@ -702,7 +712,7 @@ export function ProductDetailClient({
 
         const res = await fetch('/api/uploads', {
           method: 'POST',
-          headers: { 'X-Session-Id': sessionId },
+          headers: await identityHeaders(),
           body: formData,
         });
         // POST /api/uploads returns the persisted Upload doc (originalPath)
@@ -908,7 +918,7 @@ export function ProductDetailClient({
       try {
         const previewRes = await fetch('/api/uploads/preview', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+          headers: await identityHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ personalizationId, slotIndex: 0, dataUrl: previewDataUrl }),
         });
         if (previewRes.ok) {
@@ -951,7 +961,7 @@ export function ProductDetailClient({
         const res = existingDocId
           ? await fetch(`/api/customizations/${existingDocId}`, {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+              headers: await identityHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 transformJson,
                 previewPath: sharedPreviewPath,
@@ -962,7 +972,7 @@ export function ProductDetailClient({
             })
           : await fetch('/api/customizations', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+              headers: await identityHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 sessionId,
                 personalizationId,
