@@ -31,6 +31,10 @@ vi.mock('../../../../lib/personalization-order', async () => {
   return { ...actual, buildLineSnapshot: (...a: unknown[]) => mockBuildLineSnapshot(...a) };
 });
 
+// Combo Offers: the catalogue lookups behind priceComboLines are faked per test.
+const mockComboDeps = vi.hoisted(() => ({ loadCombo: vi.fn(), loadVariant: vi.fn(), isProductAvailable: vi.fn() }));
+vi.mock('../../../../lib/firestore-combos', () => ({ firestoreComboDeps: () => mockComboDeps }));
+
 const mockFindCouponByCode = vi.fn();
 vi.mock('../../../../lib/coupon-lookup', () => ({
   findCouponByCode: (...args: unknown[]) => mockFindCouponByCode(...args),
@@ -1089,6 +1093,148 @@ describe('POST /api/checkout/create-order', () => {
 
       expect(response.status).toBe(502);
       expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Combo Offers', () => {
+    const combo = {
+      id: 'triple-9', slug: 'triple-9', name: 'Triple 9 Combo', status: 'published', price: 99900, mrp: 199900, version: 2, couponsAllowed: false,
+      items: [
+        { id: 'small', productId: 'p_small', variantId: 'v_small', quantity: 1 },
+        { id: 'large', productId: 'p_large', variantId: 'v_large', quantity: 1 },
+      ],
+    };
+    const variants: Record<string, unknown> = {
+      v_small: { id: 'v_small', productId: 'p_small', price: 40000, stockStatus: 'in_stock', isActive: true, sku: 'S', sizeLabel: '6x8', frameColour: 'Black', material: 'Wood', widthIn: 6, heightIn: 8 },
+      v_large: { id: 'v_large', productId: 'p_large', price: 80000, stockStatus: 'in_stock', isActive: true, sku: 'L', sizeLabel: '12x18', frameColour: 'Black', material: 'Wood', widthIn: 12, heightIn: 18 },
+    };
+    const comboLine = (over: { frames?: Array<Record<string, unknown>>; version?: number } = {}) => ({
+      variantId: 'combo:triple-9', personalizationId: 'inst_1', title: 'Triple 9 Combo', qty: 1,
+      combo: {
+        comboId: 'triple-9', version: over.version ?? 2, name: 'Triple 9 Combo',
+        frames: over.frames ?? [
+          { key: 'small-1', productId: 'p_small', variantId: 'v_small', personalizationId: 'pf_small' },
+          { key: 'large-1', productId: 'p_large', variantId: 'v_large', personalizationId: 'pf_large' },
+        ],
+      },
+    });
+    const custDoc = (personalizationId: string) => ({ data: () => ({ userId: 'user_1', personalizationId, slotIndex: 0, status: 'draft' }), ref: {} });
+
+    function arrange(items: unknown[]) {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      mockCartDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ items }) });
+      mockAddressDoc.get.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      });
+      mockComboDeps.loadCombo.mockResolvedValue(combo);
+      mockComboDeps.loadVariant.mockImplementation(async (id: string) => variants[id] ?? null);
+      mockComboDeps.isProductAvailable.mockResolvedValue(true);
+      mockProductDocGet.mockImplementation(async (id: string) => ({ exists: true, id, data: () => ({ title: `Product ${id}`, photoSlots: 1 }) }));
+      mockGetShippingSettings.mockResolvedValue({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
+      mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_combo' });
+    }
+
+    it('buys a combo as one charge for the combo price, written as one order item per frame plus a combo record', async () => {
+      arrange([comboLine()]);
+      mockCustomizationsWhereGet.mockResolvedValue({ docs: [custDoc('pf_small'), custDoc('pf_large')] });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).amount).toBe(99900 + 5000); // the combo price, not the sum of its frames' own prices
+      const items = mockBatchSet.mock.calls.map(([, d]) => d).filter((d) => d?.combo);
+      expect(items).toHaveLength(2);
+      expect(items.reduce((n, i) => n + i.unitPrice * i.qty, 0)).toBe(99900);
+      expect(items[0]).toMatchObject({
+        productId: 'p_small', variantId: 'v_small', personalizationId: 'pf_small', qty: 1, title: 'Product p_small', sku: 'S',
+        combo: { instanceId: 'inst_1', comboId: 'triple-9', comboName: 'Triple 9 Combo', frameKey: 'small-1', frameLabel: 'Frame 1' },
+      });
+      const [, order] = mockBatchCreate.mock.calls[0];
+      expect(order).toMatchObject({ subtotal: 99900, total: 104900, productIds: expect.arrayContaining(['p_small', 'p_large']) });
+      expect(order.combos).toEqual([
+        expect.objectContaining({
+          instanceId: 'inst_1', comboId: 'triple-9', version: 2, name: 'Triple 9 Combo', price: 99900, mrp: 199900,
+          frames: [
+            expect.objectContaining({ key: 'small-1', label: 'Frame 1', variantId: 'v_small', orderItemId: 'item_id' }),
+            expect.objectContaining({ key: 'large-1', label: 'Frame 2', variantId: 'v_large', orderItemId: 'item_id' }),
+          ],
+        }),
+      ]);
+      // each frame's draft customizations are locked to the order exactly like a single product's
+      expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), { status: 'ordered' });
+    });
+
+    it('refuses a combo with an unfinished frame, before any order number or payment session', async () => {
+      arrange([comboLine()]);
+      mockCustomizationsWhereGet.mockResolvedValue({ docs: [custDoc('pf_small')] }); // the large frame has no photo
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body).toMatchObject({ code: 'combo_incomplete', frames: ['Triple 9 Combo: Frame 2'] });
+      expect(mockRunTransaction).not.toHaveBeenCalled();
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+      expect(mockBatchCommit).not.toHaveBeenCalled();
+    });
+
+    it('refuses a combo whose price or contents changed after it was added, naming the reason', async () => {
+      arrange([comboLine({ version: 1 })]);
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(409);
+      expect((await response.json()).unavailable).toEqual([{ variantId: 'combo:triple-9', reason: 'combo_changed' }]);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+
+    it('finds a template frame\'s design inside its combo and verifies it, so it is not printed blank', async () => {
+      const claim = { templateId: 'single-8x12', templateVersion: 1, state: { slots: {} } };
+      arrange([comboLine({
+        frames: [
+          { key: 'small-1', productId: 'p_small', variantId: 'v_small', personalizationId: 'pf_small', personalization: claim },
+          { key: 'large-1', productId: 'p_large', variantId: 'v_large', personalizationId: 'pf_large' },
+        ],
+      })]);
+      mockCustomizationsWhereGet.mockResolvedValue({ docs: [custDoc('pf_large')] });
+      mockBuildLineSnapshot.mockResolvedValueOnce(buildOrderSnapshot(singlePhotoTemplate, createEmptyState(singlePhotoTemplate.id, singlePhotoTemplate.version)));
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+
+      expect(response.status).toBe(200);
+      expect(mockBuildLineSnapshot).toHaveBeenCalledTimes(1);
+      expect(mockBuildLineSnapshot.mock.calls[0]![2]).toMatchObject({ templateId: 'single-8x12', templateVersion: 1 });
+      expect(mockBuildLineSnapshot.mock.calls[0]![3]).toMatchObject({ offeredTemplateId: null });
+      const smallItem = mockBatchSet.mock.calls.map(([, d]) => d).find((d) => d?.personalizationId === 'pf_small');
+      expect(smallItem?.personalization).toBeDefined(); // the verified snapshot reached the order item
+    });
+
+    it('rejects malformed combo lines: wrong quantity, no frames, a plain line pretending to be a combo, or combo data on a normal line', async () => {
+      for (const bad of [
+        { ...comboLine(), qty: 2 },
+        { ...comboLine(), combo: { ...comboLine().combo, frames: [] } },
+        { ...comboLine(), variantId: 'combo:someone-elses' },
+        { variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 1, combo: comboLine().combo },
+      ]) {
+        mockGetUserId.mockResolvedValueOnce('user_1');
+        mockCartDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ items: [bad] }) });
+        const response = await POST(makeRequest({ addressId: 'addr_1' }));
+        expect(response.status).toBe(400);
+      }
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+
+    it('does not let a combo be discounted by a coupon unless the combo allows it', async () => {
+      arrange([comboLine()]);
+      mockCustomizationsWhereGet.mockResolvedValue({ docs: [custDoc('pf_small'), custDoc('pf_large')] });
+      mockFindCouponByCode.mockResolvedValue({ code: 'TEN', type: 'percent', value: 10, appliesTo: 'all', isActive: true, usageLimit: null, usedCount: 0, perUserLimit: 0, minOrderValue: 0, validFrom: null, validUntil: null });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1', couponCode: 'TEN' }));
+      const body = await response.json();
+
+      // Nothing was discounted: either the coupon is refused for this cart or the total stays at the combo price.
+      if (response.status === 200) expect(body.amount).toBe(99900 + 5000);
+      else expect(body.code).toBe('coupon_invalid');
     });
   });
 

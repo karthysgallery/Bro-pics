@@ -3,6 +3,8 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { calculateCouponDiscount, splitGstFromInclusiveTotal, type DeliveryMethod } from '@bro-pics/shared';
 import { getShippingSettings, getGstSettings } from './firestore-settings';
 import { findVariantById } from './variant-lookup';
+import { isComboLine, priceComboLines, type PricedCombo } from './combo-pricing';
+import { firestoreComboDeps } from './firestore-combos';
 import { findCouponByCode } from './coupon-lookup';
 import { computeEligibleSubtotal } from './coupon-eligibility';
 import {
@@ -27,7 +29,10 @@ export interface TaxLine {
 }
 
 export interface OrderPricing {
+  /** One line per frame for a Combo Offer (its price split across them), one line per cart line otherwise. */
   priced: PricedCartLine[];
+  /** The Combo Offers in the cart, priced as wholes. */
+  combos: PricedCombo[];
   /** Non-empty => the cart can't be bought as-is; totals below are all 0. */
   unavailable: UnavailableLine[];
   /** Paise. total === subtotal - discount + shipping. */
@@ -58,7 +63,10 @@ export async function computeOrderPricing(
 ): Promise<OrderPricing> {
   const { userId, cartItems, couponCode, deliveryMethod } = input;
 
-  const uniqueVariantIds = [...new Set(cartItems.map((item) => item.variantId))];
+  const comboCartLines = cartItems.filter(isComboLine);
+  const regularCartLines = cartItems.filter((item) => !isComboLine(item));
+
+  const uniqueVariantIds = [...new Set(regularCartLines.map((item) => item.variantId))];
   const variantEntries = await Promise.all(
     uniqueVariantIds.map(async (variantId) => [variantId, await findVariantById(db, variantId)] as const)
   );
@@ -66,10 +74,15 @@ export async function computeOrderPricing(
     variantEntries.filter(([, variant]) => variant !== null) as [string, NonNullable<(typeof variantEntries)[number][1]>][]
   );
 
-  const { priced, unavailable } = priceCartLines(cartItems, variantsById);
+  const regular = priceCartLines(regularCartLines, variantsById);
+  const comboResult = comboCartLines.length > 0 ? await priceComboLines(comboCartLines, firestoreComboDeps(db)) : { priced: [], combos: [], unavailable: [] };
+  const priced = [...regular.priced, ...comboResult.priced];
+  const unavailable = [...regular.unavailable, ...comboResult.unavailable];
+  const combos = comboResult.combos;
   if (unavailable.length > 0) {
     return {
       priced,
+      combos: [],
       unavailable,
       subtotal: 0,
       discount: 0,
@@ -106,7 +119,10 @@ export async function computeOrderPricing(
       if (!perUserOk) {
         coupon = { requested: true, applied: false, reason: 'per_user_limit_reached' };
       } else {
-        const eligibleSubtotal = await computeEligibleSubtotal(db, priced, found);
+        // A combo is already priced as an offer: coupons only touch it if the combo allows them.
+        const couponsAllowed = new Map(combos.map((c) => [c.instanceId, c.couponsAllowed]));
+        const eligibleLines = priced.filter((line) => !line.combo || couponsAllowed.get(line.combo.instanceId) === true);
+        const eligibleSubtotal = await computeEligibleSubtotal(db, eligibleLines, found);
         const result = calculateCouponDiscount(eligibleSubtotal, found, new Date(), userId);
         if (result.valid) {
           discount = result.discountPaise;
@@ -131,5 +147,5 @@ export async function computeOrderPricing(
       ]
     : [];
 
-  return { priced, unavailable: [], subtotal, discount, shipping, total, coupon, taxLines };
+  return { priced, combos, unavailable: [], subtotal, discount, shipping, total, coupon, taxLines };
 }

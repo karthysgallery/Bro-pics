@@ -17,11 +17,21 @@ export interface PricedCartLine {
   heightIn: number;
   /** Verified snapshot, attached by create-order for lines that carry v2 personalization. */
   personalization?: import('@bro-pics/shared').OrderPersonalizationSnapshot;
+  /** Set when this line is one frame of a Combo Offer (see lib/combo-pricing.ts); its unitPrice is that frame's share. */
+  combo?: import('@bro-pics/shared').OrderItemCombo;
 }
 
 export interface UnavailableLine {
   variantId: string;
-  reason: 'not_found' | 'inactive' | 'out_of_stock';
+  reason:
+    | 'not_found'
+    | 'inactive'
+    | 'out_of_stock'
+    // A combo in the cart that can't be bought as it is: gone/unpublished, edited since it was
+    // added (price or contents), or not matching its definition.
+    | 'combo_unavailable'
+    | 'combo_changed'
+    | 'combo_invalid';
 }
 
 export interface CartLineInput {
@@ -35,6 +45,8 @@ export interface CartLineInput {
    * as-is: create-order rebuilds it into a verified snapshot (see lib/personalization-order.ts).
    */
   personalization?: { templateId: string; templateVersion: number; state: unknown };
+  /** A Combo Offer parent line: carries every frame's own variant, personalization and uploads. */
+  combo?: import('@bro-pics/shared').CartCombo;
 }
 
 /**

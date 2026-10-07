@@ -10,7 +10,7 @@ import { getPaymentProvider } from '../../../../lib/payments/provider-factory';
 import { PaymentNotConfiguredError } from '../../../../lib/payments/types';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { createHash } from 'node:crypto';
-import { stateFingerprint } from '@bro-pics/shared';
+import { stateFingerprint, CartComboSchema, COMBO_VARIANT_PREFIX, type OrderCombo } from '@bro-pics/shared';
 import {
   generateOrderNo,
   OrderSchema,
@@ -29,6 +29,19 @@ import {
 const MAX_LINE_QTY = 20;
 
 function isMalformedCartLine(item: CartLineInput): boolean {
+  // A Combo Offer line is one parent whose frames are validated against the combo on the server;
+  // here only its shape: combo marker + a well-formed frame list, one at a time.
+  const isCombo = typeof item.variantId === 'string' && item.variantId.startsWith(COMBO_VARIANT_PREFIX);
+  if (isCombo) {
+    return (
+      item.qty !== 1 ||
+      typeof item.personalizationId !== 'string' ||
+      item.personalizationId.length === 0 ||
+      !CartComboSchema.safeParse(item.combo).success ||
+      item.variantId !== `${COMBO_VARIANT_PREFIX}${(item.combo as { comboId: string }).comboId}`
+    );
+  }
+  if (item.combo !== undefined) return true; // only a combo line may carry combo data
   return (
     typeof item.variantId !== 'string' ||
     item.variantId.length === 0 ||
@@ -236,12 +249,36 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  // Every frame of a combo must actually be personalized: a verified template design, or a
+  // saved photo for each of the product's photo slots. (A single product is not checked this
+  // way today; a combo is bought on trust that every frame was done, so it is checked here.)
+  const photoSlotsByProductId = new Map<string, number>();
+  productSnaps.forEach((snap, index) => {
+    const data = snap.exists ? (snap.data() as { photoSlots?: unknown } | undefined) : undefined;
+    photoSlotsByProductId.set(distinctProductIds[index], typeof data?.photoSlots === 'number' ? data.photoSlots : 1);
+  });
+  const incompleteFrames: string[] = [];
+  for (const line of priced) {
+    if (!line.combo) continue;
+    const claimed = claimedLine(cartItems, line)?.personalization;
+    if (claimed) continue; // template design: verified (or refused) just below
+    const docs = customizationSnapshots.flatMap((snap) => snap.docs).filter((d) => d.data().personalizationId === line.personalizationId);
+    const slotsDone = new Set(docs.map((d) => d.data().slotIndex)).size;
+    if (slotsDone < (photoSlotsByProductId.get(line.productId) ?? 1)) incompleteFrames.push(`${line.combo.comboName}: ${line.combo.frameLabel}`);
+  }
+  if (incompleteFrames.length > 0) {
+    return NextResponse.json(
+      { error: 'Finish personalizing every frame in your combo before checking out.', code: 'combo_incomplete', frames: incompleteFrames },
+      { status: 409 }
+    );
+  }
+
   // Personalization claimed on a line becomes a verified snapshot, or the order is refused —
   // before any side effect. (Lines without it — legacy per-slot customizations, or items
   // that aren't personalized — are untouched.)
   const personalizationFp = new Map<string, string>();
   for (const line of priced) {
-    const cartLine = cartItems.find((c) => c.variantId === line.variantId && c.personalizationId === line.personalizationId);
+    const cartLine = claimedLine(cartItems, line);
     if (!cartLine?.personalization) continue;
     try {
       // The variant decides which template is offered and the size it prints at.
@@ -279,7 +316,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   //                             NOW — paying the stale one would ship the wrong
   //                             thing to the wrong place.
   const inputsHash = fingerprintOrder({
-    priced: priced.map((l) => ({ ...l, personalizationFp: personalizationFp.get(`${l.variantId}|${l.personalizationId}`) })),
+    priced: priced.map((l) => ({ ...l, personalizationFp: `${personalizationFp.get(`${l.variantId}|${l.personalizationId}`) ?? ''}${l.combo ? `#${l.combo.comboId}/${l.combo.frameKey}` : ''}` })),
     address,
     couponId: appliedCouponId ?? null,
     deliveryMethod,
@@ -365,6 +402,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   const orderRef = idempotencyKey
     ? db.collection('orders').doc(deterministicOrderId(userId, `${idempotencyKey}:${inputsHash}`))
     : db.collection('orders').doc();
+  // Item ids are fixed up front so the order can point at each combo frame's item.
+  const itemRefs = priced.map(() => orderRef.collection('items').doc());
+  const orderCombos: OrderCombo[] = pricing.combos.map((combo) => ({
+    instanceId: combo.instanceId,
+    comboId: combo.comboId,
+    version: combo.version,
+    name: combo.name,
+    ...(combo.slug && { slug: combo.slug }),
+    price: combo.price,
+    mrp: combo.mrp,
+    frames: combo.frames.map((frame) => ({
+      ...frame,
+      orderItemId: itemRefs[priced.findIndex((l) => l.combo?.instanceId === combo.instanceId && l.combo.frameKey === frame.key)]!.id,
+    })),
+  }));
   const order = OrderSchema.parse({
     id: orderRef.id,
     orderNo,
@@ -388,6 +440,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     amountDueOnDelivery: 0,
     taxLines,
     ...(appliedCouponId && { couponId: appliedCouponId }),
+    ...(orderCombos.length > 0 && { combos: orderCombos }),
   });
 
   const batch = db.batch();
@@ -425,10 +478,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  for (const line of priced) {
-    const itemRef = orderRef.collection('items').doc();
+  priced.forEach((line, i) => {
+    const itemRef = itemRefs[i]!;
     batch.set(itemRef, OrderItemSchema.parse({ ...line, id: itemRef.id }));
-  }
+  });
 
   for (const snapshot of customizationSnapshots) {
     for (const doc of snapshot.docs) {
@@ -467,6 +520,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     },
     { status: 200 }
   );
+}
+
+/**
+ * The cart's own claim for a priced line. A combo frame's claim lives inside its parent line
+ * (`parent.combo.frames[key].personalization`), not as a top-level cart line, so it has to be
+ * found there; otherwise a template frame would get no verified snapshot and print blank.
+ */
+function claimedLine(cartItems: CartLineInput[], line: { variantId: string; personalizationId: string; combo?: { instanceId: string; frameKey: string } }) {
+  if (line.combo) {
+    const parent = cartItems.find((c) => c.personalizationId === line.combo!.instanceId && c.combo);
+    const frame = parent?.combo?.frames.find((f) => f.key === line.combo!.frameKey);
+    return frame ? { personalization: frame.personalization as { templateId: string; templateVersion: number; state: unknown } | undefined } : undefined;
+  }
+  return cartItems.find((c) => c.variantId === line.variantId && c.personalizationId === line.personalizationId);
 }
 
 function deterministicOrderId(userId: string, idempotencyKey: string): string {

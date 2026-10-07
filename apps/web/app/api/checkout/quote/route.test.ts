@@ -52,6 +52,7 @@ describe('POST /api/checkout/quote', () => {
   it('returns the server-computed totals for the signed-in user\'s own cart, passing coupon and delivery through', async () => {
     mockPricing.mockResolvedValue({
       priced: [{ variantId: 'v1', personalizationId: 'p1', unitPrice: 79900, qty: 1, title: 'x' }],
+      combos: [],
       unavailable: [], subtotal: 79900, discount: 8000, shipping: 5000, total: 76900,
       coupon: { requested: true, applied: true, code: 'TEN', freeShipping: false }, taxLines: [{ rate: 18, amount: 11731 }],
     });
@@ -64,11 +65,26 @@ describe('POST /api/checkout/quote', () => {
 
   it('surfaces unavailable lines so the page can tell the customer', async () => {
     mockPricing.mockResolvedValue({
-      priced: [], unavailable: [{ variantId: 'v1', reason: 'out_of_stock' }], subtotal: 0, discount: 0, shipping: 0, total: 0,
+      priced: [], combos: [], unavailable: [{ variantId: 'v1', reason: 'out_of_stock' }], subtotal: 0, discount: 0, shipping: 0, total: 0,
       coupon: { requested: false }, taxLines: [],
     });
     const body = await (await POST(req())).json();
     expect(body.unavailable).toEqual([{ variantId: 'v1', reason: 'out_of_stock' }]);
+  });
+
+  it('prices a combo as one whole next to its per-frame lines', async () => {
+    mockPricing.mockResolvedValue({
+      priced: [
+        { variantId: 'v_small', personalizationId: 'pf1', unitPrice: 100000, qty: 1, title: 'x', combo: { instanceId: 'inst1', comboId: 'triple-9', comboName: 'Triple 9', frameKey: 'small-1', frameLabel: 'Frame 1' } },
+        { variantId: 'v_large', personalizationId: 'pf2', unitPrice: 199900, qty: 1, title: 'x', combo: { instanceId: 'inst1', comboId: 'triple-9', comboName: 'Triple 9', frameKey: 'large-1', frameLabel: 'Frame 2' } },
+      ],
+      combos: [{ instanceId: 'inst1', comboId: 'triple-9', version: 1, name: 'Triple 9', price: 299900, mrp: 499900, couponsAllowed: false, frames: [] }],
+      unavailable: [], subtotal: 299900, discount: 0, shipping: 0, total: 299900, coupon: { requested: false }, taxLines: [],
+    });
+    const body = await (await POST(req())).json();
+    expect(body.combos).toEqual([{ instanceId: 'inst1', comboId: 'triple-9', price: 299900, mrp: 499900 }]);
+    expect(body.lines.map((l: { comboInstanceId?: string }) => l.comboInstanceId)).toEqual(['inst1', 'inst1']);
+    expect(body.subtotal).toBe(299900);
   });
 
   it('429s when rate-limited', async () => {

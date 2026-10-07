@@ -7,6 +7,7 @@ export type ApiErrorCode =
   | 'not_found'
   | 'invalid_request'
   | 'conflict'
+  | 'not_publishable'
   | 'rate_limited'
   | 'internal';
 

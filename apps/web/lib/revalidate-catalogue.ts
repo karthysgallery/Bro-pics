@@ -31,3 +31,11 @@ export function revalidateProductPage(slug: string): void {
 export function revalidateCategoryPage(slug: string): void {
   safeRevalidate(`/category/${slug}`);
 }
+
+/** A Combo Offer changed: its own page, the combos list, and the homepage (which can feature combos). */
+export function revalidateComboPages(slug: string): void {
+  safeRevalidate(`/combo/${slug}`);
+  safeRevalidate('/combos');
+  safeRevalidate('/');
+  safeRevalidate('/sitemap.xml');
+}

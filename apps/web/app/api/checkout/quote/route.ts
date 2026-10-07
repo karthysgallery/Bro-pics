@@ -56,7 +56,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         personalizationId: line.personalizationId,
         unitPrice: line.unitPrice,
         qty: line.qty,
+        ...(line.combo && { comboInstanceId: line.combo.instanceId }),
       })),
+      // Each combo as one priced whole, keyed by the cart line's own id (its personalizationId).
+      combos: pricing.combos.map((c) => ({ instanceId: c.instanceId, comboId: c.comboId, price: c.price, mrp: c.mrp })),
       subtotal: pricing.subtotal,
       discount: pricing.discount,
       shipping: pricing.shipping,
