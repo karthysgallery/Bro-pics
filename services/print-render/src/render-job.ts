@@ -1,5 +1,5 @@
-import { EDITOR_CANVAS_SIZE, type Rect, type RotationDeg } from '@bro-pics/shared';
-import { renderPrintFile } from './render-print-file';
+import type { Rect, RotationDeg } from '@bro-pics/shared';
+import { renderLegacyPrintFile } from './render-legacy-print';
 import { renderTemplate, type AssetLoader } from './render-template';
 import type { OrderPersonalizationSnapshot } from '@bro-pics/shared';
 
@@ -26,16 +26,23 @@ export interface RenderJobDependencies {
       cropRect: Rect;
       rotationDeg: RotationDeg;
       textFieldsJson?: Record<string, { value: string; fontFamily: string; color: string }>;
+      clipartId?: string | null;
     }>
   >;
   getFrameTemplate(
     variantId: string,
     templateVersion: number
   ): Promise<{
+    /** Presentation only — never downloaded or printed by the print job. */
     mockupUrl: string;
     maskUrl: string | null;
+    /** Presentation only — never downloaded or printed by the print job. */
     overlayUrl: string | null;
+    /** Printed decoration, if the template has any. */
+    printArtworkUrl?: string | null;
+    printArea?: { x: number; y: number; width: number; height: number } | null;
     printableRects: Array<{ slotIndex: number; x: number; y: number; width: number; height: number }>;
+    clipartOptions?: Array<{ id: string; assetUrl: string; x: number; y: number; width: number; height: number }>;
     textZones?: Array<{
       fieldKey: string;
       label: string;
@@ -171,10 +178,14 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
       throw new Error(`Frame template not found for variant ${orderItem.variantId} v${templateVersion}`);
     }
 
-    const [mockupBuffer, overlayBuffer, maskBuffer] = await Promise.all([
-      deps.fetchPublicAsset(template.mockupUrl),
-      template.overlayUrl ? deps.fetchPublicAsset(template.overlayUrl) : Promise.resolve(null),
+    // Only PRINTED assets: the mockup (frame/lifestyle picture) and the
+    // glass overlay are presentation layers and never reach the print file.
+    const clipartId = customizations.find((c) => c.clipartId)?.clipartId ?? null;
+    const clipartOption = clipartId ? template.clipartOptions?.find((c) => c.id === clipartId) ?? null : null;
+    const [printArtworkBuffer, maskBuffer, clipartBuffer] = await Promise.all([
+      template.printArtworkUrl ? deps.fetchPublicAsset(template.printArtworkUrl) : Promise.resolve(null),
       template.maskUrl ? deps.fetchPublicAsset(template.maskUrl) : Promise.resolve(null),
+      clipartOption ? deps.fetchPublicAsset(clipartOption.assetUrl) : Promise.resolve(null),
     ]);
 
     const slots = await Promise.all(
@@ -214,20 +225,13 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
             .filter((f): f is NonNullable<typeof f> => f !== null)
         : undefined;
 
-    // The customer designed on the square editor canvas, and every rect
-    // (slots, text, mockup) is a fraction of THAT square. Rendering straight
-    // into the frame's 2:3 print size stretched the whole design, photo
-    // included, by 1.5x. Keep the square, enlarged to the print resolution
-    // the same way template-v2 jobs are (printScale).
-    const legacyCanvas = { width: EDITOR_CANVAS_SIZE, height: EDITOR_CANVAS_SIZE };
-    const printSidePx = Math.round(EDITOR_CANVAS_SIZE * printScale(legacyCanvas, variant));
-    const printBuffer = await renderPrintFile({
-      printWidthPx: printSidePx,
-      printHeightPx: printSidePx,
+    const printBuffer = await renderLegacyPrintFile({
+      template: { printableRects: template.printableRects, printArea: template.printArea ?? null },
+      paperPx: { width: variant.printWidthPx, height: variant.printHeightPx },
       slots,
-      mockupBuffer,
-      overlayBuffer,
+      printArtworkBuffer,
       textFields,
+      clipart: clipartOption && clipartBuffer ? { buffer: clipartBuffer, rect: clipartOption } : null,
     });
 
     const renderedFilePath = await deps.uploadPrintFile(job.orderId, job.itemId, 'print.png', printBuffer, 'image/png');

@@ -46,14 +46,52 @@ async function makeDeps(overrides: Partial<RenderJobDependencies> = {}): Promise
 }
 
 describe('renderPrintJob', () => {
-  it('keeps the square design undistorted for a 2:3 frame (no stretching to the frame shape)', async () => {
-    const deps = await makeDeps({ getVariant: vi.fn().mockResolvedValue({ printWidthPx: 600, printHeightPx: 900 }) });
+  it('prints only the photo at the paper size: never the frame mockup or glare overlay', async () => {
+    const redMockup = await solidPng(10, 10, [0, 0, 255, 255]); // a solid blue "wooden frame"
+    const deps = await makeDeps({
+      getVariant: vi.fn().mockResolvedValue({ printWidthPx: 600, printHeightPx: 900 }),
+      getFrameTemplate: vi.fn().mockResolvedValue({
+        mockupUrl: 'https://cdn.example.com/mockup.png',
+        maskUrl: null,
+        overlayUrl: 'https://cdn.example.com/glare.png',
+        printableRects: [{ slotIndex: 0, x: 0.25, y: 0.1, width: 0.5, height: 0.75 }],
+      }),
+      fetchPublicAsset: vi.fn().mockResolvedValue(redMockup),
+    });
 
     await renderPrintJob(deps, 'order_1_item_1');
 
+    expect(deps.fetchPublicAsset).not.toHaveBeenCalled();
     const buffer = (deps.uploadPrintFile as ReturnType<typeof vi.fn>).mock.calls[0]![3] as Buffer;
-    const { width, height } = await sharp(buffer).metadata();
-    expect({ width, height }).toEqual({ width: 600, height: 600 });
+    const { data, info } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
+    expect({ width: info.width, height: info.height }).toEqual({ width: 600, height: 900 });
+    // The whole sheet is the customer's (red) photo — no blue frame pixels anywhere.
+    let blue = 0;
+    for (let i = 0; i < data.length; i += info.channels) if (data[i + 2]! > 200 && data[i]! < 50) blue++;
+    expect(blue).toBe(0);
+    expect([data[0], data[1], data[2]]).toEqual([255, 0, 0]);
+  });
+
+  it('prints the template’s printed artwork on top of the photo', async () => {
+    const greenArt = await solidPng(10, 10, [0, 255, 0, 255]);
+    const deps = await makeDeps({
+      getVariant: vi.fn().mockResolvedValue({ printWidthPx: 100, printHeightPx: 100 }),
+      getFrameTemplate: vi.fn().mockResolvedValue({
+        mockupUrl: 'https://cdn.example.com/mockup.png',
+        maskUrl: null,
+        overlayUrl: null,
+        printArtworkUrl: 'https://cdn.example.com/border.png',
+        printableRects: [{ slotIndex: 0, x: 0, y: 0, width: 1, height: 1 }],
+      }),
+      fetchPublicAsset: vi.fn().mockResolvedValue(greenArt),
+    });
+
+    await renderPrintJob(deps, 'order_1_item_1');
+
+    expect(deps.fetchPublicAsset).toHaveBeenCalledWith('https://cdn.example.com/border.png');
+    const buffer = (deps.uploadPrintFile as ReturnType<typeof vi.fn>).mock.calls[0]![3] as Buffer;
+    const { data } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
+    expect([data[0], data[1], data[2]]).toEqual([0, 255, 0]);
   });
 
   it('leases, renders, uploads, and completes on the happy path', async () => {

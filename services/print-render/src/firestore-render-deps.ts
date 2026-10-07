@@ -81,6 +81,7 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
             templateVersion: number;
             transformJson: { cropRect: { x: number; y: number; width: number; height: number }; rotationDeg: 0 | 90 | 180 | 270 };
             textFieldsJson?: Record<string, { value: string; fontFamily: string; color: string }>;
+            clipartId?: string | null;
           };
           return {
             id: doc.id,
@@ -90,6 +91,7 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
             cropRect: data.transformJson.cropRect,
             rotationDeg: data.transformJson.rotationDeg,
             textFieldsJson: data.textFieldsJson,
+            clipartId: data.clipartId ?? null,
           };
         })
         .sort((a, b) => a.slotIndex - b.slotIndex);
@@ -106,8 +108,11 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
         mockupUrl: match.mockupUrl,
         maskUrl: match.maskUrl,
         overlayUrl: match.overlayUrl,
+        printArtworkUrl: match.printArtworkUrl ?? null,
+        printArea: match.printArea ?? null,
         printableRects: match.printableRects,
         textZones: match.textZones,
+        clipartOptions: match.clipartOptions,
       };
     },
     async getUpload(uploadId) {
