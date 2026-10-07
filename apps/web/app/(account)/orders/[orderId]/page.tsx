@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SignedOutNotice } from '../../../../components/account/SignedOutNotice';
 import { OrderStatusTimeline, STATUS_CHIP_STYLES, statusLabel } from '../../../../components/orders/OrderStatusTimeline';
 import { formatPaise } from '../../../../lib/format-price';
+import { groupOrderItems } from '../../../../lib/order-combo-groups';
 import { SUPPORT_EMAIL } from '../../../../lib/support-contact';
 import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
 import { useToast } from '../../../../components/ui/Toast';
@@ -478,7 +479,49 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           <div className="rounded-3xl bg-paper border border-line p-6 shadow-sm">
             <h2 className="font-display text-lg font-bold text-ink mb-4">Items in your order</h2>
             <ul className="divide-y divide-line">
-              {items.map((item, i) => {
+              {groupOrderItems(items, order.combos).map((group) => {
+                if (group.kind === 'combo') {
+                  return (
+                    <li key={group.instanceId} className="py-4" data-testid="order-combo">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h3 className="font-display text-base font-bold text-ink">{group.name}</h3>
+                        <p className="text-sm font-semibold text-ink">
+                          {group.price !== null ? formatPaise(group.price) : ''}
+                          {group.mrp !== null && group.price !== null && group.mrp > group.price && (
+                            <span className="ml-2 text-xs font-normal text-ink/45 line-through">{formatPaise(group.mrp)}</span>
+                          )}
+                        </p>
+                      </div>
+                      <p className="text-xs text-ink/60 mt-0.5">Combo offer · {group.frames.length} personalised frames</p>
+                      <ul className="mt-3 space-y-2 rounded-2xl bg-tint p-3">
+                        {group.frames.map(({ item, label, index }) => (
+                          <li key={index} className="text-xs text-ink/80">
+                            <span className="font-semibold text-ink">{label}</span>
+                            {' · '}
+                            {item.title}
+                            {(item.sizeLabel || item.frameColour) && ` · ${[item.sizeLabel, item.frameColour].filter(Boolean).join(' · ')}`}
+                            {item.personalization && (
+                              <span className="text-ink/60">
+                                {' · '}
+                                {Object.keys(item.personalization.state.slots).length} photo
+                                {Object.keys(item.personalization.state.slots).length === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      {group.slug && (
+                        <Link
+                          href={`/combo/${group.slug}`}
+                          className="mt-3 inline-block px-4 py-2 rounded-full border border-line bg-paper hover:bg-tint text-ink text-xs font-semibold transition-colors"
+                        >
+                          Order this combo again
+                        </Link>
+                      )}
+                    </li>
+                  );
+                }
+                const { item, index: i } = group;
                 const slug = productSlugs.get(item.productId);
                 const key = `${item.personalizationId}-${i}`;
                 return (

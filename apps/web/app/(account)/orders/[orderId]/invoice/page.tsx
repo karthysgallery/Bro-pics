@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SignedOutNotice } from '../../../../../components/account/SignedOutNotice';
 import { getFirestore, doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../../../lib/auth-context';
 import { getFirebaseApp } from '../../../../../lib/firebase-client';
 import { PageSkeleton } from '../../../../../components/ui/Skeleton';
+import { groupOrderItems } from '../../../../../lib/order-combo-groups';
 import { getInvoiceSeller, type InvoiceSeller } from '../../../../../lib/invoice-seller';
 import type { Order, OrderItem, Address } from '@bro-pics/shared';
 
@@ -193,16 +194,30 @@ export default function InvoicePage({ params }: InvoicePageProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {items.map((item, i) => (
-                <tr key={i} className="hover:bg-tint/20">
-                  <td className="p-3 font-medium text-ink">
-                    {item.title}
-                  </td>
-                  <td className="p-3 text-right text-ink font-medium">{item.qty}</td>
-                  <td className="p-3 text-right text-ink/70">{formatPaise(item.unitPrice)}</td>
-                  <td className="p-3 text-right text-ink font-semibold">{formatPaise(item.unitPrice * item.qty)}</td>
-                </tr>
-              ))}
+              {groupOrderItems(items, order.combos).map((group) =>
+                group.kind === 'combo' ? (
+                  <Fragment key={group.instanceId}>
+                    <tr className="hover:bg-tint/20">
+                      <td className="p-3 font-medium text-ink">{group.name} <span className="font-normal text-ink/60">(combo of {group.frames.length} frames)</span></td>
+                      <td className="p-3 text-right text-ink font-medium">1</td>
+                      <td className="p-3 text-right text-ink/70">{formatPaise(group.price ?? group.frames.reduce((n, f) => n + f.item.unitPrice * f.item.qty, 0))}</td>
+                      <td className="p-3 text-right text-ink font-semibold">{formatPaise(group.price ?? group.frames.reduce((n, f) => n + f.item.unitPrice * f.item.qty, 0))}</td>
+                    </tr>
+                    {group.frames.map(({ item, label, index }) => (
+                      <tr key={index} className="text-ink/60">
+                        <td className="py-1.5 pl-6 pr-3" colSpan={4}>{label}: {item.title}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ) : (
+                  <tr key={group.index} className="hover:bg-tint/20">
+                    <td className="p-3 font-medium text-ink">{group.item.title}</td>
+                    <td className="p-3 text-right text-ink font-medium">{group.item.qty}</td>
+                    <td className="p-3 text-right text-ink/70">{formatPaise(group.item.unitPrice)}</td>
+                    <td className="p-3 text-right text-ink font-semibold">{formatPaise(group.item.unitPrice * group.item.qty)}</td>
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
         </div>

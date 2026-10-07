@@ -1,7 +1,8 @@
 'use client';
 
 import { formatPaise } from '../../../../lib/format-price';
-import { useEffect, useState, use } from 'react';
+import { groupOrderItems } from '../../../../lib/order-combo-groups';
+import { Fragment, useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../../lib/auth-context';
@@ -332,8 +333,19 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             </h2>
 
             <div className="divide-y divide-line">
-              {items.map((item, idx) => (
-                <div key={item.id || idx} className="py-3.5">
+              {groupOrderItems(items, order?.combos).flatMap((group) =>
+                group.kind === 'item'
+                  ? [{ item: group.item, idx: group.index, head: null, frameLabel: null as string | null }]
+                  : group.frames.map((frame, n) => ({ item: frame.item, idx: frame.index, head: n === 0 ? group : null, frameLabel: frame.label as string | null }))
+              ).map(({ item, idx, head, frameLabel }) => (
+                <Fragment key={item.id || idx}>
+                {head && (
+                  <div className="mt-3 rounded-xl bg-tint px-3 py-2 text-xs" data-testid="admin-order-combo">
+                    <span className="font-bold text-ink">Combo offer: {head.name}</span>
+                    <span className="text-ink/70"> · {head.frames.length} frames{head.price !== null ? ` · ${formatPaise(head.price)} paid for the set` : ''}</span>
+                  </div>
+                )}
+                <div className={`py-3.5 ${frameLabel ? 'pl-3 border-l-2 border-gold/60' : ''}`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-14 h-14 rounded-xl border border-line bg-field overflow-hidden shrink-0 flex items-center justify-center">
@@ -344,7 +356,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                       )}
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold text-ink">{item.title}</h3>
+                      <h3 className="text-xs font-bold text-ink">{frameLabel ? `${frameLabel} · ` : ''}{item.title}</h3>
                       {(item.sizeLabel || item.frameColour || item.material) && (
                         <p className="text-2xs text-ink/70">
                           {[item.sizeLabel, item.frameColour, item.material].filter(Boolean).join(' · ')}
@@ -353,6 +365,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                       )}
                       <p className="text-2xs text-ink/50">
                         Qty: <strong className="text-ink">{item.qty}</strong> × {formatPaise(item.unitPrice)}
+                        {frameLabel ? ' (share of the combo price)' : ''}
                       </p>
                     </div>
                   </div>
@@ -365,6 +378,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                 </div>
                 {item.personalization && <PersonalizationSummary snapshot={item.personalization} />}
                 </div>
+                </Fragment>
               ))}
             </div>
 
