@@ -31,6 +31,7 @@ import { BuyBox } from './BuyBox';
 import { PersonalizationPreview, PersonalizationControls, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
 import { TemplateProductLayout } from '../customizer/TemplateProductLayout';
+import { useComboFrame } from '../../lib/combo-frame-context';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -308,20 +309,23 @@ export function ProductDetailClient({
   // silently skipped — see PROJECT_STATUS.md). Debounced the same way
   // the undo/redo history watcher above is, coalescing a whole
   // drag/typing burst into one save rather than one per keystroke/pixel.
+  // Inside a combo, several frames can share a product and size, so a per-product draft would
+  // offer one frame's photos to another; a frame is saved explicitly instead.
+  const inComboFrame = useComboFrame() !== null;
   const [pendingDraft, setPendingDraft] = useState<PersonalizationDraft | null>(null);
   const [restoringDraft, setRestoringDraft] = useState(false);
   const draftCheckedRef = useRef(false);
   const draftSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (draftCheckedRef.current || !selectedVariant || slots.size > 0) return;
+    if (inComboFrame || draftCheckedRef.current || !selectedVariant || slots.size > 0) return;
     draftCheckedRef.current = true;
     const draft = loadDraft(product.id, selectedVariant.id);
     if (draft) setPendingDraft(draft);
   }, [selectedVariant, product.id, slots.size]);
 
   useEffect(() => {
-    if (!selectedVariant || slots.size === 0) return;
+    if (inComboFrame || !selectedVariant || slots.size === 0) return;
     if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
     draftSaveDebounceRef.current = setTimeout(() => {
       saveDraft(product.id, selectedVariant.id, {
@@ -994,7 +998,7 @@ export function ProductDetailClient({
       // [FE-11] Cart now owns this personalization — the draft would
       // otherwise dangle and, worse, offer to "restore" a design the
       // customer already added, on a return visit before checkout.
-      if (selectedVariant) clearDraft(product.id, selectedVariant.id);
+      if (selectedVariant && !inComboFrame) clearDraft(product.id, selectedVariant.id);
       setSlots(new Map());
       setTextFields(new Map());
       setSelectedClipartId(null);

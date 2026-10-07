@@ -12,6 +12,7 @@ import {
 } from '@bro-pics/shared';
 import { AuthContext } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
+import { useComboFrame } from '../../lib/combo-frame-context';
 import { getOrCreateSessionId } from '../../lib/session-id';
 import type { Orientation } from '../../lib/orientation';
 import { BuyBox } from '../product/BuyBox';
@@ -84,6 +85,7 @@ function TemplateEditorSession({
   const userRef = useRef(auth?.user ?? null);
   userRef.current = auth?.user ?? null;
   const { items, addItem, updateItem, removeItem } = useCart();
+  const inComboFrame = useComboFrame() !== null;
 
   // Resolved on first use, then fixed for this editing session (signing in rotates the stored id).
   const sessionRef = useRef<string | null>(null);
@@ -97,7 +99,8 @@ function TemplateEditorSession({
     variantId: selectedVariant.id,
     printSizeIn,
     initialState,
-    useDrafts: !editPersonalizationId,
+    // In a combo several frames can share a product and size, so no shared per-product draft.
+    useDrafts: !editPersonalizationId && !inComboFrame,
     sessionId,
     authToken,
   });

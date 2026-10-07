@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Product, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
+import { useComboFrame } from '../../lib/combo-frame-context';
 import { useSiteText } from '../layout/SiteTextContext';
 import { VariantSelector } from './VariantSelector';
 import { DeliveryTimeline } from './DeliveryTimeline';
@@ -99,6 +100,8 @@ export function BuyBox({
   const [quantity, setQuantity] = useState(1);
   const text = useSiteText();
   const { addItem, updateItem } = useCart();
+  // Inside a combo this box saves one frame into the combo instead of adding a product to the cart.
+  const comboFrame = useComboFrame();
   const shippingPromise = freeShippingPromise(useShippingSettings());
 
   // Options are scoped to the current orientation + the other dimension's
@@ -205,13 +208,22 @@ export function BuyBox({
       )}
 
       <div className="my-2">
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-2xl sm:text-3xl font-bold text-ink">{formatPaise(price)}</span>
-          {compareAtPrice && compareAtPrice > price && (
-            <span className="text-sm text-ink/40 line-through">{formatPaise(compareAtPrice)}</span>
-          )}
-        </div>
-        <p className="text-xs text-ink/50 mt-0.5">{text.priceNote}</p>
+        {comboFrame ? (
+          <>
+            <p className="font-display text-xl sm:text-2xl font-bold text-ink">{comboFrame.label}</p>
+            <p className="text-xs text-ink/60 mt-0.5">Included in {comboFrame.comboName}. The combo price covers every frame.</p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-2xl sm:text-3xl font-bold text-ink">{formatPaise(price)}</span>
+              {compareAtPrice && compareAtPrice > price && (
+                <span className="text-sm text-ink/40 line-through">{formatPaise(compareAtPrice)}</span>
+              )}
+            </div>
+            <p className="text-xs text-ink/50 mt-0.5">{text.priceNote}</p>
+          </>
+        )}
       </div>
 
       {product.shortDesc && (
@@ -262,10 +274,12 @@ export function BuyBox({
 
       {/* Quantity & Primary Action Button */}
       <div className="my-2 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs text-ink/70 font-medium">Quantity</span>
-          <QuantityStepper value={quantity} onChange={setQuantity} />
-        </div>
+        {!comboFrame && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-ink/70 font-medium">Quantity</span>
+            <QuantityStepper value={quantity} onChange={setQuantity} />
+          </div>
+        )}
 
         {!personalizationReady && personalizationReason && (
           <p className="text-xs text-ink/60">{personalizationReason}</p>
@@ -277,9 +291,11 @@ export function BuyBox({
           disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
           className="w-full h-12 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          {isEditingCartLine
-            ? submitting ? 'Saving…' : 'Save changes'
-            : submitting ? 'Adding…' : 'Add to cart'}
+          {comboFrame
+            ? submitting ? 'Saving…' : `Save ${comboFrame.label}`
+            : isEditingCartLine
+              ? submitting ? 'Saving…' : 'Save changes'
+              : submitting ? 'Adding…' : 'Add to cart'}
         </Button>
       </div>
 
@@ -312,7 +328,7 @@ export function BuyBox({
       {/* Sticky Mobile Bottom CTA Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-paper/95 backdrop-blur-md border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
         <div className="min-w-0">
-          <div className="text-xs font-bold text-ink truncate">Total {formatPaise(price * quantity)}</div>
+          <div className="text-xs font-bold text-ink truncate">{comboFrame ? comboFrame.label : `Total ${formatPaise(price * quantity)}`}</div>
           <div className="text-3xs text-ink/60 truncate">{selectedSize || 'Standard'} · {selectedColour || 'Default'}</div>
         </div>
         <button
@@ -322,9 +338,11 @@ export function BuyBox({
           disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
           className="h-11 min-h-[44px] px-6 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs"
         >
-          {isEditingCartLine
-            ? submitting ? 'Saving…' : 'Save'
-            : submitting ? 'Adding…' : 'Add to cart'}
+          {comboFrame
+            ? submitting ? 'Saving…' : 'Save frame'
+            : isEditingCartLine
+              ? submitting ? 'Saving…' : 'Save'
+              : submitting ? 'Adding…' : 'Add to cart'}
         </button>
       </div>
     </div>

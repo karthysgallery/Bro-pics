@@ -98,17 +98,37 @@ export default function CartPage() {
                           {formatPaise(item.unitPriceSnapshot * item.qty)}
                         </span>
                       </div>
-                      <p className="text-xs text-ink/60 mt-1">Personalised photo print</p>
+                      {item.combo ? (
+                        <div className="mt-1">
+                          <p className="text-xs text-ink/60">Combo offer · {item.combo.frames.length} personalised frames</p>
+                          <ul className="mt-2 grid gap-0.5 text-xs text-ink/70">
+                            {item.combo.frames.map((frame, index) => (
+                              <li key={frame.key} className="truncate">Frame {index + 1}: {frame.title ?? 'Personalised frame'}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-ink/60 mt-1">Personalised photo print</p>
+                      )}
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-2">
-                      <QuantityStepper
-                        value={item.qty}
-                        onChange={(qty) => updateQuantity(item.variantId, item.personalizationId, qty)}
-                        label={`Quantity for ${item.title}`}
-                      />
+                      {item.combo ? (
+                        <span className="text-xs font-semibold text-ink/70">1 combo</span>
+                      ) : (
+                        <QuantityStepper
+                          value={item.qty}
+                          onChange={(qty) => updateQuantity(item.variantId, item.personalizationId, qty)}
+                          label={`Quantity for ${item.title}`}
+                        />
+                      )}
                       <div className="flex items-center gap-4 text-xs font-medium text-ink/60">
-                        {item.productSlug && (
+                        {item.combo?.slug && (
+                          <Link href={`/combo/${item.combo.slug}`} className="hover:text-ink transition-colors">
+                            View combo
+                          </Link>
+                        )}
+                        {item.productSlug && !item.combo && (
                           <Link
                             href={`/product/${item.productSlug}?edit=${item.personalizationId}&variantId=${item.variantId}`}
                             className="hover:text-ink transition-colors"

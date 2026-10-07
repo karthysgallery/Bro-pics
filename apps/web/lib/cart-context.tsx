@@ -48,7 +48,8 @@ export interface CartContextValue {
   totalPaise: number;
 }
 
-const CartContext = createContext<CartContextValue | null>(null);
+/** Exported only so a combo frame can stand in for the cart around the existing editors (see combo-frame-context). */
+export const CartContext = createContext<CartContextValue | null>(null);
 
 /**
  * Single-item merge for addItem: on a match (same variantId AND

@@ -394,6 +394,10 @@ export default function CheckoutPage() {
       ? { rate: gst.taxRate, amount: splitGstFromInclusiveTotal(grandTotal, gst.taxRate).gstAmountPaise }
       : null;
   const hasUnavailableItems = quote !== null && quote.unavailable.length > 0;
+  const hasChangedCombo = quote !== null && quote.unavailable.some((u) => u.variantId.startsWith('combo:'));
+  // A combo is priced as a whole, so its summary line shows the combo's price rather than a frame's.
+  const quotedComboPrice = (item: { personalizationId: string; combo?: unknown }) =>
+    item.combo ? quote?.combos?.find((c) => c.instanceId === item.personalizationId)?.price : undefined;
   const quotedUnitPrice = (item: { variantId: string; personalizationId: string }) =>
     quote?.lines.find((l) => l.variantId === item.variantId && l.personalizationId === item.personalizationId)?.unitPrice;
 
@@ -539,7 +543,9 @@ export default function CheckoutPage() {
               {items.map((item) => (
                 <div key={`${item.variantId}-${item.personalizationId}`} className="flex justify-between text-xs text-ink/80">
                   <span className="truncate pr-2">{item.title} × {item.qty}</span>
-                  <span className="font-semibold text-ink">{formatPaise((quotedUnitPrice(item) ?? item.unitPriceSnapshot) * item.qty)}</span>
+                  <span className="font-semibold text-ink">
+                    {formatPaise(item.combo ? (quotedComboPrice(item) ?? item.unitPriceSnapshot) : (quotedUnitPrice(item) ?? item.unitPriceSnapshot) * item.qty)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -609,7 +615,9 @@ export default function CheckoutPage() {
 
             {hasUnavailableItems && (
               <p role="alert" className="text-xs text-alert my-2">
-                Some items in your bag are no longer available. Please review your bag before checking out.
+                {hasChangedCombo
+                  ? 'A combo in your bag has changed or is no longer available. Remove it from your bag and add it again.'
+                  : 'Some items in your bag are no longer available. Please review your bag before checking out.'}
               </p>
             )}
             {paymentConfirming && (

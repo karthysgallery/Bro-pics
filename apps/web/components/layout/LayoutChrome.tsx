@@ -49,7 +49,11 @@ export function LayoutChrome({
   const defaultAnnouncement = ['Made for your memories', freeShippingPromise(shippingSettings)].filter(Boolean).join(' • ');
 
   useEffect(() => {
-    const handleOpen = () => setIsCartOpen(true);
+    // A frame saved inside a combo is not in the cart yet, so there is nothing to show.
+    const handleOpen = () => {
+      if (document.body.dataset.comboFrame) return;
+      setIsCartOpen(true);
+    };
     window.addEventListener('karthys:open-cart', handleOpen);
     return () => window.removeEventListener('karthys:open-cart', handleOpen);
   }, []);

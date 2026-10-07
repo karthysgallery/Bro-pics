@@ -6,9 +6,13 @@ vi.mock('../lib/firestore-product-detail', () => ({
 vi.mock('../lib/firestore-categories', () => ({
   getActiveCategories: vi.fn(),
 }));
+vi.mock('../lib/firestore-combos', () => ({
+  getPublishedCombos: vi.fn().mockResolvedValue([]),
+}));
 
 import { getSitemapProducts } from '../lib/firestore-product-detail';
 import { getActiveCategories } from '../lib/firestore-categories';
+import { getPublishedCombos } from '../lib/firestore-combos';
 import sitemap from './sitemap';
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
@@ -43,5 +47,16 @@ describe('sitemap', () => {
     for (const page of ['about', 'contact', 'faq', 'how-it-works', 'picture-quality-guide', 'privacy', 'return-refund-policy', 'shipping-policy', 'terms']) {
       expect(urls).toContain(`${baseUrl}/${page}`);
     }
+  });
+
+  it('lists published combos and their index page, and nothing extra when there are none', async () => {
+    vi.mocked(getSitemapProducts).mockResolvedValue([]);
+    vi.mocked(getActiveCategories).mockResolvedValue([]);
+    vi.mocked(getPublishedCombos).mockResolvedValueOnce([{ slug: 'triple-9', updatedAt: '2026-10-02T00:00:00.000Z', coverImageUrl: '/c.jpg' }] as never);
+    const urls = (await sitemap()).map((e) => e.url);
+    expect(urls).toContain(`${baseUrl}/combos`);
+    expect(urls).toContain(`${baseUrl}/combo/triple-9`);
+
+    expect((await sitemap()).map((e) => e.url)).not.toContain(`${baseUrl}/combos`);
   });
 });

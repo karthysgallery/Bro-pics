@@ -150,6 +150,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               {items.map((item) => {
                 const stock = stockByVariant.get(item.variantId);
                 const stockBadge = stock && (stock.isActive === false ? 'Discontinued' : STOCK_BADGE_LABEL[stock.stockStatus]);
+                const combo = item.combo;
                 return (
                 <li key={`${item.variantId}-${item.personalizationId}`} className="flex gap-3 py-4">
                   <div className="relative w-16 h-16 shrink-0 rounded-md bg-tint overflow-hidden">
@@ -159,19 +160,38 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-ink line-clamp-2">{item.title}</p>
+                    {combo && (
+                      <details className="mt-1 text-2xs text-ink/60">
+                        <summary className="cursor-pointer select-none">Combo · {combo.frames.length} frames</summary>
+                        <ul className="mt-1 space-y-0.5">
+                          {combo.frames.map((frame, index) => (
+                            <li key={frame.key} className="truncate">Frame {index + 1}: {frame.title ?? 'Personalized frame'}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                     {stockBadge && (
                       <span className="inline-block mt-1 text-2xs font-semibold px-2 py-0.5 rounded-full bg-alert/10 text-alert">
                         {stockBadge}
                       </span>
                     )}
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <QuantityStepper
-                        value={item.qty}
-                        onChange={(qty) => updateQuantity(item.variantId, item.personalizationId, qty)}
-                        label={`Quantity for ${item.title}`}
-                      />
+                      {combo ? (
+                        <span className="text-2xs font-semibold text-ink/70">1 combo</span>
+                      ) : (
+                        <QuantityStepper
+                          value={item.qty}
+                          onChange={(qty) => updateQuantity(item.variantId, item.personalizationId, qty)}
+                          label={`Quantity for ${item.title}`}
+                        />
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
-                        {item.productSlug && (
+                        {combo?.slug && (
+                          <Link href={`/combo/${combo.slug}`} onClick={onClose} className="text-2xs text-ink/50 hover:text-accent underline underline-offset-2">
+                            View
+                          </Link>
+                        )}
+                        {item.productSlug && !combo && (
                           <Link
                             href={`/product/${item.productSlug}?edit=${item.personalizationId}&variantId=${item.variantId}`}
                             onClick={onClose}
@@ -180,14 +200,14 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             Edit
                           </Link>
                         )}
-                        <button
+                        {!combo && <button
                           onClick={() => handleMoveToWishlist(item)}
                           disabled={movingKey === `${item.variantId}-${item.personalizationId}`}
                           aria-label={`Move ${item.title} to wishlist`}
                           className="text-2xs text-ink/50 hover:text-accent underline underline-offset-2 disabled:opacity-50"
                         >
                           Move to wishlist
-                        </button>
+                        </button>}
                         <button
                           onClick={() => removeItem(item.variantId, item.personalizationId)}
                           aria-label={`Remove ${item.title}`}

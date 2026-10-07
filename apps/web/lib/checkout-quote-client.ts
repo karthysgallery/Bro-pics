@@ -5,6 +5,8 @@ export interface CheckoutQuote {
   empty: boolean;
   unavailable: Array<{ variantId: string; reason: string }>;
   lines: Array<{ variantId: string; personalizationId: string; unitPrice: number; qty: number }>;
+  /** Combo offers in the bag, each priced as a whole; instanceId is the cart line's own personalizationId. */
+  combos?: Array<{ instanceId: string; comboId: string; price: number; mrp: number }>;
   /** Paise. total === subtotal - discount + shipping. */
   subtotal: number;
   discount: number;
