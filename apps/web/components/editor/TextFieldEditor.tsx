@@ -29,6 +29,10 @@ interface TextFieldEditorProps {
   required?: boolean;
   allowedFontKeys?: string[];
   allowedColorValues?: string[];
+  // False when the template places this text outside the printed area
+  // (e.g. on the picture of the frame): it shows in the preview but is not
+  // printed, and the customer is told so.
+  printed?: boolean;
 }
 
 // One instance per text field (e.g. "Name", "Date") — a labelled input with
@@ -43,6 +47,7 @@ export function TextFieldEditor({
   required = false,
   allowedFontKeys,
   allowedColorValues,
+  printed = true,
 }: TextFieldEditorProps) {
   const inputId = `text-field-${fieldKey}`;
   const isEmpty = !field.value.trim();
@@ -73,8 +78,14 @@ export function TextFieldEditor({
           {field.value.length}/{maxLength}
         </span>
       </div>
+      {!printed && (
+        <p id={`${inputId}-not-printed`} className="mb-2 text-xs text-ink/70">
+          Shown in the preview only — this text is not printed on your photo.
+        </p>
+      )}
       <input
         id={inputId}
+        aria-describedby={printed ? undefined : `${inputId}-not-printed`}
         type="text"
         maxLength={maxLength}
         value={field.value}

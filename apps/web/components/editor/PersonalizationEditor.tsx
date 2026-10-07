@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { FrameTemplate, ProductMedia, RotationDeg, Variant } from '@bro-pics/shared';
-import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE } from '@bro-pics/shared';
+import { fractionRectToCanvasRect, EDITOR_CANVAS_SIZE, isInsidePrintArea, legacyPrintArea } from '@bro-pics/shared';
 import { EditorCanvasErrorBoundary } from './EditorCanvasErrorBoundary';
 import { TextFieldEditor, type TextFieldValue } from './TextFieldEditor';
 import { ClipartPicker } from './ClipartPicker';
@@ -609,6 +609,8 @@ export function PersonalizationControls({
             Custom Text
           </h3>
           {template.textZones.map((zone) => {
+            // Only text inside the template's printed area is printed (shared print layout).
+            const printArea = legacyPrintArea(template);
             const field = textFields.get(zone.fieldKey) ?? {
               value: '',
               fontKey: DEFAULT_TEXT_FONT_KEY,
@@ -624,6 +626,7 @@ export function PersonalizationControls({
                 required={zone.required}
                 allowedFontKeys={zone.allowedFonts}
                 allowedColorValues={zone.allowedColors}
+                printed={isInsidePrintArea(zone, printArea)}
                 onChange={(next) => onTextFieldChange(zone.fieldKey, next)}
               />
             );

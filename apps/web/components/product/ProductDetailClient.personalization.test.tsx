@@ -539,6 +539,9 @@ describe('ProductDetailClient — inline personalization', () => {
       );
 
       const nameInput = (await screen.findByLabelText('Name')) as HTMLInputElement;
+      // This zone sits below the photo slot (on the frame picture), so the customer is told it is not printed.
+      expect(screen.getByText(/Shown in the preview only — this text is not printed/)).toBeInTheDocument();
+      expect(nameInput).toHaveAccessibleDescription(/not printed on your photo/);
       expect(nameInput).toBeInTheDocument();
       expect(screen.getByRole('group', { name: /name font/i })).toBeInTheDocument();
       expect(screen.getByRole('group', { name: /name colour/i })).toBeInTheDocument();

@@ -8,7 +8,7 @@ import { MediaPickerModal } from '../../../../../components/admin/MediaPickerMod
 import { StatusChip } from '../../../../../components/admin/StatusChip';
 import { FormField, SaveBar } from '../../../../../components/admin/AdminForm';
 import { useToast } from '../../../../../components/ui/Toast';
-import { legacyPrintArea, legacyTemplatePrintWarnings, type FrameTemplate, type TextZone, type ClipartOption, type Variant, type Product } from '@bro-pics/shared';
+import { isInsidePrintArea, legacyPrintArea, legacyTemplatePrintWarnings, type FrameTemplate, type TextZone, type ClipartOption, type Variant, type Product } from '@bro-pics/shared';
 
 type PrintableRect = FrameTemplate['printableRects'][number];
 type FractionRect = { x: number; y: number; width: number; height: number };
@@ -822,7 +822,16 @@ export default function AdminTemplateFormPage({ params }: TemplateFormPageProps)
                 {textZones.map((zone, idx) => (
                   <div key={idx} className="p-4 rounded-xl border border-line bg-field/40 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-ink">Zone #{idx + 1}: {zone.label || zone.fieldKey}</span>
+                      <span className="flex flex-wrap items-center gap-2 text-xs font-bold text-ink">
+                        Zone #{idx + 1}: {zone.label || zone.fieldKey}
+                        {effectivePrintArea && isInsidePrintArea(zone, effectivePrintArea) ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-2xs font-semibold text-emerald-800">Printed</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-2xs font-semibold text-amber-900">
+                            Not printed — outside the printed area (preview only)
+                          </span>
+                        )}
+                      </span>
                       <button
                         type="button"
                         onClick={() => {

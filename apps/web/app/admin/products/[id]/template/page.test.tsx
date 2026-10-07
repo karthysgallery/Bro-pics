@@ -143,6 +143,8 @@ describe('AdminTemplateFormPage', () => {
 
     expect(screen.getAllByText(/Shop preview only — never printed/)).toHaveLength(2);
     expect(screen.getByText(/Printed artwork \(optional\)/)).toBeInTheDocument();
+    // The heading (y 0.8-0.9) sits inside the photo slot (0.1-0.9), so it is printed.
+    expect(screen.getByText('Printed')).toBeInTheDocument();
     // The heading sits below the photo slot (y 0.8-0.9 vs slot ending at 0.9 -> inside), the square slot on 8x12 paper -> margins.
     const warnings = screen.getByRole('list', { name: 'Print warnings' });
     expect(warnings).toHaveTextContent(/white margins/);
