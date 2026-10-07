@@ -54,7 +54,7 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
     setAdded(false);
   };
 
-  const reason = !loaded
+  const reason = !loaded || added
     ? ''
     : unavailable.length > 0
       ? `${cardByItem.get(unavailable[0]!.id)?.label ?? 'A frame'} is not available right now.`
@@ -175,7 +175,7 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
       </section>
 
       {/* Summary and checkout */}
-      <section aria-labelledby="summary-heading" className="rounded-3xl border border-line bg-paper p-5 md:p-6">
+      <section id="summary" aria-labelledby="summary-heading" className="scroll-mt-24 rounded-3xl border border-line bg-paper p-5 md:p-6">
         <h2 id="summary-heading" className="font-display text-xl font-bold text-ink">Your combo</h2>
         <dl className="mt-3 grid gap-1 text-sm text-ink/75">
           <div className="flex justify-between"><dt>Frames personalized</dt><dd className="font-semibold text-ink">{progress.doneCount} of {progress.total}</dd></div>
