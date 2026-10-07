@@ -137,7 +137,7 @@ describe('WhatsApp OTP Authentication API Routes', () => {
       expect(verifyData.customToken).toBeDefined();
 
       // Check session cookie
-      expect(verifyRes.cookies.get('karthys_session')?.value).toBeDefined();
+      expect(verifyRes.cookies.get('__session')?.value).toBeDefined();
 
       // 3. Trying to verify the same OTP again must fail (invalidation on success)
       const duplicateRes = await verifyOtpHandler(verifyReq);
@@ -215,7 +215,7 @@ describe('WhatsApp OTP Authentication API Routes', () => {
       expect(data.user.phone).toBe('+919876543210');
       expect(data.customToken).toBeDefined();
 
-      expect(loginRes.cookies.get('karthys_session')?.value).toBeDefined();
+      expect(loginRes.cookies.get('__session')?.value).toBeDefined();
     });
 
     it('rejects incorrect OTP with 400', async () => {
@@ -267,7 +267,7 @@ describe('WhatsApp OTP Authentication API Routes', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
-      expect(res.cookies.get('karthys_session')?.value).toBeDefined();
+      expect(res.cookies.get('__session')?.value).toBeDefined();
     });
 
     it('rejects wrong password with 401', async () => {
@@ -300,9 +300,9 @@ describe('WhatsApp OTP Authentication API Routes', () => {
         })
       );
       expect(verifyRes.status).toBe(200);
-      const sessionToken = verifyRes.cookies.get('karthys_session')?.value;
+      const sessionToken = verifyRes.cookies.get('__session')?.value;
       expect(sessionToken).toBeDefined();
-      const sessionCookie = `karthys_session=${sessionToken}`;
+      const sessionCookie = `__session=${sessionToken}`;
 
       // 2. Query /api/auth/me
       const meReq = new Request('http://localhost:3000/api/auth/me', {
@@ -321,8 +321,34 @@ describe('WhatsApp OTP Authentication API Routes', () => {
       });
       const logoutRes = await logoutHandler(logoutReq);
       expect(logoutRes.status).toBe(200);
-      const clearedCookie = logoutRes.cookies.get('karthys_session');
+      const clearedCookie = logoutRes.cookies.get('__session');
       expect(clearedCookie?.maxAge).toBe(0);
+    });
+
+    it('still accepts a session cookie issued under the old name, and logout clears both names', async () => {
+      const sendRes = await sendOtpHandler(
+        createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone: '9876500011', purpose: 'register' })
+      );
+      const { devOtp } = await sendRes.json();
+      const verifyRes = await verifyOtpHandler(
+        createJsonRequest('http://localhost:3000/api/auth/verify-whatsapp-otp', {
+          phone: '9876500011',
+          otp: devOtp,
+          purpose: 'register',
+          fullName: 'Legacy Session User',
+          password: 'ValidPassword1',
+        })
+      );
+      const token = verifyRes.cookies.get('__session')?.value;
+      expect(token).toBeDefined();
+
+      const legacy = { cookie: `karthys_session=${token}` };
+      const meRes = await meHandler(new Request('http://localhost:3000/api/auth/me', { headers: legacy }));
+      expect(meRes.status).toBe(200);
+
+      const logoutRes = await logoutHandler(new Request('http://localhost:3000/api/auth/logout', { method: 'POST', headers: legacy }));
+      expect(logoutRes.cookies.get('__session')?.maxAge).toBe(0);
+      expect(logoutRes.cookies.get('karthys_session')?.maxAge).toBe(0);
     });
 
     it('returns 401 when no session cookie is sent to /api/auth/me', async () => {
@@ -366,7 +392,7 @@ describe('WhatsApp OTP Authentication API Routes', () => {
 
       expect(res.status).toBe(403);
       expect((await res.json()).code).toBe('PASSWORD_REQUIRED');
-      expect(res.cookies.get('karthys_session')).toBeUndefined();
+      expect(res.cookies.get('__session')).toBeUndefined();
       expect(recordLogin).not.toHaveBeenCalled();
       vi.restoreAllMocks();
     });

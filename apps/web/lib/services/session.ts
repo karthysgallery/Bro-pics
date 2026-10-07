@@ -10,7 +10,13 @@ export interface SessionData {
   expiresAt: number;
 }
 
-const SESSION_COOKIE_NAME = 'karthys_session';
+// Firebase Hosting (in front of Cloud Run) forwards ONLY a cookie named
+// `__session` to the backend and strips every other cookie, so the session
+// lives under that name. `karthys_session` is the previous name: it is still
+// READ (so sessions started before the rename keep working where the cookie
+// does reach us, e.g. the run.app address), never written, and cleared on logout.
+export const SESSION_COOKIE_NAME = '__session';
+export const LEGACY_SESSION_COOKIE_NAME = 'karthys_session';
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 const DEV_SESSION_SECRET = 'karthys-gallery-dev-secret-do-not-use-in-production-min32chars';
@@ -88,9 +94,14 @@ export function verifySessionToken(token: string | null | undefined): SessionDat
  */
 export function getSessionFromRequest(request: Request): SessionData | null {
   const cookieHeader = request.headers.get('cookie') || '';
-  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`));
-  if (!match) return null;
-  return verifySessionToken(match[1]);
+  // The current cookie wins; the legacy one only counts when the current one
+  // is absent or no longer valid (e.g. expired), never the other way round.
+  for (const name of [SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME]) {
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    const session = match ? verifySessionToken(match[1]) : null;
+    if (session) return session;
+  }
+  return null;
 }
 
 /**
@@ -133,13 +144,16 @@ export function attachSessionCookie(response: any, token: string): void {
  */
 export function clearSessionCookie(response: any): void {
   if (response?.cookies?.set) {
-    response.cookies.set(SESSION_COOKIE_NAME, '', {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 0,
-      expires: new Date(0),
-    });
+    // Both names: a browser may still hold the pre-rename cookie.
+    for (const name of [SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME]) {
+      response.cookies.set(name, '', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 0,
+        expires: new Date(0),
+      });
+    }
   } else {
     response.headers.set('Set-Cookie', buildClearSessionCookieHeader());
   }
