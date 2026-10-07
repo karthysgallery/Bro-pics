@@ -21,9 +21,20 @@ import { getFirestore } from 'firebase-admin/firestore';
  * the renderer answers 409 to the loser.
  */
 
+// Empty = not configured: nothing is dispatched (safe default until the renderer is deployed).
 const PRINT_RENDER_URL = defineString('PRINT_RENDER_URL', {
+  default: '',
   description: 'Private Cloud Run URL of the print renderer, e.g. https://print-render-xxxx.a.run.app',
 });
+
+function rendererUrl(): string | null {
+  const url = PRINT_RENDER_URL.value().trim();
+  if (!url) {
+    logger.warn('PRINT_RENDER_URL is not set; print jobs are not dispatched');
+    return null;
+  }
+  return url;
+}
 // Jobs created before this ISO time are never picked up by the sweep, so
 // switching dispatch on does not suddenly render an old backlog. Empty = no cutoff.
 const PRINT_DISPATCH_AFTER = defineString('PRINT_DISPATCH_AFTER', { default: '' });
@@ -121,8 +132,10 @@ export const dispatchPrintJob = onDocumentWritten(
     const after = event.data?.after.exists ? (event.data.after.data() as JobFields) : undefined;
     if (!becameQueued(before, after)) return;
     const jobId = event.params.jobId;
+    const url = rendererUrl();
+    if (!url) return;
     try {
-      const result = await dispatchToRenderer(PRINT_RENDER_URL.value(), jobId, realDeps);
+      const result = await dispatchToRenderer(url, jobId, realDeps);
       logger.info('Print job dispatched', { jobId, result });
     } catch (error) {
       // The job stays queued; sweepPrintJobs sends it again.
@@ -132,6 +145,8 @@ export const dispatchPrintJob = onDocumentWritten(
 );
 
 export const sweepPrintJobs = onSchedule({ schedule: 'every 5 minutes', region: 'asia-south1', timeoutSeconds: 540 }, async () => {
+  const url = rendererUrl();
+  if (!url) return;
   const db = getFirestore();
   const now = new Date();
   const cutoffRaw = PRINT_DISPATCH_AFTER.value();
@@ -151,7 +166,7 @@ export const sweepPrintJobs = onSchedule({ schedule: 'every 5 minutes', region: 
     .slice(0, SWEEP_LIMIT);
   if (due.length === 0) return;
 
-  const results = await Promise.allSettled(due.map((doc) => dispatchToRenderer(PRINT_RENDER_URL.value(), doc.id, realDeps)));
+  const results = await Promise.allSettled(due.map((doc) => dispatchToRenderer(url, doc.id, realDeps)));
   logger.info('Print sweep', {
     dispatched: due.map((d, i) => ({ jobId: d.id, result: results[i]!.status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<DispatchResult>).value : 'error' })),
   });
