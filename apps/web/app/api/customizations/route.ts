@@ -5,7 +5,7 @@ import { findVariantById } from '../../../lib/variant-lookup';
 import { getUserIdFromAuthHeader } from '../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../lib/rate-limit';
 import { CustomizationSchema, CURRENT_SCHEMA_VERSION } from '@bro-pics/shared';
-import { effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
+import { loadFrameTemplateVersion, serverSlotDpi } from '../../../lib/server-slot-dpi';
 import type { Upload, FrameTemplate, Customization } from '@bro-pics/shared';
 import { fontFamilyForKey } from '../../../lib/text-personalization-options';
 
@@ -161,14 +161,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   // and a submission with no textFieldsJson still needs this to catch a
   // MISSING required field, so this can't be skipped just because
   // textFieldsJson is absent.
-  const { templateVersion } = body as Record<string, unknown>;
-  if (typeof templateVersion === 'number') {
-    // A single-field `variantId` equality query, filtered by version in
-    // memory — matching GET /api/frame-templates/[variantId]'s own
-    // established reasoning: a second `.where('version','==',...)` would
-    // need a composite index this environment can't deploy.
-    const templateSnapshot = await db.collectionGroup('frameTemplates').where('variantId', '==', variantId).get();
-    const template = templateSnapshot.docs.map((d) => d.data() as FrameTemplate).find((t) => t.version === templateVersion);
+  const { templateVersion, slotIndex } = body as Record<string, unknown>;
+  // Also gives the photo-quality check its slot size and thresholds below.
+  const template = await loadFrameTemplateVersion(db, variantId, templateVersion);
+  {
     if (template && template.textZones.length > 0) {
       const textFieldsJson = (body as Record<string, unknown>).textFieldsJson as
         | Record<string, { value: string; fontFamily: string; color: string }>
@@ -199,19 +195,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   // to the print's HEIGHT axis. Not swapping variant.widthIn/heightIn to
   // match produces up to a 50% DPI over-report at those rotations. See
   // Finding 4 in the second-round review.
-  const rotationDeg = (transformJson as Record<string, unknown>).rotationDeg;
-  const { printWidthIn, printHeightIn } = printDimensionsForRotation(
+  // Judged at the slot's real printed size with the slot's own thresholds
+  // (lib/server-slot-dpi.ts), the same rule the shop's badge uses.
+  const { effectiveDpi, tier: dpiBand } = serverSlotDpi({
+    template,
+    slotIndex: typeof slotIndex === 'number' ? slotIndex : 0,
     variant,
-    typeof rotationDeg === 'number' ? rotationDeg : 0
-  );
-
-  const { effectiveDpi, tier: dpiBand } = effectiveDpiFromCropRect(
-    upload.widthPx,
-    upload.heightPx,
+    upload,
     cropRect,
-    printWidthIn,
-    printHeightIn
-  );
+    rotationDeg: (transformJson as Record<string, unknown>).rotationDeg,
+  });
 
   // The "use this photo anyway" confirmation used to be pure client state
   // (SlotState.confirmedLowDpi) that never reached the server at all — a

@@ -12,9 +12,8 @@ import {
   fractionRectToCanvasRect,
   slotCropRectInOriginalPx,
   EDITOR_CANVAS_SIZE,
-  effectiveDpiFromCropRect,
+  legacySlotDpi,
   dpiTier,
-  printDimensionsForRotation,
   type RotationDeg,
 } from '@bro-pics/shared';
 import { selectGalleryMedia } from '../../lib/gallery-media';
@@ -69,20 +68,28 @@ function orientationOf(v: Variant): Orientation {
  * mirroring the identical swap /api/customizations applies server-side.
  */
 function computeEffectiveDpi(
-  slotRect: { x: number; y: number; width: number; height: number },
+  slotRect: { x: number; y: number; width: number; height: number; widthMm?: number; heightMm?: number; minDpi?: number; recommendedDpi?: number },
   widthPx: number,
   heightPx: number,
   scale: number,
   offsetX: number,
   offsetY: number,
   rotationDeg: RotationDeg,
-  variant: Variant
+  variant: Variant,
+  template: Pick<FrameTemplate, 'printableRects' | 'printArea'> | null
 ): number {
   const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
   const cropRect = slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, scale, offsetX, offsetY, rotationDeg);
-  const { printWidthIn, printHeightIn } = printDimensionsForRotation(variant, rotationDeg);
-  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, printWidthIn, printHeightIn);
-  return effectiveDpi;
+  // Judged at the slot's real printed size (shared print layout), not the whole frame.
+  return legacySlotDpi({
+    template: template ?? { printableRects: [{ ...slotRect, slotIndex: 0 }] },
+    slot: slotRect,
+    variant,
+    uploadWidthPx: widthPx,
+    uploadHeightPx: heightPx,
+    cropRect,
+    rotationDeg,
+  }).effectiveDpi;
 }
 
 const MAX_ZOOM_MULTIPLE = 4;
@@ -357,7 +364,8 @@ export function ProductDetailClient({
               draftSlot.offsetX,
               draftSlot.offsetY,
               draftSlot.rotationDeg,
-              selectedVariant
+              selectedVariant,
+              template
             );
             const restored: SlotState = {
               uploadId: draftSlot.uploadId,
@@ -545,9 +553,9 @@ export function ProductDetailClient({
       if (isSameRect) {
         // Frame geometry did not change (e.g. only frame colour changed) -> PRESERVE user transform!
         const effectiveDpi = selectedVariant
-          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, slot.scale, slot.offsetX, slot.offsetY, slot.rotationDeg, selectedVariant)
+          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, slot.scale, slot.offsetX, slot.offsetY, slot.rotationDeg, selectedVariant, template)
           : slot.effectiveDpi;
-        if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
+        if (tierOrder[dpiTier(effectiveDpi, rect)] > tierOrder[dpiTier(slot.effectiveDpi, rect)]) {
           worsenedSlots.push(slotIndex);
         }
         next.set(slotIndex, { ...slot, effectiveDpi });
@@ -564,10 +572,10 @@ export function ProductDetailClient({
           slot.rotationDeg
         );
         const effectiveDpi = selectedVariant
-          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant)
+          ? computeEffectiveDpi(rect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, slot.rotationDeg, selectedVariant, template)
           : slot.effectiveDpi;
         const tierOrder = { green: 0, amber: 1, red: 2 } as const;
-        if (tierOrder[dpiTier(effectiveDpi)] > tierOrder[dpiTier(slot.effectiveDpi)]) {
+        if (tierOrder[dpiTier(effectiveDpi, rect)] > tierOrder[dpiTier(slot.effectiveDpi, rect)]) {
           worsenedSlots.push(slotIndex);
         }
         next.set(slotIndex, { ...slot, scale, offsetX, offsetY, effectiveDpi, confirmedLowDpi: false });
@@ -594,11 +602,16 @@ export function ProductDetailClient({
 
   const activeSlot = slots.get(activeSlotIndex);
   const activeRect = template?.printableRects.find((r) => r.slotIndex === activeSlotIndex);
-  const activeSlotIsRed = activeSlot !== undefined && dpiTier(activeSlot.effectiveDpi) === 'red';
+  const activeSlotIsRed = activeSlot !== undefined && dpiTier(activeSlot.effectiveDpi, activeRect) === 'red';
 
   const photoCompletion = validateSlotsComplete(
     product.photoSlots,
-    new Map(Array.from(slots.entries()).map(([i, s]) => [i, { effectiveDpi: s.effectiveDpi, confirmedLowDpi: s.confirmedLowDpi }]))
+    new Map(
+      Array.from(slots.entries()).map(([i, s]) => {
+        const rect = template?.printableRects.find((r) => r.slotIndex === i);
+        return [i, { effectiveDpi: s.effectiveDpi, confirmedLowDpi: s.confirmedLowDpi, minDpi: rect?.minDpi, recommendedDpi: rect?.recommendedDpi }];
+      })
+    )
   );
   // [FE-12] A required text zone blocks Add to Cart the same way an
   // empty photo slot already does — checked after photo completion so
@@ -655,7 +668,7 @@ export function ProductDetailClient({
       const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
       const scale = coverScale(canvasRect.width, canvasRect.height, localWidthPx, localHeightPx);
       const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, localWidthPx, localHeightPx, scale);
-      const effectiveDpi = computeEffectiveDpi(slotRect, localWidthPx, localHeightPx, scale, offsetX, offsetY, 0, selectedVariant);
+      const effectiveDpi = computeEffectiveDpi(slotRect, localWidthPx, localHeightPx, scale, offsetX, offsetY, 0, selectedVariant, template);
 
       setSlots((prev) => {
         const next = new Map(prev);
@@ -726,7 +739,7 @@ export function ProductDetailClient({
         const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
         const scale = coverScale(canvasRect.width, canvasRect.height, widthPx, heightPx);
         const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, widthPx, heightPx, scale);
-        const effectiveDpi = computeEffectiveDpi(slotRect, widthPx, heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+        const effectiveDpi = computeEffectiveDpi(slotRect, widthPx, heightPx, scale, offsetX, offsetY, 0, selectedVariant, template);
 
         setSlots((prev) => {
           const next = new Map(prev);
@@ -775,7 +788,7 @@ export function ProductDetailClient({
       const clamped = Math.min(maxScale, Math.max(minScale, newScale));
       if (clamped === current.scale) return prev;
       const { offsetX, offsetY } = offsetAfterScaleChange(current.offsetX, current.offsetY, current.scale, clamped, canvasRect.width, canvasRect.height);
-      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, clamped, offsetX, offsetY, current.rotationDeg, selectedVariant);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, clamped, offsetX, offsetY, current.rotationDeg, selectedVariant, template);
       const next = new Map(prev);
       next.set(activeSlotIndex, { ...current, scale: clamped, offsetX, offsetY, effectiveDpi });
       return next;
@@ -797,7 +810,7 @@ export function ProductDetailClient({
       const minScale = coverScaleForRotation(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, newRotation);
       const newScale = Math.max(current.scale, minScale);
       const { offsetX, offsetY } = centeredOffsetForRotation(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, newScale, newRotation);
-      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, newScale, offsetX, offsetY, newRotation, selectedVariant);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, newScale, offsetX, offsetY, newRotation, selectedVariant, template);
       const next = new Map(prev);
       next.set(activeSlotIndex, { ...current, rotationDeg: newRotation, scale: newScale, offsetX, offsetY, effectiveDpi });
       return next;
@@ -811,7 +824,7 @@ export function ProductDetailClient({
       const canvasRect = fractionRectToCanvasRect(activeRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
       const scale = coverScale(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx);
       const { offsetX, offsetY } = centeredOffset(canvasRect.width, canvasRect.height, current.widthPx, current.heightPx, scale);
-      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, scale, offsetX, offsetY, 0, selectedVariant);
+      const effectiveDpi = computeEffectiveDpi(activeRect, current.widthPx, current.heightPx, scale, offsetX, offsetY, 0, selectedVariant, template);
       const next = new Map(prev);
       next.set(activeSlotIndex, { ...current, scale, offsetX, offsetY, rotationDeg: 0, effectiveDpi });
       return next;
@@ -823,7 +836,7 @@ export function ProductDetailClient({
       const current = prev.get(slotIndex);
       const rect = template?.printableRects.find((r) => r.slotIndex === slotIndex);
       if (!current || !rect || !selectedVariant) return prev;
-      const effectiveDpi = computeEffectiveDpi(rect, current.widthPx, current.heightPx, transform.scale, transform.offsetX, transform.offsetY, current.rotationDeg, selectedVariant);
+      const effectiveDpi = computeEffectiveDpi(rect, current.widthPx, current.heightPx, transform.scale, transform.offsetX, transform.offsetY, current.rotationDeg, selectedVariant, template);
       const next = new Map(prev);
       next.set(slotIndex, { ...current, ...transform, effectiveDpi });
       return next;

@@ -84,8 +84,10 @@ function mockUploadFetch(overrides: Partial<Record<string, unknown>> = {}) {
       id: 'up_1',
       sessionId: 's_1',
       originalUrl: '/uploaded.jpg',
-      widthPx: 2400,
-      heightPx: 3000,
+      // The square test slot prints 8x8in on the 8x10 paper, so this
+      // photo's 2000x2000 visible crop is 250 DPI: "lower quality" (amber).
+      widthPx: 2000,
+      heightPx: 2500,
       mime: 'image/jpeg',
       bytes: 12345,
       exifStripped: true,
@@ -203,7 +205,7 @@ describe('ProductDetailClient — inline personalization', () => {
   });
 
   it('[FE-10] replacing a photo in a filled slot keeps the same slot, refits the transform, and recomputes DPI for the new photo', async () => {
-    mockUploadFetch({ id: 'up_1', widthPx: 2400, heightPx: 3000 });
+    mockUploadFetch({ id: 'up_1', widthPx: 2000, heightPx: 2500 });
     renderProduct(makeProduct(), [variant], [makeTemplate()]);
 
     const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
@@ -214,7 +216,7 @@ describe('ProductDetailClient — inline personalization', () => {
       (lastEditorCanvasProps?.slots as Array<{ slotIndex: number; scale: number; photoUrl: string }>).find((s) => s.slotIndex === 0)!;
     await waitFor(() => expect(slotByIndex0()).toBeDefined());
     const firstScale = slotByIndex0().scale;
-    // This file's `variant` fixture already puts a 2400x3000 upload into
+    // This file's `variant` fixture already puts a 2000x2500 upload into
     // the "lower quality print" (amber) tier — see the "good-quality
     // photo" test above, which enables Add to Cart at this same DPI.
     expect(screen.getByText(/lower quality print/i)).toBeInTheDocument();
@@ -454,6 +456,19 @@ describe('ProductDetailClient — inline personalization', () => {
       fireEvent.click(zoomOut);
       fireEvent.click(zoomOut);
       await waitFor(() => expect(activeSlot().scale).toBeCloseTo(initialScale, 5));
+    });
+
+    it("applies the slot's own quality requirement to the badge and the Add to cart check", async () => {
+      // 250 DPI passes the default 150 minimum, but this slot asks for 260.
+      mockUploadFetch();
+      renderProduct(makeProduct(), [variant], [
+        makeTemplate({ printableRects: [{ slotIndex: 0, x: 0.1, y: 0.1, width: 0.4, height: 0.4, minDpi: 260, recommendedDpi: 400 }] }),
+      ]);
+      const input = (await screen.findByLabelText(/upload a photo/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] } });
+      await waitFor(() => expect(screen.getByText(/too low resolution/i)).toBeInTheDocument());
+      expect(screen.getByText(/Below 260 DPI/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add to cart/i })).toBeDisabled();
     });
 
     it('recomputes the DPI badge/tier as the customer zooms', async () => {

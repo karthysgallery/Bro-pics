@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { RotationDeg, Variant } from '@bro-pics/shared';
+import type { FrameTemplate, RotationDeg, Variant } from '@bro-pics/shared';
 import {
   coverScaleForRotation,
   centeredOffsetForRotation,
@@ -9,8 +9,7 @@ import {
   EDITOR_CANVAS_SIZE,
   fractionRectToCanvasRect,
   slotCropRectInOriginalPx,
-  printDimensionsForRotation,
-  effectiveDpiFromCropRect,
+  legacySlotDpi,
 } from '@bro-pics/shared';
 import { dpiTier } from '@bro-pics/shared';
 import { DpiBadge } from './DpiBadge';
@@ -19,20 +18,27 @@ import type { SlotState } from './PersonalizationEditor';
 const MAX_ZOOM_MULTIPLE = 4;
 
 function calculateDpi(
-  slotRect: { x: number; y: number; width: number; height: number },
+  slotRect: { x: number; y: number; width: number; height: number; widthMm?: number; heightMm?: number; minDpi?: number; recommendedDpi?: number },
   widthPx: number,
   heightPx: number,
   scale: number,
   offsetX: number,
   offsetY: number,
   rotationDeg: RotationDeg,
-  variant: Variant
+  variant: Variant,
+  template: Pick<FrameTemplate, 'printableRects' | 'printArea'> | null
 ): number {
   const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
   const cropRect = slotCropRectInOriginalPx(canvasRect.width, canvasRect.height, scale, offsetX, offsetY, rotationDeg);
-  const { printWidthIn, printHeightIn } = printDimensionsForRotation(variant, rotationDeg);
-  const { effectiveDpi } = effectiveDpiFromCropRect(widthPx, heightPx, cropRect, printWidthIn, printHeightIn);
-  return effectiveDpi;
+  return legacySlotDpi({
+    template: template ?? { printableRects: [{ ...slotRect, slotIndex: 0 }] },
+    slot: slotRect,
+    variant,
+    uploadWidthPx: widthPx,
+    uploadHeightPx: heightPx,
+    cropRect,
+    rotationDeg,
+  }).effectiveDpi;
 }
 
 interface PhotoCropModalProps {
@@ -40,8 +46,10 @@ interface PhotoCropModalProps {
   onClose: () => void;
   slotIndex: number;
   slot: SlotState;
-  slotRect: { x: number; y: number; width: number; height: number; widthMm?: number; heightMm?: number };
+  slotRect: { x: number; y: number; width: number; height: number; widthMm?: number; heightMm?: number; minDpi?: number; recommendedDpi?: number };
   variant: Variant | null;
+  /** The frame template, so DPI is judged at the slot's real printed size. */
+  template?: Pick<FrameTemplate, 'printableRects' | 'printArea'> | null;
   onApply: (transform: { scale: number; offsetX: number; offsetY: number; rotationDeg: RotationDeg; effectiveDpi: number }) => void;
   onLiveTransformChange: (slotIndex: number, transform: { scale: number; offsetX: number; offsetY: number; rotationDeg: RotationDeg; effectiveDpi: number }) => void;
 }
@@ -55,6 +63,7 @@ export function PhotoCropModal({
   slot,
   slotRect,
   variant,
+  template = null,
   onApply,
   onLiveTransformChange,
 }: PhotoCropModalProps) {
@@ -126,7 +135,7 @@ export function PhotoCropModal({
   const emitLiveUpdate = useCallback(
     (scale: number, offsetX: number, offsetY: number, rotationDeg: RotationDeg) => {
       const effectiveDpi = variant
-        ? calculateDpi(slotRect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, rotationDeg, variant)
+        ? calculateDpi(slotRect, slot.widthPx, slot.heightPx, scale, offsetX, offsetY, rotationDeg, variant, template)
         : slot.effectiveDpi;
       setCurrentDpi(effectiveDpi);
       onLiveTransformChange(slotIndex, { scale, offsetX, offsetY, rotationDeg, effectiveDpi });
@@ -404,7 +413,7 @@ export function PhotoCropModal({
 
           {/* Real-time DPI Quality Indicator */}
           <div className="mt-3 flex items-center justify-center">
-            <DpiBadge effectiveDpi={currentDpi} />
+            <DpiBadge effectiveDpi={currentDpi} thresholds={slotRect} />
           </div>
         </div>
 

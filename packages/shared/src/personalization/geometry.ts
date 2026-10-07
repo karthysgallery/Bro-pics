@@ -201,15 +201,24 @@ export function canvasPrintWidthIn(canvas: Pick<TemplateCanvas, 'width' | 'dpi'>
 
 /**
  * Effective print resolution of the visible photo region in this slot: source
- * pixels across the slot divided by the slot's printed width in inches.
+ * pixels across the slot over the slot's printed size, on whichever axis has
+ * fewer pixels per inch.
  */
 export function effectiveDpi(
   region: Rect,
-  slot: Pick<PhotoSlot, 'width' | 'widthMm'>,
+  slot: Pick<PhotoSlot, 'width' | 'widthMm'> & Partial<Pick<PhotoSlot, 'height' | 'heightMm'>>,
   canvas: Pick<TemplateCanvas, 'width' | 'dpi'> & { height?: number },
   printSize?: PrintSizeIn
 ): number {
-  const slotWidthIn = slot.widthMm ? slot.widthMm / 25.4 : slot.width * canvasPrintWidthIn(canvas, printSize);
+  const canvasWidthIn = canvasPrintWidthIn(canvas, printSize);
+  const slotWidthIn = slot.widthMm ? slot.widthMm / 25.4 : slot.width * canvasWidthIn;
   if (slotWidthIn <= 0 || region.width <= 0) return 0;
-  return region.width / slotWidthIn;
+  const byWidth = region.width / slotWidthIn;
+  const slotHeightIn = slot.heightMm
+    ? slot.heightMm / 25.4
+    : slot.height !== undefined && canvas.height
+      ? slot.height * canvasWidthIn * (canvas.height / canvas.width)
+      : 0;
+  if (slotHeightIn <= 0 || region.height <= 0) return byWidth;
+  return Math.min(byWidth, region.height / slotHeightIn);
 }

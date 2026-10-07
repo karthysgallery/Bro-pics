@@ -53,7 +53,7 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     const aspect = slotAspectRatio(slot, template.canvas);
     const crop = cropRectInOriginalPx(photo.width, photo.height, photo.rotation, aspect, photo.transform);
     const dpi = effectiveDpi(crop, slot, template.canvas, options.printSizeIn);
-    const tier = dpiTier(dpi);
+    const tier = dpiTier(dpi, { minDpi: slot.minDpi, recommendedDpi: slot.recommendedDpi });
     const status: SlotStatus = { slotId: slot.id, filled: true, required: slot.required, dpi, tier };
     if (tier === 'red') {
       status.message = 'Your photo may appear low quality in the final print.';

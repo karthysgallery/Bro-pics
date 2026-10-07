@@ -10,12 +10,13 @@ import { PersonalizationStateSchema, STATE_SCHEMA_VERSION, type PersonalizationS
  * every existing product renders through the new engine unchanged — no data
  * migration, no second template model.
  *
- * A legacy template's `mockupUrl` is BOTH the frame graphic and part of the
- * print file (it is composited into the print render), so it maps to a fixed
- * layer with `printed: true`, preserving today's print output exactly.
+ * A legacy template's `mockupUrl` (the wooden frame / lifestyle picture) and
+ * `overlayUrl` (glare) are presentation only, so they map to fixed layers with
+ * `printed: false`. Its optional `printArtworkUrl` is the printed decoration.
  */
 export function fromFrameTemplate(
-  frame: Pick<FrameTemplate, 'id' | 'mockupUrl' | 'overlayUrl' | 'maskUrl' | 'printableRects' | 'textZones' | 'version' | 'bleedMm'>,
+  frame: Pick<FrameTemplate, 'id' | 'mockupUrl' | 'overlayUrl' | 'maskUrl' | 'printableRects' | 'textZones' | 'version' | 'bleedMm'> &
+    Partial<Pick<FrameTemplate, 'printArtworkUrl'>>,
   options: { templateId: string; name: string; canvasWidthPx: number; canvasHeightPx: number; dpi?: number }
 ): PersonalizationTemplate {
   const photoSlots = [...frame.printableRects]
@@ -34,6 +35,8 @@ export function fromFrameTemplate(
       fit: 'cover' as const,
       ...(r.widthMm && { widthMm: r.widthMm }),
       ...(r.heightMm && { heightMm: r.heightMm }),
+      ...(r.minDpi && { minDpi: r.minDpi }),
+      ...(r.recommendedDpi && { recommendedDpi: r.recommendedDpi }),
     }));
 
   const textSlots = frame.textZones.map((z) => ({
@@ -55,12 +58,15 @@ export function fromFrameTemplate(
     ...(z.maxFontSizePx && { maxFontSizePx: z.maxFontSizePx }),
   }));
 
-  // Legacy paint order: photos -> mockup -> overlay -> text.
+  // Legacy paint order: photos -> printed artwork -> mockup -> overlay -> text.
   const layers: PersonalizationTemplate['layers'] = [
     ...photoSlots.map((s) => ({ kind: 'photoSlot' as const, slotId: s.id })),
-    { kind: 'fixed', id: 'legacy-frame', role: 'frame', asset: { assetId: `legacy-mockup:${frame.id}`, url: frame.mockupUrl }, x: 0, y: 0, width: 1, height: 1, printed: true },
+    ...(frame.printArtworkUrl
+      ? [{ kind: 'fixed' as const, id: 'legacy-print-artwork', role: 'decoration' as const, asset: { assetId: `legacy-artwork:${frame.id}`, url: frame.printArtworkUrl }, x: 0, y: 0, width: 1, height: 1, printed: true }]
+      : []),
+    { kind: 'fixed', id: 'legacy-frame', role: 'frame', asset: { assetId: `legacy-mockup:${frame.id}`, url: frame.mockupUrl }, x: 0, y: 0, width: 1, height: 1, printed: false },
     ...(frame.overlayUrl
-      ? [{ kind: 'fixed' as const, id: 'legacy-overlay', role: 'foreground' as const, asset: { assetId: `legacy-overlay:${frame.id}`, url: frame.overlayUrl }, x: 0, y: 0, width: 1, height: 1, printed: true }]
+      ? [{ kind: 'fixed' as const, id: 'legacy-overlay', role: 'foreground' as const, asset: { assetId: `legacy-overlay:${frame.id}`, url: frame.overlayUrl }, x: 0, y: 0, width: 1, height: 1, printed: false }]
       : []),
     ...textSlots.map((s) => ({ kind: 'text' as const, slotId: s.id })),
   ];

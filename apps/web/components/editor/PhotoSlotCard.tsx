@@ -10,7 +10,7 @@ interface PhotoSlotCardProps {
   slotIndex: number;
   totalSlots: number;
   slot?: SlotState;
-  slotRect: GeometryRect;
+  slotRect: GeometryRect & { minDpi?: number; recommendedDpi?: number };
   isActive: boolean;
   isUploading: boolean;
   uploadError?: string | null;
@@ -40,7 +40,7 @@ export function PhotoSlotCard({
 
   const canvasRect = fractionRectToCanvasRect(slotRect, EDITOR_CANVAS_SIZE, EDITOR_CANVAS_SIZE);
   const slotAspectRatio = canvasRect.width / canvasRect.height;
-  const isRedDpi = slot ? dpiTier(slot.effectiveDpi) === 'red' : false;
+  const isRedDpi = slot ? dpiTier(slot.effectiveDpi, slotRect) === 'red' : false;
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -194,7 +194,7 @@ export function PhotoSlotCard({
           </div>
 
           <div className="mt-0.5">
-            <DpiBadge effectiveDpi={slot.effectiveDpi} />
+            <DpiBadge effectiveDpi={slot.effectiveDpi} thresholds={slotRect} />
           </div>
 
           {isRedDpi && isActive && (

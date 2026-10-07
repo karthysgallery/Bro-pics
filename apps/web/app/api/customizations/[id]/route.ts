@@ -3,7 +3,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { findVariantById } from '../../../../lib/variant-lookup';
 import { checkRateLimit } from '../../../../lib/rate-limit';
-import { CustomizationSchema, effectiveDpiFromCropRect, printDimensionsForRotation } from '@bro-pics/shared';
+import { CustomizationSchema } from '@bro-pics/shared';
+import { loadFrameTemplateVersion, serverSlotDpi } from '../../../../lib/server-slot-dpi';
 import type { Customization, Upload } from '@bro-pics/shared';
 
 const MUTABLE_FIELDS = ['transformJson', 'textFieldsJson', 'clipartId', 'previewPath', 'renderStatus'] as const;
@@ -79,9 +80,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!variant) {
       return NextResponse.json({ error: `Unknown variantId: ${existing.variantId}`, code: 'unknown_variant' }, { status: 400 });
     }
-    const rotationDeg = transformJson.rotationDeg;
-    const { printWidthIn, printHeightIn } = printDimensionsForRotation(variant, typeof rotationDeg === 'number' ? rotationDeg : 0);
-    const { effectiveDpi, tier } = effectiveDpiFromCropRect(upload.widthPx, upload.heightPx, cropRect, printWidthIn, printHeightIn);
+    const template = await loadFrameTemplateVersion(db, existing.variantId, existing.templateVersion);
+    const { effectiveDpi, tier } = serverSlotDpi({
+      template,
+      slotIndex: existing.slotIndex,
+      variant,
+      upload,
+      cropRect,
+      rotationDeg: transformJson.rotationDeg,
+    });
     dpiUpdate = { effectiveDpi, dpiBand: tier };
   }
 

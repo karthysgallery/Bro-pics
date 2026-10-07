@@ -37,12 +37,19 @@ describe('legacy FrameTemplate -> v2 template', () => {
     expect(t.photoSlots.map((s) => [s.id, s.x, s.width])).toEqual([['photo_01', 0.1, 0.4], ['photo_02', 0.5, 0.4]]);
   });
 
-  it('preserves the legacy paint order (photos -> frame -> overlay -> text) and keeps the frame in the PRINT file as before', () => {
+  it('preserves the legacy paint order (photos -> frame -> overlay -> text) and keeps the frame and glare OUT of the print', () => {
     expect(t.layers.map((l) => (l.kind === 'fixed' ? l.id : `${l.kind}:${l.slotId}`))).toEqual([
       'photoSlot:photo_01', 'photoSlot:photo_02', 'legacy-frame', 'legacy-overlay', 'text:caption',
     ]);
     const fixed = t.layers.filter((l) => l.kind === 'fixed');
-    expect(fixed.every((l) => l.kind === 'fixed' && l.printed)).toBe(true);
+    expect(fixed.every((l) => l.kind === 'fixed' && !l.printed)).toBe(true);
+  });
+
+  it('prints the template’s printed artwork, between the photos and the frame', () => {
+    const withArt = fromFrameTemplate({ ...legacy, printArtworkUrl: '/art/border.png' }, opts);
+    const art = withArt.layers.find((l) => l.kind === 'fixed' && l.id === 'legacy-print-artwork');
+    expect(art).toMatchObject({ printed: true, role: 'decoration' });
+    expect(withArt.layers.map((l) => (l.kind === 'fixed' ? l.id : l.kind)).indexOf('legacy-print-artwork')).toBe(2);
   });
 
   it('carries text zones over as text slots', () => {

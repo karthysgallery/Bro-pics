@@ -300,6 +300,17 @@ describe('POST /api/customizations', () => {
     expect(body.redConfirmedAt).toBeUndefined();
   });
 
+  it("judges quality at the slot's printed size with the slot's own requirement, from the server's own template", async () => {
+    // 3000px across a 10x10in frame is 300 DPI (green) by default — but this
+    // template's slot asks for at least 320, so the server must say red.
+    mockFrameTemplatesGet.mockResolvedValueOnce({
+      docs: [{ data: () => ({ version: 1, textZones: [], printableRects: [{ slotIndex: 0, x: 0, y: 0, width: 1, height: 1, minDpi: 320, recommendedDpi: 400 }] }) }],
+    });
+    const res = await POST(makeRequest(validBody, 'sess_1'));
+    expect(res.status).toBe(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ dpiBand: 'red', effectiveDpi: 300 }));
+  });
+
   it('returns 429 and does not touch Firestore when rate-limited', async () => {
     mockSet.mockClear();
     vi.mocked(checkRateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 42 });

@@ -35,7 +35,8 @@ vi.mock('firebase-admin/firestore', () => ({
       return { doc: () => ({ get: mockDocGet, set: mockSet }) };
     },
     collectionGroup: () => ({
-      where: () => ({ limit: () => ({ get: mockCollectionGroupGet }) }),
+      // limit().get(): variant lookup; get(): frame-template lookup (none here -> whole-frame fallback).
+      where: () => ({ limit: () => ({ get: mockCollectionGroupGet }), get: async () => ({ docs: [] }) }),
     }),
   }),
 }));

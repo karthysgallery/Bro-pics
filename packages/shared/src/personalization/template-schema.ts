@@ -69,6 +69,9 @@ export const PhotoSlotSchema = z
     /** Optional physical size, for DPI warnings when it differs from canvas*fraction. */
     widthMm: z.number().positive().optional(),
     heightMm: z.number().positive().optional(),
+    /** This slot's own quality requirement at its printed size: warn below recommendedDpi, block below minDpi (defaults 150 / 300). */
+    minDpi: z.number().int().min(72).max(600).optional(),
+    recommendedDpi: z.number().int().min(100).max(1200).optional(),
     /** Customer-facing hint, e.g. "Bride", "Main photo". */
     hint: z.string().optional(),
   })

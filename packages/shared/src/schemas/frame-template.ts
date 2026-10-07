@@ -42,12 +42,25 @@ export const ClipartOptionSchema = z.object({
 
 export type ClipartOption = z.infer<typeof ClipartOptionSchema>;
 
+/** A rectangle as fractions (0-1) of the square editor canvas. */
+export const FractionRectSchema = z.object({ x: fraction, y: fraction, width: fraction, height: fraction });
+
 export const FrameTemplateSchema = z.object({
   id: z.string(),
   variantId: z.string(),
+  // PRESENTATION ONLY — never printed. The frame/lifestyle picture shown
+  // around the customer's photo in the shop (wooden frame, wall, shadows).
   mockupUrl: z.string().min(1),
+  // Shapes the photo inside its slot; applies to the printed photo too.
   maskUrl: z.string().nullable(),
+  // PRESENTATION ONLY — never printed (glass glare, reflections).
   overlayUrl: z.string().nullable(),
+  // PRINTED decorative artwork (printed border, quote background…), drawn in
+  // the same full-canvas coordinates as the mockup. Absent = photos/text only.
+  printArtworkUrl: z.string().min(1).nullable().optional(),
+  // The part of the editor canvas that is physically printed; it is fitted
+  // to the variant's paper size. Absent = the box around all photo slots.
+  printArea: FractionRectSchema.nullable().optional(),
   printableRects: z
     .array(
       z.object({
@@ -63,6 +76,10 @@ export const FrameTemplateSchema = z.object({
         // TextZone's new fields above.
         widthMm: z.number().positive().optional(),
         heightMm: z.number().positive().optional(),
+        // This slot's own quality requirement (see dpiTier): warn below
+        // recommendedDpi, block below minDpi. Unset = 150 / 300.
+        minDpi: z.number().int().min(72).max(600).optional(),
+        recommendedDpi: z.number().int().min(100).max(1200).optional(),
       })
     )
     .min(1),

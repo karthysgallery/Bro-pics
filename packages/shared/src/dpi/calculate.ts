@@ -5,9 +5,22 @@ export interface DpiResult {
   tier: DpiTier;
 }
 
-export function dpiTier(dpi: number): DpiTier {
-  if (dpi >= 300) return 'green';
-  if (dpi >= 150) return 'amber';
+export const DEFAULT_MIN_DPI = 150;
+export const DEFAULT_RECOMMENDED_DPI = 300;
+
+/** A slot's own quality requirement; unset values fall back to the defaults above. */
+export interface DpiThresholds {
+  minDpi?: number;
+  recommendedDpi?: number;
+}
+
+/**
+ * green = sharp at this size, amber = printable but may look slightly soft
+ * (warn), red = genuinely too few pixels (block unless the customer accepts).
+ */
+export function dpiTier(dpi: number, thresholds: DpiThresholds = {}): DpiTier {
+  if (dpi >= (thresholds.recommendedDpi ?? DEFAULT_RECOMMENDED_DPI)) return 'green';
+  if (dpi >= (thresholds.minDpi ?? DEFAULT_MIN_DPI)) return 'amber';
   return 'red';
 }
 
@@ -49,10 +62,11 @@ export function effectiveDpiFromCropRect(
   _uploadHeightPx: number,
   cropRect: { width: number; height: number },
   printWidthIn: number,
-  printHeightIn: number
+  printHeightIn: number,
+  thresholds: DpiThresholds = {}
 ): DpiResult {
   const effectiveDpi = Math.min(cropRect.width / printWidthIn, cropRect.height / printHeightIn);
-  return { effectiveDpi, tier: dpiTier(effectiveDpi) };
+  return { effectiveDpi, tier: dpiTier(effectiveDpi, thresholds) };
 }
 
 /**

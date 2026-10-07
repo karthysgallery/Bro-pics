@@ -32,14 +32,14 @@ export function validateTextFieldsComplete(
  */
 export function validateSlotsComplete(
   slotCount: number,
-  customizationsBySlot: Map<number, { effectiveDpi: number; confirmedLowDpi: boolean }>
+  customizationsBySlot: Map<number, { effectiveDpi: number; confirmedLowDpi: boolean; minDpi?: number; recommendedDpi?: number }>
 ): SlotCompletionResult {
   for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
     const customization = customizationsBySlot.get(slotIndex);
     if (!customization) {
       return { complete: false, reason: `Slot ${slotIndex + 1} has no photo yet` };
     }
-    if (dpiTier(customization.effectiveDpi) === 'red' && !customization.confirmedLowDpi) {
+    if (dpiTier(customization.effectiveDpi, customization) === 'red' && !customization.confirmedLowDpi) {
       return { complete: false, reason: `Slot ${slotIndex + 1} photo DPI is too low for a sharp print` };
     }
   }

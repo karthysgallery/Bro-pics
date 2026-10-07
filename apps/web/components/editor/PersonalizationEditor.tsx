@@ -654,6 +654,7 @@ export function PersonalizationControls({
           slot={editingSlot}
           slotRect={editingSlotRect}
           variant={variant ?? null}
+          template={template}
           onApply={(transform) => {
             onTransformChange(editingSlotIndex!, {
               scale: transform.scale,

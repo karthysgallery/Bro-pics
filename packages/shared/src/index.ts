@@ -41,6 +41,7 @@ export * from './pricing/gst';
 export * from './pricing/coupon-eligibility';
 export * from './dpi/calculate';
 export * from './dpi/derive-print-pixels';
+export * from './print';
 export * from './cart/merge-cart-items';
 export * from './orders/order-number';
 export * from './orders/invoice-number';
