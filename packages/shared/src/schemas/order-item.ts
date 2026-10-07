@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OrderPersonalizationSnapshotSchema } from '../personalization/versioning';
+import { OrderItemComboSchema } from './combo';
 
 export const OrderItemSchema = z.object({
   id: z.string(),
@@ -25,6 +26,10 @@ export const OrderItemSchema = z.object({
   // Structured personalization (template v2 + the customer's state) frozen at purchase. Optional:
   // orders from before the engine, and non-personalized items, simply don't have it.
   personalization: OrderPersonalizationSnapshotSchema.optional(),
+  // Set when this item is one frame of a Combo Offer. Its unitPrice is that frame's share of the
+  // combo price (the shares add up to exactly what was charged), so order totals, GST, invoices
+  // and refunds work from item prices as for any order.
+  combo: OrderItemComboSchema.optional(),
 });
 
 export type OrderItem = z.infer<typeof OrderItemSchema>;

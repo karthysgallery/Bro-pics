@@ -83,3 +83,4 @@ export * from './text-fitting';
 export * from './payments/payment-events';
 export * from './payments/webhook-idempotency';
 export * from './personalization';
+export * from './schemas/combo';

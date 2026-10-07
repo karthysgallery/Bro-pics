@@ -1,3 +1,5 @@
+import type { CartCombo } from '../schemas/combo';
+
 export interface CartLine {
   variantId: string;
   personalizationId: string;
@@ -16,6 +18,10 @@ export interface CartLine {
   // the customer's state — asset IDS and transforms, never image bytes. The server re-verifies it
   // at checkout (lib/personalization-order.ts); here it is only what the cart remembers.
   personalization?: { templateId: string; templateVersion: number; state: unknown };
+  // A Combo Offer is ONE parent line (variantId `combo:<comboId>`, qty 1, personalizationId = this
+  // combo instance) that keeps every included frame's own variant, personalization and uploads. It
+  // is expanded into ordinary per-frame order items on the server at checkout.
+  combo?: CartCombo;
 }
 
 function lineKey(line: CartLine): string {

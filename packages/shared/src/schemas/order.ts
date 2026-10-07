@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OrderComboSchema } from './combo';
 
 // Same-day is deliberately not an option — see checkout-calc.ts's
 // DELIVERY_METHODS comment for why (every order needs its own production
@@ -74,6 +75,9 @@ export const OrderSchema = z
     // subcollection. Optional so an order placed before this field
     // existed still parses.
     productIds: z.array(z.string()).optional(),
+    // Combo Offers bought in this order (one entry per combo line); their frames are the order
+    // items carrying a matching `combo.instanceId`. Optional: most orders have none.
+    combos: z.array(OrderComboSchema).optional(),
     // One per checkout attempt (generated client-side, stable across
     // retries of that same attempt) — lets create-order detect a
     // double-click/retried request and return the existing order instead
