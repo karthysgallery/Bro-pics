@@ -1,0 +1,6 @@
+# Source uploaded for the website build (gcloud builds submit from the repo root).
+#!include:.gitignore
+#!include:.dockerignore
+.git
+.github
+apps/web/public/placeholders/products/test_high_res_photo.jpg

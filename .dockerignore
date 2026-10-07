@@ -11,3 +11,4 @@ docs
 **/*.test.ts
 **/*.test.tsx
 PRODUCTION_READINESS_AUDIT.md
+apps/web/public/placeholders/products/test_high_res_photo.jpg
