@@ -81,6 +81,7 @@ export function AddressPicker({ userId, onSelect, onSelectAddress }: AddressPick
                 {TYPE_LABEL[address.type]}
               </span>
             )}
+            {address.recipientName ? <strong className="font-semibold text-ink">{address.recipientName} · </strong> : ''}
             {address.label ? <strong className="font-semibold text-ink">{address.label} — </strong> : ''}
             {address.line1}, {address.city}, {address.state} {address.pincode}
           </span>

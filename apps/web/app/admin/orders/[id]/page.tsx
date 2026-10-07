@@ -259,6 +259,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
   }
 
   const address = order.addressJson as {
+    recipientName?: string | null;
     label?: string | null;
     phone?: string;
     line1?: string;
@@ -661,7 +662,10 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
             </h2>
 
             <div className="space-y-1 text-ink/80">
-              <span className="font-bold text-ink block">{order.customerName || 'Customer'}</span>
+              <span className="font-bold text-ink block">{address?.recipientName || order.customerName || 'Customer'}</span>
+              {address?.recipientName && order.customerName && address.recipientName !== order.customerName && (
+                <span className="block text-2xs text-ink/60">Gift — ordered by {order.customerName}</span>
+              )}
               <span className="block font-mono text-2xs">{address?.phone || 'No phone'}</span>
               <p className="pt-1 text-2xs text-ink/70">
                 {address?.line1}

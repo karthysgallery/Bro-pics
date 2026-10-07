@@ -1,4 +1,4 @@
-import type { Rect, RotationDeg } from '@bro-pics/shared';
+import { EDITOR_CANVAS_SIZE, type Rect, type RotationDeg } from '@bro-pics/shared';
 import { renderPrintFile } from './render-print-file';
 import { renderTemplate, type AssetLoader } from './render-template';
 import type { OrderPersonalizationSnapshot } from '@bro-pics/shared';
@@ -214,9 +214,16 @@ export async function renderPrintJob(deps: RenderJobDependencies, jobId: string)
             .filter((f): f is NonNullable<typeof f> => f !== null)
         : undefined;
 
+    // The customer designed on the square editor canvas, and every rect
+    // (slots, text, mockup) is a fraction of THAT square. Rendering straight
+    // into the frame's 2:3 print size stretched the whole design, photo
+    // included, by 1.5x. Keep the square, enlarged to the print resolution
+    // the same way template-v2 jobs are (printScale).
+    const legacyCanvas = { width: EDITOR_CANVAS_SIZE, height: EDITOR_CANVAS_SIZE };
+    const printSidePx = Math.round(EDITOR_CANVAS_SIZE * printScale(legacyCanvas, variant));
     const printBuffer = await renderPrintFile({
-      printWidthPx: variant.printWidthPx,
-      printHeightPx: variant.printHeightPx,
+      printWidthPx: printSidePx,
+      printHeightPx: printSidePx,
       slots,
       mockupBuffer,
       overlayBuffer,

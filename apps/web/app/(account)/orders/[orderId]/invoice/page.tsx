@@ -144,7 +144,7 @@ export default function InvoicePage({ params }: InvoicePageProps) {
             <p className="text-2xs font-bold uppercase tracking-wider text-ink/50 mb-1">BILL TO / SHIP TO</p>
             {address ? (
               <>
-                <p className="text-xs font-semibold text-ink">{order.customerName || address.label || 'Recipient'}</p>
+                <p className="text-xs font-semibold text-ink">{address.recipientName || order.customerName || address.label || 'Recipient'}</p>
                 <p className="text-xs text-ink/70">
                   {address.line1}{address.line2 ? `, ${address.line2}` : ''}
                 </p>

@@ -140,6 +140,7 @@ export default function AddressesPage() {
                         {ADDRESS_TYPE_LABEL[address.type]}
                       </span>
                     )}
+                    {address.recipientName && <p className="text-xs font-semibold text-ink mb-1">{address.recipientName}</p>}
                     <p className="text-xs text-ink/80 font-medium mb-1">
                       {address.line1}{address.line2 ? `, ${address.line2}` : ''}
                     </p>

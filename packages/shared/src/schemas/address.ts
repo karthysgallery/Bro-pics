@@ -5,6 +5,10 @@ export const AddressTypeSchema = z.enum(['home', 'work', 'other']);
 
 export const AddressSchema = z.object({
   id: z.string(),
+  // Who receives the parcel (printed on the courier label). Optional so
+  // addresses saved before it existed still parse; the address form makes
+  // it required for anything new.
+  recipientName: z.string().trim().max(80).nullable().optional(),
   label: z.string().nullable(),
   line1: z.string().min(1),
   line2: z.string().nullable(),

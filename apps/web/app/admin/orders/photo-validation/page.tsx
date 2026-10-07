@@ -41,7 +41,7 @@ export default function PhotoValidationQueuePage() {
         const items = (json.orders || []).map((o: any) => ({
           id: o.id,
           orderNo: o.orderNo || o.id.slice(0, 8),
-          customerName: o.addressJson?.name || o.customerName || 'Customer',
+          customerName: o.addressJson?.recipientName || o.customerName || 'Customer',
           customerPhone: o.addressJson?.phone || o.customerPhone || '—',
           total: o.total || 149900,
           placedAt: o.placedAt || o.createdAt,

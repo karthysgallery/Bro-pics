@@ -18,6 +18,7 @@ describe('AddressForm', () => {
     const onSaved = vi.fn();
     render(<AddressForm userId="user_1" onSaved={onSaved} />);
 
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Priya Iyer' } });
     fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
     fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
     fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
@@ -27,8 +28,31 @@ describe('AddressForm', () => {
 
     await waitFor(() => expect(mockSetDoc).toHaveBeenCalled());
     expect(onSaved).toHaveBeenCalledWith(
-      expect.objectContaining({ line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001' })
+      expect.objectContaining({ recipientName: 'Priya Iyer', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001' })
     );
+  });
+
+  it('asks for the name of the person receiving the parcel', async () => {
+    const onSaved = vi.fn();
+    render(<AddressForm userId="user_1" onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
+    fireEvent.change(screen.getByLabelText('Pincode'), { target: { value: '600001' } });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+919876543210' } });
+    fireEvent.click(screen.getByText('Save address'));
+    expect(await screen.findByText('Enter the name of the person receiving the parcel.')).toBeInTheDocument();
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  it("starts the name with the account holder's name, which can be changed for a gift", async () => {
+    const { AuthContext } = await import('../../lib/auth-context');
+    render(
+      <AuthContext.Provider value={{ user: { uid: 'user_1', displayName: 'Karthik' } as never, loading: false, signOut: vi.fn() }}>
+        <AddressForm userId="user_1" onSaved={vi.fn()} />
+      </AuthContext.Provider>
+    );
+    expect(screen.getByLabelText('Full name')).toHaveValue('Karthik');
   });
 
   it('does not submit when a required field is empty', async () => {
@@ -42,6 +66,7 @@ describe('AddressForm', () => {
   it("[FE-35] rejects a pincode starting with 9 (reserved for army postal service, never a real deliverable address)", async () => {
     const onSaved = vi.fn();
     render(<AddressForm userId="user_1" onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Priya Iyer' } });
     fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
     fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
     fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
@@ -56,6 +81,7 @@ describe('AddressForm', () => {
   it('[FE-35] makes the first address a customer ever saves the default automatically', async () => {
     const onSaved = vi.fn();
     render(<AddressForm userId="user_1" onSaved={onSaved} isFirstAddress />);
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Priya Iyer' } });
     fireEvent.change(screen.getByLabelText('Address line 1'), { target: { value: '12 MG Road' } });
     fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Chennai' } });
     fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Tamil Nadu' } });
@@ -68,7 +94,7 @@ describe('AddressForm', () => {
 
   it('[FE-35] does not make a second address default just because isFirstAddress was passed by mistake for an edit', async () => {
     const existingAddress = {
-      id: 'addr_1', label: null, line1: '12 MG Road', line2: null, city: 'Chennai', state: 'Tamil Nadu',
+      id: 'addr_1', recipientName: 'Priya Iyer', label: null, line1: '12 MG Road', line2: null, city: 'Chennai', state: 'Tamil Nadu',
       pincode: '600001', phone: '+919876543210', isDefault: false, type: null, country: 'India', deliveryInstructions: null,
     };
     const onSaved = vi.fn();
@@ -77,8 +103,8 @@ describe('AddressForm', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ isDefault: false })));
   });
 
-  function fillValid(overrides: Partial<Record<'Address line 1' | 'City' | 'State' | 'Pincode' | 'Phone', string>> = {}) {
-    const values = { 'Address line 1': '12 MG Road', City: 'Chennai', State: 'Tamil Nadu', Pincode: '600001', Phone: '98765 43210', ...overrides };
+  function fillValid(overrides: Partial<Record<'Full name' | 'Address line 1' | 'City' | 'State' | 'Pincode' | 'Phone', string>> = {}) {
+    const values = { 'Full name': 'Priya Iyer', 'Address line 1': '12 MG Road', City: 'Chennai', State: 'Tamil Nadu', Pincode: '600001', Phone: '98765 43210', ...overrides };
     for (const [label, value] of Object.entries(values)) {
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
     }

@@ -113,6 +113,7 @@ const PAYMENT_STATUS_LABEL: Record<Order['paymentStatus'], string> = {
 };
 
 interface StoredAddress {
+  recipientName?: string | null;
   label?: string | null;
   line1?: string;
   line2?: string | null;
@@ -676,7 +677,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             const address = order.addressJson as StoredAddress | undefined;
             return (
               <div className="space-y-1 text-xs text-ink/80 mb-6">
-                <p className="font-bold text-ink">{order.customerName || user.displayName || 'Customer'}</p>
+                <p className="font-bold text-ink">{address?.recipientName || order.customerName || user.displayName || 'Customer'}</p>
                 {address?.line1 && (
                   <p>
                     {address.line1}

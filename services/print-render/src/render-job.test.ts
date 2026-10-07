@@ -46,6 +46,16 @@ async function makeDeps(overrides: Partial<RenderJobDependencies> = {}): Promise
 }
 
 describe('renderPrintJob', () => {
+  it('keeps the square design undistorted for a 2:3 frame (no stretching to the frame shape)', async () => {
+    const deps = await makeDeps({ getVariant: vi.fn().mockResolvedValue({ printWidthPx: 600, printHeightPx: 900 }) });
+
+    await renderPrintJob(deps, 'order_1_item_1');
+
+    const buffer = (deps.uploadPrintFile as ReturnType<typeof vi.fn>).mock.calls[0]![3] as Buffer;
+    const { width, height } = await sharp(buffer).metadata();
+    expect({ width, height }).toEqual({ width: 600, height: 600 });
+  });
+
   it('leases, renders, uploads, and completes on the happy path', async () => {
     const deps = await makeDeps();
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { getFirestore, doc, collection, setDoc } from 'firebase/firestore';
 import { AddressSchema, type Address, type AddressType } from '@bro-pics/shared';
 import { getFirebaseApp } from '../../lib/firebase-client';
 import { INDIAN_STATES_AND_UTS } from '../../lib/indian-states';
+import { AuthContext } from '../../lib/auth-context';
 
 interface AddressFormProps {
   userId: string;
@@ -25,7 +26,7 @@ const TYPE_OPTIONS: Array<{ value: AddressType; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
-type FieldName = 'line1' | 'city' | 'state' | 'pincode' | 'phone';
+type FieldName = 'recipientName' | 'line1' | 'city' | 'state' | 'pincode' | 'phone';
 
 // Indian mobile numbers: 10 digits starting 6-9, optionally written with +91 / 91 / 0.
 // Stored normalised as +91XXXXXXXXXX so every address looks the same to couriers.
@@ -39,6 +40,9 @@ const inputClass = (invalid: boolean) =>
   `rounded-md border px-3 py-2 text-base sm:text-sm text-ink ${invalid ? 'border-alert' : 'border-line'}`;
 
 export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirstAddress = false }: AddressFormProps) {
+  // Defaults to the account's own name; changed when the order is a gift.
+  const accountName = useContext(AuthContext)?.user?.displayName ?? '';
+  const [recipientName, setRecipientName] = useState(existingAddress?.recipientName ?? (existingAddress ? '' : accountName));
   const [line1, setLine1] = useState(existingAddress?.line1 ?? '');
   const [line2, setLine2] = useState(existingAddress?.line2 ?? '');
   const [city, setCity] = useState(existingAddress?.city ?? '');
@@ -63,6 +67,7 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
     setError(null);
 
     const errors: Partial<Record<FieldName, string>> = {};
+    if (recipientName.trim().length < 2) errors.recipientName = 'Enter the name of the person receiving the parcel.';
     if (!line1.trim()) errors.line1 = 'Enter your house/flat number and street.';
     if (!city.trim()) errors.city = 'Enter your city or town.';
     if (!state.trim()) errors.state = 'Choose your state.';
@@ -78,6 +83,7 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
 
     const candidate = {
       id: addressId,
+      recipientName: recipientName.trim() || null,
       label: label.trim() || null,
       line1: line1.trim(),
       line2: line2.trim() || null,
@@ -129,6 +135,19 @@ export function AddressForm({ userId, onSaved, onCancel, existingAddress, isFirs
 
   return (
     <div className="flex flex-col gap-3">
+      <label htmlFor="address-recipientName" className="text-sm font-medium text-ink">Full name</label>
+      <input
+        id="address-recipientName"
+        value={recipientName}
+        onChange={(e) => setRecipientName(e.target.value)}
+        autoComplete="name"
+        maxLength={80}
+        className={inputClass(Boolean(fieldErrors.recipientName))}
+        {...errorProps('recipientName')}
+      />
+      <p className="text-xs text-ink/60 -mt-2">Who will receive the parcel. Sending a gift? Use their name.</p>
+      {fieldError('recipientName')}
+
       <span className="text-sm font-medium text-ink">Address type (optional)</span>
       <div className="flex gap-2" role="group" aria-label="Address type">
         {TYPE_OPTIONS.map((option) => (
