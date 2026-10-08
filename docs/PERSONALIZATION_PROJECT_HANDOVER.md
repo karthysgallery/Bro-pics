@@ -4,9 +4,18 @@ Updated 2026-10-08 (code at commit `0ddab07`, local only: nothing is pushed to `
 Earlier detail: `docs/PERSONALIZATION_ENGINE_PROGRESS.md` (engine phases, file map, verify commands).
 
 ## Freeze (owner instruction, 2026-10-08)
-Implementation is FROZEN at commit `0ddab07`. Do not push to `master`, do not deploy anything (Cloud Run, functions, print service, rules), do not change DNS, do not enable production mode. Only this documentation is maintained until the owner supplies the missing inputs below and starts the final go-live sequence.
+Implementation was FROZEN at commit `0ddab07`; the owner then approved two scoped changes (admin Files box, SEO) — everything else stays frozen. Do not push to `master`, do not deploy anything (Cloud Run, functions, print service, rules), do not change DNS, do not enable production mode. Only this documentation is maintained until the owner supplies the missing inputs below and starts the final go-live sequence.
 
 **Awaiting from the owner:** the product-in-motion / reels video files; production credentials (WhatsApp OTP, Razorpay live keys + webhook secret); decisions on rules deployment, DNS and the `master` push.
+
+## SEO (added 2026-10-08) — full detail in `docs/SEO_IMPLEMENTATION.md` and `docs/SEO_LAUNCH_GUIDE.md`
+Architecture: Product DB → SEO generator (`lib/seo/product-seo.ts`) → SSR metadata + JSON-LD (`lib/structured-data.ts`, ProductGroup with per-variant offers) → canonical URL (`lib/seo/site.ts`, always https://karthysgallery.in) → sitemap index + product/category/page/combo/image sitemaps (route handlers, revalidated on every admin change) → Search Console → Merchant feed (`/feeds/google-merchant.xml`) → Merchant Center.
+Status: BUILT + TESTED on a production build against the emulators (`pnpm --filter @bro-pics/web seo:audit -- --base <url> --db` → PASS 52 / WARN 10 / FAIL 0; warnings = short seed meta descriptions). Real 404s (global loading skeleton scoped away from SEO pages), cached product pages (ISR), 308 redirects for renamed products (`slugHistory`), noindex headers for private routes, admin "Search status".
+NOT BUILT: GA4 (needs Measurement ID + consent decision), return-policy structured data (needs policy data), content guides. NOT TESTED: Rich Results Test, URL Inspection, Merchant acceptance, Core Web Vitals (all need the live domain).
+Go-live gate: `seo:audit --base https://karthysgallery.in --db --expect-production` must show 0 FAIL. Preview mode (noindex) is still ON; nothing pushed or deployed.
+
+## Files Box (admin order page, 2026-10-08)
+Each order item shows Preview, each original photo and the print-ready file (with print-job state and "Render again"), plus a per-order zip (`/api/admin/orders/[id]/files-zip`). Download route accepts `?upload=` and verifies the photo belongs to the item.
 
 ## What exists
 - **Template engine (v2):** schema, validation, geometry, state, completeness, versioning, mockup scenes, legacy adapter — `packages/shared/src/personalization/`. Collage templates are created in `/admin/personalization-templates`, linked to a product or size, and give shoppers the multi-photo editor (`components/customizer/`).
