@@ -136,6 +136,28 @@ export async function uploadPhoto(file: File, ctx: UploadContext, fetchImpl: typ
   }
 }
 
+/**
+ * Asks the server for the background-removed copy of an uploaded photo (for a
+ * "cut out" photo space). Returns the copy's upload; when the photo is already
+ * a cut-out, the same upload comes back.
+ */
+export async function requestCutout(uploadId: string, ctx: Omit<UploadContext, 'variantId'>, fetchImpl: typeof fetch = fetch): Promise<UploadedPhoto> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`/api/uploads/${encodeURIComponent(uploadId)}/cutout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': ctx.sessionId, ...(ctx.authToken && { Authorization: `Bearer ${ctx.authToken}` }) },
+      body: '{}',
+    });
+  } catch {
+    throw new PhotoError('cutout_failed', 'The background could not be removed (no connection), so your photo is used as it is.');
+  }
+  const body = (await res.json().catch(() => ({}))) as { uploadId?: string; widthPx?: number; heightPx?: number; code?: string };
+  if (res.ok && body.uploadId && body.widthPx && body.heightPx) return { id: body.uploadId, width: body.widthPx, height: body.heightPx };
+  if (body.code === 'no_subject') throw new PhotoError('no_subject', 'No people were found in this photo, so its background was kept.');
+  throw new PhotoError('cutout_failed', 'The background could not be removed right now, so your photo is used as it is.');
+}
+
 /** Runs async jobs a few at a time, in the order they were queued. */
 export function createTaskQueue(concurrency = 3) {
   let running = 0;

@@ -74,6 +74,12 @@ export const PhotoSlotSchema = z
     recommendedDpi: z.number().int().min(100).max(1200).optional(),
     /** Customer-facing hint, e.g. "Bride", "Main photo". */
     hint: z.string().optional(),
+    /**
+     * Cut the people out of the customer's photo (its background becomes
+     * transparent), e.g. a couple standing over a mosaic of small photos.
+     * The editor swaps in the cut-out copy; renderers just draw a photo with alpha.
+     */
+    removeBackground: z.boolean().optional(),
   })
   .refine((slot) => slot.width > 0 && slot.height > 0, { message: 'slot width/height must be > 0' });
 export type PhotoSlot = z.infer<typeof PhotoSlotSchema>;

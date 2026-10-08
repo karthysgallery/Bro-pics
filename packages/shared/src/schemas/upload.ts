@@ -19,6 +19,10 @@ export const UploadSchema = z.object({
   // candidate until a future backfill (same pattern as BE-05a's
   // storage-path migration) gives it one.
   createdAt: z.date().optional(),
+  /** This upload is a background-removed copy (transparent PNG) of that upload. */
+  cutoutOf: z.string().min(1).optional(),
+  /** The background-removed copy of this upload, once one has been made (reused, never made twice). */
+  cutoutUploadId: z.string().min(1).optional(),
 });
 
 export type Upload = z.infer<typeof UploadSchema>;

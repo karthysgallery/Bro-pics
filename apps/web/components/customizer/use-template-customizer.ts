@@ -28,8 +28,8 @@ import { resolveFontFamilyForCanvas } from '../../lib/text-personalization-optio
 import { templateAssetSrc } from './asset-src';
 import { useImageCache, type ImageCache } from './image-cache';
 import { usePhotoSources, type PhotoSources } from './use-photo-sources';
-import { createTaskQueue, prepareLocalPhoto, PhotoError, uploadPhoto, type UploadedPhoto } from './photo-files';
-import { planPhotoTargets } from './state-carry';
+import { createTaskQueue, prepareLocalPhoto, PhotoError, requestCutout, uploadPhoto, type UploadedPhoto } from './photo-files';
+import { planPhotoTargets, repeatPhotosIntoEmpty } from './state-carry';
 import { renderToDataUrl, requiredImageSources, fontKeyOf } from './render-template';
 import { loadTemplateDraft, saveTemplateDraft, hasContent, clearTemplateDraft } from './draft-store';
 
@@ -48,6 +48,8 @@ export interface CustomizerOptions {
 
 export interface SlotActivity {
   uploading: boolean;
+  /** What is happening while busy, when it is more than an upload (e.g. removing the background). */
+  working?: string;
   error?: string;
 }
 
@@ -205,6 +207,42 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     [apply, enqueue, photos, rewriteEverywhere, setSlotActivity]
   );
 
+  // --- Cut-outs: photo spaces whose photo has its background removed --------
+
+  /** Uploaded photos already sent for (or returned by) background removal. */
+  const cutoutChecked = useRef(new Set<string>());
+  useEffect(() => {
+    for (const slot of template.photoSlots) {
+      if (!slot.removeBackground) continue;
+      const photo = state.slots[slot.id];
+      if (!photo || photo.assetId.startsWith('local:') || cutoutChecked.current.has(photo.assetId)) continue;
+      const original = photo.assetId;
+      cutoutChecked.current.add(original);
+      setSlotActivity(slot.id, { uploading: true, working: 'Removing the background…' });
+      const job = (async () => {
+        const opts = optionsRef.current;
+        try {
+          const cut = await requestCutout(original, { sessionId: opts.sessionId(), authToken: await opts.authToken().catch(() => null) });
+          cutoutChecked.current.add(cut.id);
+          if (cut.id !== original) {
+            photos.ensure([cut.id]);
+            // Same picture, same framing: only the asset (and its size, if it was capped) changes.
+            rewriteEverywhere((p) => (p.assetId === original ? { ...p, assetId: cut.id, width: cut.width, height: cut.height } : p));
+          }
+          setSlotActivity(slot.id, null);
+          return true;
+        } catch (err) {
+          setSlotActivity(slot.id, { uploading: false, error: err instanceof PhotoError ? err.message : 'The background could not be removed, so your photo is used as it is.' });
+          // The photo itself is fine: the order can go ahead with it as it is.
+          return true;
+        } finally {
+          pending.current.delete(`cutout:${original}`);
+        }
+      })();
+      pending.current.set(`cutout:${original}`, job);
+    }
+  }, [template.photoSlots, state.slots, photos, rewriteEverywhere, setSlotActivity]);
+
   /** Adds photos: the chosen slot first, then every empty slot in order. */
   const addPhotos = useCallback(
     (files: File[], preferredSlotId?: string | null) => {
@@ -224,6 +262,12 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
   );
 
   const removePhoto = useCallback((slotId: string) => apply((s) => clearSlot(s, slotId)), [apply]);
+  /** Fills empty spaces by repeating the photos already in the design. Returns how many were filled. */
+  const repeatPhotos = useCallback(() => {
+    const { state: next, filled } = repeatPhotosIntoEmpty(template, stateRef.current);
+    if (filled > 0) apply(() => next);
+    return filled;
+  }, [apply, template]);
   const rotatePhoto = useCallback(
     (slotId: string) =>
       apply((s) => {
@@ -395,8 +439,15 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
 
   /** Waits for photos still uploading. False if any failed (the slot is then empty again). */
   const waitForUploads = useCallback(async (): Promise<boolean> => {
-    const results = await Promise.all([...pending.current.values()]);
-    return results.every(Boolean) && !Object.values(stateRef.current.slots).some((p) => p.assetId.startsWith('local:'));
+    let ok = true;
+    // A finished upload can start a background removal on the next render, so keep
+    // waiting until nothing is in flight.
+    for (let round = 0; round < 10 && (round === 0 || pending.current.size > 0); round++) {
+      const results = await Promise.all([...pending.current.values()]);
+      ok = ok && results.every(Boolean);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return ok && !Object.values(stateRef.current.slots).some((p) => p.assetId.startsWith('local:'));
   }, []);
 
   /** Loads a whole design (a cart line being edited) as the new starting point. */
@@ -439,6 +490,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     redo,
     addPhotos,
     removePhoto,
+    repeatPhotos,
     rotatePhoto,
     resetPhoto,
     panPhoto,

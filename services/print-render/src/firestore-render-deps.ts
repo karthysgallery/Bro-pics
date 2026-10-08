@@ -8,6 +8,8 @@ import { OrderPersonalizationSnapshotSchema, type FrameTemplate, type Variant } 
 import { leasePrintJob, failPrintJob, completePrintJobAndAdvanceOrder } from '@bro-pics/shared/src/print-jobs/print-jobs';
 import { getAdminApp } from './firebase-admin';
 import type { RenderJobDependencies } from './render-job';
+import type { CutoutDependencies, CutoutUploadRecord } from './cutout-job';
+import { removeBackground } from './background-removal';
 
 /**
  * The real Firestore/Storage-backed implementation of RenderJobDependencies
@@ -160,3 +162,32 @@ export function buildFirestoreRenderDeps(): RenderJobDependencies {
 }
 
 export type { Firestore };
+
+/** Firestore/Storage wiring for background removal (see cutout-job.ts). */
+export function buildFirestoreCutoutDeps(): CutoutDependencies {
+  const app = getAdminApp();
+  const db = getFirestore(app);
+  const bucket = getStorage(app).bucket();
+  return {
+    async getUpload(uploadId) {
+      const snap = await db.collection('uploads').doc(uploadId).get();
+      return snap.exists ? ({ id: snap.id, ...(snap.data() as Omit<CutoutUploadRecord, 'id'>) } as CutoutUploadRecord) : null;
+    },
+    async download(path) {
+      const [buffer] = await bucket.file(path).download();
+      return buffer;
+    },
+    async saveFile(path, data, contentType) {
+      await bucket.file(path).save(data, { contentType, resumable: false });
+    },
+    newUploadId: () => db.collection('uploads').doc().id,
+    async createUpload(record) {
+      await db.collection('uploads').doc(String(record.id)).create(record);
+    },
+    async linkCutout(originalId, cutoutId) {
+      await db.collection('uploads').doc(originalId).update({ cutoutUploadId: cutoutId });
+    },
+    removeBackground,
+    now: () => new Date(),
+  };
+}

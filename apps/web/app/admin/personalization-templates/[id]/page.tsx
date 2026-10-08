@@ -8,10 +8,12 @@ import { ConfirmModal } from '../../../../components/admin/AdminModal';
 import { useAdminApi } from '../../../../components/admin/template-builder/use-admin-api';
 import { TemplateStage, type SamplePhoto, type SpaceKind } from '../../../../components/admin/template-builder/TemplateStage';
 import { CalendarSlotInspector, PhotoSlotInspector, TextSlotInspector } from '../../../../components/admin/template-builder/SlotInspector';
+import { PhotoGridForm } from '../../../../components/admin/template-builder/PhotoGridForm';
 import { ProductLinks } from '../../../../components/admin/template-builder/ProductLinks';
 import {
   DETECTION_NOTES_KEY,
   addCalendarSlot,
+  addPhotoGrid,
   addPhotoSlot,
   addTextSlot,
   artworkAbovePhotos,
@@ -375,6 +377,14 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
                 </button>
               )}
             </div>
+            {editable && (
+              <PhotoGridForm
+                onAdd={(options) => {
+                  const added = addPhotoGrid(draft, options);
+                  if (added.ids.length > 0) setDraft(added.template);
+                }}
+              />
+            )}
             {draft.photoSlots.length === 0 ? (
               <p className="text-xs text-ink/60">No photo spaces yet.</p>
             ) : (

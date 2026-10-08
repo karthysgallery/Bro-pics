@@ -19,6 +19,9 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 COPY lib ./lib
 COPY fonts ./fonts
+# Background-removal model (BiRefNet-lite, MIT). Fetched and checksum-verified by
+# `pnpm --filter @bro-pics/print-render fetch-model` before the image is built.
+COPY models ./models
 # The SVG renderer (librsvg) ignores @font-face and finds fonts only through
 # fontconfig, so the bundled fonts must also be installed where fontconfig
 # looks. Without this, customer text prints in a default system font.

@@ -32,3 +32,6 @@ test-results/
 
 # Browser-automation tool output
 .playwright-mcp/
+
+# Background-removal model (fetched by services/print-render: pnpm fetch-model)
+services/print-render/models/*.onnx

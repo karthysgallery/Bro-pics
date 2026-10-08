@@ -58,3 +58,28 @@ export function planPhotoTargets(
   }
   return { targets: targets.slice(0, count), overflow: Math.max(0, count - targets.length) };
 }
+
+/**
+ * Fills the empty photo spaces by repeating the customer's photos in turn
+ * (a mosaic with more spaces than photos). Cut-out spaces are neither a
+ * source nor a target: a cut-out belongs only where the design asked for one.
+ * Photos still uploading are not repeated.
+ */
+export function repeatPhotosIntoEmpty(template: Pick<PersonalizationTemplate, 'photoSlots'>, state: PersonalizationState): { state: PersonalizationState; filled: number } {
+  const regular = template.photoSlots.filter((s) => !s.removeBackground);
+  const seen = new Set<string>();
+  const sources = regular
+    .map((s) => state.slots[s.id])
+    .filter((p): p is NonNullable<typeof p> => p !== undefined && !p.assetId.startsWith('local:'))
+    .filter((p) => (seen.has(p.assetId) ? false : (seen.add(p.assetId), true)));
+  if (sources.length === 0) return { state, filled: 0 };
+  const slots = { ...state.slots };
+  let filled = 0;
+  for (const slot of regular) {
+    if (slots[slot.id]) continue;
+    const photo = sources[filled % sources.length]!;
+    slots[slot.id] = { ...photo, transform: { scale: 1, offsetX: 0, offsetY: 0 }, confirmedLowDpi: false };
+    filled++;
+  }
+  return filled === 0 ? { state, filled } : { state: { ...state, slots }, filled };
+}

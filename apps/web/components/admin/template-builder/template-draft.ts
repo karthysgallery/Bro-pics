@@ -58,7 +58,71 @@ export function addCalendarSlot(t: PersonalizationTemplate): { template: Persona
 }
 
 export function updatePhotoSlot(t: PersonalizationTemplate, id: string, patch: SlotPatch): PersonalizationTemplate {
-  return { ...t, photoSlots: t.photoSlots.map((s) => (s.id === id ? clampBox({ ...s, ...patch }) : s)) };
+  const next = { ...t, photoSlots: t.photoSlots.map((s) => (s.id === id ? clampBox({ ...s, ...patch }) : s)) };
+  return patch.removeBackground ? raisePhotoLayer(next, id) : next;
+}
+
+/** Paints a photo space above every other photo space (a cut-out over a mosaic), still under artwork on top and text. */
+export function raisePhotoLayer(t: PersonalizationTemplate, id: string): PersonalizationTemplate {
+  const from = t.layers.findIndex((l) => l.kind === 'photoSlot' && l.slotId === id);
+  if (from < 0) return t;
+  const layers = [...t.layers];
+  const [layer] = layers.splice(from, 1);
+  const lastPhoto = layers.map((l) => l.kind).lastIndexOf('photoSlot');
+  layers.splice(lastPhoto + 1, 0, layer!);
+  return { ...t, layers };
+}
+
+export interface PhotoGridOptions {
+  columns: number;
+  rows: number;
+  /** Space between photos, as a fraction of the design's width. */
+  gap: number;
+  /** Area the grid fills, as fractions of the design (default: all of it). */
+  area?: { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * A grid of small photo spaces (a mosaic background), added UNDER the
+ * existing photos so a main photo — often a cut-out — stays on top. The
+ * spaces are optional: empty ones can be filled by repeating the customer's
+ * photos, and are otherwise simply left out of the print.
+ */
+export function addPhotoGrid(t: PersonalizationTemplate, options: PhotoGridOptions): { template: PersonalizationTemplate; ids: string[] } {
+  const columns = Math.max(1, Math.min(30, Math.round(options.columns)));
+  const rows = Math.max(1, Math.min(30, Math.round(options.rows)));
+  const area = options.area ?? { x: 0, y: 0, width: 1, height: 1 };
+  const aspect = t.canvas.width / t.canvas.height;
+  const gapX = Math.max(0, options.gap);
+  const gapY = gapX * aspect;
+  const cellW = (area.width - gapX * (columns + 1)) / columns;
+  const cellH = (area.height - gapY * (rows + 1)) / rows;
+  if (cellW <= 0.005 || cellH <= 0.005) return { template: t, ids: [] };
+  const taken = allSlotIds(t);
+  const slots: PhotoSlot[] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < columns; c++) {
+      const id = nextId([...taken, ...slots.map((s) => s.id)], 'photo_');
+      slots.push({
+        id,
+        label: `Mosaic ${slots.length + 1}`,
+        required: false,
+        x: round4(area.x + gapX + c * (cellW + gapX)),
+        y: round4(area.y + gapY + r * (cellH + gapY)),
+        width: round4(cellW),
+        height: round4(cellH),
+        rotationDeg: 0,
+        shape: 'rect',
+        fit: 'cover',
+      });
+    }
+  const layers = [...t.layers];
+  const firstPhoto = layers.findIndex((l) => l.kind === 'photoSlot');
+  const firstAbove = layers.findIndex((l) => (l.kind === 'fixed' && l.role !== 'background') || l.kind === 'text' || l.kind === 'calendar');
+  const at = firstPhoto >= 0 ? firstPhoto : firstAbove === -1 ? layers.length : firstAbove;
+  layers.splice(at, 0, ...slots.map((s) => ({ kind: 'photoSlot' as const, slotId: s.id })));
+  // Fill order: the existing (main) photos first, then the mosaic.
+  return { template: { ...t, photoSlots: [...t.photoSlots, ...slots], layers }, ids: slots.map((s) => s.id) };
 }
 
 export function updateTextSlot(t: PersonalizationTemplate, id: string, patch: TextPatch): PersonalizationTemplate {

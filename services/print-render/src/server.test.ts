@@ -97,3 +97,30 @@ async function tinyPng(): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
   return sharp(Buffer.alloc(4 * 4 * 4), { raw: { width: 4, height: 4, channels: 4 } }).png().toBuffer();
 }
+
+describe('POST /cutout/:uploadId', () => {
+  const cutoutDeps = (removeBackground = vi.fn(async () => ({ png: Buffer.from('png'), width: 10, height: 10, subjectShare: 0.4 }))) => ({
+    getUpload: vi.fn(async (id: string) => (id === 'up_1' ? { id, sessionId: 's', originalPath: 'uploads/s/up_1/original.jpg', widthPx: 10, heightPx: 10, status: 'ready' as const } : null)),
+    download: vi.fn(async () => Buffer.from('x')),
+    saveFile: vi.fn(async () => undefined),
+    newUploadId: () => 'cut_1',
+    createUpload: vi.fn(async () => undefined),
+    linkCutout: vi.fn(async () => undefined),
+    removeBackground,
+    now: () => new Date(),
+  });
+
+  it('returns the new upload, 404 for an unknown photo and 400 for a bad id', async () => {
+    const app = createServer(makeDeps(), cutoutDeps());
+    expect((await request(app).post('/cutout/up_1')).body).toEqual({ uploadId: 'cut_1', widthPx: 10, heightPx: 10, reused: false });
+    expect((await request(app).post('/cutout/nope')).status).toBe(404);
+    expect((await request(app).post('/cutout/a.b')).status).toBe(400);
+  });
+
+  it('answers 503 when the model is missing or the service has no cut-out wiring', async () => {
+    const { CutoutUnavailableError } = await import('./background-removal');
+    const app = createServer(makeDeps(), cutoutDeps(vi.fn(async () => Promise.reject(new CutoutUnavailableError('no model')))));
+    expect((await request(app).post('/cutout/up_1')).status).toBe(503);
+    expect((await request(createServer(makeDeps())).post('/cutout/up_1')).status).toBe(503);
+  });
+});

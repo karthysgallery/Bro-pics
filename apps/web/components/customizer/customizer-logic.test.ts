@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CalendarSlotSchema, createEmptyState, setCalendarDate, setSlotPhoto, setText, type PersonalizationTemplate } from '@bro-pics/shared';
-import { carryOverState, planPhotoTargets } from './state-carry';
+import { carryOverState, planPhotoTargets, repeatPhotosIntoEmpty } from './state-carry';
 import { clearTemplateDraft, DRAFT_MAX_AGE_MS, loadTemplateDraft, persistableState, saveTemplateDraft } from './draft-store';
 import { createTaskQueue, PhotoError, uploadPhoto } from './photo-files';
 
@@ -57,6 +57,23 @@ describe('carryOverState', () => {
     expect(state.slots.a.transform).toEqual({ scale: 1, offsetX: 0, offsetY: 0 });
     expect(state.slots.a.confirmedLowDpi).toBe(false);
     expect(dropped).toBe(1);
+  });
+});
+
+describe('repeatPhotosIntoEmpty', () => {
+  it('cycles the photos through the empty mosaic spaces, never into or out of a cut-out space', () => {
+    const base = template('mosaic', ['main', 'm1', 'm2', 'm3', 'm4', 'm5']);
+    const t = { ...base, photoSlots: base.photoSlots.map((s) => (s.id === 'main' ? { ...s, removeBackground: true } : s)) };
+    let s = setSlotPhoto(createEmptyState('mosaic', 1), 'main', photo('couple'));
+    s = setSlotPhoto(s, 'm1', photo('a'));
+    s = setSlotPhoto(s, 'm2', photo('b'));
+    s = setSlotPhoto(s, 'm4', photo('local:still-uploading'));
+    const { state, filled } = repeatPhotosIntoEmpty(t, s);
+    expect(filled).toBe(2);
+    expect(state.slots.m3!.assetId).toBe('a');
+    expect(state.slots.m5!.assetId).toBe('b');
+    expect(state.slots.main!.assetId).toBe('couple');
+    expect(repeatPhotosIntoEmpty(t, state).filled).toBe(0);
   });
 });
 

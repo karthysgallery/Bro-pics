@@ -116,6 +116,9 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
   const statusBySlot = new Map(completeness.slots.map((s) => [s.slotId, s]));
   const active = template.photoSlots.find((s) => s.id === activeSlotId) ?? null;
   const activeStatus = active ? statusBySlot.get(active.id) : undefined;
+  const regularSlots = template.photoSlots.filter((s) => !s.removeBackground);
+  const filledRegular = regularSlots.filter((s) => state.slots[s.id]).length;
+  const emptyRegular = regularSlots.length - filledRegular;
   const activePhoto = active ? state.slots[active.id] : undefined;
   const errors = Object.entries(activity).filter(([, a]) => a.error);
   const unavailable = new Set(customizer.unavailableSlots);
@@ -167,6 +170,16 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
         </ul>
       )}
 
+      {total > 1 && emptyRegular > 0 && filledRegular > 0 && !customizer.uploading && (
+        <button
+          type="button"
+          onClick={() => customizer.repeatPhotos()}
+          className="w-full rounded-xl border border-dashed border-ink/40 px-3 py-2 text-xs font-semibold text-ink hover:border-ink"
+        >
+          Fill the {emptyRegular} empty space{emptyRegular === 1 ? '' : 's'} by repeating your photos
+        </button>
+      )}
+
       {total > 1 && (
         <ul className="grid grid-cols-4 gap-2 sm:grid-cols-5">
           {template.photoSlots.map((slot, i) => {
@@ -204,6 +217,15 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
           })}
         </ul>
       )}
+
+      {Object.entries(activity)
+        .filter(([, a]) => a.working)
+        .map(([slotId, a]) => (
+          <p key={slotId} role="status" className="flex items-center gap-2 rounded-xl bg-tint px-3 py-2 text-xs text-ink">
+            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink/20 border-t-ink" aria-hidden="true" />
+            {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.working} This takes about half a minute.
+          </p>
+        ))}
 
       {active && activePhoto && activeStatus?.tier && (
         <div className="space-y-2 rounded-xl border border-line/80 px-3 py-2.5">

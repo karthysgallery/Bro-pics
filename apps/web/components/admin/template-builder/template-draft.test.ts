@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { detectPhotoSlots, templateDraftFromDetection, validateTemplate, type PersonalizationTemplate } from '@bro-pics/shared';
 import {
   addCalendarSlot,
+  addPhotoGrid,
   addPhotoSlot,
   addTextSlot,
   artworkAbovePhotos,
@@ -81,6 +82,31 @@ describe('template builder edits', () => {
     t = removeSlot(t, added.id);
     expect(t.calendarSlots).toEqual([]);
     expect(t.layers.some((l) => l.kind === 'calendar')).toBe(false);
+  });
+
+  it('adds a mosaic grid under the main photo, and a cut-out space is raised above it', () => {
+    const base = detectedDraft();
+    const grid = addPhotoGrid(base, { columns: 4, rows: 3, gap: 0.01 });
+    const t = grid.template;
+    expect(grid.ids).toHaveLength(12);
+    const mosaic = t.photoSlots.filter((s) => grid.ids.includes(s.id));
+    expect(mosaic.every((s) => !s.required && s.label.startsWith('Mosaic '))).toBe(true);
+    // Equal cells inside the design, with the gap between them.
+    expect(new Set(mosaic.map((s) => s.width)).size).toBe(1);
+    expect(Math.max(...mosaic.map((s) => s.x + s.width))).toBeLessThanOrEqual(1);
+    expect(mosaic[1]!.x - (mosaic[0]!.x + mosaic[0]!.width)).toBeCloseTo(0.01, 3);
+    // Painted under the existing photos; the existing photos are still filled first.
+    const order = t.layers.filter((l) => l.kind === 'photoSlot').map((l) => (l.kind === 'photoSlot' ? l.slotId : ''));
+    expect(order.slice(-2)).toEqual(['photo_01', 'photo_02']);
+    expect(t.photoSlots.slice(0, 2).map((s) => s.id)).toEqual(['photo_01', 'photo_02']);
+    expect(validateTemplate(t).issues.filter((i) => i.severity === 'error')).toEqual([]);
+    // Turning on "remove background" puts that space on top of every other photo.
+    const cut = updatePhotoSlot(t, 'photo_01', { removeBackground: true });
+    const after = cut.layers.filter((l) => l.kind === 'photoSlot').map((l) => (l.kind === 'photoSlot' ? l.slotId : ''));
+    expect(after[after.length - 1]).toBe('photo_01');
+    expect(cut.photoSlots.find((s) => s.id === 'photo_01')?.removeBackground).toBe(true);
+    // Too many cells for the space: nothing is added.
+    expect(addPhotoGrid(base, { columns: 30, rows: 30, gap: 0.05 }).ids).toEqual([]);
   });
 
   it('switches the artwork between over and under the photos', () => {

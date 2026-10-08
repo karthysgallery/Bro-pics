@@ -6,15 +6,17 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "bundle": "esbuild src/server.ts --bundle --platform=node --target=node20 --format=esm --outfile=lib/server.js --external:sharp --external:express --external:firebase-admin",
+    "bundle": "esbuild src/server.ts --bundle --platform=node --target=node20 --format=esm --outfile=lib/server.js --external:sharp --external:express --external:firebase-admin --external:onnxruntime-node",
     "start": "node lib/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "fetch-model": "node fetch-model.mjs"
   },
   "dependencies": {
     "@bro-pics/shared": "workspace:*",
     "express": "^4.21.0",
     "firebase-admin": "^12.6.0",
+    "onnxruntime-node": "1.30.0",
     "sharp": "^0.35.0",
     "tsx": "^4.19.0"
   },
@@ -23,7 +25,7 @@
     "@types/supertest": "^6.0.2",
     "esbuild": "^0.24.0",
     "supertest": "^7.0.0",
-    "vitest": "^2.1.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }
