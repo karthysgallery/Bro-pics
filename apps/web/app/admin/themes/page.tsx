@@ -226,9 +226,9 @@ export default function FestivalThemesPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6 pb-28 md:p-8">
       <div className="flex flex-col justify-between gap-4 border-b border-line pb-4 sm:flex-row sm:items-end">
         <div className="space-y-1">
-          <h1 className="font-display text-xl font-bold text-ink md:text-2xl">Festival themes</h1>
+          <h1 className="font-display text-xl font-bold text-ink md:text-2xl">Colours &amp; themes</h1>
           <p className="text-xs text-ink/60">
-            Repaint the shop for Diwali, Pongal, Christmas, New Year or your own occasion. Turn a theme on now, or give it dates and the shop switches by itself.
+            Change the shop&apos;s colour palette, or repaint it for Diwali, Pongal, Christmas, New Year or your own occasion. To change the everyday colours, open <strong className="font-semibold text-ink">Everyday</strong> below, edit the colours and press Save; &quot;Reset to original&quot; brings the starting palette back. Turn a theme on now, or give it dates and the shop switches by itself.
           </p>
         </div>
         <div className="rounded-xl border border-line bg-paper px-4 py-2.5 text-xs">
