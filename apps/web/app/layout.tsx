@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import './globals.css';
 import type { Category } from '@bro-pics/shared';
@@ -16,6 +16,7 @@ import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pic
 import { CANONICAL_ORIGIN } from '../lib/seo/site';
 import { getAppearanceSettings } from '../lib/firestore-settings';
 import { appearanceCss, DEFAULT_APPEARANCE, type Appearance } from '@bro-pics/shared';
+import { NavigationLoader, SplashScreen } from '../components/brand/Preloader';
 import { withComboNavLink } from '../lib/combo-nav';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Inter, DM_Sans, Poppins, Nunito_Sans, Montserrat, Playfair_Display, Lora, Fraunces, Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
@@ -200,6 +201,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         {appearanceStyles && <style data-appearance dangerouslySetInnerHTML={{ __html: appearanceStyles }} />}
         {themeCss && <style data-theme={festive!.id} dangerouslySetInnerHTML={{ __html: themeCss }} />}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+        {appearance.welcomeAnimation && <SplashScreen />}
+        <Suspense fallback={null}>
+          <NavigationLoader />
+        </Suspense>
         <ToastProvider>
           <AuthProvider>
             <WishlistSync />

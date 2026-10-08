@@ -20,6 +20,9 @@ Go-live gate: `seo:audit --base https://karthysgallery.in --db --expect-producti
 - **Site text** (`/admin/site-text`): now also covers cart/checkout wording (heading, empty message, checkout button, checkout headline, order summary, coupon label, place-order button, address hint).
 - Verified in the browser on the emulators: fonts, corners and button shape change on the storefront and not in the admin; hiding Reviews removes it; favicon links appear; defaults add nothing. Not changed: product-page layout (gallery side), fonts for the personalization text picker, round icon buttons/badges.
 
+## Preloader (2026-10-08)
+`components/brand/KarthysMark.tsx` (SVG of the logo's two tilted wooden frames: strokes are drawn, a photo "develops" in the small frame, a light sweeps the large one, the name rises in; `loop` mode sways like hung pictures) + `Preloader.tsx`: **SplashScreen** (first visit per session, ~1.7s, in the server HTML, CSS failsafe at 3s, skipped in admin/for crawlers/reduced-motion = still logo), **NavigationLoader** (progress bar at once, animated mark only if a page change takes >250ms, clears on arrival), **LoaderPanel** (used by loading.tsx in account/admin/checkout/cart/search). Keyframes `.kl-*` in `app/globals.css`. Admin switch: Appearance → "Show the animated logo when the shop first opens". The old global `app/loading.tsx` stays removed (it caused soft 404s). Tested: unit tests + browser (final frame matches the logo, splash leaves and is remembered, nav loader appears on a slow page change and stays away on fast ones).
+
 ## Files Box (admin order page, 2026-10-08)
 Each order item shows Preview, each original photo and the print-ready file (with print-job state and "Render again"), plus a per-order zip (`/api/admin/orders/[id]/files-zip`). Download route accepts `?upload=` and verifies the photo belongs to the item.
 

@@ -164,6 +164,17 @@ export default function AppearancePage() {
         <p className="text-2xs text-ink/55">Use a square image, at least 180 × 180 pixels (PNG works well). Upload it first in Media Assets.</p>
       </section>
 
+      <section className={card} aria-labelledby="welcome">
+        <h2 id="welcome" className={sectionTitle}>Loading animation</h2>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-3">
+          <input type="checkbox" className="mt-0.5 accent-[#14213D]" checked={draft.welcomeAnimation} onChange={(e) => set('welcomeAnimation', e.target.checked)} />
+          <span>
+            <span className="block text-sm font-semibold text-ink">Show the animated logo when the shop first opens</span>
+            <span className="text-2xs text-ink/60">Plays for about two seconds, once per visit, and never for search engines. The small loading animation shown while a page is on its way always stays.</span>
+          </span>
+        </label>
+      </section>
+
       <section className={card} aria-labelledby="product-sections">
         <h2 id="product-sections" className={sectionTitle}>Product page sections</h2>
         <ul className="grid gap-2 sm:grid-cols-2">

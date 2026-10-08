@@ -50,6 +50,8 @@ export const AppearanceSchema = z
     buttons: z.enum(BUTTON_STYLES),
     /** A library image (Admin > Media) used as the browser-tab icon; null = the default icon. */
     faviconMediaId: z.string().min(1).max(80).nullable(),
+    /** The animated KarthysGallery logo shown once when a visitor first opens the shop. */
+    welcomeAnimation: z.boolean(),
     productPage: z.object(Object.fromEntries(PRODUCT_PAGE_SECTIONS.map((s) => [s.key, z.boolean()])) as Record<ProductPageSectionKey, z.ZodBoolean>),
   })
   .strict();
@@ -61,6 +63,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   corners: 'default',
   buttons: 'default',
   faviconMediaId: null,
+  welcomeAnimation: true,
   productPage: Object.fromEntries(PRODUCT_PAGE_SECTIONS.map((s) => [s.key, true])) as Record<ProductPageSectionKey, boolean>,
 };
 
