@@ -19,7 +19,8 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: ComboPageProps): Promise<Metadata> {
   const { slug } = await params;
   const combo = await getPublishedComboBySlug(slug);
-  if (!combo) return { title: 'Combo not found | KarthysGallery' };
+  // Thrown while metadata resolves so an unknown or unpublished combo is a real 404.
+  if (!combo) notFound();
   const description = combo.description.slice(0, 160) || `${combo.name}: a set of personalized frames at one price.`;
   const images = combo.coverImageUrl ? [{ url: combo.coverImageUrl, alt: combo.coverImageAlt || combo.name }] : undefined;
   return {

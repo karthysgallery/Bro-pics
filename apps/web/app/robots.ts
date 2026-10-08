@@ -30,6 +30,5 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: '*', allow: ['/', ...ALLOWED_API_PATHS], disallow: DISALLOWED_PATHS },
     sitemap: canonicalUrl('/sitemap.xml'),
-    host: canonicalUrl('/').replace(/\/$/, ''),
   };
 }

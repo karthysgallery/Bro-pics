@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seo:audit": "node scripts/seo-audit.mjs"
   },
   "dependencies": {
     "@bro-pics/print-render": "workspace:*",

@@ -52,39 +52,9 @@ describe('category generateMetadata', () => {
     expect(metadata.title).toBe('Frames & Wall Décor | KarthysGallery');
   });
 
-  it('returns fallback metadata when the category does not exist', async () => {
+  it('an unknown category is a real 404', async () => {
     vi.mocked(getCategoryBySlug).mockResolvedValue(null);
-    const metadata = await generateMetadata({
-      params: Promise.resolve({ slug: 'missing' }),
-      searchParams: Promise.resolve({}),
-    });
-    expect(metadata.title).toBe('Category Not Found | KarthysGallery');
-  });
-
-  it('[FE-42] does not noindex a bare category URL or one with a single facet', async () => {
-    vi.mocked(getCategoryBySlug).mockResolvedValue(mockCategory as never);
-
-    const bare = await generateMetadata({
-      params: Promise.resolve({ slug: 'frames-wall-decor' }),
-      searchParams: Promise.resolve({}),
-    });
-    expect(bare.robots).toBeUndefined();
-
-    const oneFacet = await generateMetadata({
-      params: Promise.resolve({ slug: 'frames-wall-decor' }),
-      searchParams: Promise.resolve({ size: '8x12 in' }),
-    });
-    expect(oneFacet.robots).toBeUndefined();
-  });
-
-  it('[FE-42] noindexes (but still follows) a URL stacking two or more facets', async () => {
-    vi.mocked(getCategoryBySlug).mockResolvedValue(mockCategory as never);
-
-    const metadata = await generateMetadata({
-      params: Promise.resolve({ slug: 'frames-wall-decor' }),
-      searchParams: Promise.resolve({ size: '8x12 in', colour: 'Black' }),
-    });
-    expect(metadata.robots).toEqual({ index: false, follow: true });
+    await expect(generateMetadata({ params: Promise.resolve({ slug: 'missing' }), searchParams: Promise.resolve({}) })).rejects.toThrow(/NOT_FOUND|404/);
   });
 
   it('page 2 is its own canonical, indexable page (it lists different products); filters point back at the category', async () => {

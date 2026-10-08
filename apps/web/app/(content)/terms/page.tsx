@@ -11,7 +11,7 @@ const FALLBACK_METADATA: Metadata = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPageBySlug('terms').catch(() => null);
-  return contentPageMetadata(page, FALLBACK_METADATA);
+  return contentPageMetadata(page, FALLBACK_METADATA, '/terms');
 }
 
 export default async function TermsPage() {

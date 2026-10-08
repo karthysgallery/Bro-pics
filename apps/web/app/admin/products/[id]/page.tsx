@@ -487,6 +487,7 @@ export default function AdminProductFormPage({ params }: ProductFormPageProps) {
             onChange={(next) => { setSeo((prev) => ({ ...prev, ...next })); setIsDirty(true); }}
             product={{ title, slug, shortDesc, descriptionHtml, hasImage }}
             onSlugChange={(next) => { setSlug(next); setIsDirty(true); }}
+            publishStatus={status}
           />
         )}
 

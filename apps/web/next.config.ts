@@ -27,6 +27,8 @@ export const NOINDEX_SOURCES = [
   '/signup',
   '/forgot-password',
   '/search',
+  // A tabbed copy of the policy pages that already exist as their own pages; the separate pages are the ones to index.
+  '/policies',
   '/combo/:slug/frame/:key',
 ];
 

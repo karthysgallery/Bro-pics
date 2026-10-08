@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: 'Combo offers | KarthysGallery',
   description: 'Sets of personalized frames at one price. Pick a combo, then design each frame with your own photos.',
   alternates: { canonical: '/combos' },
+  openGraph: { type: 'website', url: '/combos', title: 'Combo offers | KarthysGallery' },
 };
 
 export default async function CombosPage() {

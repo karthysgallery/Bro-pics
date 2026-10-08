@@ -11,7 +11,7 @@ const FALLBACK_METADATA: Metadata = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPageBySlug('return-refund-policy').catch(() => null);
-  return contentPageMetadata(page, FALLBACK_METADATA);
+  return contentPageMetadata(page, FALLBACK_METADATA, '/return-refund-policy');
 }
 
 export default async function ReturnRefundPolicyPage() {

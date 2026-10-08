@@ -33,7 +33,7 @@ import type { TextFieldValue } from '../editor/TextFieldEditor';
 import { TemplateProductLayout } from '../customizer/TemplateProductLayout';
 import { useComboFrame } from '../../lib/combo-frame-context';
 
-interface ProductDetailClientProps {
+export interface ProductDetailClientProps {
   product: Product;
   variants: Variant[];
   media: ProductMedia[];

@@ -6,6 +6,8 @@ import { getActiveFaqs } from '../../../lib/firestore-content';
 export const metadata: Metadata = {
   title: 'FAQ — KarthysGallery',
   description: 'Answers about photos, sizing, delivery, personalization and refunds.',
+  alternates: { canonical: '/faq' },
+  openGraph: { type: 'website', url: '/faq', title: 'FAQ — KarthysGallery' },
 };
 
 const FAQS: { section: string; items: { q: string; a: React.ReactNode }[] }[] = [

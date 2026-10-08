@@ -52,9 +52,8 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   const { slug } = await params;
   const category = await getCategoryBySlug(slug);
 
-  if (!category) {
-    return { title: 'Category Not Found | KarthysGallery' };
-  }
+  // Thrown while metadata resolves so an unknown category is a real 404, not a 200 page that says "not found".
+  if (!category) notFound();
 
   const urlParams = toSearchParams(await searchParams);
   const { page } = parseSearchFilters(urlParams);

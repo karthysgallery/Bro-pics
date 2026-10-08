@@ -38,7 +38,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.primaryImageUrl ? (
             <Image
               src={product.primaryImageUrl}
-              alt={product.title}
+              alt={product.seo?.imageAlt || product.title}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
               className={`object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04] ${

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { analyseProductSeo, suggestSeo } from '@bro-pics/shared';
 import { FormField } from './AdminForm';
+import { CANONICAL_ORIGIN } from '../../lib/seo/site';
 
 export interface ProductSeoValue {
   seoTitle: string;
@@ -19,9 +20,12 @@ interface ProductSeoPanelProps {
   /** Product fields the check reads but this tab doesn't edit. */
   product: { title: string; slug: string; shortDesc: string; descriptionHtml: string; hasImage: boolean };
   onSlugChange: (slug: string) => void;
+  /** Publishing state from the Publishing tab: only a published product is in the sitemap and indexable. */
+  publishStatus?: 'published' | 'draft' | 'archived';
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
+// Always the public address — the same one canonicals, sitemaps and structured data use.
+const SITE_URL = CANONICAL_ORIGIN;
 const inputClass =
   'w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold';
 
@@ -34,7 +38,7 @@ function Counter({ length, min, max }: { length: number; min: number; max: numbe
   );
 }
 
-export function ProductSeoPanel({ value, onChange, product, onSlugChange }: ProductSeoPanelProps) {
+export function ProductSeoPanel({ value, onChange, product, onSlugChange, publishStatus = 'published' }: ProductSeoPanelProps) {
   const [keywordDraft, setKeywordDraft] = useState('');
 
   const report = useMemo(
@@ -90,6 +94,26 @@ export function ProductSeoPanel({ value, onChange, product, onSlugChange }: Prod
           <p className="text-lg leading-snug text-[#1a0dab] line-clamp-1">{report.preview.title}</p>
           <p className="text-[13px] leading-snug text-[#4d5156] line-clamp-2">{report.preview.description || 'Add a description so Google has something to show.'}</p>
         </div>
+      </div>
+
+      {/* What search engines will actually be told about this page. All of it follows automatically from the product's data and status. */}
+      <div className="rounded-2xl border border-line bg-field/50 p-4 text-xs" data-testid="seo-status">
+        <p className="text-2xs font-bold uppercase tracking-wider text-ink">Search status</p>
+        <dl className="mt-2 grid gap-1.5 sm:grid-cols-[170px_1fr]">
+          <dt className="text-ink/60">Page address (canonical)</dt>
+          <dd className="break-all font-mono text-ink">{`${SITE_URL}/product/${product.slug}`}</dd>
+          <dt className="text-ink/60">Search engines</dt>
+          <dd className={publishStatus === 'published' && !value.noindex ? 'font-semibold text-green-700' : 'font-semibold text-alert'}>
+            {publishStatus !== 'published' ? `Hidden — this product is ${publishStatus}` : value.noindex ? 'Hidden — “keep out of search engines” is ticked' : 'Can be indexed'}
+          </dd>
+          <dt className="text-ink/60">Sitemap</dt>
+          <dd className="text-ink">{publishStatus === 'published' && !value.noindex ? 'Included automatically (updates within the hour, or at once when you save)' : 'Not included'}</dd>
+          <dt className="text-ink/60">Product data for Google</dt>
+          <dd className="text-ink">Generated automatically from the name, photos, sizes, prices and stock; sizes become variants of one product</dd>
+          <dt className="text-ink/60">Google Merchant feed</dt>
+          <dd className="text-ink">{publishStatus === 'published' && !value.noindex ? 'Included, one line per size' : 'Not included'}</dd>
+        </dl>
+        {publishStatus === 'archived' && <p className="mt-2 text-ink/70">An archived product&apos;s page returns “not found”, so search engines drop it.</p>}
       </div>
 
       <FormField label="Focus keyword" hint='The exact phrase customers type into Google, e.g. "vijay photo frame"'>

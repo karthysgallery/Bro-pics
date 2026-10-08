@@ -14,7 +14,7 @@ const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPageBySlug('contact').catch(() => null);
-  return contentPageMetadata(page, FALLBACK_METADATA);
+  return contentPageMetadata(page, FALLBACK_METADATA, '/contact');
 }
 
 export default async function ContactPage() {

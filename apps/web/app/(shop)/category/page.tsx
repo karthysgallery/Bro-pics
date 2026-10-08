@@ -3,19 +3,28 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getActiveCategories } from '../../../lib/firestore-categories';
 import { Section } from '../../../components/ui/Section';
+import { buildBreadcrumbList } from '../../../lib/structured-data';
 
 export const metadata: Metadata = {
   title: 'Shop all photo frame collections — KarthysGallery',
   description:
     'Browse every KarthysGallery collection of personalized photo frames — pick a size and orientation, upload your photo, and preview it before you buy.',
+  alternates: { canonical: '/category' },
+  openGraph: { type: 'website', url: '/category', title: 'Shop all photo frame collections — KarthysGallery' },
 };
 
 export default async function CategoryIndexPage() {
   const categories = await getActiveCategories();
   const topLevel = categories.filter((category) => !category.parentId);
 
+  const breadcrumbJsonLd = buildBreadcrumbList([
+    { name: 'Home', path: '/' },
+    { name: 'Shop all', path: '/category' },
+  ]);
+
   return (
     <Section>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <div className="flex flex-col gap-8">
         {/* Breadcrumb & Header */}
         <div>

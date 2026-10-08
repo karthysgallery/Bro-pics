@@ -57,4 +57,30 @@ describe('ProductSeoPanel', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Hide this product from Google/ }));
     expect(state().noindex).toBe(true);
   });
+
+  describe('search status', () => {
+    const value = { seoTitle: '', seoDesc: '', focusKeyword: '', keywords: [], imageAlt: '', noindex: false };
+    const status = (props: Partial<React.ComponentProps<typeof ProductSeoPanel>> & { noindex?: boolean }) => {
+      const { noindex, ...rest } = props;
+      render(<ProductSeoPanel value={{ ...value, noindex: noindex ?? false }} onChange={() => {}} product={product} onSlugChange={() => {}} {...rest} />);
+      return screen.getByTestId('seo-status');
+    };
+
+    it('shows the public canonical address and says a published product is indexable and in the sitemap', () => {
+      const box = status({ publishStatus: 'published' });
+      expect(box).toHaveTextContent('https://karthysgallery.in/product/classic-frame-01');
+      expect(box).toHaveTextContent('Can be indexed');
+      expect(box).toHaveTextContent('Included automatically');
+    });
+
+    it('says a draft or archived product is hidden and out of the sitemap', () => {
+      const box = status({ publishStatus: 'archived' });
+      expect(box).toHaveTextContent('Hidden — this product is archived');
+      expect(box).toHaveTextContent('Not included');
+    });
+
+    it('says a product marked "keep out of search engines" is hidden', () => {
+      expect(status({ noindex: true })).toHaveTextContent('keep out of search engines');
+    });
+  });
 });

@@ -11,7 +11,9 @@ import {
   getFrameTemplatesByProductId,
   getPersonalizationTemplatesByVariant,
 } from '../../../../lib/firestore-product-detail';
+import { Suspense } from 'react';
 import { ProductDetailClient } from '../../../../components/product/ProductDetailClient';
+import { ProductDetailWithUrlParams } from '../../../../components/product/ProductDetailWithUrlParams';
 import { ProductTabs } from '../../../../components/product/ProductTabs';
 import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
@@ -28,11 +30,8 @@ export const revalidate = 60;
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
-  // [FE-16] ?edit={personalizationId} from the cart drawer's Edit link —
-  // reading searchParams makes this one request dynamic (not served from
-  // the static/ISR cache) without opting the whole route out of
-  // generateStaticParams/revalidate for every other visit.
-  searchParams: Promise<{ edit?: string; variantId?: string }>;
+  // No searchParams on purpose: reading the query string on the server would make every product page uncacheable.
+  // ?edit= and ?variantId= are applied in the browser (ProductDetailWithUrlParams).
 }
 
 export async function generateStaticParams() {
@@ -45,7 +44,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   const detail = await getProductBySlug(slug);
 
   if (!detail) {
-    return { title: 'Product Not Found | KarthysGallery' };
+    // Thrown HERE (while metadata resolves, before any HTML is sent) so the response really is a 404 / a permanent
+    // redirect. Left to the page body, the loading skeleton has already been sent and the status would stay 200 (a "soft 404").
+    const current = await findCurrentSlugForOldSlug(slug).catch(() => null);
+    if (current && current !== slug) permanentRedirect(`/product/${current}`);
+    notFound();
   }
 
   const { product } = detail;
@@ -85,9 +88,8 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   };
 }
 
-export default async function ProductPage({ params, searchParams }: ProductPageProps) {
+export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const { edit: editPersonalizationId, variantId: requestedVariantId } = await searchParams;
   const detail = await getProductBySlug(slug);
   if (!detail) {
     // A product that was renamed answers its old address with a permanent redirect; anything else is a real 404.
@@ -109,6 +111,14 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   // Combo offers that include this product: a real, contextual internal link in both directions (the combo page links to its products).
   const productCombos = (await getPublishedCombos().catch(() => [])).filter((c) => c.items.some((i) => i.productId === product.id));
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
+
+  const detailProps = {
+    product,
+    variants,
+    media,
+    initialTemplatesByVariant: templatesByVariant,
+    personalizationTemplatesByVariant,
+  };
 
   const jsonLd = buildProductJsonLd({
     product,
@@ -155,16 +165,10 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
         <span className="text-ink/60">{product.title}</span>
       </nav>
 
-      <ProductDetailClient
-        product={product}
-        variants={variants}
-        media={media}
-        initialTemplatesByVariant={templatesByVariant}
-        personalizationTemplatesByVariant={personalizationTemplatesByVariant}
-        editPersonalizationId={editPersonalizationId}
-        // ?variantId= (the address used for each size in the structured data) opens the page on that size.
-        initialVariantId={requestedVariantId && variants.some((v) => v.id === requestedVariantId) ? requestedVariantId : undefined}
-      />
+      {/* The fallback is the page the server renders for everyone (and for crawlers); the browser then applies ?edit= / ?variantId=. */}
+      <Suspense fallback={<ProductDetailClient {...detailProps} />}>
+        <ProductDetailWithUrlParams {...detailProps} />
+      </Suspense>
 
       {/* Figma 4-item Trust Reassurance Bar */}
       <div className="my-12 py-6 border-y border-line grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 text-ink/80 text-xs md:text-sm font-medium">

@@ -12,7 +12,7 @@ const FALLBACK_METADATA: Metadata = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPageBySlug('picture-quality-guide').catch(() => null);
-  return contentPageMetadata(page, FALLBACK_METADATA);
+  return contentPageMetadata(page, FALLBACK_METADATA, '/picture-quality-guide');
 }
 
 export default async function PictureQualityGuidePage() {
