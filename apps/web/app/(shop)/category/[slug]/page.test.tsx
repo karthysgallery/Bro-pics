@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+vi.mock('../../../../lib/firestore-combos', () => ({ getPublishedCombos: vi.fn().mockResolvedValue([]) }));
+vi.mock('../../../../lib/firestore-categories', () => ({ getActiveCategories: vi.fn().mockResolvedValue([]) }));
+
 vi.mock('../../../../lib/firestore-products', () => ({
   getCategoryBySlug: vi.fn(),
   searchProductsPage: vi.fn(),
@@ -83,14 +87,20 @@ describe('category generateMetadata', () => {
     expect(metadata.robots).toEqual({ index: false, follow: true });
   });
 
-  it('[FE-42] noindexes page 2 onward', async () => {
+  it('page 2 is its own canonical, indexable page (it lists different products); filters point back at the category', async () => {
     vi.mocked(getCategoryBySlug).mockResolvedValue(mockCategory as never);
 
-    const metadata = await generateMetadata({
-      params: Promise.resolve({ slug: 'frames-wall-decor' }),
-      searchParams: Promise.resolve({ page: '2' }),
-    });
-    expect(metadata.robots).toEqual({ index: false, follow: true });
+    const page2 = await generateMetadata({ params: Promise.resolve({ slug: 'frames-wall-decor' }), searchParams: Promise.resolve({ page: '2' }) });
+    expect(page2.robots).toBeUndefined();
+    expect(page2.alternates?.canonical).toBe('/category/frames-wall-decor?page=2');
+    expect(page2.title).toMatch(/Page 2$/);
+
+    const oneFacet = await generateMetadata({ params: Promise.resolve({ slug: 'frames-wall-decor' }), searchParams: Promise.resolve({ size: '8x12 in' }) });
+    expect(oneFacet.alternates?.canonical).toBe('/category/frames-wall-decor');
+
+    const twoFacets = await generateMetadata({ params: Promise.resolve({ slug: 'frames-wall-decor' }), searchParams: Promise.resolve({ size: '8x12 in', colour: 'Black' }) });
+    expect(twoFacets.robots).toEqual({ index: false, follow: true });
+    expect(twoFacets.alternates?.canonical).toBe('/category/frames-wall-decor');
   });
 
   it('[FE-42] falls back to settings/seo.ogImagePath only when the category has no image of its own', async () => {

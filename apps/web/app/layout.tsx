@@ -13,6 +13,7 @@ import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getSt
 import { SiteTextProvider } from '../components/layout/SiteTextContext';
 import { DEFAULT_SITE_TEXT, type SiteText } from '@bro-pics/shared';
 import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
+import { CANONICAL_ORIGIN } from '../lib/seo/site';
 import { withComboNavLink } from '../lib/combo-nav';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
@@ -72,7 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = seo?.defaultDescription || FALLBACK_DESCRIPTION;
   const ogImage = resolveOgImage('', seo);
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in'),
+    metadataBase: new URL(CANONICAL_ORIGIN),
     title,
     description,
     openGraph: { type: 'website', siteName: 'KarthysGallery', locale: 'en_IN', title, description, ...(ogImage && { images: [ogImage] }) },

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+vi.mock('../../../../lib/firestore-combos', () => ({ getPublishedCombos: vi.fn().mockResolvedValue([]) }));
 vi.mock('../../../../lib/firestore-product-detail', () => ({
   getProductBySlug: vi.fn(),
   getRelatedProducts: vi.fn(),

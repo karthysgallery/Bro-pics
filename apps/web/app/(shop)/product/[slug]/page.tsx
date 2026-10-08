@@ -1,8 +1,9 @@
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
   getProductBySlug,
+  findCurrentSlugForOldSlug,
   getRelatedProducts,
   getFrequentlyBoughtTogether,
   getAllActiveProductSlugs,
@@ -17,7 +18,10 @@ import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
 import { buildBreadcrumbList, buildProductJsonLd, resolveOgImage } from '../../../../lib/structured-data';
-import { getSeoSettings, getSiteText } from '../../../../lib/firestore-settings';
+import { getSeoSettings, getShippingSettings, getSiteText } from '../../../../lib/firestore-settings';
+import { productCanonicalPath, productImageAlt, productSeoDescription, productSeoTitle } from '../../../../lib/seo/product-seo';
+import { SITE_NAME } from '../../../../lib/seo/site';
+import { getPublishedCombos } from '../../../../lib/firestore-combos';
 import { DEFAULT_SITE_TEXT } from '@bro-pics/shared';
 
 export const revalidate = 60;
@@ -51,20 +55,23 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   const seoSettings = await getSeoSettings().catch(() => null);
   const ogImage = resolveOgImage(product.primaryImageUrl, seoSettings);
   const seo = product.seo ?? {};
-  const title = seo.title || `${product.title} | KarthysGallery`;
-  const description = seo.description || product.shortDesc;
+  // Title and description come from this product's own data (the owner's wording wins), never a shared template string.
+  const title = productSeoTitle(product);
+  const description = productSeoDescription(product);
   const keywords = [seo.focusKeyword, ...(seo.keywords ?? [])].filter((k): k is string => Boolean(k && k.trim()));
-  const images = ogImage ? [{ url: ogImage, alt: seo.imageAlt || product.title }] : undefined;
+  const images = ogImage ? [{ url: ogImage, alt: productImageAlt(product) }] : undefined;
+  const canonical = productCanonicalPath(product.slug);
   return {
     title,
     description,
     ...(keywords.length > 0 && { keywords }),
-    alternates: { canonical: `/product/${product.slug}` },
+    // Every product is its own canonical page (never the category), whatever query string it was reached with.
+    alternates: { canonical },
     ...(seo.noindex && { robots: { index: false, follow: true } }),
     openGraph: {
       type: 'website',
-      siteName: 'KarthysGallery',
-      url: `/product/${product.slug}`,
+      siteName: SITE_NAME,
+      url: canonical,
       title: seo.title || product.title,
       description,
       ...(images && { images }),
@@ -80,9 +87,14 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const { slug } = await params;
-  const { edit: editPersonalizationId, variantId: editVariantId } = await searchParams;
+  const { edit: editPersonalizationId, variantId: requestedVariantId } = await searchParams;
   const detail = await getProductBySlug(slug);
-  if (!detail) notFound();
+  if (!detail) {
+    // A product that was renamed answers its old address with a permanent redirect; anything else is a real 404.
+    const current = await findCurrentSlugForOldSlug(slug).catch(() => null);
+    if (current && current !== slug) permanentRedirect(`/product/${current}`);
+    notFound();
+  }
 
   const { product, variants, media, reviews } = detail;
   const [relatedProducts, frequentlyBoughtTogether, category, templatesByVariant, personalizationTemplatesByVariant] = await Promise.all([
@@ -93,9 +105,27 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     getPersonalizationTemplatesByVariant(product, variants),
   ]);
   const siteText = await getSiteText().catch(() => DEFAULT_SITE_TEXT);
+  const shippingSettings = await getShippingSettings().catch(() => null);
+  // Combo offers that include this product: a real, contextual internal link in both directions (the combo page links to its products).
+  const productCombos = (await getPublishedCombos().catch(() => [])).filter((c) => c.items.some((i) => i.productId === product.id));
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
 
-  const jsonLd = buildProductJsonLd({ product, variants, media, reviews, categoryName: category?.name });
+  const jsonLd = buildProductJsonLd({
+    product,
+    variants,
+    media,
+    reviews,
+    categoryName: category?.name,
+    description: productSeoDescription(product),
+    ...(shippingSettings && {
+      shipping: {
+        freeShippingThreshold: shippingSettings.freeShippingThreshold,
+        flatShippingCharge: shippingSettings.flatShippingCharge,
+        dispatchDaysMin: product.dispatchDaysMin,
+        dispatchDaysMax: product.dispatchDaysMax,
+      },
+    }),
+  });
 
   // [FE-41] Mirrors the visible breadcrumb `<nav>` below exactly — same
   // trail, same labels, same hrefs — so the two can never show a
@@ -108,7 +138,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
 
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       <nav aria-label="Breadcrumb" className="text-xs text-ink/60 mb-5 flex items-center gap-1.5 font-sans">
@@ -132,7 +162,8 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
         initialTemplatesByVariant={templatesByVariant}
         personalizationTemplatesByVariant={personalizationTemplatesByVariant}
         editPersonalizationId={editPersonalizationId}
-        initialVariantId={editPersonalizationId ? editVariantId : undefined}
+        // ?variantId= (the address used for each size in the structured data) opens the page on that size.
+        initialVariantId={requestedVariantId && variants.some((v) => v.id === requestedVariantId) ? requestedVariantId : undefined}
       />
 
       {/* Figma 4-item Trust Reassurance Bar */}
@@ -168,6 +199,21 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
           <span>{siteText.trust4}</span>
         </div>
       </div>
+
+      {productCombos.length > 0 && (
+        <section aria-labelledby="product-combos" className="mb-10">
+          <h2 id="product-combos" className="font-display text-xl font-bold text-ink">Also in a combo offer</h2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {productCombos.map((combo) => (
+              <li key={combo.id}>
+                <Link href={`/combo/${combo.slug}`} className="inline-flex rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-gold">
+                  {combo.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <ProductTabs product={product} variants={variants} />
       <VideoRail media={media} />

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
 import { resolveActiveTheme } from '@bro-pics/shared';
 import { getThemeSettings } from '../../lib/firestore-settings';
 import { FestiveGreeting } from '../../components/theme/FestiveGreeting';
@@ -12,6 +13,10 @@ import {
   getFeaturedReviews,
 } from '../../lib/firestore-homepage';
 import { getActiveCategories } from '../../lib/firestore-categories';
+import { getPublishedCombos } from '../../lib/firestore-combos';
+import { getSeoSettings } from '../../lib/firestore-settings';
+import { ComboOffersStrip } from '../../components/home/ComboOffersStrip';
+import { canonicalUrl, SITE_NAME } from '../../lib/seo/site';
 import { HeroSlider } from '../../components/home/HeroSlider';
 import { CategoryTiles } from '../../components/home/CategoryTiles';
 import { ProductGrid } from '../../components/home/ProductGrid';
@@ -37,6 +42,24 @@ const RecentlyViewedRail = dynamic(() =>
 );
 
 export const revalidate = 60;
+
+const HOME_TITLE = 'Personalized Photo Frames & Gifts Online | KarthysGallery';
+const HOME_DESCRIPTION =
+  'Turn your photos into personalized frames, collages and gifts. Upload your pictures, preview the design online, and order from KarthysGallery.';
+
+/** The owner's SEO settings (Admin → Settings → SEO) win; these defaults describe what the shop actually sells. */
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getSeoSettings().catch(() => null);
+  const title = seo?.defaultTitle || HOME_TITLE;
+  const description = seo?.defaultDescription || HOME_DESCRIPTION;
+  return {
+    title,
+    description,
+    alternates: { canonical: '/' },
+    openGraph: { type: 'website', siteName: SITE_NAME, url: '/', title, description },
+    twitter: { card: 'summary_large_image', title, description },
+  };
+}
 
 // Seeded sections still carry the old "products in motion" titles; those are
 // replaced by the trust heading, while an admin-written title wins.
@@ -73,6 +96,9 @@ export default async function HomePage() {
 
   const featuredCategoryId =
     typeof featuredSection?.config.categoryId === 'string' ? featuredSection.config.categoryId : categories[0]?.id;
+
+  const combos = await getPublishedCombos().catch(() => []);
+  const websiteJsonLd = { '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: canonicalUrl('/') };
 
   const [bestSellers, featuredProducts, trustVideos, featuredReviews] = await Promise.all([
     bestSellersSection ? getBestSellingProducts(10) : Promise.resolve([]),
@@ -138,6 +164,7 @@ export default async function HomePage() {
 
   return (
     <div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
       {greeting && <FestiveGreeting greeting={greeting} />}
       {/* Keyed by position as well as id: the `id` field comes from seeded
           data and duplicates across documents have been seen in practice,
@@ -148,6 +175,8 @@ export default async function HomePage() {
           id={section.type === 'best_sellers' ? 'best-sellers' : undefined}
         >
           {renderSection(section, index)}
+          {/* Combo offers sit right after the best sellers, where people are already comparing what to buy. */}
+          {section.type === 'best_sellers' && <ComboOffersStrip combos={combos} />}
         </div>
       ))}
     </div>

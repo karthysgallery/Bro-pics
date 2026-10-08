@@ -64,6 +64,12 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
 
   const update: Record<string, unknown> = { ...body, updatedAt: new Date() };
+  // A renamed address keeps working: the old one is remembered so the storefront can send visitors (and search
+  // engines) on to the new one with a permanent redirect instead of a 404. Renaming back removes it from the list.
+  if (body.slug && body.slug !== current.slug) {
+    const earlier = (current as Product & { slugHistory?: string[] }).slugHistory ?? [];
+    update.slugHistory = [...new Set([...earlier, current.slug])].filter((s) => s !== body.slug);
+  }
   if (body.status) {
     update.isActive = body.status === 'published';
   }

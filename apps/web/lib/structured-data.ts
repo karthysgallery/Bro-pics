@@ -2,7 +2,7 @@ import type { Product, ProductMedia, Review, Variant } from '@bro-pics/shared';
 import { SUPPORT_EMAIL } from './support-contact';
 import { buildPublicMediaUrl } from './media-public-url';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
+import { CANONICAL_ORIGIN as SITE_URL } from './seo/site';
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
 
 /**
@@ -68,7 +68,7 @@ export function buildProductReviewsJsonLd(reviews: Review[]) {
     .map((review) => ({
       '@type': 'Review',
       reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5, worstRating: 1 },
-      author: { '@type': 'Person', name: 'Verified KarthysGallery customer' },
+      author: { '@type': 'Person', name: review.isVerified ? 'Verified buyer' : 'KarthysGallery customer' },
       reviewBody: review.body,
       name: review.title,
     }));
@@ -79,16 +79,66 @@ function absoluteUrl(url: string): string {
   return /^https?:\/\//.test(url) ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
+/** Facts about delivery that are true of every offer on the page; each is shown to the customer on the product page. */
+export interface ShippingFacts {
+  /** Paise: orders at or above this ship free. */
+  freeShippingThreshold: number;
+  /** Paise: standard shipping below the threshold. */
+  flatShippingCharge: number;
+  dispatchDaysMin: number;
+  dispatchDaysMax: number;
+}
+
+export interface JsonLdVariant {
+  id?: string;
+  sku: string;
+  price: number;
+  stockStatus: string;
+  sizeLabel?: string;
+  frameColour?: string;
+  material?: string;
+}
+
+function availabilityOf(stockStatus: string): string {
+  if (stockStatus === 'in_stock') return 'https://schema.org/InStock';
+  if (stockStatus === 'backorder') return 'https://schema.org/BackOrder';
+  return 'https://schema.org/OutOfStock';
+}
+
+function shippingDetailsFor(pricePaise: number, facts: ShippingFacts | undefined) {
+  if (!facts) return undefined;
+  const freeShipping = facts.freeShippingThreshold > 0 && pricePaise >= facts.freeShippingThreshold;
+  return {
+    '@type': 'OfferShippingDetails',
+    shippingRate: { '@type': 'MonetaryAmount', value: (freeShipping ? 0 : facts.flatShippingCharge / 100).toFixed(2), currency: 'INR' },
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
+    deliveryTime: {
+      '@type': 'ShippingDeliveryTime',
+      handlingTime: { '@type': 'QuantitativeValue', minValue: facts.dispatchDaysMin, maxValue: facts.dispatchDaysMax, unitCode: 'DAY' },
+    },
+  };
+}
+
 /**
- * The Product structured data Google reads for rich results (price, stock,
- * stars, images). Price ranges become an AggregateOffer across all sizes.
+ * The Product structured data Google reads for rich results (price, stock, stars, images).
+ *
+ * - One size/finish: a single Product with one Offer.
+ * - Several sizes/finishes with the same price: one Product with an AggregateOffer.
+ * - Several variants that differ by size, finish or material: a ProductGroup whose hasVariant lists each variant
+ *   as its own Product (own SKU, own price, own stock). Only attributes that really differ are listed in variesBy.
+ *
+ * Everything here mirrors what the product page shows. Nothing is invented: no ratings or reviews unless the page
+ * has them, no return policy (none is stored as data), no GTIN/MPN (custom products have none).
  */
 export function buildProductJsonLd(input: {
-  product: Pick<Product, 'title' | 'slug' | 'shortDesc' | 'primaryImageUrl' | 'ratingAverage' | 'ratingCount' | 'seo'>;
-  variants: Pick<Variant, 'sku' | 'price' | 'stockStatus'>[];
+  product: Pick<Product, 'title' | 'slug' | 'shortDesc' | 'primaryImageUrl' | 'ratingAverage' | 'ratingCount' | 'seo'> & { id?: string };
+  variants: JsonLdVariant[];
   media: Pick<ProductMedia, 'type' | 'url'>[];
   reviews: Review[];
   categoryName?: string;
+  shipping?: ShippingFacts;
+  /** Overrides the description (the page's generated one) so the markup and the meta description agree. */
+  description?: string;
   now?: Date;
 }) {
   const { product, variants, media, reviews } = input;
@@ -97,50 +147,78 @@ export function buildProductJsonLd(input: {
   const images = [...new Set([product.primaryImageUrl, ...media.filter((m) => m.type === 'image').map((m) => m.url)].filter(Boolean))]
     .slice(0, 8)
     .map(absoluteUrl);
-  const inStock = variants.some((v) => v.stockStatus === 'in_stock');
-  const availability = inStock ? 'https://schema.org/InStock' : variants.some((v) => v.stockStatus === 'backorder') ? 'https://schema.org/BackOrder' : 'https://schema.org/OutOfStock';
-  const prices = variants.map((v) => v.price / 100);
-  const validUntil = new Date((input.now ?? new Date()).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const keywords = [seo.focusKeyword, ...(seo.keywords ?? [])].filter((k): k is string => Boolean(k && k.trim()));
   const productReviews = buildProductReviewsJsonLd(reviews);
   const seller = { '@type': 'Organization', name: 'KarthysGallery' };
+  const description = input.description || seo.description || product.shortDesc;
+  const prices = variants.map((v) => v.price / 100);
 
-  return {
+  const common = {
     '@context': 'https://schema.org',
-    '@type': 'Product',
     name: product.title,
-    description: seo.description || product.shortDesc,
+    description,
     url,
     ...(images.length > 0 && { image: images }),
-    ...(variants[0]?.sku && { sku: variants[0].sku }),
     brand: { '@type': 'Brand', name: 'KarthysGallery' },
     ...(input.categoryName && { category: input.categoryName }),
     ...(keywords.length > 0 && { keywords: keywords.join(', ') }),
     ...(product.ratingCount > 0 && { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.ratingAverage, reviewCount: product.ratingCount } }),
     ...(productReviews.length > 0 && { review: productReviews }),
+  };
+
+  const offerFor = (v: JsonLdVariant) => ({
+    '@type': 'Offer',
+    url: v.id ? `${url}?variantId=${encodeURIComponent(v.id)}` : url,
+    price: (v.price / 100).toFixed(2),
+    priceCurrency: 'INR',
+    itemCondition: 'https://schema.org/NewCondition',
+    availability: availabilityOf(v.stockStatus),
+    seller,
+    ...(shippingDetailsFor(v.price, input.shipping) && { shippingDetails: shippingDetailsFor(v.price, input.shipping) }),
+  });
+
+  const distinct = (pick: (v: JsonLdVariant) => string | undefined) => new Set(variants.map((v) => pick(v) ?? '')).size > 1;
+  const variesBySize = distinct((v) => v.sizeLabel);
+  const variesByColour = distinct((v) => v.frameColour);
+  const variesByMaterial = distinct((v) => v.material);
+  const isGroup = variants.length > 1 && variants.every((v) => v.id) && (variesBySize || variesByColour || variesByMaterial);
+
+  if (isGroup) {
+    return {
+      ...common,
+      '@type': 'ProductGroup',
+      productGroupID: product.id ?? product.slug,
+      variesBy: [
+        ...(variesBySize ? ['https://schema.org/size'] : []),
+        ...(variesByColour ? ['https://schema.org/color'] : []),
+        ...(variesByMaterial ? ['https://schema.org/material'] : []),
+      ],
+      hasVariant: variants.map((v) => ({
+        '@type': 'Product',
+        name: [product.title, [v.sizeLabel, v.frameColour].filter(Boolean).join(', ')].filter(Boolean).join(' — '),
+        sku: v.sku,
+        url: `${url}?variantId=${encodeURIComponent(v.id!)}`,
+        ...(images.length > 0 && { image: images[0] }),
+        ...(v.sizeLabel && { size: v.sizeLabel }),
+        ...(v.frameColour && { color: v.frameColour }),
+        ...(v.material && { material: v.material }),
+        brand: { '@type': 'Brand', name: 'KarthysGallery' },
+        offers: offerFor(v),
+      })),
+    };
+  }
+
+  const single = variants.length === 1 || (prices.length > 0 && Math.min(...prices) === Math.max(...prices));
+  const inStock = variants.some((v) => v.stockStatus === 'in_stock');
+  const availability = inStock ? 'https://schema.org/InStock' : variants.some((v) => v.stockStatus === 'backorder') ? 'https://schema.org/BackOrder' : 'https://schema.org/OutOfStock';
+  return {
+    ...common,
+    '@type': 'Product',
+    ...(variants[0]?.sku && { sku: variants[0].sku }),
     ...(prices.length > 0 && {
-      offers:
-        prices.length > 1 && Math.min(...prices) !== Math.max(...prices)
-          ? {
-              '@type': 'AggregateOffer',
-              priceCurrency: 'INR',
-              lowPrice: Math.min(...prices).toFixed(2),
-              highPrice: Math.max(...prices).toFixed(2),
-              offerCount: prices.length,
-              availability,
-              url,
-              seller,
-            }
-          : {
-              '@type': 'Offer',
-              price: prices[0].toFixed(2),
-              priceCurrency: 'INR',
-              priceValidUntil: validUntil,
-              itemCondition: 'https://schema.org/NewCondition',
-              availability,
-              url,
-              seller,
-            },
+      offers: single
+        ? offerFor(variants[0]!)
+        : { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: Math.min(...prices).toFixed(2), highPrice: Math.max(...prices).toFixed(2), offerCount: prices.length, availability, url, seller },
     }),
   };
 }

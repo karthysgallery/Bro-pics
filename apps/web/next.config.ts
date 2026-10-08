@@ -11,8 +11,28 @@ const withBundleAnalyzer = withBundleAnalyzerInit({ enabled: process.env.ANALYZE
 // traffic before ever enforcing — this session has no way to observe
 // that traffic, so flipping straight to enforcing would risk silently
 // breaking the site with no way to notice).
+/**
+ * Pages that must never appear in search results. robots.txt already asks crawlers to stay out; this header is the
+ * second layer for anything that gets linked or crawled anyway (a header works for client-rendered pages too).
+ */
+export const NOINDEX_SOURCES = [
+  '/admin/:path*',
+  '/staff/:path*',
+  '/api/((?!media/).*)',
+  '/checkout/:path*',
+  '/cart',
+  '/account/:path*',
+  '/orders/:path*',
+  '/signin',
+  '/signup',
+  '/forgot-password',
+  '/search',
+  '/combo/:slug/frame/:key',
+];
+
 async function securityHeaders() {
   return [
+    ...NOINDEX_SOURCES.map((source) => ({ source, headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] })),
     {
       source: '/:path*',
       headers: [

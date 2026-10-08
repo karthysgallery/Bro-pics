@@ -1,21 +1,35 @@
 import type { MetadataRoute } from 'next';
+import { canonicalUrl, isPreviewDeployment } from '../lib/seo/site';
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://karthysgallery.in';
+/** Private or useless-to-index areas. Everything else (catalogue, content, images, CSS, JS) stays crawlable. */
+export const DISALLOWED_PATHS = [
+  '/admin',
+  '/staff',
+  '/dashboard',
+  '/checkout',
+  '/cart',
+  '/orders',
+  '/account',
+  '/signin',
+  '/signup',
+  '/forgot-password',
+  '/search',
+  // A step in a purchase flow (the personalization editor for one frame of a combo), not a page of its own.
+  '/combo/*/frame/',
+  '/api/',
+];
+
+/** Public images are served through /api/media/…; Google must be able to fetch them even though the rest of /api/ is closed. */
+export const ALLOWED_API_PATHS = ['/api/media/'];
 
 export default function robots(): MetadataRoute.Robots {
   // A temporary preview address must never be crawled (see middleware.ts).
-  if (process.env.SITE_PREVIEW === '1') {
+  if (isPreviewDeployment()) {
     return { rules: { userAgent: '*', disallow: '/' } };
   }
   return {
-    rules: {
-      userAgent: '*',
-      allow: '/',
-      // [BE-40] /account was missing — every page under it needs a signed-in
-      // user and has nothing for a crawler to index, same reasoning as the
-      // other disallowed paths here.
-      disallow: ['/admin', '/dashboard', '/staff', '/checkout', '/orders', '/account', '/api'],
-    },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    rules: { userAgent: '*', allow: ['/', ...ALLOWED_API_PATHS], disallow: DISALLOWED_PATHS },
+    sitemap: canonicalUrl('/sitemap.xml'),
+    host: canonicalUrl('/').replace(/\/$/, ''),
   };
 }

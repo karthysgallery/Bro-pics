@@ -20,16 +20,25 @@ function safeRevalidate(path: string): void {
   }
 }
 
+/** The sitemaps are built from the catalogue: any publish/edit/archive makes them stale at once. */
+export function revalidateSitemaps(): void {
+  for (const path of ['/sitemap.xml', '/sitemap-products.xml', '/sitemap-categories.xml', '/sitemap-images.xml', '/sitemap-combos.xml', '/feeds/google-merchant.xml']) {
+    safeRevalidate(path);
+  }
+}
+
 export function revalidateHomepage(): void {
   safeRevalidate('/');
 }
 
 export function revalidateProductPage(slug: string): void {
   safeRevalidate(`/product/${slug}`);
+  revalidateSitemaps();
 }
 
 export function revalidateCategoryPage(slug: string): void {
   safeRevalidate(`/category/${slug}`);
+  revalidateSitemaps();
 }
 
 /** A Combo Offer changed: its own page, the combos list, and the homepage (which can feature combos). */
@@ -37,5 +46,5 @@ export function revalidateComboPages(slug: string): void {
   safeRevalidate(`/combo/${slug}`);
   safeRevalidate('/combos');
   safeRevalidate('/');
-  safeRevalidate('/sitemap.xml');
+  revalidateSitemaps();
 }

@@ -9,6 +9,10 @@ import { parseSearchFilters, PAGE_SIZE } from '@bro-pics/shared';
 import { orientationFromSizeLabel } from '../../../../lib/orientation';
 import { buildBreadcrumbList, resolveOgImage } from '../../../../lib/structured-data';
 import { getSeoSettings } from '../../../../lib/firestore-settings';
+import { getPublishedCombos } from '../../../../lib/firestore-combos';
+import { getActiveCategories } from '../../../../lib/firestore-categories';
+import { categoryCanonicalPath, categorySeoDescription, categorySeoTitle } from '../../../../lib/seo/category-seo';
+import { canonicalUrl, SITE_NAME } from '../../../../lib/seo/site';
 
 export const revalidate = 60;
 
@@ -38,8 +42,7 @@ function toSearchParams(raw: Record<string, string | string[] | undefined>): URL
 // stop a crawler from indexing anyway. `follow: true` throughout — a
 // filtered page's product links are still real, crawlable products.
 function shouldNoindexFacetedUrl(urlParams: URLSearchParams): boolean {
-  const page = Number(urlParams.get('page') ?? '1');
-  if (Number.isInteger(page) && page > 1) return true;
+  // Pagination alone is NOT a reason to noindex: page 2 lists different products and is its own canonical page.
   const facetKeys = ['size', 'colour', 'material', 'orientation', 'minRating', 'inStockOnly', 'sort', 'minPrice', 'maxPrice'];
   const activeFacetCount = facetKeys.filter((key) => urlParams.has(key)).length;
   return activeFacetCount >= 2;
@@ -54,21 +57,36 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   }
 
   const urlParams = toSearchParams(await searchParams);
-  const fallbackDescription = `Shop ${category.name} at KarthysGallery.`;
+  const { page } = parseSearchFilters(urlParams);
   // [FE-42] Falls back to settings/seo.ogImagePath only when this
   // category has no image of its own — never overrides a real one.
   const seoSettings = await getSeoSettings().catch(() => null);
   const ogImage = resolveOgImage(category.image, seoSettings);
+  let totalCount = 0;
+  try {
+    totalCount = (await searchProductsPage('', { categoryId: category.id }, 1))?.totalCount ?? 0;
+  } catch {
+    // The description then simply doesn't mention a count.
+  }
+  const title = categorySeoTitle(category);
+  const description = categorySeoDescription(category, totalCount);
+  // Filters/sorting canonicalize to the bare category; only real pagination keeps its own address.
+  const hasFacet = ['size', 'colour', 'material', 'orientation', 'minRating', 'inStockOnly', 'sort', 'minPrice', 'maxPrice'].some((k) => urlParams.has(k));
+  const canonical = categoryCanonicalPath(category.slug, hasFacet ? 1 : page);
   return {
-    title: category.seo.title ?? `${category.name} | KarthysGallery`,
-    description: category.seo.description ?? fallbackDescription,
-    alternates: { canonical: `/category/${category.slug}` },
+    title: page > 1 && !hasFacet ? `${title} — Page ${page}` : title,
+    description,
+    alternates: { canonical },
     ...(shouldNoindexFacetedUrl(urlParams) && { robots: { index: false, follow: true } }),
     openGraph: {
+      type: 'website',
+      siteName: SITE_NAME,
+      url: canonical,
       title: category.seo.title ?? category.name,
-      description: category.seo.description ?? fallbackDescription,
+      description,
       ...(ogImage && { images: [ogImage] }),
     },
+    twitter: { card: 'summary_large_image', title: category.seo.title ?? category.name, description, ...(ogImage && { images: [ogImage] }) },
   };
 }
 
@@ -118,9 +136,32 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     { name: category.name, path: `/category/${category.slug}` },
   ]);
 
+  // The listing as structured data: what this page is and which products it lists, using the same addresses as the sitemap.
+  const collectionJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: category.name,
+    url: canonicalUrl(categoryCanonicalPath(category.slug, page)),
+    ...(category.description && { description: category.description }),
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: totalCount,
+      itemListElement: products.map((p, index) => ({
+        '@type': 'ListItem',
+        position: (page - 1) * PAGE_SIZE + index + 1,
+        url: canonicalUrl(`/product/${p.slug}`),
+        name: p.title,
+      })),
+    },
+  };
+  // Related categories, for people (and crawlers) who want a neighbouring collection.
+  const otherCategories = (await getActiveCategories().catch(() => [])).filter((c) => c.id !== category.id).slice(0, 8);
+  const hasCombos = (await getPublishedCombos().catch(() => [])).length > 0;
+
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd).replace(/</g, '\\u003c') }} />
 
       <nav aria-label="Breadcrumb" className="text-2xs text-ink/50 mb-2">
         <a href="/" className="hover:text-accent">Home</a>
@@ -172,6 +213,28 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           </div>
         )}
       </div>
+
+      {(otherCategories.length > 0 || hasCombos) && (
+        <nav aria-label="More collections" className="mt-12 border-t border-line pt-6">
+          <h2 className="font-display text-lg font-bold text-ink">More collections</h2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {otherCategories.map((c) => (
+              <li key={c.id}>
+                <Link href={`/category/${c.slug}`} className="inline-flex rounded-full border border-line bg-paper px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-gold">
+                  {c.name}
+                </Link>
+              </li>
+            ))}
+            {hasCombos && (
+              <li>
+                <Link href="/combos" className="inline-flex rounded-full border border-line bg-paper px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-gold">
+                  Combo offers
+                </Link>
+              </li>
+            )}
+          </ul>
+        </nav>
+      )}
     </div>
   );
 }

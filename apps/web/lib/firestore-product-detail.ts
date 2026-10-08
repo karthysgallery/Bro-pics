@@ -45,6 +45,17 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
   return { product, variants, media, reviews };
 }
 
+/**
+ * If `slug` is an OLD address of a product that was renamed, the product's current slug (else null).
+ * Lets the storefront answer the old address with a permanent redirect rather than a 404.
+ */
+export async function findCurrentSlugForOldSlug(slug: string): Promise<string | null> {
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('products').where('slugHistory', 'array-contains', slug).where('isActive', '==', true).limit(1).get();
+  if (snapshot.empty) return null;
+  return (snapshot.docs[0].data() as Product).slug;
+}
+
 export async function getRelatedProducts(
   categoryId: string,
   excludeProductId: string,
