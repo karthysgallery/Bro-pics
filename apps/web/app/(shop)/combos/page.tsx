@@ -3,6 +3,7 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import { comboSavings, expandComboFrames } from '@bro-pics/shared';
 import { getPublishedCombos } from '../../../lib/firestore-combos';
+import { isComboAvailable } from '../../../lib/firestore-combo-detail';
 import { formatPaise } from '../../../lib/format-price';
 
 export const revalidate = 60;
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 
 export default async function CombosPage() {
   const combos = await getPublishedCombos().catch(() => []);
+  const availability = new Map(await Promise.all(combos.map(async (c) => [c.id, await isComboAvailable(c).catch(() => true)] as const)));
 
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-8">
@@ -38,6 +40,7 @@ export default async function CombosPage() {
                     {combo.coverImageUrl && (
                       <Image src={combo.coverImageUrl} alt={combo.coverImageAlt || combo.name} fill sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw" unoptimized={combo.coverImageUrl.startsWith('/api/')} className="object-cover" />
                     )}
+                    {availability.get(combo.id) === false && <span className="absolute right-3 top-3 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-paper">Currently unavailable</span>}
                     {combo.badge && <span className="absolute left-3 top-3 rounded-full bg-[#FDE68A] px-3 py-1 text-xs font-semibold text-[#92400E]">{combo.badge}</span>}
                   </div>
                   <div className="p-4">

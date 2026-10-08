@@ -54,8 +54,8 @@ export function ComboFrameEditor({ combo, frameKey, frameLabel, product, variant
   );
 
   const info = useMemo<ComboFrameInfo>(
-    () => ({ label: frameLabel, comboName: combo.name, saved, variantId: variant.id, onSave }),
-    [frameLabel, combo.name, saved, variant.id, onSave]
+    () => ({ label: frameLabel, comboName: combo.name, draftScope: `${combo.id}:${frameKey}`, saved, variantId: variant.id, onSave }),
+    [frameLabel, combo.name, combo.id, frameKey, saved, variant.id, onSave]
   );
 
   return (

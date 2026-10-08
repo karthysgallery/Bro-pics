@@ -13,6 +13,7 @@ import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getSt
 import { SiteTextProvider } from '../components/layout/SiteTextContext';
 import { DEFAULT_SITE_TEXT, type SiteText } from '@bro-pics/shared';
 import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
+import { withComboNavLink } from '../lib/combo-nav';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
@@ -118,6 +119,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   } catch (error) {
     console.error('Failed to load header settings:', error);
   }
+
+  headerSettings = (await withComboNavLink(headerSettings)) as typeof headerSettings;
 
   let footerSettings: Awaited<ReturnType<typeof getFooterSettings>> = null;
   try {

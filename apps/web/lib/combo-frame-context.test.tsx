@@ -16,7 +16,7 @@ function Probe() {
   );
 }
 
-const info = (over: Partial<ComboFrameInfo> = {}): ComboFrameInfo => ({ label: 'Frame 2', comboName: 'Triple 9', saved: null, variantId: 'v1', onSave: vi.fn(), ...over });
+const info = (over: Partial<ComboFrameInfo> = {}): ComboFrameInfo => ({ label: 'Frame 2', comboName: 'Triple 9', draftScope: 'combo_1:a4-1', saved: null, variantId: 'v1', onSave: vi.fn(), ...over });
 
 describe('ComboFrameProvider', () => {
   it('sends a frame the editor "adds to the cart" to the combo instead, as one piece, and marks the page', () => {

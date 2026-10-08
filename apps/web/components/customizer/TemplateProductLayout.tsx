@@ -85,7 +85,9 @@ function TemplateEditorSession({
   const userRef = useRef(auth?.user ?? null);
   userRef.current = auth?.user ?? null;
   const { items, addItem, updateItem, removeItem } = useCart();
-  const inComboFrame = useComboFrame() !== null;
+  const comboFrame = useComboFrame();
+  // Each combo frame keeps its own unsaved design, separate from other frames of the same product.
+  const draftProductId = comboFrame ? `${product.id}@${comboFrame.draftScope}` : product.id;
 
   // Resolved on first use, then fixed for this editing session (signing in rotates the stored id).
   const sessionRef = useRef<string | null>(null);
@@ -95,12 +97,11 @@ function TemplateEditorSession({
 
   const customizer = useTemplateCustomizer({
     template,
-    productId: product.id,
+    productId: draftProductId,
     variantId: selectedVariant.id,
     printSizeIn,
     initialState,
-    // In a combo several frames can share a product and size, so no shared per-product draft.
-    useDrafts: !editPersonalizationId && !inComboFrame,
+    useDrafts: !editPersonalizationId,
     sessionId,
     authToken,
   });

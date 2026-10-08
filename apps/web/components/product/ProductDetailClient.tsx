@@ -309,26 +309,27 @@ export function ProductDetailClient({
   // silently skipped — see PROJECT_STATUS.md). Debounced the same way
   // the undo/redo history watcher above is, coalescing a whole
   // drag/typing burst into one save rather than one per keystroke/pixel.
-  // Inside a combo, several frames can share a product and size, so a per-product draft would
-  // offer one frame's photos to another; a frame is saved explicitly instead.
-  const inComboFrame = useComboFrame() !== null;
+  // Inside a combo several frames can share a product and size, so each frame keeps its own
+  // unsaved work under its own key instead of one shared per-product draft.
+  const comboFrame = useComboFrame();
+  const draftProductId = comboFrame ? `${product.id}@${comboFrame.draftScope}` : product.id;
   const [pendingDraft, setPendingDraft] = useState<PersonalizationDraft | null>(null);
   const [restoringDraft, setRestoringDraft] = useState(false);
   const draftCheckedRef = useRef(false);
   const draftSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (inComboFrame || draftCheckedRef.current || !selectedVariant || slots.size > 0) return;
+    if (draftCheckedRef.current || !selectedVariant || slots.size > 0) return;
     draftCheckedRef.current = true;
-    const draft = loadDraft(product.id, selectedVariant.id);
+    const draft = loadDraft(draftProductId, selectedVariant.id);
     if (draft) setPendingDraft(draft);
   }, [selectedVariant, product.id, slots.size]);
 
   useEffect(() => {
-    if (inComboFrame || !selectedVariant || slots.size === 0) return;
+    if (!selectedVariant || slots.size === 0) return;
     if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
     draftSaveDebounceRef.current = setTimeout(() => {
-      saveDraft(product.id, selectedVariant.id, {
+      saveDraft(draftProductId, selectedVariant.id, {
         activeSlotIndex,
         selectedClipartId,
         slots: [...slots.entries()].map(([slotIndex, s]) => ({
@@ -394,7 +395,7 @@ export function ProductDetailClient({
       const restoredSlots = new Map(restoredEntries.filter((e): e is readonly [number, SlotState] => e !== null));
       if (restoredSlots.size === 0) {
         setUploadError("We couldn't restore your saved design — the photo may have expired. Please start again.");
-        clearDraft(product.id, selectedVariant.id);
+        clearDraft(draftProductId, selectedVariant.id);
         setPendingDraft(null);
         return;
       }
@@ -409,7 +410,7 @@ export function ProductDetailClient({
   };
 
   const handleDiscardDraft = () => {
-    if (selectedVariant) clearDraft(product.id, selectedVariant.id);
+    if (selectedVariant) clearDraft(draftProductId, selectedVariant.id);
     setPendingDraft(null);
   };
 
@@ -998,7 +999,7 @@ export function ProductDetailClient({
       // [FE-11] Cart now owns this personalization — the draft would
       // otherwise dangle and, worse, offer to "restore" a design the
       // customer already added, on a return visit before checkout.
-      if (selectedVariant && !inComboFrame) clearDraft(product.id, selectedVariant.id);
+      if (selectedVariant) clearDraft(draftProductId, selectedVariant.id);
       setSlots(new Map());
       setTextFields(new Map());
       setSelectedClipartId(null);

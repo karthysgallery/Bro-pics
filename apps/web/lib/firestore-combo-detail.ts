@@ -23,6 +23,11 @@ export interface ComboItemCard {
   inStock: boolean;
 }
 
+/** A product the owner has switched off or archived can't be bought, whatever its sizes say. */
+function isProductOnSale(product: Pick<Product, 'isActive'> & { status?: string }): boolean {
+  return product.isActive !== false && product.status !== 'draft' && product.status !== 'archived';
+}
+
 async function loadItemParts(combo: Pick<Combo, 'items'>) {
   const db = getFirestore(getAdminApp());
   return Promise.all(
@@ -55,7 +60,7 @@ export async function getComboItemCards(combo: Pick<Combo, 'items'>): Promise<Co
         variantId: variant.id,
         variantLabel: `${variant.sizeLabel} · ${variant.frameColour}`,
         variantPrice: variant.price,
-        inStock: variant.isActive !== false && variant.stockStatus === 'in_stock',
+        inStock: isProductOnSale(product) && variant.isActive !== false && variant.stockStatus === 'in_stock',
       },
     ];
   });
@@ -91,4 +96,10 @@ export async function getComboFrameData(combo: Pick<Combo, 'items'>, itemId: str
     templatesByVariant,
     personalizationTemplatesByVariant,
   };
+}
+
+/** Whether every frame of a combo can be bought right now (used by the combos list; the page checks per frame). */
+export async function isComboAvailable(combo: Pick<Combo, 'items'>): Promise<boolean> {
+  const cards = await getComboItemCards(combo);
+  return cards.length === combo.items.length && cards.every((c) => c.inStock);
 }

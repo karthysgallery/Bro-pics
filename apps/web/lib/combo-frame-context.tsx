@@ -14,6 +14,8 @@ export interface ComboFrameInfo {
   /** "Frame 2" */
   label: string;
   comboName: string;
+  /** Identifies this frame of this combo, so each frame keeps its own unsaved work. */
+  draftScope: string;
   /** This frame as saved so far, if the customer is editing it again. */
   saved: SavedFrame | null;
   /** The frame's variant, so a saved line can be rebuilt for the editor. */

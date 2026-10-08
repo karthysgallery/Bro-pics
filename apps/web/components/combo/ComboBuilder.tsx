@@ -64,6 +64,12 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
 
   return (
     <div className="flex flex-col gap-10">
+      {unavailable.length > 0 && (
+        <p role="alert" className="rounded-2xl border border-alert/40 bg-alert/10 px-4 py-3 text-sm text-ink">
+          This combo can&apos;t be ordered right now: {unavailable.map((i) => cardByItem.get(i.id)?.label ?? 'a frame').join(', ')} {unavailable.length === 1 ? 'is' : 'are'} unavailable.
+        </p>
+      )}
+
       {/* Hero */}
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-10 items-center">
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl bg-tint border border-line/70">

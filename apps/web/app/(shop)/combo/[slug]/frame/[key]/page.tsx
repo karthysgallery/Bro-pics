@@ -1,8 +1,8 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { expandComboFrames } from '@bro-pics/shared';
 import { getPublishedComboBySlug } from '../../../../../../lib/firestore-combos';
-import { getComboFrameData } from '../../../../../../lib/firestore-combo-detail';
+import { getComboFrameData, getComboItemCards } from '../../../../../../lib/firestore-combo-detail';
 import { ComboFrameEditor } from '../../../../../../components/combo/ComboFrameEditor';
 
 // A step in a purchase flow: always built from the combo as it is now. A cached page built before an
@@ -27,8 +27,10 @@ export default async function ComboFramePage({ params }: FramePageProps) {
   if (!combo) notFound();
   const frame = expandComboFrames(combo).find((f) => f.key === key);
   if (!frame) notFound();
-  const data = await getComboFrameData(combo, frame.itemId);
+  const [data, cards] = await Promise.all([getComboFrameData(combo, frame.itemId), getComboItemCards(combo)]);
   if (!data) notFound();
+  // A frame that can't be bought right now can't be designed: send the customer back to the combo page, which says so.
+  if (!cards.find((c) => c.itemId === frame.itemId)?.inStock) redirect(`/combo/${combo.slug}`);
 
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6">
