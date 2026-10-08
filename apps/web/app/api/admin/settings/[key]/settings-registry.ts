@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SafeHrefSchema, SiteTextSettingsSchema, ThemeSettingsSchema } from '@bro-pics/shared';
+import { AppearanceSchema, SafeHrefSchema, SiteTextSettingsSchema, ThemeSettingsSchema } from '@bro-pics/shared';
 
 /**
  * [ABE-24] One schema per `settings/{key}` doc this generic route knows
@@ -149,6 +149,8 @@ export const SETTINGS_REGISTRY = {
   theme: ThemeSettingsSchema,
   // Shop wording: trust badges, hero buttons, product-page reassurances.
   siteText: SiteTextSettingsSchema,
+  // Typefaces, corner/button roundness, browser-tab icon, product-page sections (packages/shared/src/schemas/appearance.ts).
+  appearance: AppearanceSchema,
 } as const;
 
 export type SettingsKey = keyof typeof SETTINGS_REGISTRY;

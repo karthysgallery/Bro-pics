@@ -1,7 +1,7 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
 import { DEFAULT_SHIPPING_SETTINGS } from './checkout-calc';
-import { ThemeSettingsSchema, defaultThemeSettings, resolveSiteText, upgradeThemeSettings, type SiteText, type ThemeSettings } from '@bro-pics/shared';
+import { ThemeSettingsSchema, defaultThemeSettings, resolveAppearance, resolveSiteText, type Appearance, upgradeThemeSettings, type SiteText, type ThemeSettings } from '@bro-pics/shared';
 
 export async function getAnnouncementBarSettings(): Promise<{
   text: string;
@@ -184,6 +184,13 @@ export async function getThemeSettings(): Promise<ThemeSettings> {
   if (!doc.exists) return defaultThemeSettings();
   const parsed = ThemeSettingsSchema.safeParse(upgradeThemeSettings(doc.data()));
   return parsed.success ? parsed.data : defaultThemeSettings();
+}
+
+/** Admin-chosen look (fonts, corners, buttons, favicon, product-page sections) over the original look. */
+export async function getAppearanceSettings(): Promise<Appearance> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('appearance').get();
+  return resolveAppearance(doc.exists ? doc.data() : null);
 }
 
 /** Admin-edited shop wording (settings/siteText) over the original defaults. */

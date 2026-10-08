@@ -74,6 +74,7 @@ export * from './schemas/staff-mirror';
 export * from './schemas/staff-invite';
 export * from './schemas/analytics-daily';
 export * from './schemas/theme';
+export * from './schemas/appearance';
 export * from './schemas/site-text';
 export * from './analytics/dashboard';
 export * from './analytics/daily-rollup';

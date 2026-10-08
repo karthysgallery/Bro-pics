@@ -298,6 +298,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Website',
     items: [
       { label: 'Colours & Themes', href: '/admin/themes', permission: 'settings:write', icon: 'theme' },
+      { label: 'Appearance', href: '/admin/appearance', permission: 'settings:write', icon: 'theme' },
       { label: 'Header & Footer', href: '/admin/navigation', permission: 'settings:write', icon: 'pages' },
       { label: 'Site Text', href: '/admin/site-text', permission: 'settings:write', icon: 'pages' },
       { label: 'Homepage', href: '/admin/homepage', permission: 'content:read', icon: 'homepage' },

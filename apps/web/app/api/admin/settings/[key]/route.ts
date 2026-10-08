@@ -78,7 +78,7 @@ export async function PUT(request: Request, { params }: RouteParams): Promise<Ne
   // resource with independently PATCHable fields.
   await db.collection('settings').doc(key).set(parsed.data);
   // Shop pages are cached; a new theme (or header/footer/SEO) should show right away.
-  if (key === 'theme' || key === 'siteText' || key === 'header' || key === 'footer' || key === 'seo' || key === 'store') {
+  if (key === 'theme' || key === 'appearance' || key === 'siteText' || key === 'header' || key === 'footer' || key === 'seo' || key === 'store') {
     try {
       revalidatePath('/', 'layout');
     } catch {

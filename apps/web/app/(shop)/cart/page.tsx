@@ -54,11 +54,11 @@ export default function CartPage() {
 
       <div className="mb-8">
         <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">
-          Your bag {itemCount > 0 ? `(${itemCount})` : ''}
+          {siteText.cartTitle} {itemCount > 0 ? `(${itemCount})` : ''}
         </h1>
         <p className="text-sm text-ink/70">
           {itemCount === 0
-            ? 'Your bag is empty.'
+            ? siteText.cartEmpty
             : itemCount === 1
             ? 'One memory, ready for a place on your wall.'
             : `${itemCount} memories, ready for a place on your wall.`}
@@ -230,7 +230,7 @@ export default function CartPage() {
               href="/checkout"
               className="mt-2 block w-full py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm"
             >
-              Proceed to checkout
+              {siteText.cartCheckoutButton}
             </Link>
 
             <p className="mt-4 text-center text-2xs text-ink/50">

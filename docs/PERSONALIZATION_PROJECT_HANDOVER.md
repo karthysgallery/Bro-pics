@@ -14,6 +14,12 @@ Status: BUILT + TESTED on a production build against the emulators (`pnpm --filt
 NOT BUILT: GA4 (needs Measurement ID + consent decision), return-policy structured data (needs policy data), content guides. NOT TESTED: Rich Results Test, URL Inspection, Merchant acceptance, Core Web Vitals (all need the live domain).
 Go-live gate: `seo:audit --base https://karthysgallery.in --db --expect-production` must show 0 FAIL. Preview mode (noindex) is still ON; nothing pushed or deployed.
 
+## Admin control of the look (2026-10-08)
+- **Colours & themes** (`/admin/themes`, existing): the Everyday palette is editable (9 colour roles, contrast check, "Reset to original"), plus festival themes on a calendar.
+- **Appearance** (`/admin/appearance`, new, settings key `appearance`, `packages/shared/src/schemas/appearance.ts`): heading and body fonts (11 choices, loaded lazily with `preload:false`), corner roundness (sharp/soft/current/very round via CSS variables in `tailwind.config.ts`), main-button shape, browser-tab icon (a Media library image), and switches for product-page sections (trust bar, tabs, videos, reviews, frequently bought, related, recently viewed). Defaults = the original look and emit no CSS; "Reset to original look" restores them. The admin area is excluded from all of it.
+- **Site text** (`/admin/site-text`): now also covers cart/checkout wording (heading, empty message, checkout button, checkout headline, order summary, coupon label, place-order button, address hint).
+- Verified in the browser on the emulators: fonts, corners and button shape change on the storefront and not in the admin; hiding Reviews removes it; favicon links appear; defaults add nothing. Not changed: product-page layout (gallery side), fonts for the personalization text picker, round icon buttons/badges.
+
 ## Files Box (admin order page, 2026-10-08)
 Each order item shows Preview, each original photo and the print-ready file (with print-job state and "Render again"), plus a per-order zip (`/api/admin/orders/[id]/files-zip`). Download route accepts `?upload=` and verifies the photo belongs to the item.
 

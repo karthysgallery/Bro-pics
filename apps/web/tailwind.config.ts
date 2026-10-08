@@ -55,8 +55,15 @@ const config: Config = {
         prose: '640px',
       },
       borderRadius: {
+        // The corner scale reads CSS variables so the admin can choose Sharp/Soft/Round (Admin > Appearance).
+        // The fallbacks are Tailwind's own values: with nothing chosen, nothing changes.
+        md: 'var(--radius-md, 0.375rem)',
+        lg: 'var(--radius-lg, 0.5rem)',
+        xl: 'var(--radius-xl, 0.75rem)',
+        '2xl': 'var(--radius-2xl, 1rem)',
+        '3xl': 'var(--radius-3xl, 1.5rem)',
         // Refined card corners — slightly less "bubbly" than rounded-2xl
-        card: '12px',
+        card: 'var(--radius-card, 12px)',
         // Slightly softer than fully circular buttons
         btn: '6px',
       },

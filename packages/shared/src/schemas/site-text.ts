@@ -29,6 +29,14 @@ export const SITE_TEXT_FIELDS = [
     default: 'Dispatched in protective shockproof packaging. Free returns or replacement if damaged in transit.',
     long: true,
   },
+  { key: 'cartTitle', group: 'Cart & checkout', label: 'Cart page heading', default: 'Your bag' },
+  { key: 'cartEmpty', group: 'Cart & checkout', label: 'Message when the cart is empty', default: 'Your bag is empty.' },
+  { key: 'cartCheckoutButton', group: 'Cart & checkout', label: 'Button that goes to checkout', default: 'Proceed to checkout' },
+  { key: 'checkoutHeadline', group: 'Cart & checkout', label: 'Checkout page heading', default: 'One step closer to your wall.' },
+  { key: 'orderSummaryTitle', group: 'Cart & checkout', label: 'Order summary heading', default: 'Order summary' },
+  { key: 'couponLabel', group: 'Cart & checkout', label: 'Coupon box label', default: 'Coupon code' },
+  { key: 'placeOrderButton', group: 'Cart & checkout', label: 'Place-order button', default: 'Place order' },
+  { key: 'addressHint', group: 'Cart & checkout', label: 'Hint under the button until an address is chosen', default: 'Choose or add a delivery address to continue.' },
 ] as const;
 
 export type SiteTextKey = (typeof SITE_TEXT_FIELDS)[number]['key'];

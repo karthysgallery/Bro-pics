@@ -23,6 +23,7 @@ import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
 import { getOrCreateCheckoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../lib/checkout-idempotency-key';
 import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/DeliveryTimeline';
 import type { DeliveryMethod } from '@bro-pics/shared';
+import { useSiteText } from '../../components/layout/SiteTextContext';
 
 const DELIVERY_METHOD_LABEL: Record<DeliveryMethod, string> = { standard: 'Standard', express: 'Express' };
 // Only the courier-transit portion changes by method — production/dispatch
@@ -48,6 +49,7 @@ const COUPON_REASON_MESSAGES: Record<string, string> = {
 };
 
 export default function CheckoutPage() {
+  const siteText = useSiteText();
   const { user } = useAuth();
   const { items, totalPaise, clearCart } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
@@ -411,7 +413,7 @@ export default function CheckoutPage() {
       </nav>
 
       <div className="mb-6">
-        <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">One step closer to your wall.</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">{siteText.checkoutHeadline}</h1>
         <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Bag / Delivery / Payment</p>
       </div>
 
@@ -537,7 +539,7 @@ export default function CheckoutPage() {
 
           {/* Right: Order Summary Card */}
           <div className="rounded-3xl bg-paper border border-line p-6 lg:sticky lg:top-32 shadow-sm">
-            <h2 className="font-display text-xl font-bold text-ink mb-4">Order summary</h2>
+            <h2 className="font-display text-xl font-bold text-ink mb-4">{siteText.orderSummaryTitle}</h2>
 
             <div className="space-y-2 mb-4">
               {items.map((item) => (
@@ -552,7 +554,7 @@ export default function CheckoutPage() {
 
             {/* Coupon input */}
             <div className="my-4 pt-4 border-t border-line">
-              <label htmlFor="coupon-code" className="block text-2xs text-ink/60 mb-1 font-semibold">Coupon code</label>
+              <label htmlFor="coupon-code" className="block text-2xs text-ink/60 mb-1 font-semibold">{siteText.couponLabel}</label>
               {appliedCoupon ? (
                 <div className="flex items-center justify-between text-xs bg-tint/60 px-3 py-2 rounded-xl">
                   <span>
@@ -644,11 +646,11 @@ export default function CheckoutPage() {
                 disabled={placing || paymentConfirming || !addressId || hasUnavailableItems}
                 className="mt-2 w-full min-h-[48px] py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
               >
-                {placing ? 'Please wait…' : orderId ? 'Resume payment' : 'Place order'}
+                {placing ? 'Please wait…' : orderId ? 'Resume payment' : siteText.placeOrderButton}
               </button>
             )}
             {!addressId && !orderId && (
-              <p className="text-2xs text-ink/50 mt-2 text-center">Choose or add a delivery address to continue.</p>
+              <p className="text-2xs text-ink/50 mt-2 text-center">{siteText.addressHint}</p>
             )}
 
             <p className="mt-4 text-center text-2xs text-ink/50 leading-relaxed">

@@ -20,11 +20,11 @@ import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
 import { buildBreadcrumbList, buildProductJsonLd, resolveOgImage } from '../../../../lib/structured-data';
-import { getSeoSettings, getShippingSettings, getSiteText } from '../../../../lib/firestore-settings';
+import { getAppearanceSettings, getSeoSettings, getShippingSettings, getSiteText } from '../../../../lib/firestore-settings';
 import { productCanonicalPath, productImageAlt, productSeoDescription, productSeoTitle } from '../../../../lib/seo/product-seo';
 import { SITE_NAME } from '../../../../lib/seo/site';
 import { getPublishedCombos } from '../../../../lib/firestore-combos';
-import { DEFAULT_SITE_TEXT } from '@bro-pics/shared';
+import { DEFAULT_APPEARANCE, DEFAULT_SITE_TEXT } from '@bro-pics/shared';
 
 export const revalidate = 60;
 
@@ -108,6 +108,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   ]);
   const siteText = await getSiteText().catch(() => DEFAULT_SITE_TEXT);
   const shippingSettings = await getShippingSettings().catch(() => null);
+  // Which optional sections the admin has switched on (Admin > Appearance); all on by default.
+  const show = (await getAppearanceSettings().catch(() => DEFAULT_APPEARANCE)).productPage;
   // Combo offers that include this product: a real, contextual internal link in both directions (the combo page links to its products).
   const productCombos = (await getPublishedCombos().catch(() => [])).filter((c) => c.items.some((i) => i.productId === product.id));
   const defaultVariant = variants.find((v) => v.stockStatus === 'in_stock') ?? variants[0] ?? null;
@@ -170,6 +172,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <ProductDetailWithUrlParams {...detailProps} />
       </Suspense>
 
+      {show.showTrustBar && (
+        <>
       {/* Figma 4-item Trust Reassurance Bar */}
       <div className="my-12 py-6 border-y border-line grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 text-ink/80 text-xs md:text-sm font-medium">
         <div className="flex items-center gap-2.5">
@@ -203,6 +207,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <span>{siteText.trust4}</span>
         </div>
       </div>
+        </>
+      )}
 
       {productCombos.length > 0 && (
         <section aria-labelledby="product-combos" className="mb-10">
@@ -219,14 +225,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </section>
       )}
 
-      <ProductTabs product={product} variants={variants} />
-      <VideoRail media={media} />
-      <ReviewsSection product={product} reviews={reviews} />
-      {frequentlyBoughtTogether.length > 0 && (
+      {show.showTabs && <ProductTabs product={product} variants={variants} />}
+      {show.showVideos && <VideoRail media={media} />}
+      {show.showReviews && <ReviewsSection product={product} reviews={reviews} />}
+      {show.showFrequentlyBought && frequentlyBoughtTogether.length > 0 && (
         <RelatedProducts products={frequentlyBoughtTogether} title="Frequently Bought Together" />
       )}
-      <RelatedProducts products={relatedProducts} />
-      <RecentlyViewedRail excludeProductId={product.id} />
+      {show.showRelated && <RelatedProducts products={relatedProducts} />}
+      {show.showRecentlyViewed && <RecentlyViewedRail excludeProductId={product.id} />}
     </div>
   );
 }
