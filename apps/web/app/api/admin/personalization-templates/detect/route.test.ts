@@ -1,18 +1,22 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import sharp from 'sharp';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 const mockDocGet = vi.hoisted(() => vi.fn());
+const mockDocSet = vi.hoisted(() => vi.fn());
 vi.mock('firebase-admin/firestore', () => ({
-  getFirestore: () => ({ collection: () => ({ doc: () => ({ get: mockDocGet }) }) }),
+  getFirestore: () => ({ collection: () => ({ doc: () => ({ id: 'cleaned_1', get: mockDocGet, set: mockDocSet }) }) }),
 }));
 
 const mockDownload = vi.hoisted(() => vi.fn());
+const mockSave = vi.hoisted(() => vi.fn());
 vi.mock('firebase-admin/storage', () => ({
-  getStorage: () => ({ bucket: () => ({ file: () => ({ download: mockDownload }) }) }),
+  getStorage: () => ({ bucket: () => ({ file: (path: string) => ({ download: mockDownload, save: (...a: unknown[]) => mockSave(path, ...a) }) }) }),
 }));
 
 const mockPermission = vi.hoisted(() => vi.fn());
@@ -74,6 +78,42 @@ describe('POST /api/admin/personalization-templates/detect', () => {
     // 900 px across 12 in is 75 DPI: the admin is told to upload a bigger file.
     expect(body.artworkDpi).toBe(75);
     expect(body.warnings.join(' ')).toMatch(/at least 3600 × 2400 px/);
+  });
+
+  it('maps a real sample collage: every photo on its grid, the main photo, and its wording as a text box', async () => {
+    // The owner's reference design: 28 small photos round a large one, "FOREVER AND ALWAYS" under it,
+    // on a softly shaded light grey (which the old single-colour background check could not read).
+    mockDownload.mockResolvedValueOnce([readFileSync(join(__dirname, '../../../../../__fixtures__/collage-forever-and-always.webp'))]);
+    const res = await POST(req({ mediaId: 'm1' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const { slots, texts } = body.detection;
+    expect(slots).toHaveLength(29);
+    expect(slots.every((s: { shape: string }) => s.shape === 'rect')).toBe(true);
+    // Five columns and eight rows of small photos share exact edges.
+    expect(new Set(slots.map((s: { x: number }) => s.x.toFixed(4))).size).toBe(5);
+    const area = (s: { width: number; height: number }) => s.width * s.height;
+    const hero = [...slots].sort((a, b) => area(b) - area(a))[0];
+    expect(area(hero)).toBeGreaterThan(8 * area(slots[0]));
+    // One line of wording, just under the main photo, with the same centre.
+    expect(texts).toHaveLength(1);
+    expect(texts[0].y).toBeGreaterThanOrEqual(hero.y + hero.height);
+    expect(texts[0].x + texts[0].width / 2).toBeCloseTo(hero.x + hero.width / 2, 1);
+    // The design comes back with the wording cleared, saved as a new library image the template uses.
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockSave.mock.calls[0][0]).toMatch(/^public\/media\/cleaned_1-design-without-text\.jpg$/);
+    expect(mockDocSet).toHaveBeenCalledWith(expect.objectContaining({ id: 'cleaned_1', type: 'image', isActive: true, tags: ['template-artwork'] }));
+    expect(body.artwork).toMatchObject({ assetId: 'cleaned_1', originalAssetId: 'm1' });
+  });
+
+  it('keeps the photo spaces when the cleared copy cannot be saved', async () => {
+    mockDownload.mockResolvedValueOnce([readFileSync(join(__dirname, '../../../../../__fixtures__/collage-forever-and-always.webp'))]);
+    mockSave.mockRejectedValueOnce(new Error('storage down'));
+    const body = await (await POST(req({ mediaId: 'm1' }))).json();
+    expect(body.detection.slots).toHaveLength(29);
+    expect(body.detection.texts).toEqual([]);
+    expect(body.artwork.assetId).toBe('m1');
+    expect(body.detection.notes.join(' ')).toMatch(/could not be cleared/);
   });
 
   it('rejects unknown media and half a print size', async () => {

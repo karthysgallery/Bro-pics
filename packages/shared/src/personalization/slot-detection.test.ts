@@ -172,6 +172,66 @@ describe('detectPhotoSlots — opaque designs', () => {
     ]);
   });
 
+  it('reads a softly shaded background, lines the photos up on their grid, recovers pale photos and finds the wording', () => {
+    // 4 columns × 4 rows of 100×90 photos with 15 px gutters on a light grey
+    // that darkens towards the bottom, a darker edge line (a photographed print),
+    // and one line of wording between the second and third rows.
+    const W = 470;
+    const H = 520;
+    const img = canvas(W, H, WHITE);
+    for (let y = 0; y < H; y++) rect(img, 0, y, W, 1, [234 - Math.round((y / H) * 10), 232 - Math.round((y / H) * 10), 230 - Math.round((y / H) * 10), 255]);
+    rect(img, 0, 0, 2, H, [206, 204, 202, 255]);
+    const col = (c: number) => 20 + c * 115;
+    const row = (r: number) => [20, 125, 285, 390][r];
+    let seed = 1;
+    for (let r = 0; r < 4; r++)
+      for (let c = 0; c < 4; c++) {
+        const x = col(c);
+        const y = row(r);
+        if (r === 0 && c === 2) {
+          // A bright sky over a darker field: only the field stands out.
+          rect(img, x, y, 100, 90, [240, 242, 246, 255]);
+          photo(img, x, y + 55, 100, 35, 50);
+        } else if (r === 3 && c === 1) {
+          // A couple on a white studio wall: content in the middle only.
+          rect(img, x, y, 100, 90, [244, 243, 241, 255]);
+          photo(img, x + 30, y + 15, 40, 60, 60);
+        } else {
+          photo(img, x, y, 100, 90 - (seed % 3), seed);
+          // Ragged edges, as a JPEG gives.
+          rect(img, x, y + 90 - (seed % 3), 100, seed % 3, [80, 60, 50, 255]);
+        }
+        seed++;
+      }
+    // "FOREVER" as seven 9×14 dark letters, centred under the second row.
+    for (let i = 0; i < 7; i++) rect(img, 180 + i * 14, 240, 9, 14, [40, 40, 40, 255]);
+
+    const r = detectPhotoSlots(img);
+    expect(r.mode).toBe('opaque');
+    expect(r.slots).toHaveLength(16);
+    expect(r.slots.every((s) => s.shape === 'rect')).toBe(true);
+    // Every photo space sits exactly on its grid line (within a pixel of the one-pixel overlap).
+    const lefts = new Set(r.slots.map((s) => Math.round(s.x * W)));
+    const tops = new Set(r.slots.map((s) => Math.round(s.y * H)));
+    expect([...lefts].sort((a, b) => a - b)).toEqual([19, 134, 249, 364]);
+    expect([...tops].sort((a, b) => a - b)).toEqual([19, 124, 284, 389]);
+    expect(new Set(r.slots.map((s) => Math.round(s.width * W))).size).toBe(1);
+    expect(new Set(r.slots.map((s) => Math.round(s.height * H))).size).toBe(1);
+
+    expect(r.texts).toHaveLength(1);
+    const t = r.texts![0];
+    expect(t.color).toBe('#282828');
+    // The wording's own box, to clear from the design…
+    expect(Math.round(t.erase.x * W)).toBeLessThanOrEqual(180);
+    expect(Math.round((t.erase.x + t.erase.width) * W)).toBeGreaterThanOrEqual(270);
+    // …and a text box that stays between the rows and widens over the free space.
+    expect(t.y * H).toBeGreaterThan(215);
+    expect((t.y + t.height) * H).toBeLessThan(284);
+    expect(t.width * W).toBeGreaterThan(300);
+    expect(t.x + t.width / 2).toBeCloseTo((180 + 271) / 2 / W, 2);
+    expect(r.notes.join(' ')).toMatch(/1 line of wording/);
+  });
+
   it('reports clearly when there is no plain background to work from', () => {
     const img = canvas(200, 200, WHITE);
     photo(img, 0, 0, 200, 200, 7);
@@ -219,6 +279,23 @@ describe('templateDraftFromDetection', () => {
     expect(draft.layers.map((l) => l.kind)).toEqual(['fixed', 'photoSlot']);
     expect(draft.background).toEqual({ type: 'color', color: '#ffffff' });
     expect(draft.photoSlots[0].label).toBe('Your photo');
+  });
+
+  it('turns found wording into a text box drawn above everything, in the wording\'s colour and size', () => {
+    const img = canvas(600, 400, WHITE);
+    rect(img, 40, 40, 200, 250, GREY);
+    rect(img, 360, 40, 200, 250, GREY);
+    for (let i = 0; i < 6; i++) rect(img, 230 + i * 24, 330, 16, 28, [200, 30, 40, 255]);
+    const detection = detectPhotoSlots(img);
+    const draft = templateDraftFromDetection({ id: 'words', name: 'Words', artwork: { assetId: 'a' }, canvas: { width: 3000, height: 2000 }, detection });
+    expect(draft.textSlots).toHaveLength(1);
+    const slot = draft.textSlots[0];
+    expect(slot).toMatchObject({ id: 'text_01', label: 'Your text', align: 'center', defaultValue: '', defaultColor: '#c81e28', required: false });
+    // 28 px capitals on a 600 px design are a ~40 px font, i.e. ~27 px in the 400 px editor.
+    expect(slot.maxFontSizePx).toBeGreaterThan(24);
+    expect(slot.maxFontSizePx).toBeLessThan(30);
+    expect(draft.layers.map((l) => l.kind)).toEqual(['fixed', 'photoSlot', 'photoSlot', 'text']);
+    expect(validateTemplate(draft).valid).toBe(true);
   });
 
   it('fills a dominant hero space first and calls it the main photo', () => {

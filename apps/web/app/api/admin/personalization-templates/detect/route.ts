@@ -6,8 +6,8 @@ import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { requirePermission } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
-import { analyseCollage, planCanvas } from '../../../../../lib/collage-detection';
-import { logger, type MediaAsset } from '@bro-pics/shared';
+import { analyseCollage, eraseTextAreas, planCanvas } from '../../../../../lib/collage-detection';
+import { MediaAssetSchema, logger, type MediaAsset } from '@bro-pics/shared';
 
 const BodySchema = z
   .object({
@@ -22,8 +22,10 @@ const BodySchema = z
 
 /**
  * Analyses a collage design from the media library and proposes its photo
- * slots plus the print canvas. Nothing is saved: the admin reviews the
- * proposal in the builder and creates the draft from it.
+ * slots plus the print canvas. The admin reviews the proposal in the builder
+ * and creates the draft from it. The one thing saved here: when the design
+ * has printed wording, a copy with that wording cleared is added to the media
+ * library, because the template's text box replaces it.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
@@ -54,11 +56,45 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     const analysis = await analyseCollage(image);
+    let assetId = body.mediaId;
+    const texts = analysis.detection.texts ?? [];
+    if (texts.length > 0 && analysis.detection.backgroundColor) {
+      try {
+        const cleaned = await eraseTextAreas(image, texts, analysis.detection.backgroundColor);
+        const ref = db.collection('media').doc();
+        const path = `public/media/${ref.id}-design-without-text.${cleaned.extension}`;
+        await getStorage(getAdminApp()).bucket().file(path).save(cleaned.data, { contentType: cleaned.contentType, resumable: false });
+        const now = new Date();
+        await ref.set(
+          MediaAssetSchema.parse({
+            id: ref.id,
+            path,
+            type: 'image',
+            width: analysis.native.width,
+            height: analysis.native.height,
+            sizeBytes: cleaned.data.length,
+            alt: `${media.alt || 'Collage design'} (wording cleared for a template)`,
+            tags: ['template-artwork'],
+            usageRefs: [],
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+          })
+        );
+        assetId = ref.id;
+      } catch (err) {
+        // The photo spaces are still useful without the text boxes.
+        logger.warn('Collage detection: clearing the wording failed', { mediaId: body.mediaId, error: String(err) });
+        analysis.detection.texts = [];
+        analysis.detection.notes = analysis.detection.notes.filter((n) => !n.startsWith('Found ') || !n.includes('wording'));
+        analysis.detection.notes.push('Printed wording was found but could not be cleared from the design, so no text box was added. Add one by hand if needed.');
+      }
+    }
     const plan = planCanvas({ nativeWidth: analysis.native.width, nativeHeight: analysis.native.height, widthIn: body.widthIn, heightIn: body.heightIn, dpi: body.dpi });
     return NextResponse.json(
       {
         detection: analysis.detection,
-        artwork: { assetId: body.mediaId, ...analysis.native },
+        artwork: { assetId, ...analysis.native, ...(assetId !== body.mediaId && { originalAssetId: body.mediaId }) },
         analysed: analysis.analysed,
         canvas: plan.canvas,
         printSizeIn: { width: plan.widthIn, height: plan.heightIn },

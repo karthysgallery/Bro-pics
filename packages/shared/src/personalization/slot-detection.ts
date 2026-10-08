@@ -26,7 +26,7 @@ export interface RgbaPixels {
   data: Uint8ClampedArray | Uint8Array;
 }
 
-export type DetectionSource = 'transparent-window' | 'placeholder' | 'enclosed-area';
+export type DetectionSource = 'transparent-window' | 'placeholder' | 'enclosed-area' | 'grid-cell';
 
 export interface DetectedSlot {
   /** Unrotated box, as fractions of the image. */
@@ -45,9 +45,29 @@ export interface DetectedSlot {
   source: DetectionSource;
 }
 
+/** A line (or block of lines) of printed wording on the design, proposed as a text box. */
+export interface DetectedText {
+  /** The proposed text box, as fractions of the image: the wording plus the free space beside it. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Tight box round the printed wording (fractions), to be cleared from the artwork. */
+  erase: { x: number; y: number; width: number; height: number };
+  /** Ink colour of the wording, #rrggbb. */
+  color: string;
+  /** Estimated font size as a fraction of the image width. */
+  fontSize: number;
+  lines: number;
+  align: 'left' | 'center' | 'right';
+  confidence: number;
+}
+
 export interface SlotDetectionResult {
   mode: 'transparent-windows' | 'opaque' | 'none';
   slots: DetectedSlot[];
+  /** Printed wording found on the design (opaque designs only). */
+  texts?: DetectedText[];
   /** Where the uploaded artwork belongs in the paint stack relative to the photos. */
   artworkPlacement: 'above-photos' | 'below-photos';
   /** The plain background colour found around an opaque design, as #rrggbb. */
@@ -400,36 +420,60 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
-/** Most common colour along the image border, with its share of the border. */
-function dominantBorderColor(px: RgbaPixels): { r: number; g: number; b: number; share: number } | null {
+/**
+ * The design's background colour: the per-channel median of a thin band round
+ * the edge, with the share of that band within `tol` of it. A median rather
+ * than the single most common colour, so a softly shaded or slightly noisy
+ * (photographed, JPEG) background still reads as one colour.
+ */
+function dominantBorderColor(px: RgbaPixels, tol: number): { r: number; g: number; b: number; share: number; noise: number } | null {
   const { width: w, height: h, data } = px;
-  const bins = new Map<number, { n: number; r: number; g: number; b: number }>();
-  let total = 0;
-  const add = (x: number, y: number) => {
-    const i = (y * w + x) * 4;
-    if (data[i + 3] < 128) return;
-    const key = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4);
-    const bin = bins.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
-    bin.n++;
-    bin.r += data[i];
-    bin.g += data[i + 1];
-    bin.b += data[i + 2];
-    bins.set(key, bin);
-    total++;
+  const band = Math.max(2, Math.round(0.015 * Math.min(w, h)));
+  const hist = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  const samples: number[] = [];
+  for (let y = 0; y < h; y++) {
+    const edgeRow = y < band || y >= h - band;
+    for (let x = 0; x < w; x++) {
+      if (!edgeRow && x >= band && x < w - band) {
+        x = w - band - 1;
+        continue;
+      }
+      const i = (y * w + x) * 4;
+      if (data[i + 3] < 128) continue;
+      hist[0][data[i]]++;
+      hist[1][data[i + 1]]++;
+      hist[2][data[i + 2]]++;
+      samples.push(i);
+    }
+  }
+  if (samples.length === 0) return null;
+  const median = (hgram: Uint32Array) => {
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += hgram[v];
+      if (seen * 2 >= samples.length) return v;
+    }
+    return 255;
   };
-  for (let x = 0; x < w; x++) {
-    add(x, 0);
-    add(x, h - 1);
+  const r = median(hist[0]);
+  const g = median(hist[1]);
+  const b = median(hist[2]);
+  let close = 0;
+  const spread = new Uint32Array(tol + 1);
+  for (const i of samples) {
+    const d = Math.max(Math.abs(data[i] - r), Math.abs(data[i + 1] - g), Math.abs(data[i + 2] - b));
+    if (d <= tol) {
+      close++;
+      spread[d]++;
+    }
   }
-  for (let y = 1; y < h - 1; y++) {
-    add(0, y);
-    add(w - 1, y);
+  // How much the background itself varies (shading, noise): the 90th percentile distance.
+  let noise = 0;
+  for (let seen = 0; noise <= tol; noise++) {
+    seen += spread[noise];
+    if (seen >= 0.9 * close) break;
   }
-  if (total === 0) return null;
-  let best: { n: number; r: number; g: number; b: number } | null = null;
-  for (const bin of bins.values()) if (!best || bin.n > best.n) best = bin;
-  if (!best) return null;
-  return { r: Math.round(best.r / best.n), g: Math.round(best.g / best.n), b: Math.round(best.b / best.n), share: best.n / total };
+  return { r, g, b, share: close / samples.length, noise };
 }
 
 const hex = (n: number) => n.toString(16).padStart(2, '0');
@@ -488,7 +532,7 @@ export function detectPhotoSlots(px: RgbaPixels, options: DetectOptions = {}): S
   }
 
   // 2. Opaque design on a plain background.
-  const bg = dominantBorderColor(px);
+  const bg = dominantBorderColor(px, tol);
   if (!bg || bg.share < 0.45) {
     notes.push('No plain background colour runs around the design, so the photo areas could not be separated from it. Draw the slots by hand, or upload the design with transparent photo windows.');
     return { mode: 'none', slots: [], artworkPlacement: 'below-photos', notes };
@@ -515,13 +559,12 @@ export function detectPhotoSlots(px: RgbaPixels, options: DetectOptions = {}): S
     }
   }
   // b) Placeholder boxes / sample photos that differ from the background.
-  {
-    const { labels, components } = labelComponents(notBg, w, h);
-    for (const c of components) {
-      if (c.area < minArea || c.area > maxArea) continue;
-      const a = analyse(labels, w, h, c, 'placeholder', 1);
-      if (a) candidates.push(a);
-    }
+  const fg = labelComponents(notBg, w, h);
+  const rejected: Component[] = [];
+  for (const c of fg.components) {
+    const a = c.area >= minArea && c.area <= maxArea ? analyse(fg.labels, w, h, c, 'placeholder', 1) : null;
+    if (a) candidates.push(a);
+    else rejected.push(c);
   }
 
   // A shape that merely contains several others (an outer border, a panel behind
@@ -540,16 +583,341 @@ export function detectPhotoSlots(px: RgbaPixels, options: DetectOptions = {}): S
   }
   kept = kept.filter((a) => !drop.has(a));
 
-  const slots = readingOrder(kept.map((a) => a.slot).sort((a, b) => b.confidence - a.confidence).slice(0, maxSlots));
   const backgroundColor = `#${hex(bg.r)}${hex(bg.g)}${hex(bg.b)}`;
+  const ctx: GridContext = { w, h, data, bg, contentThreshold: Math.max(12, bg.noise * 2) };
+  const grid = refineGrid(kept.map((a) => a.slot), ctx);
+  const slots = readingOrder(grid.slots.sort((a, b) => b.confidence - a.confidence).slice(0, maxSlots));
+  const texts = findTextLines(rejected, fg.labels, slots, notBg, ctx);
   if (slots.length === 0) {
     notes.push('No photo areas were found. Draw the slots by hand, or upload the design with transparent photo windows.');
-    return { mode: 'none', slots, artworkPlacement: 'below-photos', backgroundColor, notes };
+    return { mode: 'none', slots, texts, artworkPlacement: 'below-photos', backgroundColor, notes };
   }
   notes.push(`Found ${slots.length} photo area${slots.length === 1 ? '' : 's'} on a ${backgroundColor} background. Customer photos will be placed over them.`);
+  if (grid.filled > 0) {
+    notes.push(`${grid.filled} of them ${grid.filled === 1 ? 'is a pale photo' : 'are pale photos'} placed from the grid the other photos line up on — check ${grid.filled === 1 ? 'it' : 'them'}.`);
+  }
+  if (grid.snapped) notes.push('The photo spaces were lined up on the design\'s grid so their edges match exactly.');
+  if (texts.length > 0) {
+    notes.push(
+      `Found ${texts.length} line${texts.length === 1 ? '' : 's'} of wording. ${texts.length === 1 ? 'It was' : 'They were'} cleared from the design and turned into a text box customers can change — type the design's own wording as the default text.`
+    );
+  }
   const lowConfidence = slots.filter((s) => s.confidence < 0.6).length;
   if (lowConfidence > 0) notes.push(`${lowConfidence} area${lowConfidence === 1 ? ' is' : 's are'} uncertain — check them before publishing.`);
-  return { mode: 'opaque', slots, artworkPlacement: 'below-photos', backgroundColor, notes };
+  return { mode: 'opaque', slots, texts, artworkPlacement: 'below-photos', backgroundColor, notes };
+}
+
+interface GridContext {
+  w: number;
+  h: number;
+  data: Uint8ClampedArray | Uint8Array;
+  bg: { r: number; g: number; b: number };
+  /** A pixel further than this from the background colour is content. */
+  contentThreshold: number;
+}
+
+interface PxBox {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+}
+
+const toPx = (s: DetectedSlot, w: number, h: number): PxBox => ({ l: s.x * w, t: s.y * h, r: (s.x + s.width) * w, b: (s.y + s.height) * h });
+
+function overlapArea(a: PxBox, b: PxBox): number {
+  return Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
+}
+
+/** Groups nearby values; returns the median of every group with at least two members. */
+function clusterLines(values: number[], tol: number): number[] {
+  const sorted = [...values].sort((a, b) => a - b);
+  const lines: number[] = [];
+  let group: number[] = [];
+  const flush = () => {
+    if (group.length >= 2) lines.push(group[Math.floor(group.length / 2)]);
+    group = [];
+  };
+  for (const v of sorted) {
+    if (group.length > 0 && v - group[group.length - 1] > tol) flush();
+    group.push(v);
+  }
+  flush();
+  return lines;
+}
+
+function nearestLine(v: number, lines: number[], tol: number): number | null {
+  let best: number | null = null;
+  for (const line of lines) if (Math.abs(line - v) <= tol && (best === null || Math.abs(line - v) < Math.abs(best - v))) best = line;
+  return best;
+}
+
+/** Share of the box's pixels that are content (clearly not background). */
+function contentShare(ctx: GridContext, box: PxBox): number {
+  const { w, h, data, bg, contentThreshold } = ctx;
+  const l = Math.max(0, Math.ceil(box.l));
+  const t = Math.max(0, Math.ceil(box.t));
+  const r = Math.min(w, Math.floor(box.r));
+  const b = Math.min(h, Math.floor(box.b));
+  let total = 0;
+  let content = 0;
+  for (let y = t; y < b; y++)
+    for (let x = l; x < r; x++) {
+      const o = (y * w + x) * 4;
+      total++;
+      if (Math.max(Math.abs(data[o] - bg.r), Math.abs(data[o + 1] - bg.g), Math.abs(data[o + 2] - bg.b)) > contentThreshold) content++;
+    }
+  return total === 0 ? 0 : content / total;
+}
+
+/**
+ * Collage photos sit on a grid. Edges that nearly line up are snapped onto the
+ * shared grid line, so every space is placed exactly, and a grid cell left
+ * empty only because its photo is pale (a white dress, a bright sky — pixels
+ * that look like the background) is filled in when it clearly holds content.
+ */
+function refineGrid(input: DetectedSlot[], ctx: GridContext): { slots: DetectedSlot[]; filled: number; snapped: boolean } {
+  const { w, h } = ctx;
+  const straight = input.filter((s) => s.rotationDeg === 0);
+  if (straight.length < 4) return { slots: input, filled: 0, snapped: false };
+  const tolX = Math.max(2, 0.012 * w);
+  const tolY = Math.max(2, 0.012 * h);
+  const boxes = straight.map((s) => toPx(s, w, h));
+  const lefts = clusterLines(boxes.map((b) => b.l), tolX);
+  const rights = clusterLines(boxes.map((b) => b.r), tolX);
+  const tops = clusterLines(boxes.map((b) => b.t), tolY);
+  const bottoms = clusterLines(boxes.map((b) => b.b), tolY);
+
+  // Grid cells: a column span and a row span that match the size of a photo
+  // already found. Only on a clear grid — enough photos sharing column and row lines.
+  let cells: PxBox[] = [];
+  if (straight.length >= 6 && lefts.length >= 3 && tops.length >= 3) {
+    const widths = boxes.map((b) => b.r - b.l);
+    const heights = boxes.map((b) => b.b - b.t);
+    const spans = (starts: number[], ends: number[], known: number[], tol: number) =>
+      starts.flatMap((a) => ends.filter((b) => b > a && known.some((k) => Math.abs(b - a - k) <= tol)).map((b) => [a, b] as [number, number]));
+    const cols = spans(lefts, rights, widths, tolX);
+    const rows = spans(tops, bottoms, heights, tolY);
+    cells = cols.flatMap(([l, r]) => rows.map(([t, b]) => ({ l, r, t, b }))).sort((a, b) => (a.r - a.l) * (a.b - a.t) - (b.r - b.l) * (b.b - b.t));
+  }
+  const cellArea = (c: PxBox) => (c.r - c.l) * (c.b - c.t);
+  const collides = (cell: PxBox, others: PxBox[]) => others.some((o) => overlapArea(o, cell) > 0.05 * Math.min(cellArea(cell), cellArea(o)));
+
+  const rectShare = straight.filter((s) => s.shape === 'rect').length / straight.length;
+  let snapped = false;
+  const slots: DetectedSlot[] = [];
+  const placed: PxBox[] = [];
+  const pending = input.map((s) => (s.rotationDeg === 0 ? toPx(s, w, h) : null));
+  input.forEach((s, index) => {
+    if (s.rotationDeg !== 0) {
+      slots.push(s);
+      return;
+    }
+    const b = pending[index]!;
+    const l = nearestLine(b.l, lefts, tolX);
+    const r = nearestLine(b.r, rights, tolX);
+    const t = nearestLine(b.t, tops, tolY);
+    const bt = nearestLine(b.b, bottoms, tolY);
+    let nb: PxBox = { l: l ?? b.l, r: r ?? b.r, t: t ?? b.t, b: bt ?? b.b };
+    let onGrid = l !== null && r !== null && t !== null && bt !== null;
+    if (!onGrid) {
+      // Part of a pale photo (only its darker part stood out): it grows to the
+      // smallest grid cell around it, if that cell is free.
+      const others = [...placed, ...pending.filter((p, i): p is PxBox => p !== null && i > index)];
+      const cell = cells.find((c) => c.l <= b.l + tolX && c.r >= b.r - tolX && c.t <= b.t + tolY && c.b >= b.b - tolY && !collides(c, others));
+      if (cell) {
+        nb = cell;
+        onGrid = true;
+      }
+    }
+    if (nb.l !== b.l || nb.r !== b.r || nb.t !== b.t || nb.b !== b.b) snapped = true;
+    const next: DetectedSlot = { ...s, x: clamp01(nb.l / w), y: clamp01(nb.t / h), width: Math.min(1, (nb.r - nb.l) / w), height: Math.min(1, (nb.b - nb.t) / h) };
+    // On a grid of plain rectangles, a sample photo read as a polygon or a rounded
+    // box (its pale corners blending into the gutter) is a rectangle too.
+    if (onGrid && rectShare >= 0.7 && (s.shape === 'polygon' || s.shape === 'rounded')) {
+      next.shape = 'rect';
+      delete next.polygon;
+      delete next.cornerRadius;
+      next.confidence = Math.max(s.confidence, 0.65);
+    }
+    slots.push(next);
+    placed.push(nb);
+  });
+
+  // A grid cell left empty only because its whole photo is pale: filled when it clearly holds content.
+  let filled = 0;
+  for (const cell of cells) {
+    if (collides(cell, placed)) continue;
+    const inset = Math.max(1, 0.04 * Math.min(cell.r - cell.l, cell.b - cell.t));
+    const inner = contentShare(ctx, { l: cell.l + inset, t: cell.t + inset, r: cell.r - inset, b: cell.b - inset });
+    if (inner < 0.25) continue;
+    slots.push({
+      x: clamp01(cell.l / w),
+      y: clamp01(cell.t / h),
+      width: Math.min(1, (cell.r - cell.l) / w),
+      height: Math.min(1, (cell.b - cell.t) / h),
+      rotationDeg: 0,
+      shape: 'rect',
+      confidence: Math.round(Math.min(0.75, 0.45 + inner * 0.4) * 100) / 100,
+      source: 'grid-cell',
+    });
+    placed.push(cell);
+    filled++;
+  }
+  return { slots, filled, snapped };
+}
+
+/**
+ * Printed wording on the background: small marks (letters) that are not photo
+ * areas, sitting side by side on a shared line. Lines stacked closely are one
+ * block. Each block becomes a proposed text box spanning the free space beside
+ * the wording, so a customer's longer text still fits.
+ */
+function findTextLines(marks: Component[], labels: Int32Array, slots: DetectedSlot[], notBg: Uint8Array, ctx: GridContext): DetectedText[] {
+  const { w, h, data } = ctx;
+  const photoBoxes = slots.map((s) => toPx(s, w, h));
+  const inPhoto = (c: Component) => {
+    const cx = (c.minX + c.maxX + 1) / 2;
+    const cy = (c.minY + c.maxY + 1) / 2;
+    return photoBoxes.some((b) => cx >= b.l - 2 && cx <= b.r + 2 && cy >= b.t - 2 && cy <= b.b + 2);
+  };
+  const glyphs = marks
+    .filter((c) => {
+      const gh = c.maxY - c.minY + 1;
+      const gw = c.maxX - c.minX + 1;
+      return c.area >= 4 && gh >= 4 && gh <= 0.12 * h && gw <= 4 * gh && !c.touchesBorder && !inPhoto(c);
+    })
+    .slice(0, 3000);
+  if (glyphs.length < 3) return [];
+
+  // Union-find over glyphs that share a line.
+  const parent = glyphs.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const order = glyphs.map((_, i) => i).sort((a, b) => glyphs[a].minX - glyphs[b].minX);
+  for (let ai = 0; ai < order.length; ai++) {
+    const a = glyphs[order[ai]];
+    const ah = a.maxY - a.minY + 1;
+    for (let bi = ai + 1; bi < order.length; bi++) {
+      const b = glyphs[order[bi]];
+      const bh = b.maxY - b.minY + 1;
+      const gap = b.minX - a.maxX;
+      if (gap > 1.5 * Math.max(ah, bh, 8)) break;
+      const vOverlap = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY) + 1;
+      if (vOverlap >= 0.5 * Math.min(ah, bh) && Math.max(ah, bh) / Math.min(ah, bh) <= 2.5) parent[find(order[ai])] = find(order[bi]);
+    }
+  }
+  interface Line {
+    members: Component[];
+    l: number;
+    t: number;
+    r: number;
+    b: number;
+    glyphHeight: number;
+  }
+  const groups = new Map<number, Component[]>();
+  glyphs.forEach((g, i) => {
+    const root = find(i);
+    groups.set(root, [...(groups.get(root) ?? []), g]);
+  });
+  const lines: Line[] = [];
+  for (const members of groups.values()) {
+    if (members.length < 3) continue;
+    const l = Math.min(...members.map((m) => m.minX));
+    const r = Math.max(...members.map((m) => m.maxX)) + 1;
+    const t = Math.min(...members.map((m) => m.minY));
+    const b = Math.max(...members.map((m) => m.maxY)) + 1;
+    const heights = members.map((m) => m.maxY - m.minY + 1).sort((x, y) => x - y);
+    const glyphHeight = heights[Math.floor(heights.length * 0.75)];
+    if (r - l < 2 * (b - t)) continue;
+    lines.push({ members, l, t, b, r, glyphHeight });
+  }
+  if (lines.length === 0) return [];
+
+  // Stack lines that belong to one block (horizontally overlapping, close, similar size).
+  lines.sort((a, b) => a.t - b.t);
+  const blocks: Line[][] = [];
+  for (const line of lines) {
+    const block = blocks.find((bl) => {
+      const last = bl[bl.length - 1];
+      const overlap = Math.min(last.r, line.r) - Math.max(last.l, line.l);
+      return overlap > 0 && line.t - last.b <= 1.0 * Math.max(last.glyphHeight, line.glyphHeight) && Math.max(last.glyphHeight, line.glyphHeight) / Math.min(last.glyphHeight, line.glyphHeight) <= 1.6;
+    });
+    if (block) block.push(line);
+    else blocks.push([line]);
+  }
+
+  const texts: DetectedText[] = [];
+  for (const block of blocks) {
+    const members = block.flatMap((ln) => ln.members);
+    const own = new Set(members.map((m) => m.id));
+    const l = Math.min(...block.map((ln) => ln.l));
+    const r = Math.max(...block.map((ln) => ln.r));
+    const t = Math.min(...block.map((ln) => ln.t));
+    const b = Math.max(...block.map((ln) => ln.b));
+    const glyphHeight = Math.max(...block.map((ln) => ln.glyphHeight));
+    // Capital letters are about 70% of the font size.
+    const fontPx = glyphHeight / 0.7;
+
+    // Ink colour: the strongest glyph pixels (the edges are blended with the background).
+    const ink: number[] = [];
+    for (let y = t; y < b; y++)
+      for (let x = l; x < r; x++) {
+        const p = y * w + x;
+        if (own.has(labels[p])) ink.push(p);
+      }
+    if (ink.length === 0) continue;
+    const dist = (p: number) => Math.max(Math.abs(data[p * 4] - ctx.bg.r), Math.abs(data[p * 4 + 1] - ctx.bg.g), Math.abs(data[p * 4 + 2] - ctx.bg.b));
+    ink.sort((p, q) => dist(q) - dist(p));
+    const core = ink.slice(0, Math.max(1, Math.ceil(ink.length * 0.4)));
+    const avg = (k: number) => Math.round(core.reduce((sum, p) => sum + data[p * 4 + k], 0) / core.length);
+    const color = `#${hex(avg(0))}${hex(avg(1))}${hex(avg(2))}`;
+
+    // The box: the wording's rows with breathing room, widened symmetrically
+    // over the free background beside it (stopping at photos or other marks).
+    // Never reaching into the photos directly above or below the wording.
+    const padY = 0.3 * fontPx;
+    let boxT = Math.max(0, t - padY);
+    let boxB = Math.min(h, b + padY);
+    for (const pb of photoBoxes) {
+      if (pb.r <= l || pb.l >= r) continue;
+      if (pb.b <= t + 1) boxT = Math.max(boxT, pb.b + 1);
+      if (pb.t >= b - 1) boxB = Math.min(boxB, pb.t - 1);
+    }
+    const blocked = (x: number) => {
+      if (photoBoxes.some((pb) => x >= pb.l && x < pb.r && pb.t < boxB && pb.b > boxT)) return true;
+      for (let y = Math.floor(boxT); y < Math.ceil(boxB); y++) {
+        const p = y * w + x;
+        if (notBg[p] && !own.has(labels[p])) return true;
+      }
+      return false;
+    };
+    const margin = Math.max(2, 0.4 * fontPx);
+    let leftRoom = 0;
+    for (let x = l - 1; x >= 0 && !blocked(x); x--) leftRoom++;
+    let rightRoom = 0;
+    for (let x = r; x < w && !blocked(x); x++) rightRoom++;
+    const room = Math.max(0, Math.min(leftRoom, rightRoom) - margin);
+    const boxL = Math.max(0, l - room);
+    const boxR = Math.min(w, r + room);
+    const erasePad = Math.max(2, 0.15 * fontPx);
+    const el = Math.max(0, l - erasePad);
+    const et = Math.max(0, t - erasePad);
+    const er = Math.min(w, r + erasePad);
+    const eb = Math.min(h, b + erasePad);
+    texts.push({
+      x: clamp01(boxL / w),
+      y: clamp01(boxT / h),
+      width: Math.min(1, (boxR - boxL) / w),
+      height: Math.min(1, (boxB - boxT) / h),
+      erase: { x: el / w, y: et / h, width: (er - el) / w, height: (eb - et) / h },
+      color,
+      fontSize: Math.round((fontPx / w) * 10000) / 10000,
+      lines: block.length,
+      align: 'center',
+      confidence: Math.round(Math.min(0.9, 0.5 + members.length * 0.03) * 100) / 100,
+    });
+  }
+  return texts.sort((a, b) => a.y - b.y);
 }
 
 export interface DraftFromDetectionInput {
@@ -597,6 +965,28 @@ export function templateDraftFromDetection(input: DraftFromDetectionInput): Pers
     printed: true,
   };
   const slotLayers = photoSlots.map((s) => ({ kind: 'photoSlot' as const, slotId: s.id }));
+  const texts = input.detection.texts ?? [];
+  // Font sizes are authored against a 400px-wide editor (see the renderers).
+  const editorPx = (fraction: number) => Math.round(fraction * 400 * 10) / 10;
+  const textSlots = texts.map((t, i) => {
+    const maxFont = Math.max(8, editorPx(t.fontSize));
+    return {
+      id: `text_${String(i + 1).padStart(2, '0')}`,
+      label: texts.length === 1 ? 'Your text' : `Text ${i + 1}`,
+      required: false,
+      x: t.x,
+      y: t.y,
+      width: t.width,
+      height: t.height,
+      maxLength: Math.max(20, Math.min(120, 40 * t.lines)),
+      align: t.align,
+      defaultValue: '',
+      defaultColor: t.color,
+      minFontSizePx: Math.max(6, Math.round(maxFont * 0.5 * 10) / 10),
+      maxFontSizePx: maxFont,
+    };
+  });
+  const textLayers = textSlots.map((s) => ({ kind: 'text' as const, slotId: s.id }));
   const count = photoSlots.length;
   return PersonalizationTemplateSchema.parse({
     id: input.id,
@@ -607,7 +997,7 @@ export function templateDraftFromDetection(input: DraftFromDetectionInput): Pers
     canvas: { width: input.canvas.width, height: input.canvas.height, dpi: input.canvas.dpi ?? 300 },
     ...(input.detection.backgroundColor && { background: { type: 'color', color: input.detection.backgroundColor } }),
     photoSlots,
-    textSlots: [],
-    layers: input.detection.artworkPlacement === 'above-photos' ? [...slotLayers, artworkLayer] : [artworkLayer, ...slotLayers],
+    textSlots,
+    layers: [...(input.detection.artworkPlacement === 'above-photos' ? [...slotLayers, artworkLayer] : [artworkLayer, ...slotLayers]), ...textLayers],
   });
 }

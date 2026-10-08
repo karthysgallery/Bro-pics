@@ -21,7 +21,7 @@ interface TemplateSummary {
 
 interface DetectResponse {
   detection: SlotDetectionResult;
-  artwork: { assetId: string; width: number; height: number; hasAlpha: boolean };
+  artwork: { assetId: string; width: number; height: number; hasAlpha: boolean; originalAssetId?: string };
   canvas: { width: number; height: number; dpi: number };
   printSizeIn: { width: number; height: number };
   artworkDpi: number;
