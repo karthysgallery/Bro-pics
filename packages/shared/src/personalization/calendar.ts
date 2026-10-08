@@ -117,9 +117,10 @@ export function calendarLayout(slot: CalendarSlot, date: CalendarDate, box: Box,
 
   // Title band (top 24%), rule, weekday row, then the weeks.
   const title = `${MONTH_NAMES[date.month - 1]} ${date.year}`;
-  const titleSize = Math.min(0.19 * H, (0.9 * W) / (title.length * 0.5));
-  items.push({ kind: 'text', text: title, x: x + W / 2, y: y + 0.19 * H, fontSize: titleSize, font: 'title', color });
-  if (slot.showRule) items.push({ kind: 'rule', x: x + 0.02 * W, y: y + 0.245 * H, width: 0.96 * W, height: Math.max(1, 0.007 * H), color });
+  // Baseline high enough that a script face's long descenders (the y of "May") clear the rule.
+  const titleSize = Math.min(0.17 * H, (0.9 * W) / (title.length * 0.5));
+  items.push({ kind: 'text', text: title, x: x + W / 2, y: y + 0.155 * H, fontSize: titleSize, font: 'title', color });
+  if (slot.showRule) items.push({ kind: 'rule', x: x + 0.02 * W, y: y + 0.25 * H, width: 0.96 * W, height: Math.max(1, 0.007 * H), color });
 
   const colW = W / 7;
   const startDay = slot.weekStart === 'monday' ? 1 : 0;
