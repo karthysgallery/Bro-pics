@@ -11,11 +11,13 @@ const DEFAULT_TTL_MINUTES = 15;
  * permanent Firestore truth was the original bug — any order/customization
  * older than an hour showed broken images).
  */
-export async function getSignedReadUrl(path: string, ttlMinutes: number = DEFAULT_TTL_MINUTES): Promise<string> {
+export async function getSignedReadUrl(path: string, ttlMinutes: number = DEFAULT_TTL_MINUTES, downloadAs?: string): Promise<string> {
   const bucket = getStorage(getAdminApp()).bucket();
   const [url] = await bucket.file(path).getSignedUrl({
     action: 'read',
     expires: Date.now() + ttlMinutes * 60 * 1000,
+    // With a name, the browser saves the file under it instead of opening it.
+    ...(downloadAs && { responseDisposition: `attachment; filename="${downloadAs.replace(/["\\\r\n]/g, '')}"` }),
   });
   return url;
 }

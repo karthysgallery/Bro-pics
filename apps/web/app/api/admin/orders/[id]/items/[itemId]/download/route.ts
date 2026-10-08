@@ -8,19 +8,15 @@ import { adminApiError } from '../../../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../../../lib/audit-log';
 import { getSignedReadUrl } from '../../../../../../../../lib/storage-url';
 import { DownloadTypeSchema } from './download-request-schema';
+import { fileExtension, listItemOriginals, printFilePath, safeFileName } from '../../../../../../../../lib/order-item-files';
 import { logger, type OrderItem, type Upload } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ id: string; itemId: string }>;
 }
 
-// [BE-16] The exact path uploadPrintFile() in render-job.ts writes a
-// completed print file to — deterministic, so this route can check for
-// it without needing PrintJob.renderedFilePath (which is per-job, and
-// this route only has an item id, not a job id).
-function printFilePath(orderId: string, itemId: string): string {
-  return `print-files/${orderId}/${itemId}/print.png`;
-}
+// [BE-16] The exact path uploadPrintFile() in render-job.ts writes a completed print file to is
+// deterministic (printFilePath), so this route can check for it without needing a job id.
 
 /**
  * [ABE-16] Signed downloads for an order item's original photo, its
@@ -60,33 +56,36 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
   }
   const item = itemSnap.data() as OrderItem;
 
+  const orderSnap = await db.collection('orders').doc(orderId).get();
+  const orderNo = (orderSnap.exists ? (orderSnap.data() as { orderNo?: string }).orderNo : undefined) ?? orderId;
+  const frameLabel = item.combo?.frameLabel ? `-${item.combo.frameLabel}` : '';
+  const baseName = safeFileName(`${orderNo}${frameLabel}-${item.title}`);
+
   let path: string | null = null;
+  let downloadAs: string | undefined;
   if (type === 'preview') {
-    path = item.previewPath;
+    path = item.previewPath ?? null;
+    if (path) downloadAs = `${baseName}-preview.${fileExtension(path, 'png')}`;
   } else if (type === 'print') {
     path = printFilePath(orderId, itemId);
     const [exists] = await getStorage(getAdminApp()).bucket().file(path).exists();
     if (!exists) path = null;
+    else downloadAs = `${baseName}-PRINT-READY.png`;
   } else {
-    // 'original' — resolve via this item's Customizations. A plain
-    // equality query, sorted in memory after fetching — the same pattern
-    // services/print-render's own getCustomizationsForPersonalization
-    // uses for the identical query, since an equality filter plus
-    // orderBy on a DIFFERENT field would need a composite index that
-    // doesn't exist for this collection. Slot 0 (or whichever sorts
-    // first) is the one staff most often need for a fulfillment
-    // question, not a specific slot on a multi-slot item.
-    const customizationsSnap = await db
-      .collection('customizations')
-      .where('personalizationId', '==', item.personalizationId)
-      .get();
-    const customizations = customizationsSnap.docs
-      .map((doc) => doc.data() as { uploadId: string; slotIndex: number })
-      .sort((a, b) => a.slotIndex - b.slotIndex);
-    if (customizations.length > 0) {
-      const uploadSnap = await db.collection('uploads').doc(customizations[0].uploadId).get();
+    // 'original': one of THIS item's photos. `upload` picks which; without it the first photo is used. An
+    // upload id that does not belong to this item is refused, so this route can't be used to read other
+    // customers' photos by guessing ids.
+    const originals = await listItemOriginals(db, item);
+    const wanted = url.searchParams.get('upload');
+    const chosen = wanted ? originals.find((o) => o.uploadId === wanted) : originals[0];
+    if (wanted && !chosen) {
+      return adminApiError(404, 'not_found', 'That photo does not belong to this item');
+    }
+    if (chosen) {
+      const uploadSnap = await db.collection('uploads').doc(chosen.uploadId).get();
       if (uploadSnap.exists) {
         path = (uploadSnap.data() as Upload).originalPath;
+        downloadAs = `${baseName}-${safeFileName(chosen.label.toLowerCase())}-original.${fileExtension(path, 'jpg')}`;
       }
     }
   }
@@ -95,7 +94,7 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     return adminApiError(404, 'not_found', `No ${type} file available for this item yet`);
   }
 
-  const signedUrl = await getSignedReadUrl(path);
+  const signedUrl = await getSignedReadUrl(path, undefined, downloadAs);
 
   await writeAuditLog(db, {
     actorUid: permission.uid,

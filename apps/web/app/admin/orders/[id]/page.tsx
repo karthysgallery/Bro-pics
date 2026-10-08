@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../../lib/auth-context';
 import { StatusChip } from '../../../../components/admin/StatusChip';
 import { RefundModal } from '../../../../components/admin/RefundModal';
+import { ItemFilesBox } from '../../../../components/admin/ItemFilesBox';
 import { PersonalizationSummary } from '../../../../components/admin/PersonalizationSummary';
 import { Timeline, type TimelineEvent } from '../../../../components/admin/Timeline';
 import { FormField } from '../../../../components/admin/AdminForm';
@@ -74,6 +75,33 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
 
   // Refund Modal
   const [showRefundModal, setShowRefundModal] = useState(false);
+
+  // Everything needed to produce the order (previews, original photos, print-ready files) in one zip.
+  const [downloadingZip, setDownloadingZip] = useState(false);
+  const downloadAllFiles = async () => {
+    if (!user) return;
+    setDownloadingZip(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/admin/orders/${orderId}/files-zip`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error?.message ?? 'Could not prepare the files.');
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${order?.orderNo ?? orderId}-files.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not prepare the files.', 'error');
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
 
   // Fetch Full Order Details
   const fetchOrderDetails = async () => {
@@ -328,9 +356,19 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
         <div className="lg:col-span-8 space-y-6">
           {/* Section 1: Line Items Table */}
           <div className="rounded-2xl border border-line bg-paper p-5 shadow-xs space-y-4">
-            <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
-              Order Line Items ({items.length})
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
+                Order Line Items ({items.length})
+              </h2>
+              <button
+                type="button"
+                onClick={downloadAllFiles}
+                disabled={downloadingZip}
+                className="rounded-lg bg-gold px-3 py-1.5 text-2xs font-bold text-ink transition-colors hover:bg-gold-deep disabled:opacity-50"
+              >
+                {downloadingZip ? 'Preparing zip…' : 'Download all files (zip)'}
+              </button>
+            </div>
 
             <div className="divide-y divide-line">
               {groupOrderItems(items, order?.combos).flatMap((group) =>
@@ -377,6 +415,7 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                   </div>
                 </div>
                 {item.personalization && <PersonalizationSummary snapshot={item.personalization} />}
+                {item.id && <ItemFilesBox orderId={orderId} itemId={item.id} />}
                 </div>
                 </Fragment>
               ))}
