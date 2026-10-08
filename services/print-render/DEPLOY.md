@@ -25,7 +25,9 @@ must be live first, or the dispatcher has nothing to do.
 pnpm --filter @bro-pics/print-render bundle
 docker build --platform linux/amd64 -t print-render:check services/print-render
 docker run --rm -p 8282:8080 -e FIREBASE_STORAGE_BUCKET=x -e GCLOUD_PROJECT=x print-render:check
-# GET http://localhost:8282/health -> {"status":"ok","fonts":{"ok":true,...}}
+# GET http://localhost:8282/health -> {"status":"ok","fonts":{"ok":true,...,"rendering":{"checked":true,"ok":true,"fallingBack":[]}}}
+# "rendering" proves text is drawn in the bundled fonts (on Linux; skipped on macOS).
+# fallingBack non-empty = fonts not installed for fontconfig: customer text would print in a default font.
 ```
 
 ## 2. Runtime identity (least privilege)

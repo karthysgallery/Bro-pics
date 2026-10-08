@@ -19,6 +19,10 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 COPY lib ./lib
 COPY fonts ./fonts
+# The SVG renderer (librsvg) ignores @font-face and finds fonts only through
+# fontconfig, so the bundled fonts must also be installed where fontconfig
+# looks. Without this, customer text prints in a default system font.
+COPY fonts /usr/share/fonts/truetype/karthys
 RUN fc-cache -f
 
 # Cloud Run sets PORT (8080).

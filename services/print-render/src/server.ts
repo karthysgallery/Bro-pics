@@ -5,7 +5,7 @@ import { logger } from '@bro-pics/shared';
 // importing it directly here is exactly the intended use.
 import { PrintJobNotLeasableError } from '@bro-pics/shared/src/print-jobs/print-jobs';
 import { renderPrintJob, type RenderJobDependencies } from './render-job';
-import { verifyFontFiles } from './render-text';
+import { verifyFontFiles, verifyFontsRender } from './render-text';
 
 /**
  * deps is injected (rather than built internally) so tests can exercise
@@ -25,9 +25,10 @@ export function createServer(deps: RenderJobDependencies): Express {
   const app = express();
   app.use(express.json({ limit: '30mb' }));
 
-  app.get('/health', (_req, res) => {
+  app.get('/health', async (_req, res) => {
     const fonts = verifyFontFiles();
-    res.status(200).json({ status: 'ok', fonts });
+    const rendering = await verifyFontsRender().catch((error: unknown) => ({ checked: false, ok: false, fallingBack: [], error: String(error) }));
+    res.status(200).json({ status: 'ok', fonts: { ...fonts, ok: fonts.ok && rendering.ok, rendering } });
   });
 
   app.post('/render/:jobId', async (req, res) => {
@@ -55,6 +56,11 @@ if (process.env.NODE_ENV !== 'test') {
   } else {
     logger.info('All required fonts verified for print rendering');
   }
+  void verifyFontsRender()
+    .then((r) => {
+      if (r.checked && !r.ok) logger.error('Fonts are on disk but text renders in the fallback font', { fallingBack: r.fallingBack });
+    })
+    .catch((error: unknown) => logger.warn('Font render check failed', { error: String(error) }));
 
   const { buildFirestoreRenderDeps } = await import('./firestore-render-deps');
   const port = process.env.PORT ? Number(process.env.PORT) : 8080;

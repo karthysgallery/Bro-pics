@@ -214,3 +214,30 @@ export function verifyFontFiles(): { ok: boolean; missing: string[] } {
   }
   return { ok: missing.length === 0, missing };
 }
+
+/**
+ * Proves the bundled fonts are actually USED when text is drawn, not just
+ * present on disk: each family is rendered and compared with a family that
+ * does not exist (which draws in the fallback font). A family that renders
+ * identically to the fallback is not installed where the SVG renderer finds
+ * fonts. Skipped on macOS, where sharp draws text with the system's own font
+ * service instead of fontconfig, so the answer would not reflect production.
+ */
+export async function verifyFontsRender(): Promise<{ checked: boolean; ok: boolean; fallingBack: string[] }> {
+  if (process.platform === 'darwin') return { checked: false, ok: true, fallingBack: [] };
+  const { default: sharp } = await import('sharp');
+  const draw = (family: string) =>
+    sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="90"><rect width="360" height="90" fill="#fff"/><text x="10" y="64" font-family="'${escapeXml(family)}'" font-size="56" fill="#000">Ag May 24</text></svg>`
+      )
+    )
+      .raw()
+      .toBuffer();
+  const fallback = await draw('No Such Font KG');
+  const fallingBack: string[] = [];
+  for (const entry of FONT_MAP) {
+    if (Buffer.compare(await draw(entry.label), fallback) === 0) fallingBack.push(entry.label);
+  }
+  return { checked: true, ok: fallingBack.length === 0, fallingBack };
+}
