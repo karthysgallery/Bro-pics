@@ -54,7 +54,10 @@ export function ItemFilesBox({ orderId, itemId }: { orderId: string; itemId: str
       const token = await user.getIdToken();
       const res = await fetch(`${base}/files`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(String(res.status));
-      setFiles((await res.json()) as ItemFiles);
+      const body = (await res.json()) as Partial<ItemFiles> | null;
+      // A page must never crash on an unexpected reply: anything that isn't the files shape counts as a failed load.
+      if (!body || !Array.isArray(body.originals) || !body.print || typeof body.preview !== 'boolean') throw new Error('unexpected reply');
+      setFiles(body as ItemFiles);
       setFailed(false);
     } catch {
       setFailed(true);
