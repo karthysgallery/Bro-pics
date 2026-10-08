@@ -3,6 +3,11 @@
 Updated 2026-10-08 (code at commit `0ddab07`, local only: nothing is pushed to `master`, production mode is OFF, DNS is unchanged).
 Earlier detail: `docs/PERSONALIZATION_ENGINE_PROGRESS.md` (engine phases, file map, verify commands).
 
+## Freeze (owner instruction, 2026-10-08)
+Implementation is FROZEN at commit `0ddab07`. Do not push to `master`, do not deploy anything (Cloud Run, functions, print service, rules), do not change DNS, do not enable production mode. Only this documentation is maintained until the owner supplies the missing inputs below and starts the final go-live sequence.
+
+**Awaiting from the owner:** the product-in-motion / reels video files; production credentials (WhatsApp OTP, Razorpay live keys + webhook secret); decisions on rules deployment, DNS and the `master` push.
+
 ## What exists
 - **Template engine (v2):** schema, validation, geometry, state, completeness, versioning, mockup scenes, legacy adapter — `packages/shared/src/personalization/`. Collage templates are created in `/admin/personalization-templates`, linked to a product or size, and give shoppers the multi-photo editor (`components/customizer/`).
 - **Classic editor (legacy frame templates):** `components/product/ProductDetailClient.tsx` + `components/editor/`.
