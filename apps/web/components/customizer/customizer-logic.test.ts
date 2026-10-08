@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createEmptyState, setSlotPhoto, setText, type PersonalizationTemplate } from '@bro-pics/shared';
+import { CalendarSlotSchema, createEmptyState, setCalendarDate, setSlotPhoto, setText, type PersonalizationTemplate } from '@bro-pics/shared';
 import { carryOverState, planPhotoTargets } from './state-carry';
 import { clearTemplateDraft, DRAFT_MAX_AGE_MS, loadTemplateDraft, persistableState, saveTemplateDraft } from './draft-store';
 import { createTaskQueue, PhotoError, uploadPhoto } from './photo-files';
@@ -34,6 +34,16 @@ describe('carryOverState', () => {
     expect(state.texts.names.value).toBe('Asha & Ravi');
     expect(dropped).toBe(0);
     expect(v1.id).toBe(v2.id);
+  });
+
+  it('keeps the chosen calendar date on another version, and drops it where there is no calendar', () => {
+    const withCalendar = (version: number) => ({
+      ...template('cal', ['photo_01'], [], version),
+      calendarSlots: [CalendarSlotSchema.parse({ id: 'calendar_01', label: 'Date', x: 0.1, y: 0.6, width: 0.8, height: 0.3 })],
+    });
+    const s = setCalendarDate(createEmptyState('cal', 1), 'calendar_01', '2024-05-24');
+    expect(carryOverState(s, withCalendar(2)).state.dates).toEqual({ calendar_01: { date: '2024-05-24' } });
+    expect(carryOverState(s, template('cal', ['photo_01'], [], 2)).state.dates).toBeUndefined();
   });
 
   it('refills another layout in order, resetting framing, and counts photos with no space left', () => {

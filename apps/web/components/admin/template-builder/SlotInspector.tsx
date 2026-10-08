@@ -1,7 +1,7 @@
 'use client';
 
-import { FONT_MAP, type PersonalizationTemplate, type PhotoSlot, type TextSlot } from '@bro-pics/shared';
-import type { SlotPatch, TextPatch } from './template-draft';
+import { FONT_MAP, type CalendarSlot, type PersonalizationTemplate, type PhotoSlot, type TextSlot } from '@bro-pics/shared';
+import type { CalendarPatch, SlotPatch, TextPatch } from './template-draft';
 
 const inputClass = 'h-9 w-full rounded-lg border border-line bg-white px-2.5 text-sm text-ink outline-none focus:border-ink disabled:bg-field disabled:text-ink/50';
 const pct = (n: number) => Math.round(n * 10_000) / 100;
@@ -198,6 +198,94 @@ export function TextSlotInspector({ slot, onChange, onRemove, disabled }: { slot
       {!disabled && (
         <button type="button" onClick={onRemove} className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-alert hover:border-alert">
           Delete text
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FontSelect({ label, value, onChange, disabled }: { label: string; value: string; onChange: (key: string) => void; disabled?: boolean }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={inputClass}>
+        {FONT_MAP.map((f) => (
+          <option key={f.key} value={f.key}>
+            {f.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ColourField({ label, value, onChange, disabled }: { label: string; value: string; onChange: (hex: string) => void; disabled?: boolean }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">{label}</span>
+      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="h-9 w-full cursor-pointer rounded-lg border border-line bg-white" />
+    </label>
+  );
+}
+
+export function CalendarSlotInspector({ slot, onChange, onRemove, disabled }: { slot: CalendarSlot; onChange: (patch: CalendarPatch) => void; onRemove: () => void; disabled?: boolean }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-ink">Calendar: {slot.label}</h3>
+      <p className="text-xs leading-relaxed text-ink/60">The customer picks a date. The calendar shows that month and marks the day.</p>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+        <label className="block space-y-1">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Name customers see</span>
+          <input value={slot.label} onChange={(e) => onChange({ label: e.target.value })} disabled={disabled} className={inputClass} />
+        </label>
+        <label className="flex h-9 items-center gap-1.5 text-xs text-ink">
+          <input type="checkbox" checked={slot.required} onChange={(e) => onChange({ required: e.target.checked })} disabled={disabled} className="h-4 w-4 accent-[#c9861a]" />
+          Required
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block space-y-1">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Starting date (optional)</span>
+          <input type="date" value={slot.defaultDate ?? ''} onChange={(e) => onChange({ defaultDate: e.target.value || undefined })} disabled={disabled} className={inputClass} />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Week starts on</span>
+          <select value={slot.weekStart} onChange={(e) => onChange({ weekStart: e.target.value as CalendarSlot['weekStart'] })} disabled={disabled} className={inputClass}>
+            <option value="sunday">Sunday</option>
+            <option value="monday">Monday</option>
+          </select>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <FontSelect label="Month font" value={slot.titleFont} onChange={(titleFont) => onChange({ titleFont })} disabled={disabled} />
+        <FontSelect label="Days font" value={slot.bodyFont} onChange={(bodyFont) => onChange({ bodyFont })} disabled={disabled} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <ColourField label="Calendar colour" value={slot.color} onChange={(color) => onChange({ color })} disabled={disabled} />
+        <ColourField label="Mark colour" value={slot.markColor} onChange={(markColor) => onChange({ markColor })} disabled={disabled} />
+        <ColourField label="Marked day number" value={slot.markTextColor} onChange={(markTextColor) => onChange({ markTextColor })} disabled={disabled} />
+      </div>
+      <div className="grid grid-cols-3 items-end gap-2">
+        <label className="block space-y-1">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Mark</span>
+          <select value={slot.mark} onChange={(e) => onChange({ mark: e.target.value as CalendarSlot['mark'] })} disabled={disabled} className={inputClass}>
+            <option value="heart">Heart</option>
+            <option value="circle">Circle</option>
+          </select>
+        </label>
+        <label className="flex h-9 items-center gap-1.5 text-xs text-ink">
+          <input type="checkbox" checked={slot.leadingZero} onChange={(e) => onChange({ leadingZero: e.target.checked })} disabled={disabled} className="h-4 w-4 accent-[#c9861a]" />
+          05, not 5
+        </label>
+        <label className="flex h-9 items-center gap-1.5 text-xs text-ink">
+          <input type="checkbox" checked={slot.showRule} onChange={(e) => onChange({ showRule: e.target.checked })} disabled={disabled} className="h-4 w-4 accent-[#c9861a]" />
+          Line under month
+        </label>
+      </div>
+      <BoxFields box={slot} onChange={onChange} disabled={disabled} />
+      {!disabled && (
+        <button type="button" onClick={onRemove} className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-alert hover:border-alert">
+          Delete calendar
         </button>
       )}
     </div>

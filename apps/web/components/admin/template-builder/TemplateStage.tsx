@@ -18,7 +18,7 @@ interface TemplateStageProps {
   template: PersonalizationTemplate;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onChange?: (kind: 'photo' | 'text', id: string, patch: SlotPatch) => void;
+  onChange?: (kind: SpaceKind, id: string, patch: SlotPatch) => void;
   /** Photos to show in the spaces, by slot id (the admin's own files, never uploaded). */
   samples?: ReadonlyMap<string, SamplePhoto>;
   /** Sample text, by text slot id. */
@@ -27,6 +27,22 @@ interface TemplateStageProps {
 }
 
 type Corner = 'nw' | 'ne' | 'sw' | 'se';
+export type SpaceKind = 'photo' | 'text' | 'calendar';
+
+/** The photo, text or calendar space with this id, and which kind it is. */
+function findSpace(template: PersonalizationTemplate, id: string): { kind: SpaceKind; box: { x: number; y: number; width: number; height: number } } | null {
+  const photo = template.photoSlots.find((s) => s.id === id);
+  if (photo) return { kind: 'photo', box: photo };
+  const text = template.textSlots.find((s) => s.id === id);
+  if (text) return { kind: 'text', box: text };
+  const calendar = (template.calendarSlots ?? []).find((s) => s.id === id);
+  return calendar ? { kind: 'calendar', box: calendar } : null;
+}
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 function shapePath(slot: Pick<PhotoSlot, 'shape' | 'cornerRadius' | 'polygon'>, x: number, y: number, w: number, h: number): string {
   if (slot.shape === 'ellipse') {
@@ -60,7 +76,9 @@ export function TemplateStage({ template, selectedId, onSelect, onChange, sample
       if (sample) slots[slot.id] = { assetId: `sample:${slot.id}`, width: sample.width, height: sample.height, transform: { scale: 1, offsetX: 0, offsetY: 0 }, rotation: 0, confirmedLowDpi: false };
     }
     const texts = Object.fromEntries(Object.entries(sampleTexts ?? {}).map(([id, value]) => [id, { value }]));
-    return { schemaVersion: 1, templateId: template.id, templateVersion: template.version, slots, texts };
+    // Calendars without a default date show today, marked, so the admin sees the finished look.
+    const dates = Object.fromEntries((template.calendarSlots ?? []).filter((c) => !c.defaultDate).map((c) => [c.id, { date: today() }]));
+    return { schemaVersion: 1, templateId: template.id, templateVersion: template.version, slots, texts, dates };
   }, [template, samples, sampleTexts]);
 
   const photoSrc = (slotId: string) => samples?.get(slotId)?.src ?? null;
@@ -109,18 +127,18 @@ export function TemplateStage({ template, selectedId, onSelect, onChange, sample
 
   // --- Direct manipulation --------------------------------------------------
 
-  const drag = useRef<{ kind: 'photo' | 'text'; id: string; mode: 'move' | Corner; start: { x: number; y: number }; box: { x: number; y: number; width: number; height: number } } | null>(null);
+  const drag = useRef<{ kind: SpaceKind; id: string; mode: 'move' | Corner; start: { x: number; y: number }; box: { x: number; y: number; width: number; height: number } } | null>(null);
 
   const toFraction = (clientX: number, clientY: number) => {
     const rect = svgRef.current!.getBoundingClientRect();
     return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
   };
 
-  const begin = (e: ReactPointerEvent, kind: 'photo' | 'text', id: string, mode: 'move' | Corner) => {
+  const begin = (e: ReactPointerEvent, kind: SpaceKind, id: string, mode: 'move' | Corner) => {
     e.stopPropagation();
     onSelect(id);
     if (readOnly || !onChange) return;
-    const slot = kind === 'photo' ? template.photoSlots.find((s) => s.id === id) : template.textSlots.find((s) => s.id === id);
+    const slot = findSpace(template, id)?.box;
     if (!slot) return;
     svgRef.current?.setPointerCapture?.(e.pointerId);
     drag.current = { kind, id, mode, start: toFraction(e.clientX, e.clientY), box: { x: slot.x, y: slot.y, width: slot.width, height: slot.height } };
@@ -149,9 +167,9 @@ export function TemplateStage({ template, selectedId, onSelect, onChange, sample
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
     if (!selectedId || readOnly || !onChange) return;
     const step = e.shiftKey ? 0.01 : 0.002;
-    const kind = template.photoSlots.some((s) => s.id === selectedId) ? 'photo' : 'text';
-    const slot = kind === 'photo' ? template.photoSlots.find((s) => s.id === selectedId) : template.textSlots.find((s) => s.id === selectedId);
-    if (!slot) return;
+    const space = findSpace(template, selectedId);
+    if (!space) return;
+    const { kind, box: slot } = space;
     const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     const m = moves[e.key];
     if (!m) return;
@@ -171,7 +189,7 @@ export function TemplateStage({ template, selectedId, onSelect, onChange, sample
         className="absolute inset-0 h-full w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-gold"
         tabIndex={0}
         role="application"
-        aria-label="Template layout. Select a space, then drag it, drag a corner to resize, or use the arrow keys."
+        aria-label="Template layout. Select a photo, text or calendar space, then drag it, drag a corner to resize, or use the arrow keys."
         onPointerDown={() => onSelect(null)}
         onPointerMove={onPointerMove}
         onPointerUp={() => (drag.current = null)}
@@ -223,6 +241,42 @@ export function TemplateStage({ template, selectedId, onSelect, onChange, sample
                     onPointerDown={(e) => begin(e, 'photo', slot.id, corner)}
                   />
                 ))}
+            </g>
+          );
+        })}
+        {(template.calendarSlots ?? []).map((slot) => {
+          const x = slot.x * W;
+          const y = slot.y * H;
+          const w = slot.width * W;
+          const h = slot.height * H;
+          const selected = slot.id === selectedId;
+          return (
+            <g key={slot.id}>
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                fill={selected ? 'rgba(47,143,91,0.14)' : 'rgba(255,255,255,0.001)'}
+                stroke={selected ? '#2f8f5b' : 'rgba(47,143,91,0.75)'}
+                strokeWidth={selected ? stroke * 1.6 : stroke}
+                strokeDasharray={`${stroke * 5} ${stroke * 2}`}
+                style={{ cursor: readOnly ? 'pointer' : 'move' }}
+                onPointerDown={(e) => begin(e, 'calendar', slot.id, 'move')}
+              />
+              {selected && !readOnly && (
+                <rect
+                  x={x + w - handle / 2}
+                  y={y + h - handle / 2}
+                  width={handle}
+                  height={handle}
+                  fill="#fff"
+                  stroke="#2f8f5b"
+                  strokeWidth={stroke}
+                  style={{ cursor: 'nwse-resize' }}
+                  onPointerDown={(e) => begin(e, 'calendar', slot.id, 'se')}
+                />
+              )}
             </g>
           );
         })}

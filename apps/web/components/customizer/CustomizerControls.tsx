@@ -1,6 +1,6 @@
 'use client';
 
-import { FONT_MAP, type TextSlot } from '@bro-pics/shared';
+import { FONT_MAP, formatCalendarDate, parseCalendarDate, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
 import { TEXT_COLOR_OPTIONS } from '../../lib/text-personalization-options';
 import { Icon } from './icons';
 import { fontKeyOf } from './render-template';
@@ -14,6 +14,32 @@ interface CustomizerControlsProps {
 
 const TIER_LABEL = { green: 'Sharp', amber: 'Good', red: 'Low resolution' } as const;
 const TIER_DOT = { green: 'bg-[#2f8f5b]', amber: 'bg-[#d29a2b]', red: 'bg-alert' } as const;
+
+function CalendarField({ customizer, slot }: { customizer: TemplateCustomizer; slot: CalendarSlot }) {
+  const picked = customizer.state.dates?.[slot.id]?.date ?? '';
+  const inputId = `date-${slot.id}`;
+  const shown = picked || slot.defaultDate || '';
+  return (
+    <div className="space-y-2">
+      <label htmlFor={inputId} className="block text-[13px] font-semibold text-ink">
+        {slot.label}
+        {slot.required && <span className="text-ink/50"> (required)</span>}
+      </label>
+      <input
+        id={inputId}
+        type="date"
+        value={picked}
+        min="1900-01-01"
+        max="2200-12-31"
+        onChange={(e) => customizer.setDate(slot.id, parseCalendarDate(e.target.value) ? e.target.value : null)}
+        className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition-colors focus:border-ink"
+      />
+      <p className="text-xs text-ink/60">
+        {shown ? `The calendar shows ${formatCalendarDate(shown)}, with that day marked.` : 'Pick the day to mark: the calendar shows its month.'}
+      </p>
+    </div>
+  );
+}
 
 function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot: TextSlot }) {
   const value = customizer.state.texts[slot.id];
@@ -200,6 +226,14 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
               <span>Print this photo anyway. I understand it may look soft.</span>
             </label>
           )}
+        </div>
+      )}
+
+      {(template.calendarSlots ?? []).length > 0 && (
+        <div className="space-y-4 border-t border-line pt-4">
+          {(template.calendarSlots ?? []).map((slot) => (
+            <CalendarField key={slot.id} customizer={customizer} slot={slot} />
+          ))}
         </div>
       )}
 

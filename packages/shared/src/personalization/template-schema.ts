@@ -99,6 +99,46 @@ export const TextSlotSchema = z.object({
 export type TextSlot = z.infer<typeof TextSlotSchema>;
 
 /**
+ * A printed month calendar. The customer picks a date; the calendar shows that
+ * date's month (title, weekday row, the days) with the chosen day marked, e.g.
+ * a red heart behind "24". Layout is computed by calendarLayout() (calendar.ts),
+ * which the browser preview and the print renderer both draw from.
+ */
+export const CALENDAR_MARKS = ['heart', 'circle'] as const;
+export const CalendarSlotSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    required: z.boolean().default(true),
+    x: fraction,
+    y: fraction,
+    width: fraction,
+    height: fraction,
+    /** First column of the week. */
+    weekStart: z.enum(['sunday', 'monday']).default('sunday'),
+    /** Font keys from FONT_MAP: the month title (a script face suits it) and the weekday/day numbers. */
+    titleFont: z.string().default('great-vibes'),
+    bodyFont: z.string().default('josefin'),
+    /** Colour of the title, rule, weekday names and day numbers. */
+    color: z.string().default('#ffffff'),
+    /** The marked day: shape, its colour, and the colour of the number drawn over it. */
+    mark: z.enum(CALENDAR_MARKS).default('heart'),
+    markColor: z.string().default('#e0242c'),
+    markTextColor: z.string().default('#ffffff'),
+    /** Day numbers as "05" rather than "5". */
+    leadingZero: z.boolean().default(true),
+    /** A thin line under the month title. */
+    showRule: z.boolean().default(true),
+    /** Shown until the customer picks a date, as YYYY-MM-DD. */
+    defaultDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .refine((slot) => slot.width > 0 && slot.height > 0, { message: 'slot width/height must be > 0' });
+export type CalendarSlot = z.infer<typeof CalendarSlotSchema>;
+
+/**
  * Fixed artwork (background, decoration, frame border, foreground effects).
  * `printed: true` means the layer is part of what is PRINTED (a border drawn on
  * the paper); `printed: false` means it is preview-only (a physical wooden frame
@@ -123,9 +163,10 @@ export const BackgroundSchema = z.object({ type: z.literal('color'), color: z.st
 
 export const SlotLayerSchema = z.object({ kind: z.literal('photoSlot'), slotId: z.string().min(1) });
 export const TextLayerSchema = z.object({ kind: z.literal('text'), slotId: z.string().min(1) });
+export const CalendarLayerSchema = z.object({ kind: z.literal('calendar'), slotId: z.string().min(1) });
 
 /** One entry of the paint stack, BOTTOM first. */
-export const LayerSchema = z.discriminatedUnion('kind', [FixedLayerSchema, SlotLayerSchema, TextLayerSchema]);
+export const LayerSchema = z.discriminatedUnion('kind', [FixedLayerSchema, SlotLayerSchema, TextLayerSchema, CalendarLayerSchema]);
 export type Layer = z.infer<typeof LayerSchema>;
 
 export const CanvasSchema = z.object({
@@ -151,6 +192,8 @@ export const PersonalizationTemplateSchema = z.object({
   background: BackgroundSchema.optional(),
   photoSlots: z.array(PhotoSlotSchema),
   textSlots: z.array(TextSlotSchema).default([]),
+  /** Month calendars with a customer-chosen date. Absent on templates made before calendars existed. */
+  calendarSlots: z.array(CalendarSlotSchema).optional(),
   /** Paint order, bottom -> top. Every slot must appear exactly once; see validate-template.ts. */
   layers: z.array(LayerSchema),
   /** Free-form tags (occasion, style) for the admin catalogue. Not used by rendering. */

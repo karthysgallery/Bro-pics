@@ -10,6 +10,7 @@ import {
 } from '@bro-pics/shared';
 import { renderSlotPhoto } from './render-slot';
 import { buildTextZoneSvg } from './render-text';
+import { buildCalendarSvg } from './render-calendar';
 
 /** Resolves an asset id (customer photo, template artwork, mask) to bytes. Injected so rendering is testable and storage-agnostic. */
 export interface AssetLoader {
@@ -72,7 +73,7 @@ function shapeMaskSvg(slot: PhotoSlot, width: number, height: number): Buffer | 
  * Renders a personalization at print resolution from the SAME template + state the
  * browser preview and mockups use. Draws the layer stack bottom -> top:
  *   background colour -> fixed artwork -> photo slots (cropped, shaped, rotated)
- *   -> text, in exactly the order `template.layers` says.
+ *   -> text and calendars, in exactly the order `template.layers` says.
  * Empty photo slots draw nothing (the completeness check, not the renderer,
  * decides whether an order may exist without them).
  */
@@ -88,6 +89,7 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
 
   const slotsById = new Map(template.photoSlots.map((s) => [s.id, s]));
   const textsById = new Map(template.textSlots.map((s) => [s.id, s]));
+  const calendarsById = new Map((template.calendarSlots ?? []).map((s) => [s.id, s]));
   const composites: OverlayOptions[] = [];
 
   for (const layer of template.layers) {
@@ -134,6 +136,13 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
         top = Math.round(cy - (meta.height ?? rect.height) / 2);
       }
       composites.push({ input: rendered, left, top });
+      continue;
+    }
+
+    if (layer.kind === 'calendar') {
+      const calendar = calendarsById.get(layer.slotId);
+      const svg = calendar ? buildCalendarSvg(calendar, state, width, height) : null;
+      if (svg) composites.push({ input: svg, left: 0, top: 0 });
       continue;
     }
 

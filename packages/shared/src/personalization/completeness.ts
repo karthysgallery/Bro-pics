@@ -1,3 +1,4 @@
+import { chosenCalendarDate, parseCalendarDate } from './calendar';
 import { dpiTier } from '../dpi/calculate';
 import { cropRectInOriginalPx, effectiveDpi, slotAspectRatio, type PrintSizeIn } from './geometry';
 import type { PersonalizationState } from './state';
@@ -69,6 +70,12 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     const value = (state.texts[slot.id]?.value ?? slot.defaultValue).trim();
     if (slot.required && !value) blockers.push(`Enter “${slot.label}”.`);
     if (value.length > slot.maxLength) blockers.push(`“${slot.label}” is too long (max ${slot.maxLength} characters).`);
+  }
+
+  for (const slot of template.calendarSlots ?? []) {
+    const picked = state.dates?.[slot.id]?.date;
+    if (picked !== undefined && !parseCalendarDate(picked)) blockers.push(`“${slot.label}”: pick a valid date.`);
+    else if (slot.required && !chosenCalendarDate(slot, state)) blockers.push(`Pick a date for “${slot.label}”.`);
   }
 
   return { complete: blockers.length === 0, blockers, warnings, slots };

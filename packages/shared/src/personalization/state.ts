@@ -35,6 +35,10 @@ export const TextValueSchema = z.object({
 });
 export type TextValue = z.infer<typeof TextValueSchema>;
 
+/** A calendar's chosen day, as YYYY-MM-DD (a calendar date, no time zone). */
+export const CalendarValueSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+export type CalendarValue = z.infer<typeof CalendarValueSchema>;
+
 export const PersonalizationStateSchema = z.object({
   schemaVersion: z.number().int().positive().default(STATE_SCHEMA_VERSION),
   templateId: z.string().min(1),
@@ -43,6 +47,8 @@ export const PersonalizationStateSchema = z.object({
   slots: z.record(z.string(), SlotPhotoSchema).default({}),
   /** Keyed by TextSlot.id. */
   texts: z.record(z.string(), TextValueSchema).default({}),
+  /** Keyed by CalendarSlot.id. Absent until a template with a calendar is used. */
+  dates: z.record(z.string(), CalendarValueSchema).optional(),
 });
 export type PersonalizationState = z.infer<typeof PersonalizationStateSchema>;
 
@@ -121,6 +127,11 @@ export function setText(state: PersonalizationState, slotId: string, text: TextV
   return { ...state, texts: { ...state.texts, [slotId]: text } };
 }
 
+export function setCalendarDate(state: PersonalizationState, slotId: string, date: string | null): PersonalizationState {
+  const { [slotId]: _old, ...rest } = state.dates ?? {};
+  return { ...state, dates: date ? { ...rest, [slotId]: { date } } : rest };
+}
+
 // --- Serialization -----------------------------------------------------------
 
 /** Plain-JSON form for carts/orders/localStorage. Validates, so nothing malformed is ever persisted. */
@@ -163,6 +174,8 @@ export function stateFingerprint(state: PersonalizationState): string {
       return [id, p.assetId, round(p.transform.scale), round(p.transform.offsetX), round(p.transform.offsetY), p.rotation];
     }),
     x: textIds.map((id) => [id, state.texts[id].value, state.texts[id].fontFamily ?? '', state.texts[id].color ?? '']),
+    // Only when present, so states without calendars keep their existing fingerprints.
+    ...(state.dates && Object.keys(state.dates).length > 0 && { d: Object.keys(state.dates).sort().map((id) => [id, state.dates![id].date]) }),
   };
   return fnv1a(JSON.stringify(norm));
 }

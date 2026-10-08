@@ -11,6 +11,7 @@ import {
   setSlotPhoto,
   setSlotRotation,
   setText,
+  setCalendarDate,
   zoomTo,
   zoomTransform,
   type AssetRef,
@@ -300,6 +301,16 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     [apply, template.textSlots]
   );
 
+  // --- Calendars ----------------------------------------------------------
+
+  const setDate = useCallback(
+    (slotId: string, date: string | null) => {
+      if (!(template.calendarSlots ?? []).some((c) => c.id === slotId)) return;
+      apply((s) => setCalendarDate(s, slotId, date));
+    },
+    [apply, template.calendarSlots]
+  );
+
   // --- Sources, images and fonts ----------------------------------------
 
   useEffect(() => {
@@ -314,8 +325,16 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
 
   const [fontsVersion, setFontsVersion] = useState(0);
   const fontKeys = useMemo(
-    () => [...new Set(template.textSlots.map((t) => fontKeyOf(state.texts[t.id]?.fontFamily, t.defaultFontFamily)))].sort().join(','),
-    [template.textSlots, state.texts]
+    () =>
+      [
+        ...new Set([
+          ...template.textSlots.map((t) => fontKeyOf(state.texts[t.id]?.fontFamily, t.defaultFontFamily)),
+          ...(template.calendarSlots ?? []).flatMap((c) => [c.titleFont, c.bodyFont]),
+        ]),
+      ]
+        .sort()
+        .join(','),
+    [template.textSlots, template.calendarSlots, state.texts]
   );
   useEffect(() => {
     if (!fontKeys || typeof document === 'undefined' || !document.fonts?.load) return;
@@ -427,6 +446,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     setZoom,
     setLowDpiConfirmed,
     updateText,
+    setDate,
     draftOffer,
     restoreDraft,
     discardDraft,

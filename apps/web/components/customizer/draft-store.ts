@@ -25,7 +25,7 @@ export function persistableState(state: PersonalizationState): PersonalizationSt
 }
 
 export function hasContent(state: PersonalizationState): boolean {
-  return Object.keys(state.slots).length > 0 || Object.values(state.texts).some((t) => t.value.trim().length > 0);
+  return Object.keys(state.slots).length > 0 || Object.values(state.texts).some((t) => t.value.trim().length > 0) || Object.keys(state.dates ?? {}).length > 0;
 }
 
 export function saveTemplateDraft(productId: string, state: PersonalizationState, now = Date.now()): void {

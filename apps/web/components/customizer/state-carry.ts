@@ -8,7 +8,7 @@ const IDENTITY = { scale: 1, offsetX: 0, offsetY: 0 };
  * did is silently lost when it still fits:
  *  - same design: photos and text stay on the slots with the same ids, framing kept;
  *  - other design: photos fill the new slots in order (framing reset, since the
- *    slot shapes differ), and text moves to fields with the same id.
+ *    slot shapes differ), and text and calendar dates move to fields with the same id.
  * Returns the new state and how many photos had no slot left.
  */
 export function carryOverState(prev: PersonalizationState, next: PersonalizationTemplate): { state: PersonalizationState; dropped: number } {
@@ -37,6 +37,9 @@ export function carryOverState(prev: PersonalizationState, next: Personalization
   for (const [id, text] of Object.entries(prev.texts)) {
     if (textIds.has(id)) state.texts[id] = text;
   }
+  const calendarIds = new Set((next.calendarSlots ?? []).map((s) => s.id));
+  const dates = Object.entries(prev.dates ?? {}).filter(([id]) => calendarIds.has(id));
+  if (dates.length > 0) state.dates = Object.fromEntries(dates);
   return { state, dropped };
 }
 

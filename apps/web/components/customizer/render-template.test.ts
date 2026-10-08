@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cropRectInOriginalPx, type PersonalizationState, type PersonalizationTemplate, type SlotPhoto } from '@bro-pics/shared';
+import { CalendarSlotSchema, cropRectInOriginalPx, type PersonalizationState, type PersonalizationTemplate, type SlotPhoto } from '@bro-pics/shared';
 import { photoToSlotMatrix, renderTemplate, renderToDataUrl, requiredImageSources, type Matrix2D } from './render-template';
 
 function apply(m: Matrix2D, x: number, y: number): [number, number] {
@@ -145,6 +145,40 @@ describe('renderTemplate', () => {
     const create = (w: number, h: number) => fakeCanvas(w, h, [], 'c');
     expect(renderToDataUrl({ ...base, getImage: images(['/art.png', 'blob:up_a']), createCanvas: create }, 800)).toBeNull();
     expect(renderToDataUrl({ ...base, getImage: images(['/art.png', 'blob:up_a', 'blob:up_b']), createCanvas: create }, 800)).toMatch(/^data:image\/jpeg/);
+  });
+
+  it('draws a calendar on top, its chosen day marked, and leaves it out of an export before a date is picked', () => {
+    const calendarTemplate: PersonalizationTemplate = {
+      ...template,
+      calendarSlots: [CalendarSlotSchema.parse({ id: 'cal', label: 'Date', x: 0.1, y: 0.5, width: 0.8, height: 0.45 })],
+      layers: [...template.layers, { kind: 'calendar', slotId: 'cal' }],
+    };
+    const run = (dates: Record<string, { date: string }> | undefined, mode: 'export' | 'editor') => {
+      const log: Call[] = [];
+      renderTemplate(fakeCanvas(600, 400, log, 'main').getContext('2d')!, {
+        ...base,
+        template: calendarTemplate,
+        state: { ...state, dates },
+        width: 600,
+        height: 400,
+        mode,
+        getImage: images(['/art.png', 'blob:up_a', 'blob:up_b']),
+        createCanvas: (w, h) => fakeCanvas(w, h, [], 'slot'),
+      });
+      return log;
+    };
+    const picked = run({ cal: { date: '2024-05-24' } }, 'export');
+    const texts = picked.filter((c) => c.op === 'fillText').map((c) => c.args[0]);
+    expect(texts.slice(0, 3)).toEqual(['May 2024', 'SUN', 'MON']);
+    expect(texts).toContain('24');
+    // The heart is drawn (bezier curves + fill) after the artwork.
+    expect(picked.filter((c) => c.op === 'bezierCurveTo')).toHaveLength(6);
+    expect(picked.findIndex((c) => c.op === 'bezierCurveTo')).toBeGreaterThan(picked.findIndex((c) => c.op === 'drawImage' && c.args[0] === '/art.png'));
+    expect(run(undefined, 'export').some((c) => c.op === 'fillText')).toBe(false);
+    // In the editor the month shows without a marked day until a date is picked.
+    const editor = run(undefined, 'editor');
+    expect(editor.some((c) => c.op === 'fillText')).toBe(true);
+    expect(editor.some((c) => c.op === 'bezierCurveTo')).toBe(false);
   });
 
   it('lists every image the design needs', () => {

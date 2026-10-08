@@ -82,6 +82,10 @@ export async function buildLineSnapshot(
   for (const id of Object.keys(claimedState.texts)) {
     if (!textIds.has(id)) throw new PersonalizationRejectedError('unknown_slot', `Unknown text field "${id}".`);
   }
+  const calendarIds = new Set((template.calendarSlots ?? []).map((s) => s.id));
+  for (const id of Object.keys(claimedState.dates ?? {})) {
+    if (!calendarIds.has(id)) throw new PersonalizationRejectedError('unknown_slot', `Unknown calendar "${id}".`);
+  }
 
   // Rebuild the slots from the SERVER'S view of each upload.
   const slots: PersonalizationState['slots'] = {};

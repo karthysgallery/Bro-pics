@@ -1,5 +1,7 @@
 import {
   FONT_MAP,
+  calendarLayout,
+  chosenCalendarDate,
   estimateTextWidth,
   fitTextToZone,
   fontKeyFromCssVar,
@@ -12,6 +14,7 @@ import {
   type PhotoSlot,
   type SlotPhoto,
   type TextSlot,
+  type CalendarSlot,
 } from '@bro-pics/shared';
 
 /**
@@ -297,6 +300,47 @@ function drawTextSlot(ctx: CanvasRenderingContext2D, input: RenderInput, slot: T
   ctx.restore();
 }
 
+/**
+ * A month calendar, drawn from the same calendarLayout() items the print
+ * renderer draws. Before a date is picked the editor shows this month without
+ * a marked day; an export (cart thumbnail) leaves it out.
+ */
+function drawCalendarSlot(ctx: CanvasRenderingContext2D, input: RenderInput, slot: CalendarSlot): void {
+  const W = input.width;
+  const H = input.height;
+  let date = chosenCalendarDate(slot, input.state);
+  let markDay = true;
+  if (!date) {
+    if (input.mode !== 'editor') return;
+    const now = new Date();
+    date = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
+    markDay = false;
+  }
+  const items = calendarLayout(slot, date, { x: slot.x * W, y: slot.y * H, width: slot.width * W, height: slot.height * H }, { markDay });
+  const title = input.fontFamily(slot.titleFont);
+  const body = input.fontFamily(slot.bodyFont);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  for (const item of items) {
+    ctx.fillStyle = item.color;
+    if (item.kind === 'rule') ctx.fillRect(item.x, item.y, item.width, item.height);
+    else if (item.kind === 'mark') {
+      ctx.beginPath();
+      for (const s of item.segments) {
+        if (s.op === 'M') ctx.moveTo(s.x, s.y);
+        else if (s.op === 'C') ctx.bezierCurveTo(s.x1, s.y1, s.x2, s.y2, s.x, s.y);
+        else ctx.closePath();
+      }
+      ctx.fill();
+    } else {
+      ctx.font = `${item.fontSize}px ${item.font === 'title' ? title : body}`;
+      ctx.fillText(item.text, item.x, item.y);
+    }
+  }
+  ctx.restore();
+}
+
 /** Every image a render of this design needs: fixed artwork, masks and photos. */
 export function requiredImageSources(
   input: Pick<RenderInput, 'template' | 'state' | 'assetSrc' | 'photoSrc' | 'includeUnprinted'>
@@ -327,6 +371,7 @@ export function renderTemplate(ctx: CanvasRenderingContext2D, input: RenderInput
   const { template, width: W, height: H } = input;
   const slotsById = new Map(template.photoSlots.map((s) => [s.id, s]));
   const textsById = new Map(template.textSlots.map((s) => [s.id, s]));
+  const calendarsById = new Map((template.calendarSlots ?? []).map((s) => [s.id, s]));
   const missing: string[] = [];
 
   ctx.save();
@@ -356,6 +401,11 @@ export function renderTemplate(ctx: CanvasRenderingContext2D, input: RenderInput
       if (box.rotationDeg) ctx.rotate((box.rotationDeg * Math.PI) / 180);
       ctx.drawImage(content, -box.width / 2, -box.height / 2, box.width, box.height);
       ctx.restore();
+      continue;
+    }
+    if (layer.kind === 'calendar') {
+      const calendar = calendarsById.get(layer.slotId);
+      if (calendar) drawCalendarSlot(ctx, input, calendar);
       continue;
     }
     const textSlot = textsById.get(layer.slotId);

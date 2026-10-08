@@ -1,4 +1,4 @@
-import { checkCompleteness, type OrderPersonalizationSnapshot } from '@bro-pics/shared';
+import { checkCompleteness, formatCalendarDate, type OrderPersonalizationSnapshot } from '@bro-pics/shared';
 
 const TIER_STYLE = { green: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700' } as const;
 const TIER_LABEL = { green: 'Sharp', amber: 'Acceptable', red: 'Low resolution' } as const;
@@ -69,6 +69,20 @@ export function PersonalizationSummary({ snapshot }: { snapshot: OrderPersonaliz
           })}
         </tbody>
       </table>
+
+      {(template.calendarSlots ?? []).length > 0 && (
+        <dl className="space-y-1">
+          {(template.calendarSlots ?? []).map((slot) => {
+            const date = state.dates?.[slot.id]?.date ?? slot.defaultDate;
+            return (
+              <div key={slot.id} className="flex gap-2">
+                <dt className="font-semibold text-ink">{slot.label}:</dt>
+                <dd className="text-ink/80">{date ? formatCalendarDate(date) : <span className="text-ink/40">—</span>}</dd>
+              </div>
+            );
+          })}
+        </dl>
+      )}
 
       {template.textSlots.length > 0 && (
         <dl className="space-y-1">

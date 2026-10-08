@@ -16,7 +16,7 @@ import { useAuth } from '../../../../lib/auth-context';
 import { useCart } from '../../../../lib/cart-context';
 import { getFirebaseApp } from '../../../../lib/firebase-client';
 import { getOrCreateSessionId } from '../../../../lib/session-id';
-import { CUSTOMER_CANCELLABLE_STATUSES, type Order, type OrderItem, type OrderEvent, type Return, type ReturnStatus, type ReturnReasonCategory } from '@bro-pics/shared';
+import { CUSTOMER_CANCELLABLE_STATUSES, formatCalendarDate, type Order, type OrderItem, type OrderEvent, type Return, type ReturnStatus, type ReturnReasonCategory } from '@bro-pics/shared';
 
 const RETURN_REASON_CATEGORY_LABEL: Record<ReturnReasonCategory, string> = {
   damaged: 'Arrived damaged',
@@ -543,6 +543,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                             .map((t) => t.value.trim())
                             .filter(Boolean)
                             .map((v) => ` · “${v}”`)
+                            .join('')}
+                          {Object.values(item.personalization.state.dates ?? {})
+                            .map((d) => ` · ${formatCalendarDate(d.date)}`)
                             .join('')}
                         </p>
                       )}

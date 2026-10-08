@@ -1,3 +1,4 @@
+import { parseCalendarDate } from './calendar';
 import { PersonalizationTemplateSchema, type PersonalizationTemplate } from './template-schema';
 
 export type IssueSeverity = 'error' | 'warning';
@@ -59,11 +60,12 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
   const warn = (code: string, message: string, ref?: string) => issues.push({ severity: 'warning', code, message, ref });
 
   // --- slots exist and ids are unique across photo AND text slots ------------
-  if (t.photoSlots.length === 0 && t.textSlots.length === 0) {
-    error('no_slots', 'A template needs at least one photo or text slot.');
+  const calendars = t.calendarSlots ?? [];
+  if (t.photoSlots.length === 0 && t.textSlots.length === 0 && calendars.length === 0) {
+    error('no_slots', 'A template needs at least one photo, text or calendar slot.');
   }
   const seen = new Set<string>();
-  for (const id of [...t.photoSlots.map((s) => s.id), ...t.textSlots.map((s) => s.id)]) {
+  for (const id of [...t.photoSlots.map((s) => s.id), ...t.textSlots.map((s) => s.id), ...calendars.map((s) => s.id)]) {
     if (seen.has(id)) error('duplicate_slot_id', `Slot id "${id}" is used more than once.`, id);
     seen.add(id);
   }
@@ -76,6 +78,7 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
   };
   for (const s of t.photoSlots) inCanvas(s, 'Photo slot');
   for (const s of t.textSlots) inCanvas(s, 'Text slot');
+  for (const s of calendars) inCanvas(s, 'Calendar');
 
   // --- shape-specific requirements ------------------------------------------
   for (const s of t.photoSlots) {
@@ -105,6 +108,8 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
   const layerIds = new Set<string>();
   const photoLayers = new Map<string, number>();
   const textLayers = new Map<string, number>();
+  const calendarIds = new Set(calendars.map((s) => s.id));
+  const calendarLayers = new Map<string, number>();
   for (const layer of t.layers) {
     if (layer.kind === 'fixed') {
       if (layerIds.has(layer.id)) error('duplicate_layer_id', `Layer id "${layer.id}" is used more than once.`, layer.id);
@@ -115,6 +120,9 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
     } else if (layer.kind === 'photoSlot') {
       if (!photoIds.has(layer.slotId)) error('layer_unknown_slot', `Layer references unknown photo slot "${layer.slotId}".`, layer.slotId);
       photoLayers.set(layer.slotId, (photoLayers.get(layer.slotId) ?? 0) + 1);
+    } else if (layer.kind === 'calendar') {
+      if (!calendarIds.has(layer.slotId)) error('layer_unknown_slot', `Layer references unknown calendar "${layer.slotId}".`, layer.slotId);
+      calendarLayers.set(layer.slotId, (calendarLayers.get(layer.slotId) ?? 0) + 1);
     } else {
       if (!textIds.has(layer.slotId)) error('layer_unknown_slot', `Layer references unknown text slot "${layer.slotId}".`, layer.slotId);
       textLayers.set(layer.slotId, (textLayers.get(layer.slotId) ?? 0) + 1);
@@ -129,6 +137,14 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
     const n = textLayers.get(id) ?? 0;
     if (n === 0) error('slot_not_in_layers', `Text slot "${id}" is not in the layer stack, so it would never be drawn.`, id);
     if (n > 1) error('slot_in_layers_twice', `Text slot "${id}" appears ${n} times in the layer stack.`, id);
+  }
+  for (const id of calendarIds) {
+    const n = calendarLayers.get(id) ?? 0;
+    if (n === 0) error('slot_not_in_layers', `Calendar "${id}" is not in the layer stack, so it would never be drawn.`, id);
+    if (n > 1) error('slot_in_layers_twice', `Calendar "${id}" appears ${n} times in the layer stack.`, id);
+  }
+  for (const s of calendars) {
+    if (s.defaultDate && !parseCalendarDate(s.defaultDate)) error('invalid_date', `Calendar "${s.id}" has an invalid default date "${s.defaultDate}".`, s.id);
   }
 
   // --- canvas / print quality sanity ----------------------------------------

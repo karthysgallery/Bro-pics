@@ -1,4 +1,4 @@
-import type { PersonalizationTemplate, PhotoSlot, TextSlot } from '@bro-pics/shared';
+import { CalendarSlotSchema, type CalendarSlot, type PersonalizationTemplate, type PhotoSlot, type TextSlot } from '@bro-pics/shared';
 
 /**
  * Pure editing operations for the admin template builder. Each returns a NEW
@@ -8,6 +8,7 @@ import type { PersonalizationTemplate, PhotoSlot, TextSlot } from '@bro-pics/sha
 
 export type SlotPatch = Partial<Omit<PhotoSlot, 'id'>>;
 export type TextPatch = Partial<Omit<TextSlot, 'id'>>;
+export type CalendarPatch = Partial<Omit<CalendarSlot, 'id'>>;
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
@@ -28,7 +29,32 @@ function nextId(existing: readonly string[], prefix: string): string {
 }
 
 function allSlotIds(t: PersonalizationTemplate): string[] {
-  return [...t.photoSlots.map((s) => s.id), ...t.textSlots.map((s) => s.id)];
+  return [...t.photoSlots.map((s) => s.id), ...t.textSlots.map((s) => s.id), ...(t.calendarSlots ?? []).map((s) => s.id)];
+}
+
+export function updateCalendarSlot(t: PersonalizationTemplate, id: string, patch: CalendarPatch): PersonalizationTemplate {
+  return { ...t, calendarSlots: (t.calendarSlots ?? []).map((s) => (s.id === id ? clampBox({ ...s, ...patch }) : s)) };
+}
+
+/**
+ * A month calendar in the lower part of the design, painted on top of the
+ * artwork and photos (like text). Sized roughly 7:4, the shape of a month.
+ */
+export function addCalendarSlot(t: PersonalizationTemplate): { template: PersonalizationTemplate; id: string } {
+  const id = nextId(allSlotIds(t), 'calendar_');
+  const aspect = t.canvas.width / t.canvas.height;
+  const width = 0.6;
+  const height = round4(Math.min(0.45, (width * aspect * 4) / 7));
+  const calendars = t.calendarSlots ?? [];
+  const slot = CalendarSlotSchema.parse({
+    id,
+    label: calendars.length === 0 ? 'Your special date' : `Date ${calendars.length + 1}`,
+    x: 0.2,
+    y: round4(Math.max(0, 0.95 - height)),
+    width,
+    height,
+  });
+  return { template: { ...t, calendarSlots: [...calendars, slot], layers: [...t.layers, { kind: 'calendar', slotId: id }] }, id };
 }
 
 export function updatePhotoSlot(t: PersonalizationTemplate, id: string, patch: SlotPatch): PersonalizationTemplate {
@@ -60,7 +86,7 @@ export function addPhotoSlot(t: PersonalizationTemplate): { template: Personaliz
   const layers = [...t.layers];
   const lastPhoto = layers.map((l) => l.kind).lastIndexOf('photoSlot');
   // With the other photos; with none yet, under any artwork that sits on top and under the text.
-  const firstAbove = layers.findIndex((l) => (l.kind === 'fixed' && l.role !== 'background') || l.kind === 'text');
+  const firstAbove = layers.findIndex((l) => (l.kind === 'fixed' && l.role !== 'background') || l.kind === 'text' || l.kind === 'calendar');
   const at = lastPhoto >= 0 ? lastPhoto + 1 : firstAbove === -1 ? layers.length : firstAbove;
   layers.splice(at, 0, { kind: 'photoSlot', slotId: id });
   return { template: { ...t, photoSlots: [...t.photoSlots, slot], layers }, id };
@@ -89,6 +115,7 @@ export function removeSlot(t: PersonalizationTemplate, id: string): Personalizat
     ...t,
     photoSlots: t.photoSlots.filter((s) => s.id !== id),
     textSlots: t.textSlots.filter((s) => s.id !== id),
+    ...(t.calendarSlots && { calendarSlots: t.calendarSlots.filter((s) => s.id !== id) }),
     layers: t.layers.filter((l) => l.kind === 'fixed' || l.slotId !== id),
   };
 }
@@ -122,11 +149,11 @@ export function artworkAbovePhotos(t: PersonalizationTemplate): boolean {
   return art >= 0 && firstPhoto >= 0 && art > firstPhoto;
 }
 
-/** Moves every fixed artwork layer above or below all photo spaces (text always stays on top). */
+/** Moves every fixed artwork layer above or below all photo spaces (text and calendars always stay on top). */
 export function setArtworkAbovePhotos(t: PersonalizationTemplate, above: boolean): PersonalizationTemplate {
   const fixed = t.layers.filter((l) => l.kind === 'fixed').map((l) => (l.kind === 'fixed' ? { ...l, role: above ? ('frame' as const) : ('background' as const) } : l));
   const photos = t.layers.filter((l) => l.kind === 'photoSlot');
-  const texts = t.layers.filter((l) => l.kind === 'text');
+  const texts = t.layers.filter((l) => l.kind === 'text' || l.kind === 'calendar');
   return { ...t, layers: above ? [...photos, ...fixed, ...texts] : [...fixed, ...photos, ...texts] };
 }
 

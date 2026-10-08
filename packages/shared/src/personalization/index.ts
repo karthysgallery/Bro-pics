@@ -9,3 +9,4 @@ export * from './mockup';
 export * from './adapter';
 export * from './interaction';
 export * from './slot-detection';
+export * from './calendar';

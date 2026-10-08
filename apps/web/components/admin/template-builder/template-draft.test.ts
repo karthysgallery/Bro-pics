@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { detectPhotoSlots, templateDraftFromDetection, validateTemplate, type PersonalizationTemplate } from '@bro-pics/shared';
 import {
+  addCalendarSlot,
   addPhotoSlot,
   addTextSlot,
   artworkAbovePhotos,
@@ -11,6 +12,7 @@ import {
   setArtworkAbovePhotos,
   setPrintSize,
   templateIdFromName,
+  updateCalendarSlot,
   updatePhotoSlot,
 } from './template-draft';
 
@@ -59,6 +61,26 @@ describe('template builder edits', () => {
     t = removeSlot(removeSlot(t, dup.id), text.id);
     expect(t.layers.some((l) => l.kind !== 'fixed' && (l.slotId === dup.id || l.slotId === text.id))).toBe(false);
     expect(validateTemplate(t).valid).toBe(true);
+  });
+
+  it('adds a calendar on top that survives moving the artwork, and removes it cleanly', () => {
+    const added = addCalendarSlot(detectedDraft());
+    let t = added.template;
+    expect(t.calendarSlots).toEqual([expect.objectContaining({ id: 'calendar_03', label: 'Your special date', mark: 'heart', weekStart: 'sunday' })]);
+    expect(t.layers[t.layers.length - 1]).toEqual({ kind: 'calendar', slotId: added.id });
+    expect(validateTemplate(t).valid).toBe(true);
+    t = updateCalendarSlot(t, added.id, { x: 0.95, markColor: '#000000' });
+    expect(t.calendarSlots![0].x + t.calendarSlots![0].width).toBeLessThanOrEqual(1);
+    expect(t.calendarSlots![0].markColor).toBe('#000000');
+    // Artwork moved over the photos: the calendar still stays on top.
+    t = setArtworkAbovePhotos(t, true);
+    expect(t.layers[t.layers.length - 1]).toEqual({ kind: 'calendar', slotId: added.id });
+    // A photo added later goes under it.
+    t = addPhotoSlot(t).template;
+    expect(t.layers[t.layers.length - 1]).toEqual({ kind: 'calendar', slotId: added.id });
+    t = removeSlot(t, added.id);
+    expect(t.calendarSlots).toEqual([]);
+    expect(t.layers.some((l) => l.kind === 'calendar')).toBe(false);
   });
 
   it('switches the artwork between over and under the photos', () => {

@@ -6,11 +6,12 @@ import { validateTemplate, type PersonalizationTemplate } from '@bro-pics/shared
 import { StatusChip } from '../../../../components/admin/StatusChip';
 import { ConfirmModal } from '../../../../components/admin/AdminModal';
 import { useAdminApi } from '../../../../components/admin/template-builder/use-admin-api';
-import { TemplateStage, type SamplePhoto } from '../../../../components/admin/template-builder/TemplateStage';
-import { PhotoSlotInspector, TextSlotInspector } from '../../../../components/admin/template-builder/SlotInspector';
+import { TemplateStage, type SamplePhoto, type SpaceKind } from '../../../../components/admin/template-builder/TemplateStage';
+import { CalendarSlotInspector, PhotoSlotInspector, TextSlotInspector } from '../../../../components/admin/template-builder/SlotInspector';
 import { ProductLinks } from '../../../../components/admin/template-builder/ProductLinks';
 import {
   DETECTION_NOTES_KEY,
+  addCalendarSlot,
   addPhotoSlot,
   addTextSlot,
   artworkAbovePhotos,
@@ -19,6 +20,7 @@ import {
   removeSlot,
   setArtworkAbovePhotos,
   setPrintSize,
+  updateCalendarSlot,
   updatePhotoSlot,
   updateTextSlot,
   type SlotPatch,
@@ -100,8 +102,8 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
 
   const change = (fn: (t: PersonalizationTemplate) => PersonalizationTemplate) => setDraft((t) => (t && editable ? fn(t) : t));
 
-  const onStageChange = (kind: 'photo' | 'text', slotId: string, patch: SlotPatch) =>
-    change((t) => (kind === 'photo' ? updatePhotoSlot(t, slotId, patch) : updateTextSlot(t, slotId, patch)));
+  const onStageChange = (kind: SpaceKind, slotId: string, patch: SlotPatch) =>
+    change((t) => (kind === 'photo' ? updatePhotoSlot(t, slotId, patch) : kind === 'text' ? updateTextSlot(t, slotId, patch) : updateCalendarSlot(t, slotId, patch)));
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -201,6 +203,8 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
   const selectedPhotoIndex = draft.photoSlots.findIndex((s) => s.id === selectedId);
   const selectedPhoto = selectedPhotoIndex >= 0 ? draft.photoSlots[selectedPhotoIndex] : null;
   const selectedText = draft.textSlots.find((s) => s.id === selectedId) ?? null;
+  const calendars = draft.calendarSlots ?? [];
+  const selectedCalendar = calendars.find((s) => s.id === selectedId) ?? null;
   const widthIn = draft.canvas.width / draft.canvas.dpi;
   const heightIn = draft.canvas.height / draft.canvas.dpi;
   const above = artworkAbovePhotos(draft);
@@ -246,7 +250,8 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
           </div>
           <p className="text-xs text-ink/55">
             {draft.photoSlots.length} photo space{draft.photoSlots.length === 1 ? '' : 's'}
-            {draft.textSlots.length > 0 && ` · ${draft.textSlots.length} text field${draft.textSlots.length === 1 ? '' : 's'}`} · prints at {widthIn.toFixed(1)} × {heightIn.toFixed(1)} in
+            {draft.textSlots.length > 0 && ` · ${draft.textSlots.length} text field${draft.textSlots.length === 1 ? '' : 's'}`}
+            {calendars.length > 0 && ` · ${calendars.length} calendar${calendars.length === 1 ? '' : 's'}`} · prints at {widthIn.toFixed(1)} × {heightIn.toFixed(1)} in
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -452,6 +457,54 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
                   onChange={(patch) => change((t) => updateTextSlot(t, selectedText.id, patch))}
                   onRemove={() => {
                     change((t) => removeSlot(t, selectedText.id));
+                    setSelectedId(null);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className={card}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-ink">Calendar</h3>
+              {editable && (
+                <button
+                  type="button"
+                  className={smallButton}
+                  onClick={() => {
+                    const added = addCalendarSlot(draft);
+                    setDraft(added.template);
+                    setSelectedId(added.id);
+                  }}
+                >
+                  Add calendar
+                </button>
+              )}
+            </div>
+            {calendars.length === 0 && <p className="text-xs text-ink/60">Add a month calendar. Customers pick their special date and it is marked with a heart.</p>}
+            {calendars.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {calendars.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedId(s.id)}
+                    aria-pressed={s.id === selectedId}
+                    className={`h-8 rounded-full px-3 text-xs font-semibold ${s.id === selectedId ? 'bg-ink text-paper' : 'bg-tint text-ink hover:bg-field'}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedCalendar && (
+              <div className="border-t border-line pt-3">
+                <CalendarSlotInspector
+                  slot={selectedCalendar}
+                  disabled={!editable}
+                  onChange={(patch) => change((t) => updateCalendarSlot(t, selectedCalendar.id, patch))}
+                  onRemove={() => {
+                    change((t) => removeSlot(t, selectedCalendar.id));
                     setSelectedId(null);
                   }}
                 />

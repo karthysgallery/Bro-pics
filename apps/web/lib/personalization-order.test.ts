@@ -5,7 +5,7 @@ vi.mock('server-only', () => ({}));
 import { createFakeFirestore } from './fake-firestore.test-util';
 import { buildLineSnapshot, PersonalizationRejectedError } from './personalization-order';
 import { singlePhotoTemplate, photoPlusTextTemplate } from '@bro-pics/shared/src/personalization/test-fixtures';
-import { createEmptyState, setSlotPhoto, setText, setSlotTransform } from '@bro-pics/shared';
+import { CalendarSlotSchema, createEmptyState, setCalendarDate, setSlotPhoto, setText, setSlotTransform } from '@bro-pics/shared';
 
 function setup(opts: { status?: 'published' | 'draft'; upload?: Record<string, unknown> } = {}) {
   const fake = createFakeFirestore();
@@ -72,6 +72,7 @@ describe('buildLineSnapshot (server-side trust boundary for personalization)', (
     const extra = setSlotPhoto(goodState(), 'photo_99', { assetId: 'up_1', width: 6000, height: 4000 });
     await rejects(buildLineSnapshot(setup(), 'user_1', claim(extra)), 'unknown_slot');
     await rejects(buildLineSnapshot(setup(), 'user_1', claim(setText(goodState(), 'ghost', { value: 'x' }))), 'unknown_slot');
+    await rejects(buildLineSnapshot(setup(), 'user_1', claim(setCalendarDate(goodState(), 'ghost', '2024-05-24'))), 'unknown_slot');
   });
 
   it('re-checks completeness on the server: an empty required slot cannot be ordered', async () => {
@@ -108,5 +109,22 @@ describe('buildLineSnapshot (server-side trust boundary for personalization)', (
     const cropped = setSlotTransform(goodState(), 'photo_01', { scale: 1.5, offsetX: 0.05, offsetY: 0 }, 1);
     const snap = await buildLineSnapshot(setup(), 'user_1', claim(cropped));
     expect(snap.state.slots.photo_01.transform.scale).toBe(1.5);
+  });
+
+  it('keeps the chosen calendar date in the order, and refuses a design whose required date is missing', async () => {
+    const fake = createFakeFirestore();
+    fake.seed('uploads/up_1', { userId: 'user_1', status: 'ready', widthPx: 6000, heightPx: 4000 });
+    const db = fake.db;
+    const calendarTemplate = {
+      ...singlePhotoTemplate,
+      calendarSlots: [CalendarSlotSchema.parse({ id: 'calendar_01', label: 'Our day', x: 0.1, y: 0.6, width: 0.8, height: 0.3 })],
+      layers: [...singlePhotoTemplate.layers, { kind: 'calendar' as const, slotId: 'calendar_01' }],
+    };
+    fake.seed('personalizationTemplates/single-8x12/versions/1', { ...calendarTemplate, status: 'published' });
+    const err = await rejects(buildLineSnapshot(db, 'user_1', claim(goodState())), 'incomplete');
+    expect(err.details).toContain('Pick a date for “Our day”.');
+    const snap = await buildLineSnapshot(db, 'user_1', claim(setCalendarDate(goodState(), 'calendar_01', '2024-05-24')));
+    expect(snap.state.dates).toEqual({ calendar_01: { date: '2024-05-24' } });
+    expect(snap.template.calendarSlots?.[0].id).toBe('calendar_01');
   });
 });
