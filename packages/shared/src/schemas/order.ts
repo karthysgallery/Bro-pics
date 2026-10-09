@@ -100,6 +100,15 @@ export const OrderSchema = z
     // doc comment). Absent for any order still pending_payment, and for
     // every order placed before this field existed.
     invoiceNo: z.string().optional(),
+    /** Counted stock held for this order (tracked variants only); released if it is cancelled or never paid. */
+    stockReservation: z
+      .object({
+        status: z.enum(['held', 'released']),
+        lines: z.array(z.object({ productId: z.string(), variantId: z.string(), qty: z.number().int().positive() })),
+        heldAt: z.string(),
+        releasedAt: z.string().optional(),
+      })
+      .optional(),
     notes: z.string().optional(),
     courier: z.string().optional(),
     awbNumber: z.string().optional(),

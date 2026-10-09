@@ -16,6 +16,9 @@ export interface InventoryVariantItem {
   price: number;
   stockStatus: StockStatus;
   isActive: boolean;
+  /** Counted stock (shared by the website and the store); absent = made to order. */
+  trackStock: boolean;
+  stockQty: number | null;
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -46,6 +49,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         price: v.price,
         stockStatus: v.stockStatus,
         isActive: v.isActive,
+        trackStock: v.trackStock === true,
+        stockQty: v.trackStock === true ? (v.stockQty ?? 0) : null,
       });
     });
   }

@@ -10,6 +10,8 @@ import { getPaymentProvider } from '../../../../lib/payments/provider-factory';
 import { PaymentNotConfiguredError } from '../../../../lib/payments/types';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { createHash } from 'node:crypto';
+import { reserveOrderStock, restoreReservation, type StockReservation } from '@bro-pics/shared/src/inventory/stock';
+import { BillingError } from '@bro-pics/shared';
 import { stateFingerprint, CartComboSchema, COMBO_VARIANT_PREFIX, type OrderCombo } from '@bro-pics/shared';
 import {
   generateOrderNo,
@@ -380,6 +382,35 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Could not place your order. Please try again.' }, { status: 503 });
   }
 
+  // With an idempotencyKey the order id is deterministic, and the order doc
+  // is written with create() (fails if it exists). The query above is a fast
+  // path; this is what actually makes two simultaneous submits safe — the
+  // loser gets ALREADY_EXISTS and is handed the winner's order.
+  const orderRef = idempotencyKey
+    ? db.collection('orders').doc(deterministicOrderId(userId, `${idempotencyKey}:${inputsHash}`))
+    : db.collection('orders').doc();
+
+  // Counted stock (variants with trackStock) is taken now, atomically, so the
+  // website and the shop can never sell the same last unit twice. Made-to-order
+  // items are not counted and nothing changes for them.
+  let stockReservation: StockReservation | null = null;
+  try {
+    stockReservation = await reserveOrderStock(
+      db,
+      orderRef.id,
+      userId,
+      priced.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty, title: l.title }))
+    );
+  } catch (err) {
+    if (err instanceof BillingError && (err.code === 'insufficient_stock' || err.code === 'unavailable')) {
+      return NextResponse.json({ error: err.message, code: 'out_of_stock' }, { status: 409 });
+    }
+    throw err;
+  }
+  const giveBackStock = async (why: string) => {
+    if (stockReservation) await restoreReservation(db, orderRef.id, stockReservation, userId, why).catch((e) => console.error('Stock could not be put back', e));
+  };
+
   // Open the payment session with the configured provider. The order is
   // ALWAYS created pending_payment — it only becomes paid through the same
   // settlement pipeline the Razorpay webhook uses (see
@@ -389,19 +420,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     createdPayment = await paymentProvider.createPayment({ amount: total, receipt: orderNo });
   } catch (err) {
     console.error(`Payment provider "${paymentProvider.name}" failed to create a payment:`, err);
+    await giveBackStock('payment session failed');
     return NextResponse.json(
       { error: 'Could not start payment. Please try again.', code: 'payment_provider_error' },
       { status: 502 }
     );
   }
 
-  // With an idempotencyKey the order id is deterministic, and the order doc
-  // is written with create() (fails if it exists). The query above is a fast
-  // path; this is what actually makes two simultaneous submits safe — the
-  // loser gets ALREADY_EXISTS and is handed the winner's order.
-  const orderRef = idempotencyKey
-    ? db.collection('orders').doc(deterministicOrderId(userId, `${idempotencyKey}:${inputsHash}`))
-    : db.collection('orders').doc();
   // Item ids are fixed up front so the order can point at each combo frame's item.
   const itemRefs = priced.map(() => orderRef.collection('items').doc());
   const orderCombos: OrderCombo[] = pricing.combos.map((combo) => ({
@@ -441,6 +466,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     taxLines,
     ...(appliedCouponId && { couponId: appliedCouponId }),
     ...(orderCombos.length > 0 && { combos: orderCombos }),
+    ...(stockReservation && { stockReservation }),
   });
 
   const batch = db.batch();
@@ -494,6 +520,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     await batch.commit();
   } catch (err) {
+    // This attempt's stock goes back: either the order was not written, or a
+    // simultaneous identical submit won and holds its own reservation.
+    await giveBackStock(idempotencyKey && isAlreadyExistsError(err) ? 'duplicate submit' : 'order write failed');
     if (idempotencyKey && isAlreadyExistsError(err)) {
       const winner = await orderRef.get();
       if (winner.exists) {

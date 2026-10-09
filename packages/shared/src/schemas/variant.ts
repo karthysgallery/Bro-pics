@@ -12,6 +12,13 @@ export const VariantSchema = z.object({
   price: z.number().int().nonnegative(),
   compareAtPrice: z.number().int().nonnegative().optional(),
   stockStatus: z.enum(['in_stock', 'out_of_stock', 'backorder']),
+  /**
+   * Counted stock, shared by the website and the store (POS). Off = made to
+   * order (unlimited, the default). On = stockQty is the units on hand and
+   * every sale, return and adjustment changes it through inventory/stock.ts.
+   */
+  trackStock: z.boolean().optional(),
+  stockQty: z.number().int().optional(),
   printWidthPx: z.number().int().positive(),
   printHeightPx: z.number().int().positive(),
   minUploadPx: z.number().int().positive(),

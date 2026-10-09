@@ -9,6 +9,7 @@ import { SaveBar } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
 import type { StockStatus } from '@bro-pics/shared';
 import type { InventoryVariantItem } from '../../api/admin/inventory/route';
+import { StockCell } from '../../../components/admin/StockCell';
 
 type FilterTab = 'all' | 'in_stock' | 'out_of_stock' | 'backorder';
 
@@ -297,6 +298,7 @@ export default function AdminInventoryPage() {
                   <th className="p-3">Product Title</th>
                   <th className="p-3">Size & Colour</th>
                   <th className="p-3">Price</th>
+                  <th className="p-3">On hand (website + store)</th>
                   <th className="p-3">Current Status</th>
                   <th className="p-3 text-right">Rapid Action</th>
                 </tr>
@@ -339,6 +341,23 @@ export default function AdminInventoryPage() {
                       </td>
                       <td className="p-3 font-bold text-ink">
                         {formatPaise(item.price)}
+                      </td>
+                      <td className="p-3">
+                        <StockCell
+                          productId={item.productId}
+                          variantId={item.variantId}
+                          trackStock={item.trackStock}
+                          stockQty={item.stockQty}
+                          onChanged={(next) => {
+                            setItems((prev) =>
+                              prev.map((i) =>
+                                i.variantId === item.variantId
+                                  ? { ...i, ...next, stockStatus: next.trackStock ? ((next.stockQty ?? 0) > 0 ? 'in_stock' : 'out_of_stock') : 'in_stock' }
+                                  : i
+                              )
+                            );
+                          }}
+                        />
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
