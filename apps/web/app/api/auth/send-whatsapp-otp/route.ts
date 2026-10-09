@@ -8,6 +8,7 @@ import {
 } from '../../../../lib/services/whatsapp/otp-store';
 import { UserStore } from '../../../../lib/services/user-store';
 import { logAuthEvent } from '../../../../lib/services/auth-audit';
+import { logOtpSend } from '../../../../lib/billing/otp-log';
 
 async function handlePost(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
@@ -83,6 +84,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
   // 3. Dispatch OTP via the centralized WhatsApp provider
   const provider = getWhatsAppOtpProvider();
   const sendResult = await provider.sendOtp({ phoneNumber: normalizedPhone, purpose });
+  logOtpSend(normalizedPhone, sendResult);
 
   if (!sendResult.success) {
     return NextResponse.json({ error: sendResult.error }, { status: 400 });

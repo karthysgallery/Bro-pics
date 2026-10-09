@@ -7,6 +7,7 @@ import {
   maskPhoneNumber,
 } from '../../../../lib/services/whatsapp/otp-store';
 import { logAuthEvent } from '../../../../lib/services/auth-audit';
+import { logOtpSend } from '../../../../lib/billing/otp-log';
 
 async function handlePost(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
@@ -42,6 +43,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
   const maskedPhone = maskPhoneNumber(normalizedPhone);
   const provider = getWhatsAppOtpProvider();
   const resendResult = await provider.resendOtp({ phoneNumber: normalizedPhone, purpose });
+  logOtpSend(normalizedPhone, resendResult);
 
   if (!resendResult.success) {
     const statusCode = resendResult.code === 'MAX_RESENDS_EXCEEDED' ? 429 : 400;

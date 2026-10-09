@@ -17,3 +17,4 @@ export { rollupDailyAnalytics } from './analytics/daily-rollup';
 export { dispatchPrintJob, sweepPrintJobs } from './print/dispatch';
 export { recordBudgetAlert } from './billing/budget-alerts';
 export { releaseStockOnCancel, releaseUnpaidStock } from './billing/stock-release';
+export { invoiceOnPayment, creditNoteOnRefund, sendWhatsAppCampaigns } from './billing/invoices';
