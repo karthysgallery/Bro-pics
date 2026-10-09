@@ -36,6 +36,14 @@ The page is built; Google's figures need two one-time settings, then two enginee
 - **Engineering (with the go-live deploy):** deploy the `recordBudgetAlert` function (functions bundle); set `BILLING_EXPORT_TABLE=bropics-app.billing_export.gcp_billing_export_v1_…` (exact table name from BigQuery) on the website's Cloud Run service; grant the website's service account **BigQuery Job User** on the project and **BigQuery Data Viewer** on the `billing_export` dataset.
 - Until then the page shows "No cost figures yet" and the setup checklist; the same numbers are in the console under Billing → Reports.
 
+### A2b. Billing & POS (built and tested on emulators; not deployed) — details in `BILLING_POS_HANDOVER.md`
+- Fill **Billing Settings** (business name, address, GSTIN, phone) and confirm the GST rate.
+- Mark stocked variants as tracked on the Inventory page and enter counts (made-to-order stays untracked).
+- Create and get approved in WhatsApp Manager: `karthys_invoice` (Utility, PDF header, 4 variables), order confirmed / payment received / shipped templates, and each Marketing campaign template with a "Stop promotions" button.
+- Set `WHATSAPP_MODE=cloud`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN` on the website **and** the Functions env; point the Meta webhook to `/api/webhooks/whatsapp` (messages field).
+- Assign staff roles (staff: bill / view / download / send; admin: refunds, reports, discount override, settings).
+- Deploy rules + functions (`invoiceOnPayment`, `creditNoteOnRefund`, `sendWhatsAppCampaigns`, `releaseStockOnCancel`, `releaseUnpaidStock`) + web together, after approval; smoke test one counter bill, one online order and one return.
+
 ### A3. Content to enter (admin work, not code)
 - Product SEO titles/descriptions per product (live titles still say "| BroPics" from old seed data).
 - Real product photos/mockups (the local catalogue uses placeholder mockups), template links for collage products.
@@ -79,6 +87,12 @@ The page is built; Google's figures need two one-time settings, then two enginee
 
 **Existing data**
 - Real orders already received (BP-2026-00002/00003): contact details and promised delivery; any customers/orders/addresses on the deleted Vercel site that must be recovered; photo uploads from those customers.
+
+**Billing & POS**
+- Exact business name, address, GSTIN and phone to print on invoices; invoice prefix (default `KG-INV`) and when numbering should start.
+- Which products are kept in stock (counted) vs made to order; opening stock counts.
+- Highest discount counter staff may give without a manager (default 10%).
+- Who on staff gets which role; do they want Tamil names on the PDF (needs a Tamil font).
 
 **Launch**
 - Target date, soft-launch audience, and who tests (a real-money test order is required).
