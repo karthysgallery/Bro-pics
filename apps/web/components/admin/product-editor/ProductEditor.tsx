@@ -229,6 +229,15 @@ export function ProductEditor({ productId }: { productId: string | null }) {
           gallery: r.gallery,
         });
         setLoaded(true);
+        try {
+          const carried = sessionStorage.getItem(`product-save-warnings:${productId}`);
+          if (carried) {
+            sessionStorage.removeItem(`product-save-warnings:${productId}`);
+            setWarnings(JSON.parse(carried) as string[]);
+          }
+        } catch {
+          /* nothing carried over */
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'The product could not be loaded.');
       }
@@ -421,7 +430,15 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       set({ status });
       setDirty(false);
       showToast(status === 'published' ? 'Saved and live on the shop' : 'Saved', 'success');
-      if (!productId) router.replace(`/admin/products/${result.productId}`);
+      if (!productId) {
+        // The edit page is a fresh screen: hand it the save notes so they are not lost.
+        try {
+          sessionStorage.setItem(`product-save-warnings:${result.productId}`, JSON.stringify(result.warnings));
+        } catch {
+          /* private mode: the notes are simply not carried over */
+        }
+        router.replace(`/admin/products/${result.productId}`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'The product could not be saved.';
       setError(msg);
@@ -444,23 +461,31 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const prices = activeRows.filter((r) => r.price > 0).map((r) => r.price);
   return (
     <div className="pb-28">
-      {/* Top bar */}
-      <div className="sticky top-0 z-30 -mx-4 mb-6 flex flex-wrap items-center gap-3 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
+      {/* Header (the admin page itself does not scroll, so the actions live in the floating bar below) */}
+      <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-line pb-4">
         <div className="min-w-0 flex-1">
           <Link href="/admin/products" className="text-2xs font-medium text-ink/50 hover:text-ink">
             ← Products
           </Link>
-          <h1 className="truncate font-display text-xl font-bold text-ink">{s.title || (productId ? 'Edit frame' : 'New frame')}</h1>
+          <h1 className="truncate font-display text-2xl font-bold text-ink">{s.title || (productId ? 'Edit frame' : 'New frame')}</h1>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-2xs font-bold uppercase tracking-wide ${s.status === 'published' ? 'bg-emerald-50 text-emerald-800' : s.status === 'archived' ? 'bg-red-50 text-alert' : 'bg-field text-ink/70'}`}>
-          {s.status === 'published' ? 'Live' : s.status}
-        </span>
         {productId && s.status === 'published' && (
           <Link href={`/product/${s.slug}`} target="_blank" className="h-10 rounded-xl border border-line px-3 text-sm font-semibold leading-10 text-ink hover:bg-field">
             View on shop ↗
           </Link>
         )}
-        <button type="button" disabled={saving} onClick={() => void save()} className="h-10 rounded-xl border border-line px-4 text-sm font-semibold text-ink hover:bg-field disabled:opacity-40">
+      </div>
+
+      {/* Floating actions: always in reach while the long form scrolls. */}
+      <div className="fixed bottom-5 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-2xl border border-gold/20 bg-ink py-2 pl-4 pr-2 text-paper shadow-2xl md:left-[calc(50%+8rem)]">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.status === 'published' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-paper/15 text-paper/80'}`}>
+          {s.status === 'published' ? 'Live' : s.status}
+        </span>
+        <span className="hidden text-xs text-paper/70 sm:inline">
+          {checklist.filter((c) => c.ok).length}/{checklist.length} ready · SEO {seoReport.score}
+          {dirty ? ' · unsaved' : ''}
+        </span>
+        <button type="button" disabled={saving} onClick={() => void save()} className="h-9 rounded-xl border border-paper/25 px-3 text-sm font-semibold text-paper hover:bg-paper/10 disabled:opacity-40">
           {saving ? 'Saving…' : s.status === 'published' ? 'Save changes' : 'Save draft'}
         </button>
         {s.status !== 'published' && (
@@ -469,7 +494,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
             disabled={saving || !readyToPublish}
             title={readyToPublish ? undefined : 'Finish the checklist first'}
             onClick={() => void save(true)}
-            className="h-10 rounded-xl bg-ink px-4 text-sm font-semibold text-paper hover:bg-ink/90 disabled:opacity-40"
+            className="h-9 rounded-xl bg-gold px-4 text-sm font-bold text-ink hover:bg-gold-deep disabled:opacity-40"
           >
             Publish
           </button>
@@ -904,7 +929,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         </div>
 
         {/* Summary rail */}
-        <aside className="space-y-4 xl:sticky xl:top-24">
+        <aside className="space-y-4 xl:fixed xl:top-24 xl:w-[18rem] xl:right-[calc(2rem+max(0px,(100vw-100rem)/2))]">
           <div className="rounded-2xl border border-line bg-paper p-4">
             <p className="text-2xs font-bold uppercase tracking-wider text-ink/55">Ready to sell?</p>
             <ul className="mt-2 space-y-1.5">

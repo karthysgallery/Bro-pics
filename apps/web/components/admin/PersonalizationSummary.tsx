@@ -24,52 +24,56 @@ export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: Or
         <span className="text-ink/50">canvas {template.canvas.width}×{template.canvas.height}px @ {template.canvas.dpi} DPI</span>
       </div>
 
-      <table className="w-full text-left">
-        <caption className="sr-only">Photos placed in each slot</caption>
-        <thead className="text-ink/50">
-          <tr>
-            <th scope="col" className="py-1 pr-2 font-semibold">Slot</th>
-            <th scope="col" className="py-1 pr-2 font-semibold">Photo (upload id)</th>
-            <th scope="col" className="py-1 pr-2 font-semibold">Zoom</th>
-            <th scope="col" className="py-1 pr-2 font-semibold">Rotation</th>
-            <th scope="col" className="py-1 font-semibold">Print quality</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {template.photoSlots.map((slot) => {
-            const photo = state.slots[slot.id];
-            const s = statusBySlot.get(slot.id);
-            return (
-              <tr key={slot.id}>
-                <th scope="row" className="py-1 pr-2 font-medium text-ink">
-                  {slot.label}
-                  {!slot.required && <span className="text-ink/40"> (optional)</span>}
-                </th>
-                {photo ? (
-                  <>
-                    <td className="py-1 pr-2 font-mono text-ink/70 break-all">{photo.assetId}</td>
-                    <td className="py-1 pr-2">{photo.transform.scale.toFixed(2)}×</td>
-                    <td className="py-1 pr-2">{photo.rotation}°</td>
-                    <td className="py-1">
-                      {s?.tier && (
-                        <span className={`rounded-full px-2 py-0.5 font-semibold ${TIER_STYLE[s.tier]}`}>
-                          {TIER_LABEL[s.tier]}
-                          {s.dpi ? ` · ${Math.round(s.dpi)} dpi` : ''}
-                          {photo.confirmedLowDpi && s.tier === 'red' ? ' · customer accepted' : ''}
-                        </span>
-                      )}
+      {template.type === 'ready_made' && template.photoSlots.length === 0 ? (
+        <p className="text-ink/70">Ready-made frame: prints the shop&apos;s own artwork. Nothing to check from the customer.</p>
+      ) : (
+        <table className="w-full text-left">
+          <caption className="sr-only">Photos placed in each slot</caption>
+          <thead className="text-ink/50">
+            <tr>
+              <th scope="col" className="py-1 pr-2 font-semibold">Slot</th>
+              <th scope="col" className="py-1 pr-2 font-semibold">Photo (upload id)</th>
+              <th scope="col" className="py-1 pr-2 font-semibold">Zoom</th>
+              <th scope="col" className="py-1 pr-2 font-semibold">Rotation</th>
+              <th scope="col" className="py-1 font-semibold">Print quality</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {template.photoSlots.map((slot) => {
+              const photo = state.slots[slot.id];
+              const s = statusBySlot.get(slot.id);
+              return (
+                <tr key={slot.id}>
+                  <th scope="row" className="py-1 pr-2 font-medium text-ink">
+                    {slot.label}
+                    {!slot.required && <span className="text-ink/40"> (optional)</span>}
+                  </th>
+                  {photo ? (
+                    <>
+                      <td className="py-1 pr-2 font-mono text-ink/70 break-all">{photo.assetId}</td>
+                      <td className="py-1 pr-2">{photo.transform.scale.toFixed(2)}×</td>
+                      <td className="py-1 pr-2">{photo.rotation}°</td>
+                      <td className="py-1">
+                        {s?.tier && (
+                          <span className={`rounded-full px-2 py-0.5 font-semibold ${TIER_STYLE[s.tier]}`}>
+                            {TIER_LABEL[s.tier]}
+                            {s.dpi ? ` · ${Math.round(s.dpi)} dpi` : ''}
+                            {photo.confirmedLowDpi && s.tier === 'red' ? ' · customer accepted' : ''}
+                          </span>
+                        )}
+                      </td>
+                    </>
+                  ) : (
+                    <td colSpan={4} className="py-1 text-ink/40">
+                      Left empty
                     </td>
-                  </>
-                ) : (
-                  <td colSpan={4} className="py-1 text-ink/40">
-                    Left empty
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
 
       {(template.calendarSlots ?? []).length > 0 && (
         <dl className="space-y-1">

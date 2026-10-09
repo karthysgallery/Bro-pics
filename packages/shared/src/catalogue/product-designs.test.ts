@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { artworkDpi, artworkKept, buildReadyMadeTemplate, buildSinglePhotoTemplate, centreCrop, designId, groupSizesByShape, shapeKey } from './product-designs';
+import { shapeLabel, artworkDpi, artworkKept, buildReadyMadeTemplate, buildSinglePhotoTemplate, centreCrop, designId, groupSizesByShape, shapeKey } from './product-designs';
 import { validateTemplate } from '../personalization/validate-template';
 import { checkCompleteness } from '../personalization/completeness';
 import { createEmptyState } from '../personalization/state';
@@ -19,6 +19,7 @@ describe('auto-made product designs', () => {
       ['L1.50', { widthIn: 12, heightIn: 8 }, 1],
     ]);
     expect(shapeKey({ widthIn: 6, heightIn: 6 })).toBe('L1.00');
+    expect([shapeLabel({ widthIn: 12, heightIn: 18 }), shapeLabel({ widthIn: 10, heightIn: 8 }), shapeLabel({ widthIn: 6, heightIn: 6 }), shapeLabel({ widthIn: 12, heightIn: 15 })]).toEqual(['2:3 portrait', '5:4 landscape', 'square', '4:5 portrait']);
   });
 
   it('a ready-made design has no customer slots, is valid, is complete as is, and prints its artwork', () => {

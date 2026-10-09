@@ -50,6 +50,9 @@ export async function frameDesign(designUrl: string, printWidthIn?: number, look
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.imageSmoothingQuality = 'high';
+    // A frame photo with see-through edges must not turn black in the JPEG.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const c = Math.max(1, Math.min(look.borderPx, Math.floor(Math.min(frame.naturalWidth, frame.naturalHeight) / 2) - 1));
     const sw = frame.naturalWidth;
     const sh = frame.naturalHeight;

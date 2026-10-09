@@ -27,10 +27,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const alt = String(form?.get('alt') ?? '').trim().slice(0, 160);
   const tag = String(form?.get('tag') ?? 'product').replace(/[^a-z0-9-]/gi, '').slice(0, 30) || 'product';
 
-  const bytes = Buffer.from(await file.arrayBuffer());
+  let bytes = Buffer.from(await file.arrayBuffer());
   let width: number;
   let height: number;
   try {
+    // A frame photo must end at the frame's outer edge: trim any empty or transparent margin around it.
+    if (tag === 'frame-model') {
+      const trimmed = await sharp(bytes, { limitInputPixels: 400_000_000 }).rotate().trim({ threshold: 18 }).png().toBuffer().catch(() => null);
+      if (trimmed) bytes = Buffer.from(trimmed);
+    }
     const meta = await sharp(bytes, { limitInputPixels: 400_000_000 }).metadata();
     // Phone photos are often stored sideways with an EXIF turn: report the size as it is seen.
     const turned = (meta.orientation ?? 1) >= 5;
@@ -42,11 +47,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const ref = g.db.collection('media').doc();
-  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  const type = tag === 'frame-model' ? 'image/png' : file.type;
+  const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
   const path = `public/media/${ref.id}.${ext}`;
-  await getStorage(getAdminApp()).bucket().file(path).save(bytes, { contentType: file.type, resumable: false, metadata: { cacheControl: 'public, max-age=31536000' } });
+  await getStorage(getAdminApp()).bucket().file(path).save(bytes, { contentType: type, resumable: false, metadata: { cacheControl: 'public, max-age=31536000' } });
   const now = new Date();
-  const asset = MediaAssetSchema.parse({ id: ref.id, path, type: 'image', width, height, sizeBytes: file.size, alt, tags: [tag], usageRefs: [], isActive: true, createdAt: now, updatedAt: now });
+  const asset = MediaAssetSchema.parse({ id: ref.id, path, type: 'image', width, height, sizeBytes: bytes.length, alt, tags: [tag], usageRefs: [], isActive: true, createdAt: now, updatedAt: now });
   await ref.set(asset);
   await writeAuditLog(g.db, { actorUid: g.uid, action: 'media.create', resource: 'media', resourceId: ref.id, details: { path, tag } }).catch((error) =>
     logger.error('Failed to write audit log', { error: String(error) })

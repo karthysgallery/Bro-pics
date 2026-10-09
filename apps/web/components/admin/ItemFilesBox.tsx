@@ -133,7 +133,7 @@ export function ItemFilesBox({ orderId, itemId }: { orderId: string; itemId: str
         <div className="grid gap-1.5">
           <span className="text-ink/80"><strong className="text-ink">Original photos</strong> — the customer&apos;s uploads, untouched (use these to redesign by hand)</span>
           {files.originals.length === 0 ? (
-            <span className="text-ink/50">No uploaded photos found for this item.</span>
+            <span className="text-ink/50">No customer photos for this item (a ready-made frame has none).</span>
           ) : (
             files.originals.map((o) => (
               <div key={o.uploadId} className="flex flex-wrap items-center justify-between gap-2 pl-3">

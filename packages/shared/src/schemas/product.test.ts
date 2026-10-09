@@ -48,9 +48,9 @@ describe('ProductSchema', () => {
     expect(() => ProductSchema.parse(invalid)).toThrow();
   });
 
-  it('rejects a negative photoSlots', () => {
-    const invalid = { ...validProduct, photoSlots: 0 };
-    expect(() => ProductSchema.parse(invalid)).toThrow();
+  it('rejects a negative photoSlots, and allows 0 for a ready-made frame (nothing for the customer to add)', () => {
+    expect(() => ProductSchema.parse({ ...validProduct, photoSlots: -1 })).toThrow();
+    expect(ProductSchema.parse({ ...validProduct, photoSlots: 0, productType: 'ready_made' }).photoSlots).toBe(0);
   });
 
   it('rejects a ratingAverage above 5', () => {

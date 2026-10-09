@@ -12,6 +12,7 @@ import {
   designId,
   groupSizesByShape,
   shapeKey,
+  shapeLabel,
   variantFromRow,
   type FrameModel,
   type PersonalizationTemplate,
@@ -214,13 +215,13 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
           isActive: true, sourceMediaId: art.id, createdAt: now, updatedAt: now,
         });
       }
-      const template = buildReadyMadeTemplate({ productId: id, name: `${body.title} (${shape.largest.widthIn}x${shape.largest.heightIn} shape)`, size: shape.largest, artwork: { assetId: cutId, url: mediaImageUrl(cutId, 2400) } });
+      const template = buildReadyMadeTemplate({ productId: id, name: `${body.title} — ${shapeLabel(shape.largest)}`, size: shape.largest, artwork: { assetId: cutId, url: mediaImageUrl(cutId, 2400) } });
       const published = await publishAutoDesign(db, template, now);
       designByShape.set(shape.key, published.id);
     }
   } else if (body.productType === 'single_photo') {
     for (const shape of shapes) {
-      const template = buildSinglePhotoTemplate({ productId: id, name: `${body.title} (${shape.largest.widthIn}x${shape.largest.heightIn} shape)`, size: shape.largest });
+      const template = buildSinglePhotoTemplate({ productId: id, name: `${body.title} — ${shapeLabel(shape.largest)}`, size: shape.largest });
       const published = await publishAutoDesign(db, template, now);
       designByShape.set(shape.key, published.id);
     }

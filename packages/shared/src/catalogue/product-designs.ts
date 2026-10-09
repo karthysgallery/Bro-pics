@@ -28,6 +28,16 @@ export function shapeKey(size: SizeInches): string {
   return `${ratio >= 1 ? 'L' : 'P'}${(Math.max(ratio, 1 / ratio)).toFixed(2)}`;
 }
 
+const COMMON_SHAPES: Array<[number, string]> = [[1, '1:1'], [1.25, '4:5'], [4 / 3, '3:4'], [1.4, '5:7'], [1.5, '2:3'], [2, '1:2']];
+
+/** A shape as people say it: "2:3 portrait", "4:5 landscape", "square". */
+export function shapeLabel(size: SizeInches): string {
+  const ratio = Math.max(size.widthIn, size.heightIn) / Math.min(size.widthIn, size.heightIn);
+  if (Math.abs(ratio - 1) < 0.01) return 'square';
+  const named = COMMON_SHAPES.find(([r]) => Math.abs(r - ratio) / r < 0.01)?.[1] ?? `1:${ratio.toFixed(2)}`;
+  return `${size.widthIn > size.heightIn ? named.split(':').reverse().join(':') : named} ${size.widthIn > size.heightIn ? 'landscape' : 'portrait'}`;
+}
+
 /** Groups sizes by print shape; each group's design is drawn at its LARGEST size. */
 export function groupSizesByShape<T extends SizeInches>(sizes: T[]): Array<{ key: string; largest: T; sizes: T[] }> {
   const groups = new Map<string, T[]>();

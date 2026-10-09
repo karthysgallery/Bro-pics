@@ -6,7 +6,8 @@ vi.mock('server-only', () => ({}));
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import type { FrameModel, Product, Variant } from '@bro-pics/shared';
-import { loadProductSetup, saveProductSetup, SetupError, type ArtworkStore, type ProductSetupBody } from './product-setup';
+import { loadProductSetup, publishAutoDesign, saveProductSetup, SetupError, type ArtworkStore, type ProductSetupBody } from './product-setup';
+import { sixPhotoTemplate } from '@bro-pics/shared/src/personalization/test-fixtures';
 
 // Real Firestore (emulator). Run:
 //   firebase emulators:exec --only firestore --project demo-bropics "cd apps/web && npx vitest run lib/catalogue"
@@ -32,8 +33,8 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
   beforeAll(async () => {
     db = getFirestore(getApps()[0] ?? initializeApp({ projectId: 'demo-bropics' }));
     await db.collection('categories').doc(`cat_${run}`).set({ id: `cat_${run}`, name: 'Devotional', slug: `devotional-${run}` });
-    await db.collection('frameModels').doc(teak).set(model(teak, 'Teak Classic', 'Brown'));
-    await db.collection('frameModels').doc(gold).set(model(gold, 'Royal Gold', 'Gold'));
+    await db.collection('frameModels').doc(teak).set(model(teak, `Teak Classic ${run}`, `Brown ${run}`));
+    await db.collection('frameModels').doc(gold).set(model(gold, `Royal Gold ${run}`, `Gold ${run}`));
     // A 4000 × 6000 artwork (2:3) — sharp for 12x18 (333 ppi), soft for 20x30 at 8x10's shape crop.
     await db.collection('media').doc(`art_${run}`).set({ id: `art_${run}`, path: `public/media/art_${run}.jpg`, type: 'image', width: 4000, height: 6000, alt: '', tags: [], usageRefs: [], isActive: true });
     await db.collection('media').doc(`photo_${run}`).set({ id: `photo_${run}`, path: `public/media/photo_${run}.jpg`, type: 'image', width: 1600, height: 1600, alt: '', tags: [], usageRefs: [], isActive: true });
@@ -67,7 +68,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
     const variants = (await db.collection('products').doc(readyId).collection('variants').get()).docs.map((d) => d.data() as Variant);
     expect(variants).toHaveLength(4);
     const big = variants.find((v) => v.sizeLabel === '12x18 in' && v.frameModelId === gold)!;
-    expect(big).toMatchObject({ frameColour: 'Royal Gold', price: 149900, compareAtPrice: 179900, printWidthPx: 3600 });
+    expect(big).toMatchObject({ frameColour: `Royal Gold ${run}`, price: 149900, compareAtPrice: 179900, printWidthPx: 3600 });
     expect(big).not.toHaveProperty('cost');
     expect((await db.collection('variantCosts').doc(big.id).get()).data()).toMatchObject({ cost: 60000, productId: readyId });
 
@@ -121,6 +122,26 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
     expect(summary).toMatchObject({ type: 'single_photo', publishedVersion: 1 });
   });
 
+  it('collage: links the design made in the template builder; photo count and sizes follow it', async () => {
+    // A 6-photo 3:2 landscape collage, published as the template builder would.
+    const design = await publishAutoDesign(db, { ...sixPhotoTemplate, id: `collage_${run}`, layers: sixPhotoTemplate.layers.filter((l) => l.kind !== 'fixed') }, new Date());
+    const result = await saveProductSetup(db, store, null, body({
+      productType: 'collage', title: 'Six Memories Collage', slug: `six-memories-${run}`, productCode: 'SIX', artworkMediaId: null, collageTemplateId: design.id,
+      gallery: [{ mediaId: `photo_${run}`, alt: '' }],
+      rows: [
+        { widthIn: 18, heightIn: 12, frameModelId: teak, mrp: 199900, price: 159900, cost: 50000, isActive: true },
+        { widthIn: 12, heightIn: 12, frameModelId: teak, mrp: 99900, price: 89900, cost: 30000, isActive: true },
+      ],
+      frameModelIds: [teak],
+    }));
+    const product = (await db.collection('products').doc(result.productId).get()).data() as Product;
+    expect(product).toMatchObject({ productType: 'collage', photoSlots: 6, personalizationTemplateId: design.id });
+    const variants = (await db.collection('products').doc(result.productId).collection('variants').get()).docs.map((d) => d.data() as Variant);
+    expect(variants.every((v) => v.personalizationTemplateId === null)).toBe(true); // they use the product's design
+    // 12x12 is square, the design is 3:2: the owner is warned the print would stretch.
+    expect(result.warnings.some((w) => /12x12: this size is a different shape/.test(w))).toBe(true);
+  });
+
   it('refuses a web address another product already uses', async () => {
     await expect(saveProductSetup(db, store, null, body({ productCode: 'OTHER' }))).rejects.toThrow(SetupError);
   });
@@ -128,17 +149,17 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
   it('converting an older product keeps its existing variant ids (carts and past orders still point at them)', async () => {
     const ref = db.collection('products').doc(`legacy_${run}`);
     await ref.set({ id: ref.id, title: 'Old Frame', slug: `old-frame-${run}`, categoryId: `cat_${run}`, photoSlots: 1, isActive: true, seo: {}, createdAt: new Date(), updatedAt: new Date() });
-    await ref.collection('variants').doc(`legacy_v_${run}`).set({ id: `legacy_v_${run}`, productId: ref.id, sku: 'OLD-8X12-BLK', sizeLabel: '8x12 in', widthIn: 8, heightIn: 12, frameColour: 'Brown', material: 'Wood', price: 79900, stockStatus: 'in_stock', printWidthPx: 2400, printHeightPx: 3600, minUploadPx: 2400, aspectRatio: 0.667, isActive: true });
+    await ref.collection('variants').doc(`legacy_v_${run}`).set({ id: `legacy_v_${run}`, productId: ref.id, sku: 'OLD-8X12-BLK', sizeLabel: '8x12 in', widthIn: 8, heightIn: 12, frameColour: `Brown ${run}`, material: 'Wood', price: 79900, stockStatus: 'in_stock', printWidthPx: 2400, printHeightPx: 3600, minUploadPx: 2400, aspectRatio: 0.667, isActive: true });
     const loaded = await loadProductSetup(db, ref.id);
     expect(loaded.product).toMatchObject({ productType: 'single_photo', isLegacy: true });
-    expect(loaded.rows[0]).toMatchObject({ variantId: `legacy_v_${run}`, frameModelId: teak, legacyFinish: 'Brown', mrp: 79900 }); // matched by colour
+    expect(loaded.rows[0]).toMatchObject({ variantId: `legacy_v_${run}`, frameModelId: teak, legacyFinish: `Brown ${run}`, mrp: 79900 }); // matched by colour
     const r = loaded.rows[0]!;
     await saveProductSetup(db, store, ref.id, body({
       productType: 'single_photo', title: 'Old Frame', slug: `old-frame-${run}`, productCode: 'OLD', artworkMediaId: null, frameModelIds: [teak],
       rows: [{ variantId: r.variantId, widthIn: r.widthIn, heightIn: r.heightIn, frameModelId: r.frameModelId!, mrp: 99900, price: 79900, cost: 30000, isActive: true }],
     }));
     const v = (await ref.collection('variants').doc(`legacy_v_${run}`).get()).data() as Variant;
-    expect(v).toMatchObject({ isActive: true, frameModelId: teak, frameColour: 'Teak Classic', compareAtPrice: 99900 });
+    expect(v).toMatchObject({ isActive: true, frameModelId: teak, frameColour: `Teak Classic ${run}`, compareAtPrice: 99900 });
     expect((await ref.collection('variants').get()).size).toBe(1);
   });
 });
