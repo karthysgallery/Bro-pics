@@ -87,6 +87,14 @@ function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
       );
+    case 'frame':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="1" />
+          <rect x="7" y="7" width="10" height="10" />
+          <path d="M3 3l4 4M21 3l-4 4M3 21l4-4M21 21l-4-4" />
+        </svg>
+      );
     case 'templates':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -276,6 +284,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Catalogue',
     items: [
       { label: 'Products', href: '/admin/products', permission: 'catalogue:read', icon: 'products' },
+      { label: 'Frame Models', href: '/admin/frame-models', permission: 'catalogue:read', icon: 'frame' },
       { label: 'Categories', href: '/admin/categories', permission: 'catalogue:read', icon: 'categories' },
       { label: 'Collections', href: '/admin/collections', permission: 'catalogue:read', icon: 'collections' },
       { label: 'Combo Offers', href: '/admin/combos', permission: 'catalogue:read', icon: 'collections' },

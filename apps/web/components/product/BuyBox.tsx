@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Product, Variant } from '@bro-pics/shared';
+import type { Product, PublicFrameModel, Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { useComboFrame } from '../../lib/combo-frame-context';
 import { useSiteText } from '../layout/SiteTextContext';
@@ -76,6 +76,8 @@ interface BuyBoxProps {
   // that SAME line's price/preview (via updateItem) instead of adding a
   // new one, and changes the button's own label to match the action.
   isEditingCartLine?: boolean;
+  /** Frame models the product offers: the finish choice becomes "Frame", shown with each model's photo. */
+  frameModels?: PublicFrameModel[];
   children?: React.ReactNode;
 }
 
@@ -95,6 +97,7 @@ export function BuyBox({
   submitError,
   onAddToCart,
   isEditingCartLine,
+  frameModels = [],
   children,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
@@ -243,7 +246,14 @@ export function BuyBox({
           }}
         />
         <VariantSelector label="Size" options={sizes} selected={selectedSize} onSelect={onSelectSize} />
-        <VariantSelector label="Finish" options={colours} selected={selectedColour} onSelect={onSelectColour} display="swatch" />
+        <VariantSelector
+          label={frameModels.length ? 'Frame' : 'Finish'}
+          options={colours}
+          selected={selectedColour}
+          onSelect={onSelectColour}
+          display="swatch"
+          swatches={Object.fromEntries(frameModels.map((m) => [m.name, { imageUrl: m.image?.url, hex: m.colourHex, borderPx: m.image?.borderPx, widthPx: m.image?.widthPx }]))}
+        />
       </div>
 
       {children}

@@ -31,6 +31,7 @@ import { BuyBox } from './BuyBox';
 import { PersonalizationPreview, PersonalizationControls, type SlotState, type TextFieldValueMap } from '../editor/PersonalizationEditor';
 import type { TextFieldValue } from '../editor/TextFieldEditor';
 import { TemplateProductLayout } from '../customizer/TemplateProductLayout';
+import type { PublicFrameModel } from '@bro-pics/shared';
 import { useComboFrame } from '../../lib/combo-frame-context';
 
 export interface ProductDetailClientProps {
@@ -47,6 +48,8 @@ export interface ProductDetailClientProps {
   // template designs), by variant id. A variant listed here gets the template
   // editor; every other variant keeps the classic editor above.
   personalizationTemplatesByVariant?: Record<string, PersonalizationTemplate>;
+  // Frame models this product offers (Admin → Frame models), shown as the frame choice with their photos.
+  frameModels?: PublicFrameModel[];
   // [FE-16] Set from the cart drawer's Edit link (?edit=). Rehydrates the
   // editor from the existing personalization instead of starting blank,
   // and switches Add to Cart's save path to update the SAME
@@ -115,6 +118,7 @@ export function ProductDetailClient({
   media,
   initialTemplatesByVariant,
   personalizationTemplatesByVariant = {},
+  frameModels = [],
   editPersonalizationId,
   initialVariantId,
 }: ProductDetailClientProps) {
@@ -1033,6 +1037,7 @@ export function ProductDetailClient({
         onSelectColour={handleSelectColour}
         onSelectOrientation={handleSelectOrientation}
         editPersonalizationId={editPersonalizationId}
+        frameModels={frameModels}
       />
     );
   }
@@ -1140,6 +1145,7 @@ export function ProductDetailClient({
         submitError={submitError}
         onAddToCart={showInlineEditor ? handleAddToCart : undefined}
         isEditingCartLine={isEditingCartLine}
+        frameModels={frameModels}
       >
         {showInlineEditor && selectedVariant && (
           <PersonalizationControls

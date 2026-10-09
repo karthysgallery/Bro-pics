@@ -8,6 +8,7 @@ import {
   type PersonalizationState,
   type PersonalizationTemplate,
   type Product,
+  type PublicFrameModel,
   type Variant,
 } from '@bro-pics/shared';
 import { AuthContext } from '../../lib/auth-context';
@@ -34,6 +35,8 @@ export interface TemplateProductLayoutProps {
   onSelectOrientation: (orientation: Orientation) => void;
   /** From the cart's Edit link: the line whose design is being changed. */
   editPersonalizationId?: string;
+  /** Frame models the product offers: the preview wraps the design in the selected size's model. */
+  frameModels?: PublicFrameModel[];
 }
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -78,6 +81,7 @@ function TemplateEditorSession({
   onSelectColour,
   onSelectOrientation,
   editPersonalizationId,
+  frameModels = [],
   initialState,
   onStateChange,
 }: SessionProps) {
@@ -93,6 +97,9 @@ function TemplateEditorSession({
   const sessionRef = useRef<string | null>(null);
   const sessionId = useCallback(() => (sessionRef.current ??= getOrCreateSessionId()), []);
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
+  const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
+  const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
+  const frameLook = model?.image ? { src: model.image.url, borderPx: model.image.borderPx, mouldingWidthIn: model.mouldingWidthIn } : null;
   const printSizeIn = useMemo(() => ({ width: selectedVariant.widthIn, height: selectedVariant.heightIn }), [selectedVariant.widthIn, selectedVariant.heightIn]);
 
   const customizer = useTemplateCustomizer({
@@ -101,7 +108,8 @@ function TemplateEditorSession({
     variantId: selectedVariant.id,
     printSizeIn,
     initialState,
-    useDrafts: !editPersonalizationId,
+    // A ready-made frame has nothing to save as a draft.
+    useDrafts: !editPersonalizationId && !fixedDesign,
     sessionId,
     authToken,
   });
@@ -226,7 +234,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} />
         <BuyBox
           product={product}
           variants={variants}
@@ -243,8 +251,9 @@ function TemplateEditorSession({
           submitError={submitError}
           onAddToCart={(quantity) => void handleAddToCart(quantity)}
           isEditingCartLine={editing}
+          frameModels={frameModels}
         >
-          <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />
+          {!fixedDesign && <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />}
         </BuyBox>
       </div>
       <input

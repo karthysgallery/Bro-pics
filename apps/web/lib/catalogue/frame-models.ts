@@ -38,3 +38,23 @@ export function frameModelIdFrom(name: string, taken: ReadonlySet<string>): stri
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
   return id;
 }
+
+/**
+ * For the product page: the frame models a product offers (no cost), and its sizes ordered so the default
+ * model comes first — the page opens on the default frame, and the frame choices list in the owner's order.
+ */
+export async function frameModelsForProductPage<V extends { frameModelId?: string; widthIn: number; heightIn: number; stockStatus: string }>(
+  db: Firestore,
+  product: { frameModelIds?: string[] },
+  variants: V[]
+): Promise<{ frameModels: PublicFrameModel[]; variants: V[] }> {
+  const ids = product.frameModelIds ?? [];
+  if (!ids.length) return { frameModels: [], variants };
+  const frameModels = await publicFrameModelsFor(db, ids);
+  const rank = (v: V) => {
+    const i = v.frameModelId ? ids.indexOf(v.frameModelId) : -1;
+    return i === -1 ? ids.length : i;
+  };
+  const ordered = [...variants].sort((a, b) => rank(a) - rank(b) || a.widthIn * a.heightIn - b.widthIn * b.heightIn);
+  return { frameModels, variants: ordered };
+}

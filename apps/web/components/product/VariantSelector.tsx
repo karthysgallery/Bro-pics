@@ -1,7 +1,7 @@
 'use client';
 
 import { Chip } from '../ui/Chip';
-import { Swatch } from '../ui/Swatch';
+import { Swatch, type SwatchLook } from '../ui/Swatch';
 
 interface VariantSelectorProps {
   label: string;
@@ -9,9 +9,11 @@ interface VariantSelectorProps {
   selected: string;
   onSelect: (value: string) => void;
   display?: 'pill' | 'swatch';
+  /** Per-option look for swatches: a frame model's photo, or a colour. */
+  swatches?: Record<string, SwatchLook>;
 }
 
-export function VariantSelector({ label, options, selected, onSelect, display = 'pill' }: VariantSelectorProps) {
+export function VariantSelector({ label, options, selected, onSelect, display = 'pill', swatches }: VariantSelectorProps) {
   if (options.length <= 1) return null;
 
   return (
@@ -29,7 +31,7 @@ export function VariantSelector({ label, options, selected, onSelect, display = 
       <div className="flex flex-wrap gap-2">
         {options.map((option) =>
           display === 'swatch' ? (
-            <Swatch key={option} label={option} active={option === selected} onClick={() => onSelect(option)} />
+            <Swatch key={option} label={option} active={option === selected} onClick={() => onSelect(option)} look={swatches?.[option]} />
           ) : (
             <Chip key={option} label={option} active={option === selected} onClick={() => onSelect(option)} />
           )

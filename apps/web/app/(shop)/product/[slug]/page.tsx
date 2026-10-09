@@ -26,6 +26,10 @@ import { SITE_NAME } from '../../../../lib/seo/site';
 import { getPublishedCombos } from '../../../../lib/firestore-combos';
 import { DEFAULT_APPEARANCE, DEFAULT_SITE_TEXT } from '@bro-pics/shared';
 
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminApp } from '../../../../lib/firebase-admin';
+import { frameModelsForProductPage } from '../../../../lib/catalogue/frame-models';
+
 export const revalidate = 60;
 
 interface ProductPageProps {
@@ -98,7 +102,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
-  const { product, variants, media, reviews } = detail;
+  const { product, media, reviews } = detail;
+  // Frame models the product offers (photos for the frame choice); sizes ordered default frame first.
+  const { frameModels, variants } = await frameModelsForProductPage(getFirestore(getAdminApp()), product, detail.variants).catch(() => ({ frameModels: [], variants: detail.variants }));
   const [relatedProducts, frequentlyBoughtTogether, category, templatesByVariant, personalizationTemplatesByVariant] = await Promise.all([
     getRelatedProducts(product.categoryId, product.id, 8),
     getFrequentlyBoughtTogether(product),
@@ -120,6 +126,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     media,
     initialTemplatesByVariant: templatesByVariant,
     personalizationTemplatesByVariant,
+    frameModels,
   };
 
   const jsonLd = buildProductJsonLd({

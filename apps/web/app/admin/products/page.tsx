@@ -127,8 +127,17 @@ export default function AdminProductsPage() {
     },
     {
       key: 'photoSlots',
-      header: 'Slots',
-      render: (p) => <span className="text-ink/70">{p.photoSlots} {p.photoSlots === 1 ? 'photo' : 'photos'}</span>,
+      header: 'Kind',
+      render: (p) => {
+        const kind = p.productType ?? (p.photoSlots > 1 ? 'collage' : 'single_photo');
+        const text = kind === 'ready_made' ? 'Ready-made' : kind === 'collage' ? `Collage · ${p.photoSlots} photos` : 'Single photo';
+        return (
+          <span className="text-ink/70">
+            {text}
+            {!p.productType && <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] font-semibold text-amber-800" title="Open it once in the guided editor to set frame models and costs">old setup</span>}
+          </span>
+        );
+      },
     },
     {
       key: 'inStock',
@@ -149,12 +158,6 @@ export default function AdminProductsPage() {
             Edit
           </Link>
           <Link
-            href={`/admin/products/${p.id}/template`}
-            className="px-2.5 py-1 rounded-lg border border-line bg-paper text-gold-deep hover:bg-tint font-medium text-2xs transition-colors"
-          >
-            Template
-          </Link>
-          <Link
             href={`/product/${p.slug}`}
             target="_blank"
             className="p-1 text-ink/40 hover:text-ink text-xs transition-colors"
@@ -173,7 +176,7 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Products Catalogue</h1>
           <p className="text-xs text-ink/60 mt-0.5">
-            Manage personalized photo frames, variant pricing, templates, and inventory
+            Ready-made, single-photo and collage frames — sizes, frame models, prices and photos
           </p>
         </div>
 
@@ -181,7 +184,7 @@ export default function AdminProductsPage() {
           href="/admin/products/new"
           className="self-start sm:self-auto px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink font-semibold text-xs transition-colors shadow-xs"
         >
-          + Create Product
+          + Add frame
         </Link>
       </div>
 

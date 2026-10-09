@@ -180,6 +180,8 @@ export interface PreviewGalleryProps {
   /** Shown over the main view's corner (e.g. an expand button) in the plain view. */
   stageOverlay?: ReactNode;
   scenes?: PreviewScene[];
+  /** False for a design with nothing to edit (a ready-made frame): the plain view shows the framed picture instead of the editor. */
+  showEditor?: boolean;
 }
 
 /**
@@ -199,6 +201,7 @@ export function PreviewGallery({
   onViewChange,
   stageOverlay,
   scenes = DEFAULT_PREVIEW_SCENES,
+  showEditor = true,
 }: PreviewGalleryProps) {
   const [ownView, setOwnView] = useState<PreviewViewId>('plain');
   const view = controlledView ?? ownView;
@@ -228,7 +231,7 @@ export function PreviewGallery({
 
   const active = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
   // With no product picture to show yet, the editor's own frame is the plain view (never a blank).
-  const showLiveEditor = active.id === 'plain' && (hasPersonalization || !defaultImageUrl);
+  const showLiveEditor = showEditor && active.id === 'plain' && (hasPersonalization || !defaultImageUrl);
   // The main plain view is the live editor, so the zoom copy uses its latest picture.
   const zoomPictures: Pictures = hasPersonalization && personalizedImageUrl ? { ...pictures, plainUrl: personalizedImageUrl } : pictures;
 

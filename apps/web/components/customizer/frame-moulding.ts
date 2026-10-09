@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Puts the printed design into the shop's one frame (public/frames/mock-frame.png)
- * for the room preview, so a collage reads as a framed picture on the wall and
- * looks the same as every other product.
+ * Puts the printed design into a frame for the preview: the product's chosen
+ * frame model (a straight-on photo of the moulding, from the Frame models
+ * library) or, without one, the shop's stock frame (public/frames/mock-frame.png).
+ * Preview only — the print file never includes the frame.
  */
 
 export const FRAME_SRC = '/frames/mock-frame.png';
@@ -26,19 +27,30 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * mitres and its sides are stretched to fit, so any print shape works.
  * `printWidthIn` (the design's real width) sets how thick the moulding looks.
  */
-export async function frameDesign(designUrl: string, printWidthIn?: number): Promise<string | null> {
+export interface FrameLook {
+  /** Straight-on photo of the whole frame. */
+  src: string;
+  /** Moulding width in that photo, in its pixels. */
+  borderPx: number;
+  /** Real moulding face width, in inches. */
+  mouldingWidthIn: number;
+}
+
+export const STOCK_FRAME: FrameLook = { src: FRAME_SRC, borderPx: FRAME_MOULDING_SRC_PX, mouldingWidthIn: MOULDING_IN };
+
+export async function frameDesign(designUrl: string, printWidthIn?: number, look: FrameLook = STOCK_FRAME): Promise<string | null> {
   try {
-    const [design, frame] = await Promise.all([loadImage(designUrl), loadImage(FRAME_SRC)]);
+    const [design, frame] = await Promise.all([loadImage(designUrl), loadImage(look.src)]);
     const w = design.naturalWidth;
     const h = design.naturalHeight;
-    const m = Math.round(printWidthIn && printWidthIn > 0 ? (w * MOULDING_IN) / printWidthIn : Math.max(w, h) * 0.06);
+    const m = Math.round(printWidthIn && printWidthIn > 0 ? (w * look.mouldingWidthIn) / printWidthIn : Math.max(w, h) * 0.06);
     const canvas = document.createElement('canvas');
     canvas.width = w + m * 2;
     canvas.height = h + m * 2;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.imageSmoothingQuality = 'high';
-    const c = FRAME_MOULDING_SRC_PX;
+    const c = Math.max(1, Math.min(look.borderPx, Math.floor(Math.min(frame.naturalWidth, frame.naturalHeight) / 2) - 1));
     const sw = frame.naturalWidth;
     const sh = frame.naturalHeight;
     const W = canvas.width;

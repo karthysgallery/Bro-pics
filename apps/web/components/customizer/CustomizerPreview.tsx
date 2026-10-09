@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { canvasPrintWidthIn, MAX_SCALE, type Variant } from '@bro-pics/shared';
 import { PreviewGallery, type PreviewViewId } from '../editor/PreviewGallery';
 import { TemplateCanvas } from './TemplateCanvas';
-import { frameDesign, MOULDING_IN } from './frame-moulding';
+import { frameDesign, STOCK_FRAME, type FrameLook } from './frame-moulding';
 import { Icon, type IconName } from './icons';
 import type { TemplateCustomizer } from './use-template-customizer';
 
@@ -15,6 +15,8 @@ interface CustomizerPreviewProps {
   /** The product's own picture: shown, in every view, until the first photo is added. */
   defaultImageUrl?: string | null;
   productTitle?: string;
+  /** The chosen frame model's look (the stock frame when absent). */
+  frameLook?: FrameLook | null;
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -37,19 +39,22 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design' }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<PreviewViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
 
   const printWidthIn = canvasPrintWidthIn(template.canvas, { width: variant.widthIn, height: variant.heightIn });
   const printHeightIn = printWidthIn * (template.canvas.height / template.canvas.width);
-  const frameInches = { widthIn: printWidthIn + MOULDING_IN * 2, heightIn: printHeightIn + MOULDING_IN * 2 };
+  const look = frameLook ?? STOCK_FRAME;
+  const frameInches = { widthIn: printWidthIn + look.mouldingWidthIn * 2, heightIn: printHeightIn + look.mouldingWidthIn * 2 };
   const photoCount = Object.keys(state.slots).length;
+  // A ready-made frame: nothing to add, the design is complete as it is and is shown framed straight away.
+  const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
 
   // The rooms (and their thumbnails) show the finished design, framed, rebuilt as the design changes.
   useEffect(() => {
-    if (photoCount === 0) {
+    if (photoCount === 0 && !fixedDesign) {
       setRoomImage(null);
       return;
     }
@@ -57,7 +62,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
     const timer = setTimeout(async () => {
       const design = customizer.exportDesign(1000, true);
       if (!design) return; // a photo is still loading; this runs again once it has
-      const framed = await frameDesign(design, printWidthIn);
+      const framed = await frameDesign(design, printWidthIn, look);
       if (alive) setRoomImage(framed ?? design);
     }, 250);
     return () => {
@@ -65,7 +70,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, customizer.render.version, printWidthIn, photoCount]);
+  }, [state, customizer.render.version, printWidthIn, photoCount, fixedDesign, look.src, look.borderPx, look.mouldingWidthIn]);
 
   const activeSlot = template.photoSlots.find((s) => s.id === activeSlotId) ?? null;
   const activePhoto = activeSlotId ? state.slots[activeSlotId] : undefined;
@@ -86,12 +91,13 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       <PreviewGallery
         defaultImageUrl={defaultImageUrl}
         personalizedImageUrl={roomImage}
-        hasPersonalization={photoCount > 0}
+        hasPersonalization={photoCount > 0 || (fixedDesign && roomImage !== null)}
         frameInches={frameInches}
         cutOut={false}
         alt={productTitle}
         view={view}
         onViewChange={setView}
+        showEditor={!fixedDesign}
       >
         <div className="w-full rounded-xl bg-tint/60 p-1 md:p-2">
           <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} />
