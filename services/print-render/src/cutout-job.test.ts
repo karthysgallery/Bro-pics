@@ -18,7 +18,7 @@ function deps(uploads: Record<string, CutoutUploadRecord>, subjectShare = 0.3) {
     linkCutout: async (a, b) => {
       links.push([a, b]);
     },
-    removeBackground: vi.fn(async () => ({ png: Buffer.from('png'), width: 2400, height: 3600, subjectShare })),
+    removeBackground: vi.fn(async () => ({ png: Buffer.from('png'), width: 2400, height: 3600, subjectShare, subjectBox: { x: 0.2, y: 0.3, width: 0.5, height: 0.7 } })),
     now: () => new Date('2026-10-09T00:00:00Z'),
   };
   return { d, created, saved, links };
@@ -30,9 +30,9 @@ describe('createCutout', () => {
   it('stores the cut-out as the customer\'s own upload next to the original and links it', async () => {
     const { d, created, saved, links } = deps({ up_1: photo });
     const result = await createCutout(d, 'up_1');
-    expect(result).toEqual({ uploadId: 'cut_1', widthPx: 2400, heightPx: 3600, reused: false });
+    expect(result).toEqual({ uploadId: 'cut_1', widthPx: 2400, heightPx: 3600, reused: false, subjectBox: { x: 0.2, y: 0.3, width: 0.5, height: 0.7 } });
     expect(saved).toEqual(['uploads/s1/cut_1/original.png']);
-    expect(created[0]).toMatchObject({ id: 'cut_1', sessionId: 's1', userId: 'u1', mime: 'image/png', status: 'ready', cutoutOf: 'up_1' });
+    expect(created[0]).toMatchObject({ id: 'cut_1', sessionId: 's1', userId: 'u1', mime: 'image/png', status: 'ready', cutoutOf: 'up_1', subjectBox: { x: 0.2, y: 0.3, width: 0.5, height: 0.7 } });
     expect(links).toEqual([['up_1', 'cut_1']]);
   });
 

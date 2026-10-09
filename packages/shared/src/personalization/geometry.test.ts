@@ -183,3 +183,28 @@ describe('canvasPrintWidthIn', () => {
     expect(effectiveDpi(region, slot, canvas, { width: 16, height: 24 })).toBe(150);
   });
 });
+
+import { framingForSubject as frame } from './geometry';
+describe('framingForSubject', () => {
+  it('zooms in on the people of a cut-out and centres them, still covering the slot', () => {
+    // A 2400×3600 cut-out; the couple occupy the middle 30% × 60%. Portrait slot (0.8).
+    const t = frame(2400, 3600, 0.8, { x: 0.35, y: 0.3, width: 0.3, height: 0.6 });
+    const region = visibleRegion(2400, 3600, 0, 0.8, t);
+    // Height-limited: the couple (60% of the height, plus a little room) fills the slot top to bottom.
+    // The cover fit already shows 2400×3000 of the photo, so the zoom is 3000 / (2160 × 1.08).
+    expect(t.scale).toBeCloseTo(3000 / (0.6 * 3600 * 1.08), 2);
+    // The whole couple is inside what is shown…
+    expect(region.x).toBeLessThanOrEqual(0.35 * 2400);
+    expect(region.x + region.width).toBeGreaterThanOrEqual(0.65 * 2400);
+    expect(region.y).toBeLessThanOrEqual(0.3 * 3600);
+    expect(region.y + region.height).toBeGreaterThanOrEqual(0.9 * 3600 - 1);
+    // …and the window never leaves the photo.
+    expect(region.x).toBeGreaterThanOrEqual(0);
+    expect(region.y + region.height).toBeLessThanOrEqual(3600 + 1e-6);
+  });
+
+  it('keeps the plain cover fit when the subject already fills the photo, or the box is empty', () => {
+    expect(frame(2000, 3000, 0.7, { x: 0, y: 0, width: 1, height: 1 }).scale).toBe(1);
+    expect(frame(2000, 3000, 0.7, { x: 0, y: 0, width: 0, height: 0 })).toEqual({ scale: 1, offsetX: 0, offsetY: 0 });
+  });
+});

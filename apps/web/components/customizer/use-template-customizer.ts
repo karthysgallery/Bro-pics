@@ -12,6 +12,8 @@ import {
   setSlotRotation,
   setText,
   setCalendarDate,
+  framingForSubject,
+  slotAspectRatio,
   zoomTo,
   zoomTransform,
   type AssetRef,
@@ -226,8 +228,20 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
           cutoutChecked.current.add(cut.id);
           if (cut.id !== original) {
             photos.ensure([cut.id]);
-            // Same picture, same framing: only the asset (and its size, if it was capped) changes.
-            rewriteEverywhere((p) => (p.assetId === original ? { ...p, assetId: cut.id, width: cut.width, height: cut.height } : p));
+            // The people fill the space: framed on what was kept, rather than the whole original picture.
+            const aspect = slotAspectRatio(slot, template.canvas);
+            rewriteEverywhere((p) =>
+              p.assetId === original
+                ? {
+                    ...p,
+                    assetId: cut.id,
+                    width: cut.width,
+                    height: cut.height,
+                    rotation: 0,
+                    transform: cut.subjectBox ? framingForSubject(cut.width, cut.height, aspect, cut.subjectBox) : p.transform,
+                  }
+                : p
+            );
           }
           setSlotActivity(slot.id, null);
           return true;
@@ -241,7 +255,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
       })();
       pending.current.set(`cutout:${original}`, job);
     }
-  }, [template.photoSlots, state.slots, photos, rewriteEverywhere, setSlotActivity]);
+  }, [template.photoSlots, template.canvas, state.slots, photos, rewriteEverywhere, setSlotActivity]);
 
   /** Adds photos: the chosen slot first, then every empty slot in order. */
   const addPhotos = useCallback(

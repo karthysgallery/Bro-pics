@@ -12,11 +12,33 @@ export interface ItemOriginal {
  * The customer's original (unedited) photos for an order item. A template-engine item keeps its photos in
  * the personalization snapshot; a classic frame keeps one customization per photo slot. Either way the
  * answer is the same list, so the admin screens and the download route agree on what "this item's photos" are.
+ *
+ * Each photo is listed once, even when a mosaic repeats it in many spaces. A space whose photo had its
+ * background removed lists the cut-out AND the customer's untouched original, for anyone redesigning it.
  */
 export async function listItemOriginals(db: Firestore, item: Pick<OrderItem, 'personalizationId' | 'personalization'>): Promise<ItemOriginal[]> {
   const slots = item.personalization?.state?.slots;
   if (slots && Object.keys(slots).length > 0) {
-    return Object.values(slots).map((photo, index) => ({ uploadId: photo.assetId, label: `Photo ${index + 1}` }));
+    // In the design's own order (fill order), so "Photo 1" is the first space.
+    const order = item.personalization?.template?.photoSlots?.map((s) => s.id) ?? Object.keys(slots);
+    const ids = [...order.filter((id) => slots[id]), ...Object.keys(slots).filter((id) => !order.includes(id))];
+    const uses = new Map<string, { first: number; count: number }>();
+    ids.forEach((slotId, index) => {
+      const assetId = slots[slotId]!.assetId;
+      const seen = uses.get(assetId);
+      if (seen) seen.count++;
+      else uses.set(assetId, { first: index, count: 1 });
+    });
+    const unique = [...uses.entries()];
+    const records = await Promise.all(unique.map(([assetId]) => db.collection('uploads').doc(assetId).get()));
+    const list: ItemOriginal[] = [];
+    unique.forEach(([assetId, use], i) => {
+      const base = `Photo ${use.first + 1}${use.count > 1 ? ` (used in ${use.count} spaces)` : ''}`;
+      const cutoutOf = records[i]!.exists ? (records[i]!.data() as Upload).cutoutOf : undefined;
+      list.push({ uploadId: assetId, label: cutoutOf ? `${base} — background removed` : base });
+      if (cutoutOf) list.push({ uploadId: cutoutOf, label: `Photo ${use.first + 1} — original, before background removal` });
+    });
+    return list;
   }
   // A plain equality query sorted in memory: an equality filter plus orderBy on another field would need a composite index.
   const snap = await db.collection('customizations').where('personalizationId', '==', item.personalizationId).get();

@@ -222,3 +222,31 @@ export function effectiveDpi(
   if (slotHeightIn <= 0 || region.height <= 0) return byWidth;
   return Math.min(byWidth, region.height / slotHeightIn);
 }
+
+/**
+ * The pan/zoom that frames a subject (e.g. the people in a cut-out photo) in
+ * a slot: the subject's box, with a little room around it, is shown as large
+ * as the slot allows, centred. `subject` is a fraction box of the photo as
+ * stored (unrotated). The result is clamped like any transform, so the photo
+ * still covers the slot.
+ */
+export function framingForSubject(
+  photoWidth: number,
+  photoHeight: number,
+  slotAspect: number,
+  subject: { x: number; y: number; width: number; height: number },
+  padding = 0.04
+): PhotoTransform {
+  const bw = subject.width * photoWidth;
+  const bh = subject.height * photoHeight;
+  if (!(bw > 0 && bh > 0)) return { ...IDENTITY_TRANSFORM };
+  const pad = padding * Math.max(bw, bh);
+  const needW = bw + 2 * pad;
+  const needH = bh + 2 * pad;
+  const width = Math.max(needW, needH * slotAspect);
+  const height = width / slotAspect;
+  const cx = (subject.x + subject.width / 2) * photoWidth;
+  const cy = (subject.y + subject.height / 2) * photoHeight;
+  const region = { x: cx - width / 2, y: cy - height / 2, width, height };
+  return clampTransform(transformFromVisibleRegion(region, photoWidth, photoHeight, 0, slotAspect), photoWidth, photoHeight, slotAspect);
+}

@@ -21,6 +21,9 @@ export function buildCalendarSvg(slot: CalendarSlot, state: Pick<Personalization
   const n = (v: number) => Math.round(v * 100) / 100;
 
   const parts = items.map((item) => {
+    if (item.kind === 'panel') {
+      return `<rect x="${n(item.x)}" y="${n(item.y)}" width="${n(item.width)}" height="${n(item.height)}" rx="${n(item.radius)}" ry="${n(item.radius)}" fill="${escapeXml(item.color)}" fill-opacity="${item.opacity}"/>`;
+    }
     if (item.kind === 'rule') return `<rect x="${n(item.x)}" y="${n(item.y)}" width="${n(item.width)}" height="${n(item.height)}" fill="${escapeXml(item.color)}"/>`;
     if (item.kind === 'mark') return `<path d="${pathData(item.segments)}" fill="${escapeXml(item.color)}"/>`;
     const family = item.font === 'title' ? title.fontFamily : body.fontFamily;

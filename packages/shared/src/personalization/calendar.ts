@@ -51,6 +51,8 @@ export type CalendarItem =
   /** Centred text; `y` is the alphabetic baseline. */
   | { kind: 'text'; text: string; x: number; y: number; fontSize: number; font: 'title' | 'body'; color: string }
   | { kind: 'rule'; x: number; y: number; width: number; height: number; color: string }
+  /** A rounded backdrop behind the whole calendar; drawn first. */
+  | { kind: 'panel'; x: number; y: number; width: number; height: number; radius: number; color: string; opacity: number }
   | { kind: 'mark'; segments: CalendarPathSegment[]; color: string };
 
 export interface Box {
@@ -111,9 +113,17 @@ const baselineFor = (cy: number, fontSize: number) => cy + fontSize * 0.35;
  * before the customer has picked one).
  */
 export function calendarLayout(slot: CalendarSlot, date: CalendarDate, box: Box, options: { markDay?: boolean } = {}): CalendarItem[] {
-  const { x, y, width: W, height: H } = box;
   const items: CalendarItem[] = [];
   const color = slot.color;
+  if (slot.panelColor) {
+    items.push({ kind: 'panel', x: box.x, y: box.y, width: box.width, height: box.height, radius: 0.06 * Math.min(box.width, box.height), color: slot.panelColor, opacity: slot.panelOpacity });
+  }
+  // With a panel, the calendar sits inside it with a margin.
+  const inset = slot.panelColor ? 0.05 * Math.min(box.width, box.height) : 0;
+  const x = box.x + inset;
+  const y = box.y + inset;
+  const W = box.width - 2 * inset;
+  const H = box.height - 2 * inset;
 
   // Title band (top 24%), rule, weekday row, then the weeks.
   const title = `${MONTH_NAMES[date.month - 1]} ${date.year}`;

@@ -75,6 +75,15 @@ describe('calendarLayout', () => {
     expect(items.some((i) => i.kind === 'mark')).toBe(false);
   });
 
+  it('draws an optional panel first and keeps the calendar inside it', () => {
+    const panelled = CalendarSlotSchema.parse({ ...slot, panelColor: '#000000', panelOpacity: 0.6 });
+    const items = calendarLayout(panelled, { year: 2024, month: 5, day: 24 }, box);
+    expect(items[0]).toMatchObject({ kind: 'panel', x: 0, y: 0, width: 700, height: 420, color: '#000000', opacity: 0.6 });
+    const t = texts(items);
+    expect(Math.min(...t.map((i) => i.x))).toBeGreaterThan(21);
+    expect(calendarLayout(slot, { year: 2024, month: 5, day: 24 }, box).some((i) => i.kind === 'panel')).toBe(false);
+  });
+
   it('writes the mark as SVG path data', () => {
     const mark = calendarLayout(slot, { year: 2024, month: 5, day: 24 }, box).find((i) => i.kind === 'mark');
     expect(mark && mark.kind === 'mark' && pathData(mark.segments)).toMatch(/^M[\d. ]+ C.* Z$/);

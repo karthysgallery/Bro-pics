@@ -23,6 +23,8 @@ export const UploadSchema = z.object({
   cutoutOf: z.string().min(1).optional(),
   /** The background-removed copy of this upload, once one has been made (reused, never made twice). */
   cutoutUploadId: z.string().min(1).optional(),
+  /** For a cut-out: where the kept subject is, as fractions of the image (for automatic framing). */
+  subjectBox: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).optional(),
 });
 
 export type Upload = z.infer<typeof UploadSchema>;

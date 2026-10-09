@@ -75,6 +75,28 @@ describe('repeatPhotosIntoEmpty', () => {
     expect(state.slots.main!.assetId).toBe('couple');
     expect(repeatPhotosIntoEmpty(t, state).filled).toBe(0);
   });
+
+  it('never puts the same photo next to itself in a grid, even when the photo count matches the columns', () => {
+    // An 8 × 10 grid of spaces and 8 photos: a plain cycle would make 8 identical columns.
+    const ids = Array.from({ length: 80 }, (_, i) => `m${i}`);
+    const grid = {
+      ...template('grid', ids),
+      photoSlots: ids.map((id, i) => ({ id, label: id, required: false, x: (i % 8) * 0.125, y: Math.floor(i / 8) * 0.1, width: 0.12, height: 0.095, rotationDeg: 0, shape: 'rect' as const, fit: 'cover' as const })),
+    };
+    let s = createEmptyState('grid', 1);
+    for (let i = 0; i < 8; i++) s = setSlotPhoto(s, `m${i}`, photo(`p${i}`));
+    const { state, filled } = repeatPhotosIntoEmpty(grid, s);
+    expect(filled).toBe(72);
+    for (let i = 0; i < 80; i++) {
+      const right = i % 8 < 7 ? i + 1 : null;
+      const below = i + 8 < 80 ? i + 8 : null;
+      for (const j of [right, below]) if (j !== null) expect(state.slots[`m${j}`]!.assetId).not.toBe(state.slots[`m${i}`]!.assetId);
+    }
+    // Every photo is used about equally (10 times each).
+    const counts = new Map<string, number>();
+    for (const p of Object.values(state.slots)) counts.set(p.assetId, (counts.get(p.assetId) ?? 0) + 1);
+    expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(2);
+  });
 });
 
 describe('planPhotoTargets', () => {

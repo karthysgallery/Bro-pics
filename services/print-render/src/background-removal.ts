@@ -72,6 +72,8 @@ export interface Cutout {
   height: number;
   /** Share of the picture kept (0..1): near 0 means nothing was recognised as the subject. */
   subjectShare: number;
+  /** Bounding box of what was kept, as fractions of the image (null when nothing was kept). */
+  subjectBox: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** The model's 1024×1024 soft mask (0-255) for a photo. */
@@ -121,15 +123,28 @@ export function removeBackground(image: Buffer): Promise<Cutout> {
     // Interleave by hand: photo RGB + mask as alpha.
     const rgba = Buffer.alloc(width * height * 4);
     let kept = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
     for (let i = 0, n = width * height; i < n; i++) {
       rgba[i * 4] = photo[i * 3]!;
       rgba[i * 4 + 1] = photo[i * 3 + 1]!;
       rgba[i * 4 + 2] = photo[i * 3 + 2]!;
       const a = alpha[i]!;
       rgba[i * 4 + 3] = a;
-      if (a > 127) kept++;
+      if (a > 127) {
+        kept++;
+        const x = i % width;
+        const y = (i - x) / width;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
     }
+    const subjectBox = maxX < 0 ? null : { x: minX / width, y: minY / height, width: (maxX + 1 - minX) / width, height: (maxY + 1 - minY) / height };
     const png = await sharp(rgba, { raw: { width, height, channels: 4 } }).png({ compressionLevel: 6 }).toBuffer();
-    return { png, width, height, subjectShare: kept / (width * height) };
+    return { png, width, height, subjectShare: kept / (width * height), subjectBox };
   });
 }

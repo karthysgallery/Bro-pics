@@ -65,9 +65,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       body: '{}',
       signal: AbortSignal.timeout(CUTOUT_TIMEOUT_MS),
     });
-    const body = (await res.json().catch(() => ({}))) as { uploadId?: string; widthPx?: number; heightPx?: number; error?: string; code?: string };
+    const body = (await res.json().catch(() => ({}))) as {
+      uploadId?: string;
+      widthPx?: number;
+      heightPx?: number;
+      subjectBox?: { x: number; y: number; width: number; height: number };
+      error?: string;
+      code?: string;
+    };
     if (res.ok && body.uploadId) {
-      return NextResponse.json({ uploadId: body.uploadId, widthPx: body.widthPx, heightPx: body.heightPx }, { status: 200 });
+      return NextResponse.json({ uploadId: body.uploadId, widthPx: body.widthPx, heightPx: body.heightPx, ...(body.subjectBox && { subjectBox: body.subjectBox }) }, { status: 200 });
     }
     if (res.status === 422) return NextResponse.json({ error: body.error ?? 'No people were found in this photo.', code: 'no_subject' }, { status: 422 });
     logger.warn('Cut-out service refused', { uploadId: id, status: res.status, error: body.error });

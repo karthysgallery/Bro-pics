@@ -99,7 +99,7 @@ async function tinyPng(): Promise<Buffer> {
 }
 
 describe('POST /cutout/:uploadId', () => {
-  const cutoutDeps = (removeBackground = vi.fn(async () => ({ png: Buffer.from('png'), width: 10, height: 10, subjectShare: 0.4 }))) => ({
+  const cutoutDeps = (removeBackground = vi.fn(async () => ({ png: Buffer.from('png'), width: 10, height: 10, subjectShare: 0.4, subjectBox: null }))) => ({
     getUpload: vi.fn(async (id: string) => (id === 'up_1' ? { id, sessionId: 's', originalPath: 'uploads/s/up_1/original.jpg', widthPx: 10, heightPx: 10, status: 'ready' as const } : null)),
     download: vi.fn(async () => Buffer.from('x')),
     saveFile: vi.fn(async () => undefined),

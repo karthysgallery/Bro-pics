@@ -414,7 +414,12 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                     </span>
                   </div>
                 </div>
-                {item.personalization && <PersonalizationSummary snapshot={item.personalization} />}
+                {item.personalization && (
+                  <PersonalizationSummary
+                    snapshot={item.personalization}
+                    printSizeIn={item.widthIn && item.heightIn ? { width: item.widthIn, height: item.heightIn } : undefined}
+                  />
+                )}
                 {item.id && <ItemFilesBox orderId={orderId} itemId={item.id} />}
                 </div>
                 </Fragment>

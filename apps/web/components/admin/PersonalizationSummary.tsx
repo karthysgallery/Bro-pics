@@ -1,4 +1,4 @@
-import { checkCompleteness, formatCalendarDate, type OrderPersonalizationSnapshot } from '@bro-pics/shared';
+import { checkCompleteness, formatCalendarDate, type OrderPersonalizationSnapshot, type PrintSizeIn } from '@bro-pics/shared';
 
 const TIER_STYLE = { green: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700' } as const;
 const TIER_LABEL = { green: 'Sharp', amber: 'Acceptable', red: 'Low resolution' } as const;
@@ -8,9 +8,10 @@ const TIER_LABEL = { green: 'Sharp', amber: 'Acceptable', red: 'Low resolution' 
  * template version and their choices at purchase time, not whatever the template looks
  * like today. Tier is shown as a word as well as a colour.
  */
-export function PersonalizationSummary({ snapshot }: { snapshot: OrderPersonalizationSnapshot }) {
+export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: OrderPersonalizationSnapshot; printSizeIn?: PrintSizeIn }) {
   const { template, state } = snapshot;
-  const status = checkCompleteness(template, state);
+  // Sharpness at the size the customer bought (the same check the editor and checkout used).
+  const status = checkCompleteness(template, state, { printSizeIn });
   const statusBySlot = new Map(status.slots.map((s) => [s.slotId, s]));
 
   return (

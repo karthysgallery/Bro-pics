@@ -49,6 +49,8 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
   const [saved, setSaved] = useState<PersonalizationTemplate | null>(null);
   const [draft, setDraft] = useState<PersonalizationTemplate | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Width and height move together, so the design is never stretched by accident. */
+  const [keepProportions, setKeepProportions] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [notes, setNotes] = useState<DetectionNotes | null>(null);
@@ -527,8 +529,8 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  ['Width (in)', widthIn, (n: number) => change((t) => setPrintSize(t, n, heightIn))],
-                  ['Height (in)', heightIn, (n: number) => change((t) => setPrintSize(t, widthIn, n))],
+                  ['Width (in)', widthIn, (n: number) => change((t) => setPrintSize(t, n, keepProportions ? (n * heightIn) / widthIn : heightIn))],
+                  ['Height (in)', heightIn, (n: number) => change((t) => setPrintSize(t, keepProportions ? (n * widthIn) / heightIn : widthIn, n))],
                   ['DPI', draft.canvas.dpi, (n: number) => change((t) => setPrintSize(t, widthIn, heightIn, Math.round(n)))],
                 ] as const
               ).map(([label, value, set]) => (
@@ -549,9 +551,11 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
                 </label>
               ))}
             </div>
-            <p className="text-2xs text-ink/50">
-              Keep the design&apos;s proportions ({(widthIn / heightIn).toFixed(3)}). Customers buying another size get the same layout scaled to it.
-            </p>
+            <label className="flex items-center gap-2 text-xs text-ink">
+              <input type="checkbox" checked={keepProportions} onChange={(e) => setKeepProportions(e.target.checked)} disabled={!editable} className="h-4 w-4 accent-[#c9861a]" />
+              Keep the design&apos;s proportions ({(widthIn / heightIn).toFixed(3)}): changing the width changes the height to match
+            </label>
+            <p className="text-2xs text-ink/50">Customers buying another size get the same layout scaled to it.</p>
             {hasArtwork && (
               <fieldset className="space-y-1.5">
                 <legend className="text-2xs font-semibold uppercase tracking-wide text-ink/55">The design image sits</legend>

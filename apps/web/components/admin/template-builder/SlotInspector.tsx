@@ -295,6 +295,24 @@ export function CalendarSlotInspector({ slot, onChange, onRemove, disabled }: { 
           Line under month
         </label>
       </div>
+      <div className="grid grid-cols-3 items-end gap-2">
+        <label className="flex h-9 items-center gap-1.5 text-xs text-ink">
+          <input
+            type="checkbox"
+            checked={Boolean(slot.panelColor)}
+            onChange={(e) => onChange({ panelColor: e.target.checked ? '#000000' : undefined })}
+            disabled={disabled}
+            className="h-4 w-4 accent-[#c9861a]"
+          />
+          Panel behind it
+        </label>
+        {slot.panelColor && (
+          <>
+            <ColourField label="Panel colour" value={slot.panelColor} onChange={(panelColor) => onChange({ panelColor })} disabled={disabled} />
+            <NumberField label="Panel" suffix="% solid" value={Math.round(slot.panelOpacity * 100)} min={0} max={100} step={5} onChange={(n) => onChange({ panelOpacity: Math.min(1, Math.max(0, n / 100)) })} disabled={disabled} />
+          </>
+        )}
+      </div>
       <BoxFields box={slot} onChange={onChange} disabled={disabled} />
       {!disabled && (
         <button type="button" onClick={onRemove} className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-alert hover:border-alert">

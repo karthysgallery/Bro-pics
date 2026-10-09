@@ -324,7 +324,13 @@ function drawCalendarSlot(ctx: CanvasRenderingContext2D, input: RenderInput, slo
   ctx.textBaseline = 'alphabetic';
   for (const item of items) {
     ctx.fillStyle = item.color;
-    if (item.kind === 'rule') ctx.fillRect(item.x, item.y, item.width, item.height);
+    if (item.kind === 'panel') {
+      ctx.globalAlpha = item.opacity;
+      ctx.beginPath();
+      ctx.roundRect(item.x, item.y, item.width, item.height, item.radius);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (item.kind === 'rule') ctx.fillRect(item.x, item.y, item.width, item.height);
     else if (item.kind === 'mark') {
       ctx.beginPath();
       for (const s of item.segments) {

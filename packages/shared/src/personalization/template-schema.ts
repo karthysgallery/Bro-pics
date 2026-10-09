@@ -135,6 +135,13 @@ export const CalendarSlotSchema = z
     leadingZero: z.boolean().default(true),
     /** A thin line under the month title. */
     showRule: z.boolean().default(true),
+    /**
+     * An optional rounded panel behind the calendar (#rrggbb), so it stays
+     * readable on top of photos. Absent = no panel.
+     */
+    panelColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    /** Panel opacity, 0 (clear) to 1 (solid). */
+    panelOpacity: z.number().min(0).max(1).default(0.7),
     /** Shown until the customer picks a date, as YYYY-MM-DD. */
     defaultDate: z
       .string()

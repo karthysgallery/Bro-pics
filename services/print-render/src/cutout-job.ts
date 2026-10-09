@@ -18,6 +18,7 @@ export interface CutoutUploadRecord {
   status: 'ready' | 'rejected';
   cutoutOf?: string;
   cutoutUploadId?: string;
+  subjectBox?: { x: number; y: number; width: number; height: number };
 }
 
 export interface CutoutDependencies {
@@ -49,6 +50,8 @@ export interface CutoutResult {
   heightPx: number;
   /** True when an earlier cut-out of the same photo was reused. */
   reused: boolean;
+  /** Where the people are in the cut-out (fractions), so the editor can frame them. */
+  subjectBox?: { x: number; y: number; width: number; height: number };
 }
 
 /** Below this share of the picture kept, nothing was recognised as the subject. */
@@ -58,11 +61,13 @@ export async function createCutout(deps: CutoutDependencies, uploadId: string): 
   const upload = await deps.getUpload(uploadId);
   if (!upload) throw new CutoutError(404, 'not_found', 'That photo could not be found.');
   if (upload.status !== 'ready') throw new CutoutError(409, 'not_ready', 'That photo is not ready yet.');
-  if (upload.cutoutOf) return { uploadId: upload.id, widthPx: upload.widthPx, heightPx: upload.heightPx, reused: true };
+  if (upload.cutoutOf) return { uploadId: upload.id, widthPx: upload.widthPx, heightPx: upload.heightPx, reused: true, ...(upload.subjectBox && { subjectBox: upload.subjectBox }) };
 
   if (upload.cutoutUploadId) {
     const existing = await deps.getUpload(upload.cutoutUploadId);
-    if (existing && existing.status === 'ready') return { uploadId: existing.id, widthPx: existing.widthPx, heightPx: existing.heightPx, reused: true };
+    if (existing && existing.status === 'ready') {
+      return { uploadId: existing.id, widthPx: existing.widthPx, heightPx: existing.heightPx, reused: true, ...(existing.subjectBox && { subjectBox: existing.subjectBox }) };
+    }
   }
 
   const cut = await deps.removeBackground(await deps.download(upload.originalPath));
@@ -86,7 +91,8 @@ export async function createCutout(deps: CutoutDependencies, uploadId: string): 
     status: 'ready',
     createdAt: deps.now(),
     cutoutOf: upload.id,
+    ...(cut.subjectBox && { subjectBox: cut.subjectBox }),
   });
   await deps.linkCutout(upload.id, id);
-  return { uploadId: id, widthPx: cut.width, heightPx: cut.height, reused: false };
+  return { uploadId: id, widthPx: cut.width, heightPx: cut.height, reused: false, ...(cut.subjectBox && { subjectBox: cut.subjectBox }) };
 }

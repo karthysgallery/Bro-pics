@@ -133,7 +133,11 @@ describe('GET /api/admin/orders/[id]/items/[itemId]/download', () => {
       exists: true,
       data: () => ({ personalizationId: 'perso_1', title: 'Collage', personalization: { state: { slots: { a: { assetId: 'up_a' }, b: { assetId: 'up_b' } } } } }),
     });
-    mockUploadGet.mockResolvedValueOnce({ exists: true, data: () => ({ originalPath: 'uploads/sess/up_b/original.jpg' }) });
+    // Listing reads each photo's record (to spot cut-outs), then the download reads the chosen one.
+    mockUploadGet
+      .mockResolvedValueOnce({ exists: true, data: () => ({ originalPath: 'uploads/sess/up_a/original.jpg' }) })
+      .mockResolvedValueOnce({ exists: true, data: () => ({ originalPath: 'uploads/sess/up_b/original.jpg' }) })
+      .mockResolvedValueOnce({ exists: true, data: () => ({ originalPath: 'uploads/sess/up_b/original.jpg' }) });
     const response = await GET(makeRequest('?type=original&upload=up_b'), makeParams());
     expect(response.status).toBe(200);
     expect(mockCustomizationsGet).not.toHaveBeenCalled();
