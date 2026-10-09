@@ -31,7 +31,16 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     await writeAuditLog(db, { actorUid: g.uid, action: 'billing.invoice_regenerated', resource: 'invoice', resourceId: id, details: { invoiceNo: invoice.invoiceNo } }).catch(() => undefined);
     invoice = (await ref.get()).data() as Invoice;
   }
-  const [bytes] = await getStorage(getAdminApp()).bucket().file(invoice.pdfPath!).download();
+  const bucket = getStorage(getAdminApp()).bucket();
+  let bytes: Buffer;
+  try {
+    [bytes] = await bucket.file(invoice.pdfPath!).download();
+  } catch {
+    // Stored file missing (moved bucket, deleted): make it again from the saved invoice.
+    const done = await finishInvoice(finishDeps(), id, { send: false });
+    if (!done.pdfPath) return NextResponse.json({ error: `The PDF could not be made: ${done.pdfError}` }, { status: 500 });
+    [bytes] = await bucket.file(done.pdfPath).download();
+  }
   const disposition = new URL(request.url).searchParams.get('download') === '1' ? 'attachment' : 'inline';
   return new NextResponse(new Uint8Array(bytes), {
     status: 200,

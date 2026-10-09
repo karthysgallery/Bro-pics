@@ -63,6 +63,13 @@ describe.skipIf(!enabled)('invoice service (Firestore emulator)', { timeout: 20_
     expect(customer.consent.transactional).toMatchObject({ status: 'opted_in', source: 'pos' });
   });
 
+  it('POS: links the bill to the website account that has the same mobile number', async () => {
+    const other = `+9197${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
+    await db.collection('users').doc(`acct_${run}`).set({ phone: other, displayName: 'Ravi' });
+    await sale(`req_${run}_acct`, { customer: { phone: other, name: 'Ravi' } });
+    expect(((await db.collection('customers').doc(`p${other.slice(1)}`).get()).data() as Customer).userId).toBe(`acct_${run}`);
+  });
+
   it('POS: refuses tampered prices, over-limit discounts, wrong payments and more than is on hand — and writes nothing', async () => {
     await expect(sale(`req_${run}_b`, { lines: [{ productId: P, variantId: V, qty: 1, discountPercent: 50 }], payments: [{ method: 'cash', amount: 24950 }] })).rejects.toThrow(/need a manager/);
     await expect(sale(`req_${run}_c`, { payments: [{ method: 'upi', amount: 100 }] })).rejects.toThrow(/add up/);

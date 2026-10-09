@@ -358,6 +358,10 @@ export async function createPosSale(db: Firestore, input: PosSaleInput): Promise
   const payments: InvoicePayment[] = input.payments.map((p) => ({ method: p.method, amount: p.amount, reference: p.reference?.trim() || null }));
   checkPayments(payments, totals.total, ctx.settings.paymentMethods);
 
+  // A website account with this number is the same person: link it.
+  const account = await db.collection('users').where('phone', '==', phone).limit(1).get();
+  const userId = account.docs[0]?.id ?? null;
+
   const saleId = `s${hashId(input.staffUid, input.clientRequestId)}`;
   const invoiceId = `pos_${saleId}`;
   return db.runTransaction(async (tx) => {
@@ -381,6 +385,7 @@ export async function createPosSale(db: Firestore, input: PosSaleInput): Promise
       phone,
       name,
       email: input.customer.email ?? null,
+      userId,
       source: 'pos',
       channel: 'pos',
       amount: totals.total,
