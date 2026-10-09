@@ -209,6 +209,15 @@ function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className
           <line x1="6" y1="20" x2="6" y2="14" />
         </svg>
       );
+    case 'billing':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
+          <path d="M9 7h6" />
+          <path d="M9 11h6" />
+          <path d="M9 15h3" />
+        </svg>
+      );
     case 'costs':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -288,6 +297,20 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    group: 'Billing / POS',
+    items: [
+      { label: 'New Bill', href: '/admin/billing/new', permission: 'billing:create', icon: 'billing' },
+      { label: 'Bills / Invoices', href: '/admin/billing/invoices', permission: 'billing:view', icon: 'billing' },
+      { label: 'Customers', href: '/admin/billing/customers', permission: 'billing:view', icon: 'customers' },
+      { label: 'Offline Sales', href: '/admin/billing/pos-sales', permission: 'billing:view', icon: 'analytics' },
+      { label: 'Online Orders', href: '/admin/billing/invoices?channel=online', permission: 'billing:view', icon: 'orders' },
+      { label: 'Returns / Refunds', href: '/admin/billing/invoices?kind=credit_note', permission: 'billing:view', icon: 'returns' },
+      { label: 'Billing Reports', href: '/admin/billing/reports', permission: 'billing:reports', icon: 'analytics' },
+      { label: 'WhatsApp Invoice Settings', href: '/admin/billing/whatsapp', permission: 'billing:view', icon: 'notifications' },
+      { label: 'Billing Settings', href: '/admin/billing/settings', permission: 'billing:view', icon: 'settings' },
+    ],
+  },
+  {
     group: 'Logistics',
     items: [
       { label: 'Pincode Coverage', href: '/admin/delivery/serviceability', permission: 'settings:read', icon: 'pincode' },
@@ -320,6 +343,8 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Coupons', href: '/admin/coupons', permission: 'coupons:write', icon: 'coupons' },
       { label: 'Reviews', href: '/admin/reviews', permission: 'reviews:moderate', icon: 'reviews' },
       { label: 'Merchandising', href: '/admin/merchandising', permission: 'catalogue:write', icon: 'merchandising' },
+      { label: 'WhatsApp Campaigns', href: '/admin/marketing/whatsapp', permission: 'marketing:whatsapp', icon: 'notifications' },
+      { label: 'WhatsApp Message Logs', href: '/admin/whatsapp/messages', permission: 'whatsapp:logs', icon: 'notifications' },
     ],
   },
   {
@@ -333,6 +358,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Configuration',
     items: [
       { label: 'Store & GST Settings', href: '/admin/settings', permission: 'settings:read', icon: 'settings' },
+      { label: 'Billing', href: '/admin/billing/settings', permission: 'billing:view', icon: 'billing' },
       { label: 'Notifications', href: '/admin/settings/notifications', permission: 'settings:read', icon: 'notifications' },
       { label: 'Team & Roles', href: '/admin/settings/team', permission: 'team:manage', icon: 'team' },
       { label: 'Audit Trail', href: '/admin/audit', permission: 'audit:read', icon: 'audit' },
