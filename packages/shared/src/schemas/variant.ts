@@ -24,6 +24,8 @@ export const VariantSchema = z.object({
   minUploadPx: z.number().int().positive(),
   aspectRatio: z.number().positive(),
   isActive: z.boolean(),
+  // The frame model (catalogue/frame-model.ts) this size is made in; frameColour then holds the model's name.
+  frameModelId: z.string().min(1).optional(),
   // Overrides the product's personalizationTemplateId for this size (a
   // collage laid out differently at 8x10 than at 12x18). null = use the product's.
   personalizationTemplateId: z.string().min(1).nullable().optional(),

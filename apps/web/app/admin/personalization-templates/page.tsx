@@ -37,6 +37,7 @@ const TYPE_LABEL: Record<string, string> = {
   text_plus_photo: 'Photo + text',
   wedding_collage: 'Wedding collage',
   birthday_collage: 'Birthday collage',
+  ready_made: 'Ready-made artwork',
 };
 
 function NewFromImage({ onCancel }: { onCancel: () => void }) {

@@ -24,6 +24,8 @@ export const TEMPLATE_TYPES = [
   'text_plus_photo',
   'wedding_collage',
   'birthday_collage',
+  /** Ready-made artwork (devotional, film stars…): printed as is, nothing for the customer to add. */
+  'ready_made',
 ] as const;
 export const TemplateTypeSchema = z.enum(TEMPLATE_TYPES);
 export type TemplateType = z.infer<typeof TemplateTypeSchema>;

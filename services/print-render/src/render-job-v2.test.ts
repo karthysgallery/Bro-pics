@@ -105,3 +105,20 @@ describe('renderPrintJob for template-v2 items', () => {
     await expect(renderPrintJob(deps, 'job1')).rejects.toThrow(/Variant v1 not found/);
   });
 });
+
+describe('renderPrintJob for a ready-made frame (shop artwork, nothing from the customer)', () => {
+  it('prints the artwork at the frame size, needing no customer photo', async () => {
+    const { buildReadyMadeTemplate } = await import('@bro-pics/shared/src/catalogue/product-designs');
+    const t = buildReadyMadeTemplate({ productId: 'murugan', name: 'Lord Murugan', size: { widthIn: 8, heightIn: 12 }, artwork: { assetId: 'art_1' } });
+    const snap = buildOrderSnapshot(t, createEmptyState(t.id, t.version));
+    const { deps, calls } = fakeDeps(snap, { loadTemplateAsset: vi.fn(async () => solid(30, 90, 200)) });
+    await renderPrintJob(deps, 'job1');
+    expect(deps.getUpload).not.toHaveBeenCalled();
+    expect(deps.loadTemplateAsset).toHaveBeenCalledWith('art_1');
+    expect(calls.complete).toEqual(['print-files/o1/i1/print.png']);
+    const { data, info } = await sharp(calls.upload[0].buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect([info.width, info.height]).toEqual([2400, 3600]);
+    const i = (Math.round(info.height / 2) * info.width + Math.round(info.width / 2)) * 4;
+    expect([data[i], data[i + 1], data[i + 2]]).toEqual([30, 90, 200]);
+  }, 60_000);
+});

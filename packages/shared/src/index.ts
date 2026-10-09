@@ -89,3 +89,7 @@ export * from './billing/running-costs';
 export * from './schemas/billing';
 export * from './billing/invoice-engine';
 export * from './billing/reports';
+export * from './catalogue/product-designs';
+export * from './catalogue/frame-model';
+export * from './catalogue/product-pricing';
+export * from './seo/product-autofill';

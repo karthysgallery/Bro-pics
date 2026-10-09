@@ -16,7 +16,8 @@ export const ProductSchema = z.object({
   badges: z.array(z.string()),
   dispatchDaysMin: z.number().int().nonnegative(),
   dispatchDaysMax: z.number().int().nonnegative(),
-  photoSlots: z.number().int().positive(),
+  // 0 for a ready-made frame (nothing for the customer to add).
+  photoSlots: z.number().int().nonnegative(),
   allowsTextPersonalization: z.boolean(),
   // [BE-22] GST invoices need each line item's HSN code — optional and
   // unset for now, since which HSN code(s) apply to printed photo frames
@@ -101,6 +102,18 @@ export const ProductSchema = z.object({
   // the template editor only once that template has a PUBLISHED version;
   // until then (or when unset/null) the product keeps the classic editor.
   personalizationTemplateId: z.string().min(1).nullable().optional(),
+
+  // What kind of frame this is (catalogue/product-designs.ts). Absent on products made before
+  // the guided editor: treated as single_photo (1 slot) or collage (more).
+  productType: z.enum(['ready_made', 'single_photo', 'collage']).optional(),
+  // Short product code used in SKUs, e.g. "MURUGAN".
+  productCode: z.string().optional(),
+  // What the picture shows ("Lord Murugan", "Rajinikanth") — the main search phrase for ready-made frames.
+  subject: z.string().optional(),
+  // Frame models offered; the first is the default the product page opens with.
+  frameModelIds: z.array(z.string()).optional(),
+  // Ready-made: the shop's high-resolution artwork (media library), printed for each order.
+  artwork: z.object({ mediaId: z.string(), url: z.string(), widthPx: z.number().int().positive(), heightPx: z.number().int().positive() }).nullable().optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;

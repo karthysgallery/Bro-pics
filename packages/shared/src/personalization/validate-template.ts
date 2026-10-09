@@ -62,7 +62,9 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
   // --- slots exist and ids are unique across photo AND text slots ------------
   const calendars = t.calendarSlots ?? [];
   if (t.photoSlots.length === 0 && t.textSlots.length === 0 && calendars.length === 0) {
-    error('no_slots', 'A template needs at least one photo, text or calendar slot.');
+    // A ready-made frame is the one design with nothing to fill: its printed artwork is the whole print.
+    if (t.type !== 'ready_made') error('no_slots', 'A template needs at least one photo, text or calendar slot.');
+    else if (!t.layers.some((l) => l.kind === 'fixed' && l.printed)) error('no_artwork', 'A ready-made design needs its printed artwork.');
   }
   const seen = new Set<string>();
   for (const id of [...t.photoSlots.map((s) => s.id), ...t.textSlots.map((s) => s.id), ...calendars.map((s) => s.id)]) {

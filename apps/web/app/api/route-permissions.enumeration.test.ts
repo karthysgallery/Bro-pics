@@ -42,6 +42,12 @@ import { GET as staffReturnsGET } from './staff/returns/route';
 import { POST as staffReturnAdvancePOST } from './staff/returns/[returnId]/route';
 import { GET as staffReviewsGET } from './staff/reviews/route';
 import { POST as staffReviewModeratePOST } from './staff/reviews/[id]/moderate/route';
+import { GET as frameModelsGET, POST as frameModelsPOST } from './admin/frame-models/route';
+import { PATCH as frameModelPATCH } from './admin/frame-models/[id]/route';
+import { PUT as framingRatesPUT } from './admin/frame-models/rates/route';
+import { POST as productSetupPOST } from './admin/products/setup/route';
+import { GET as productSetupOptionsGET } from './admin/products/setup/options/route';
+import { GET as productSetupGET, PUT as productSetupPUT } from './admin/products/[id]/setup/route';
 
 function anonymousRequest(url: string, method = 'GET'): Request {
   return new Request(url, { method, headers: method === 'POST' ? { 'Content-Type': 'application/json' } : {}, body: method === 'POST' ? '{}' : undefined });
@@ -62,7 +68,7 @@ interface RouteCase {
   wrongRole: string;
   call: (request: Request) => Promise<Response>;
   url: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
 }
 
 const cases: RouteCase[] = [
@@ -133,6 +139,14 @@ const cases: RouteCase[] = [
     url: 'https://example.com/api/staff/reviews/review_1/moderate',
     call: (request) => staffReviewModeratePOST(request, { params: Promise.resolve({ id: 'review_1' }) }),
   },
+  { name: 'GET /api/admin/frame-models', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/frame-models', call: (r) => frameModelsGET(r) },
+  { name: 'POST /api/admin/frame-models', key: 'catalogue:write', wrongRole: 'staff', method: 'POST', url: 'https://example.com/api/admin/frame-models', call: (r) => frameModelsPOST(r) },
+  { name: 'PATCH /api/admin/frame-models/[id]', key: 'catalogue:write', wrongRole: 'staff', method: 'PATCH', url: 'https://example.com/api/admin/frame-models/teak', call: (r) => frameModelPATCH(r, { params: Promise.resolve({ id: 'teak' }) }) },
+  { name: 'PUT /api/admin/frame-models/rates', key: 'catalogue:write', wrongRole: 'staff', method: 'PUT', url: 'https://example.com/api/admin/frame-models/rates', call: (r) => framingRatesPUT(r) },
+  { name: 'POST /api/admin/products/setup', key: 'catalogue:write', wrongRole: 'staff', method: 'POST', url: 'https://example.com/api/admin/products/setup', call: (r) => productSetupPOST(r) },
+  { name: 'GET /api/admin/products/setup/options', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/products/setup/options', call: (r) => productSetupOptionsGET(r) },
+  { name: 'GET /api/admin/products/[id]/setup', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/products/p1/setup', call: (r) => productSetupGET(r, { params: Promise.resolve({ id: 'p1' }) }) },
+  { name: 'PUT /api/admin/products/[id]/setup', key: 'catalogue:write', wrongRole: 'staff', method: 'PUT', url: 'https://example.com/api/admin/products/p1/setup', call: (r) => productSetupPUT(r, { params: Promise.resolve({ id: 'p1' }) }) },
 ];
 
 describe('[ABE-02] admin/staff route permission enumeration', () => {
