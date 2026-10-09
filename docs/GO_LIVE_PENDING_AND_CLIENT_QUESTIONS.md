@@ -21,7 +21,7 @@ Nothing is pushed to `master`, nothing is deployed beyond the Cloud Run preview,
 3. Run the read-only `audit-live-data` script (older admin screens saved rupee values as paise).
 4. Set `NEXT_PUBLIC_SITE_URL=https://karthysgallery.in`, `SITE_PREVIEW=0`, `PAYMENT_PROVIDER=razorpay`, `WHATSAPP_OTP_MODE=production` (build values in `apps/web/cloudbuild-deploy.yaml` + the same env vars on the Cloud Run service). The app fails closed if any is missing.
 5. Deploy **Cloud Functions** (reconcile already live; deploy `razorpayWebhook`, print dispatcher/sweeper) — **upgrade the functions runtime from Node 20 before 2026-10-30** (decommission date).
-6. Deploy the **print-render service** (private Cloud Run) per `services/print-render/DEPLOY.md`, only after the website release is live; set `PRINT_RENDER_URL` and `PRINT_DISPATCH_AFTER` in `functions/.env.bropics-app`.
+6. Deploy the **print-render service** (private Cloud Run) per `services/print-render/DEPLOY.md`, only after the website release is live; set `PRINT_RENDER_URL` and `PRINT_DISPATCH_AFTER` in `functions/.env.bropics-app`. Before building it run `pnpm --filter @bro-pics/print-render fetch-model` (background-removal model); deploy with **8 GiB / 2 CPU / concurrency 1**; set `CUTOUT_SERVICE_URL` on the website service and grant it `run.invoker` on print-render; check `/health` shows `fonts.rendering.ok: true` and `cutout.modelPresent: true`.
 7. Set a **TTL policy** on `otpSessions.expireAt`.
 8. Push/merge to `master` (the Cloud Build trigger then tests, builds and deploys). First real push is also the first real proof of the trigger.
 9. DNS cut-over, HTTPS check, smoke test (browse, sign in, add to cart, pay a small real amount, refund it, verify print job, verify admin).
