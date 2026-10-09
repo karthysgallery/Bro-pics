@@ -15,3 +15,4 @@ export { reconcileStuckOrders } from './reconciliation/reconcile-orders';
 export { cleanupStaleSessions } from './cleanup/cleanup-stale-sessions';
 export { rollupDailyAnalytics } from './analytics/daily-rollup';
 export { dispatchPrintJob, sweepPrintJobs } from './print/dispatch';
+export { recordBudgetAlert } from './billing/budget-alerts';

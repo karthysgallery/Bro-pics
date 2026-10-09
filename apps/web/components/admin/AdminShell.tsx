@@ -209,6 +209,14 @@ function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className
           <line x1="6" y1="20" x2="6" y2="14" />
         </svg>
       );
+    case 'costs':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 4h12" />
+          <path d="M6 9h12" />
+          <path d="M9 4c5 0 5 10 0 10H6l8 6" />
+        </svg>
+      );
     case 'settings':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -318,6 +326,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Intelligence',
     items: [
       { label: 'Analytics Reports', href: '/admin/analytics', permission: 'analytics:read', icon: 'analytics' },
+      { label: 'Running costs', href: '/admin/running-costs', permission: 'audit:read', icon: 'costs' },
     ],
   },
   {

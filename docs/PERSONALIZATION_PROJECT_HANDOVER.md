@@ -32,6 +32,9 @@ Go-live gate: `seo:audit --base https://karthysgallery.in --db --expect-producti
 - **Go-live needs for cut-outs**: run `pnpm --filter @bro-pics/print-render fetch-model` before building the print image; give print-render **8 GiB, 2 CPU, concurrency 1**; set `CUTOUT_SERVICE_URL` (or `PRINT_RENDER_URL`) on the website's Cloud Run service and grant its service account `run.invoker` on print-render. Until then a cut-out space keeps the photo as it is and tells the customer.
 - Verified on the emulators (2 passes: admin UI + scripted admin routes; customer UI ×2): detection, publish/link, upload → cut-out → mosaic fill → date → cart → mock payment → print job → print file (4800×6000 and 5400×7170 px) → admin order view, Files box and zip.
 
+## Running costs page (2026-10-09)
+Admin → Intelligence → **Running costs** (owner/admins, `audit:read`): this month so far, expected month total, last month, budget bar, cost per service in plain words, day by day, month by month. Sources: Google budget alerts via Pub/Sub → `recordBudgetAlert` → `ops/runningCosts` (month total, includes spend before setup) and the BigQuery billing export (detail; `lib/running-costs.ts`, 1-hour cache). Setup steps: `docs/GO_LIVE_PENDING_AND_CLIENT_QUESTIONS.md` A2b. Verified on the emulators with a real-format budget message through the Pub/Sub emulator and a local BigQuery stand-in (`BIGQUERY_ENDPOINT`, dev only).
+
 ## Files Box (admin order page, 2026-10-08)
 Each order item shows Preview, each original photo and the print-ready file (with print-job state and "Render again"), plus a per-order zip (`/api/admin/orders/[id]/files-zip`). Download route accepts `?upload=` and verifies the photo belongs to the item.
 

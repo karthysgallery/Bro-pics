@@ -28,6 +28,14 @@ Nothing is pushed to `master`, nothing is deployed beyond the Cloud Run preview,
 10. Resolve the two stuck real orders **BP-2026-00002 / 00003** (paid but never printed) — only after the print pipeline is live; contact the customers.
 11. Submit `/sitemap.xml` to Google Search Console and verify the domain (Admin → Settings → SEO).
 
+### A2b. Admin → Running costs (what the website costs)
+The page is built; Google's figures need two one-time settings, then two engineering steps.
+- **Owner (billing account owner, Google Cloud console):**
+  1. Billing → Budgets & alerts → Create budget for project `bropics-app` (e.g. ₹1,000/month) → actions: **Connect a Pub/Sub topic**, create topic `billing-budget-alerts` in bropics-app.
+  2. Billing → Billing export → BigQuery export → **Standard usage cost** → project bropics-app, new dataset `billing_export` (only covers days from then on).
+- **Engineering (with the go-live deploy):** deploy the `recordBudgetAlert` function (functions bundle); set `BILLING_EXPORT_TABLE=bropics-app.billing_export.gcp_billing_export_v1_…` (exact table name from BigQuery) on the website's Cloud Run service; grant the website's service account **BigQuery Job User** on the project and **BigQuery Data Viewer** on the `billing_export` dataset.
+- Until then the page shows "No cost figures yet" and the setup checklist; the same numbers are in the console under Billing → Reports.
+
 ### A3. Content to enter (admin work, not code)
 - Product SEO titles/descriptions per product (live titles still say "| BroPics" from old seed data).
 - Real product photos/mockups (the local catalogue uses placeholder mockups), template links for collage products.

@@ -35,3 +35,4 @@ test-results/
 
 # Background-removal model (fetched by services/print-render: pnpm fetch-model)
 services/print-render/models/*.onnx
+pubsub-debug.log
