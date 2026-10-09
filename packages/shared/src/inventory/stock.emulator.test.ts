@@ -7,7 +7,7 @@ import { applyStock, readStock, releaseOrderStock, reserveOrderStock } from './s
 // Run: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npx vitest run src/inventory
 const enabled = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
-describe.skipIf(!enabled)('shared stock (Firestore emulator)', () => {
+describe.skipIf(!enabled)('shared stock (Firestore emulator)', { timeout: 20_000 }, () => {
   let db: Firestore;
   const line = { productId: 'stock_p', variantId: 'stock_v' };
   beforeAll(() => {

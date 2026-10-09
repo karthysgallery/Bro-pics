@@ -108,3 +108,18 @@ describe('isValidRole', () => {
     }
   });
 });
+
+describe('billing permissions', () => {
+  it('lets store staff bill and send invoices, but not refund, see reports, override discounts or change billing settings', () => {
+    for (const k of ['billing:view', 'billing:create', 'billing:download', 'billing:send_whatsapp'] as const) expect(roleHasPermission('staff', k)).toBe(true);
+    for (const k of ['billing:refund', 'billing:reports', 'billing:discount_override', 'billing:settings', 'marketing:whatsapp', 'whatsapp:logs'] as const) expect(roleHasPermission('staff', k)).toBe(false);
+  });
+  it('gives owners/admins everything, marketing only campaigns and the message log, catalogue/content none', () => {
+    expect(roleHasPermission('super_admin', 'billing:refund')).toBe(true);
+    expect(roleHasPermission('admin', 'billing:settings')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'marketing:whatsapp')).toBe(true);
+    expect(roleHasPermission('marketing_manager', 'billing:create')).toBe(false);
+    expect(roleHasPermission('catalogue_manager', 'billing:view')).toBe(false);
+    expect(roleHasPermission('content_manager', 'whatsapp:logs')).toBe(false);
+  });
+});

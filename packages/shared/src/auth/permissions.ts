@@ -42,6 +42,19 @@ export const PERMISSION_KEYS = [
   'team:manage',
   'analytics:read',
   'audit:read',
+  // Billing / POS (online + in-store invoices). Refunds, settings, reports and
+  // discounts above the staff limit are deliberately separate keys.
+  'billing:view',
+  'billing:create',
+  'billing:download',
+  'billing:send_whatsapp',
+  'billing:refund',
+  'billing:reports',
+  'billing:discount_override',
+  'billing:settings',
+  // WhatsApp: marketing campaigns, and the message log (who was sent what).
+  'marketing:whatsapp',
+  'whatsapp:logs',
   // Backwards-compatible content keys for legacy routes
   'content:read',
   'content:write',
@@ -50,6 +63,16 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
   super_admin: [
+    'billing:view',
+    'billing:create',
+    'billing:download',
+    'billing:send_whatsapp',
+    'billing:refund',
+    'billing:reports',
+    'billing:discount_override',
+    'billing:settings',
+    'marketing:whatsapp',
+    'whatsapp:logs',
     'catalogue:read',
     'catalogue:write',
     'catalogue:publish',
@@ -76,6 +99,16 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'content:write',
   ],
   admin: [
+    'billing:view',
+    'billing:create',
+    'billing:download',
+    'billing:send_whatsapp',
+    'billing:refund',
+    'billing:reports',
+    'billing:discount_override',
+    'billing:settings',
+    'marketing:whatsapp',
+    'whatsapp:logs',
     'catalogue:read',
     'catalogue:write',
     'catalogue:publish',
@@ -101,6 +134,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'content:write',
   ],
   staff: [
+    'billing:view',
+    'billing:create',
+    'billing:download',
+    'billing:send_whatsapp',
     'orders:read',
     'orders:write',
     'production:write',
@@ -121,6 +158,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'content:read',
   ],
   marketing_manager: [
+    'marketing:whatsapp',
+    'whatsapp:logs',
     'coupons:write',
     'reviews:moderate',
     'catalogue:read',

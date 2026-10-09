@@ -3,7 +3,7 @@
 // Import directly: '@bro-pics/shared/src/payments/firestore-payment-tx'.
 import { FieldValue, getFirestore, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { OrderEventSchema } from '../schemas/order-event';
-import { generateInvoiceNo } from '../orders/invoice-number';
+import { generateInvoiceNo, DEFAULT_INVOICE_PREFIX } from '../orders/invoice-number';
 import type { CounterTransaction } from '../orders/order-number';
 import { buildQueuedNotification, notificationOutboxId } from '../notifications/notification-outbox';
 import { buildQueuedPrintJob } from '../print-jobs/print-jobs';
@@ -74,7 +74,10 @@ export function buildPaymentTx(db: Firestore, transaction: Transaction): Payment
         razorpayPaymentId,
       });
     },
-    async generateInvoiceNo(year) {
+    async generateInvoiceNo() {
+      // Same series as in-store bills (see orders/invoice-number.ts), prefix from Admin → Billing settings.
+      const settingsSnap = await transaction.get(db.collection('settings').doc('billing'));
+      const prefix = (settingsSnap.exists ? (settingsSnap.data() as { invoicePrefix?: string }).invoicePrefix : undefined) || DEFAULT_INVOICE_PREFIX;
       const counterAdapter: CounterTransaction = {
         async get(ref) {
           const snap = await transaction.get(db.doc(ref.path));
@@ -84,10 +87,12 @@ export function buildPaymentTx(db: Firestore, transaction: Transaction): Payment
           transaction.set(db.doc(ref.path), data);
         },
       };
-      return generateInvoiceNo(counterAdapter, year);
+      return generateInvoiceNo(counterAdapter, new Date(), prefix);
     },
     setInvoiceNo(orderId, invoiceNo) {
       transaction.update(db.collection('orders').doc(orderId), { invoiceNo });
+      // Hard uniqueness lock: a second document with this number can never be created.
+      transaction.create(db.collection('invoiceNumbers').doc(invoiceNo), { invoiceNo, kind: 'invoice', orderId, at: new Date().toISOString() });
     },
     markPaymentFailed(orderId) {
       transaction.update(db.collection('orders').doc(orderId), { paymentStatus: 'failed' });

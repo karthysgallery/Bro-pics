@@ -3,34 +3,26 @@ import { generateInvoiceNo } from './invoice-number';
 import type { CounterTransaction } from './order-number';
 
 function makeFakeTransaction(currentValue: number | undefined): CounterTransaction {
-  const docSnapshot = {
-    exists: currentValue !== undefined,
-    data: () => (currentValue !== undefined ? { value: currentValue } : undefined),
-  };
-  return {
-    get: vi.fn().mockResolvedValue(docSnapshot),
-    set: vi.fn(),
-  };
+  const docSnapshot = { exists: currentValue !== undefined, data: () => (currentValue !== undefined ? { value: currentValue } : undefined) };
+  return { get: vi.fn().mockResolvedValue(docSnapshot), set: vi.fn() };
 }
 
 describe('generateInvoiceNo', () => {
-  it('starts at 1 when the counter does not exist yet', async () => {
+  it('starts at 1 in a new financial year, on its own per-year counter', async () => {
     const tx = makeFakeTransaction(undefined);
-    const invoiceNo = await generateInvoiceNo(tx, 2026);
-    expect(invoiceNo).toBe('INV-2026-00001');
-    expect(tx.set).toHaveBeenCalledWith(expect.anything(), { value: 1 });
+    expect(await generateInvoiceNo(tx, new Date('2026-10-09T06:00:00Z'))).toBe('KG-INV-2026-000001');
+    expect(tx.get).toHaveBeenCalledWith({ path: 'counters/invoice-FY2026' });
+    expect(tx.set).toHaveBeenCalledWith({ path: 'counters/invoice-FY2026' }, { value: 1 });
   });
 
-  it('increments the existing counter, independently of generateOrderNo\'s own counter', async () => {
+  it('continues the sequence with the configured prefix; January belongs to the previous financial year', async () => {
     const tx = makeFakeTransaction(41);
-    const invoiceNo = await generateInvoiceNo(tx, 2026);
-    expect(invoiceNo).toBe('INV-2026-00042');
-    expect(tx.set).toHaveBeenCalledWith(expect.anything(), { value: 42 });
+    expect(await generateInvoiceNo(tx, new Date('2027-01-15T06:00:00Z'), 'KGS')).toBe('KGS-2026-000042');
   });
 
-  it('pads to 5 digits', async () => {
+  it('keeps credit notes on their own sequence', async () => {
     const tx = makeFakeTransaction(9);
-    const invoiceNo = await generateInvoiceNo(tx, 2026);
-    expect(invoiceNo).toBe('INV-2026-00010');
+    expect(await generateInvoiceNo(tx, new Date('2026-10-09T06:00:00Z'), 'KG-CN', 'credit_note')).toBe('KG-CN-2026-000010');
+    expect(tx.get).toHaveBeenCalledWith({ path: 'counters/creditNote-FY2026' });
   });
 });
