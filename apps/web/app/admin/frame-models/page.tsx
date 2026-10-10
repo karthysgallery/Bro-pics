@@ -185,7 +185,11 @@ export default function FrameModelsPage() {
                 </dl>
                 {!m.image && <p className="rounded-lg bg-amber-50 px-2 py-1 text-2xs text-amber-800">No photo yet — the shop shows a plain stock frame.</p>}
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setEditing({ id: m.id, draft: { ...m } })} className="h-9 flex-1 rounded-xl border border-line text-xs font-semibold text-ink hover:bg-field">
+                  <button type="button" onClick={() => {
+                      // Only the editable fields: id and dates are kept by the server.
+                      const { id: _id, createdAt: _c, updatedAt: _u, ...draft } = m;
+                      setEditing({ id: m.id, draft });
+                    }} className="h-9 flex-1 rounded-xl border border-line text-xs font-semibold text-ink hover:bg-field">
                     Edit
                   </button>
                   <button type="button" onClick={() => void toggle(m)} className="h-9 flex-1 rounded-xl border border-line text-xs font-semibold text-ink hover:bg-field">

@@ -21,7 +21,10 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   const ref = g.db.collection(FRAME_MODELS).doc(id);
   const snap = await ref.get();
   if (!snap.exists) return adminApiError(404, 'not_found', 'This frame model no longer exists.');
-  const parsed = FrameModelInputSchema.partial().strict().safeParse(await request.json().catch(() => null));
+  const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  // The id and dates belong to the server; a client that echoes them back is not refused for it.
+  if (raw && typeof raw === 'object') for (const key of ['id', 'createdAt', 'updatedAt']) delete raw[key];
+  const parsed = FrameModelInputSchema.partial().strict().safeParse(raw);
   if (!parsed.success) return adminApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Invalid frame model', { issues: parsed.error.issues });
   if (parsed.data.code) {
     const clash = await g.db.collection(FRAME_MODELS).where('code', '==', parsed.data.code).get();
