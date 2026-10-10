@@ -1,6 +1,6 @@
 # Adding frames — guide for the shop
 
-Status (10 Oct 2026): built and tested on the local emulators. **Not deployed.** Branch `San's(FE)`, commits `3d41666`, `3ef4c92`, `368ffeb`.
+Status (10 Oct 2026): built and tested on the local emulators. **Not deployed.** Branch `San's(FE)`, commits `3d41666`, `3ef4c92`, `c17937e`, `96e3fd2`.
 
 ## 1. Set up your frame models once
 
