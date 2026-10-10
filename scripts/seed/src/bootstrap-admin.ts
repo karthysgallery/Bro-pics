@@ -1,9 +1,16 @@
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { ROLES, StaffMirrorSchema, type Role } from '@bro-pics/shared';
+import * as sharedModule from '@bro-pics/shared';
+import type { Role } from '@bro-pics/shared';
 import { loadEnvLocal } from './load-env';
 import { hashPasswordForSeed, passwordProblems } from './admin-password';
+
+// The shared package is loaded by Node as CommonJS, which hides its named exports from a plain
+// `import { ROLES }` ("does not provide an export named ROLES"). Reading them off the module — or its
+// `default`, depending on how the loader wraps it — works either way.
+const shared = ((sharedModule as { default?: typeof sharedModule }).default ?? sharedModule) as typeof sharedModule;
+const { ROLES, StaffMirrorSchema } = shared;
 
 /**
  * Creates (or repairs) the first privileged account so the owner can sign in
