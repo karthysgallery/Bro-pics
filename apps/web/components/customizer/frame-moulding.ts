@@ -1,5 +1,7 @@
 'use client';
 
+import { mouldingWidthOf } from './frame-edge';
+
 /**
  * Puts the printed design into a frame for the preview: the product's chosen
  * frame model (a straight-on photo of the moulding, from the Frame models
@@ -53,7 +55,10 @@ export async function frameDesign(designUrl: string, printWidthIn?: number, look
     // A frame photo with see-through edges must not turn black in the JPEG.
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const c = Math.max(1, Math.min(look.borderPx, Math.floor(Math.min(frame.naturalWidth, frame.naturalHeight) / 2) - 1));
+    // Never wider than where the moulding really ends in the photo: a frame marked a little too wide
+    // would otherwise wrap a strip of its own white inner edge around the picture.
+    const detected = await mouldingWidthOf(frame, look.src);
+    const c = Math.max(1, Math.min(look.borderPx, detected ?? Infinity, Math.floor(Math.min(frame.naturalWidth, frame.naturalHeight) / 2) - 1));
     const sw = frame.naturalWidth;
     const sh = frame.naturalHeight;
     const W = canvas.width;

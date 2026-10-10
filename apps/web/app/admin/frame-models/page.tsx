@@ -7,6 +7,7 @@ import { useAdminApi } from '../../../components/admin/template-builder/use-admi
 import { AdminDrawer } from '../../../components/admin/AdminDrawer';
 import { useToast } from '../../../components/ui/Toast';
 import { FramedPreview, lookOf } from '../../../components/admin/product-editor/FramedPreview';
+import { mouldingWidthOf } from '../../../components/customizer/frame-edge';
 import { inr, rupees, toPaise, useCatalogueUpload } from '../../../components/admin/product-editor/use-catalogue-upload';
 
 type Draft = Omit<FrameModel, 'id' | 'createdAt' | 'updatedAt'>;
@@ -27,6 +28,21 @@ const EMPTY: Draft = {
 
 const field = 'h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-ink';
 const label = 'mb-1 block text-2xs font-bold uppercase tracking-wider text-ink/60';
+
+/** Where the moulding ends in a frame photo, in the photo's own pixels (null when it cannot be seen). */
+async function findEdge(url: string, widthPx: number): Promise<number | null> {
+  const src = url.replace(/w=\d+/, 'w=1600');
+  const img = await new Promise<HTMLImageElement | null>((resolve) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => resolve(null);
+    i.src = src;
+  });
+  if (!img) return null;
+  const found = await mouldingWidthOf(img, src);
+  // The served copy may be smaller than the original: scale back to the original's pixels.
+  return found === null ? null : Math.round(found * (widthPx / img.naturalWidth));
+}
 
 /** Marks how wide the moulding is in the uploaded photo: a draggable inner outline over the picture. */
 function BorderMarker({ image, onChange }: { image: NonNullable<Draft['image']>; onChange: (borderPx: number) => void }) {
@@ -51,7 +67,19 @@ function BorderMarker({ image, onChange }: { image: NonNullable<Draft['image']>;
         className="w-full accent-[#c9861a]"
         aria-label="Moulding width in the photo"
       />
-      <p className="text-2xs text-ink/55">Drag until the dashed line sits on the inner edge of the moulding (where the picture starts).</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-2xs text-ink/55">The dashed line must sit on the inner edge of the wood — not on any white edge or mount inside it.</p>
+        <button
+          type="button"
+          onClick={async () => {
+            const found = await findEdge(image.url, image.widthPx);
+            if (found) onChange(found);
+          }}
+          className="h-8 rounded-lg border border-line px-2.5 text-2xs font-semibold text-ink hover:bg-field"
+        >
+          Find the edge automatically
+        </button>
+      </div>
     </div>
   );
 }
@@ -85,7 +113,9 @@ export default function FrameModelsPage() {
     setUploading(true);
     try {
       const img = await upload(file, { alt: editing?.draft.name ? `${editing.draft.name} frame` : 'Frame model', tag: 'frame-model' });
-      set({ image: { mediaId: img.id, url: img.url, widthPx: img.width, heightPx: img.height, borderPx: Math.round(Math.min(img.width, img.height) * 0.1) } });
+      // Start the marker where the moulding really ends (no white inner edge), or at 10% if that can't be seen.
+      const found = await findEdge(img.url, img.width);
+      set({ image: { mediaId: img.id, url: img.url, widthPx: img.width, heightPx: img.height, borderPx: found ?? Math.round(Math.min(img.width, img.height) * 0.1) } });
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Upload failed', 'error');
     } finally {
