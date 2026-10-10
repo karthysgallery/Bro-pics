@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   STANDARD_FRAME_SIZES,
+  orientSize,
   artworkDpi,
   checkPriceRows,
   discountPercent,
@@ -87,6 +88,16 @@ export function PricingGrid({
   onPickModel: (rowKey: string, modelId: string) => void;
 }) {
   const [custom, setCustom] = useState({ w: '', h: '' });
+  // Which way the frames hang: the shop's sizes are named long side first (12×8); portrait stores them as 8 wide × 12 high.
+  const fromRows = rows.find((r) => r.widthIn !== r.heightIn);
+  const fallback: 'landscape' | 'portrait' = artwork && artwork.heightPx > artwork.widthPx ? 'portrait' : 'landscape';
+  const [orientationChoice, setOrientationChoice] = useState<'landscape' | 'portrait' | null>(null);
+  const orientation = orientationChoice ?? (fromRows ? (fromRows.widthIn > fromRows.heightIn ? 'landscape' : 'portrait') : fallback);
+  /** Turns every size line the other way (same lines, so saved sizes keep their ids). */
+  const turnAll = (next: 'landscape' | 'portrait') => {
+    setOrientationChoice(next);
+    onChange(rows.map((r) => ({ ...r, ...orientSize(r, next) })));
+  };
   const byId = new Map(models.map((m) => [m.id, m]));
   const selectedModels = selectedModelIds.map((id) => byId.get(id)).filter((m): m is FrameModel => Boolean(m));
   const sizes = [...new Map(rows.map((r) => [sizeKey(r), { widthIn: r.widthIn, heightIn: r.heightIn }])).values()].sort((a, b) => a.widthIn * a.heightIn - b.widthIn * b.heightIn);
@@ -138,19 +149,36 @@ export function PricingGrid({
   return (
     <div className="space-y-4">
       <div>
-        <p className="mb-2 text-2xs font-bold uppercase tracking-wider text-ink/60">Sizes you sell (inches, width × height)</p>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-2xs font-bold uppercase tracking-wider text-ink/60">Sizes you sell (inches)</p>
+          <div role="group" aria-label="Which way the frame hangs" className="inline-flex rounded-full border border-line p-0.5 text-2xs font-semibold">
+            {(['landscape', 'portrait'] as const).map((o) => (
+              <button
+                key={o}
+                type="button"
+                aria-pressed={orientation === o}
+                onClick={() => turnAll(o)}
+                className={`h-7 rounded-full px-3 capitalize ${orientation === o ? 'bg-ink text-paper' : 'text-ink/65 hover:text-ink'}`}
+              >
+                {o === 'landscape' ? '▭ Landscape' : '▯ Portrait'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-1.5">
-          {STANDARD_FRAME_SIZES.map((s) => {
+          {STANDARD_FRAME_SIZES.map((standard) => {
+            const s = orientSize(standard, orientation);
             const on = sizes.some((x) => sizeKey(x) === sizeKey(s));
             return (
               <button
-                key={sizeKey(s)}
+                key={sizeKey(standard)}
                 type="button"
                 aria-pressed={on}
+                title={`${s.widthIn} wide × ${s.heightIn} high`}
                 onClick={() => (on ? removeSize(s) : addSize(s))}
                 className={`h-8 rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors ${on ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink/75 hover:border-ink/40'}`}
               >
-                {s.widthIn}×{s.heightIn}
+                {standard.widthIn}×{standard.heightIn}
               </button>
             );
           })}

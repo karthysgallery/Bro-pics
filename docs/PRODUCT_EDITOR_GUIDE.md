@@ -40,12 +40,19 @@ Go to **Admin → Products → + Add frame** and fill in the nine numbered secti
    - Single photo: nothing to do.
    - Collage: upload the finished collage design here. The photo spaces are found and a draft design is linked to this product; open the collage designer to check it, add any name or date spaces, then publish it. Or pick a design you already made.
 4. **Frame models:** tick the ones this product comes in. The ★ marks the frame the product page opens with.
-5. **Sizes and prices:** tap the sizes you sell; each size gets one line per frame model.
+5. **Sizes and prices:** choose **Landscape** or **Portrait** (ready-made frames follow the artwork's shape), then tap the sizes you sell: 4×3, 6×4, 8×6, 12×8, 18×12, 20×16, 24×16, or type a custom size. Each size gets one line per frame model.
    - Enter the MRP, selling price and making cost (↺ suggests a cost).
    - Margin and discount are worked out as you type.
    - **Fill other frames** copies prices to the other frame models, adding each model's price change.
    - Ready-made frames also show how sharp the artwork will print at each size.
-6. **Product photos:** these appear on the shop and in Google. A ready-made frame uses its artwork if you add none.
+6. **Product photos:** the 5 shop photos are made automatically on Save, all for the product's first size:
+   1. the picture in the default frame
+   2. sizes with measurements, every size drawn to scale and listed with and without the frame
+   3. a frame close-up with name, material, width and colour, plus the other frames offered
+   4. the frame on a room wall, to scale
+   5. the picture itself
+
+   Photo and collage frames use a sample photo, marked "Sample photo", which you can replace with your own. The photos are remade when the picture, frames or sizes change, and you can add your own photos after them. On the product page they appear as a "Product photos" strip under the preview.
 7. **Description and FAQ:** edit freely. A blank line starts a new paragraph, `## ` starts a heading, `- ` starts a bullet.
 8. **SEO:** the score and preview of what Google will show.
 9. **Delivery and publishing:** dispatch days, HSN code, badges and status.

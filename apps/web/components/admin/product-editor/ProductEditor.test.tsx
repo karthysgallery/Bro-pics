@@ -5,11 +5,15 @@ import { DEFAULT_FRAMING_COST_RATES, type FrameModel } from '@bro-pics/shared';
 const api = vi.hoisted(() => vi.fn());
 const replace = vi.hoisted(() => vi.fn());
 const upload = vi.hoisted(() => vi.fn());
-vi.mock('../template-builder/use-admin-api', () => ({ useAdminApi: () => api }));
+// The editor gets whatever function this holds, so a test can hand it a new one (as a sign-in refresh does).
+const apiHolder = vi.hoisted(() => ({ current: null as unknown as (...a: unknown[]) => unknown }));
+vi.mock('../template-builder/use-admin-api', () => ({ useAdminApi: () => apiHolder.current ?? api }));
 vi.mock('./use-catalogue-upload', async (orig) => ({ ...(await orig<typeof import('./use-catalogue-upload')>()), useCatalogueUpload: () => upload }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
 // The framed preview draws on a canvas, which jsdom has not got.
-vi.mock('./FramedPreview', () => ({ FramedPreview: ({ label }: { label?: string }) => <div data-testid="framed-preview">{label}</div>, lookOf: () => null }));
+vi.mock('./FramedPreview', () => ({ FramedPreview: ({ label }: { label?: string }) => <div data-testid="framed-preview">{label}</div>, lookOf: () => null, SAMPLE_PHOTO: '/sample.jpg' }));
+const makeProductPhotos = vi.hoisted(() => vi.fn());
+vi.mock('./product-photos', () => ({ makeProductPhotos }));
 
 import { ProductEditor } from './ProductEditor';
 
@@ -21,6 +25,7 @@ const model = (id: string, name: string, priceDelta = 0): FrameModel => ({
 describe('guided product editor', () => {
   beforeEach(() => {
     api.mockReset();
+    apiHolder.current = api;
     replace.mockReset();
     upload.mockReset();
     api.mockImplementation(async (path: string, init?: RequestInit) => {
@@ -29,7 +34,16 @@ describe('guided product editor', () => {
       if (path === '/api/admin/products/setup' && init?.method === 'POST') return { productId: 'p_new', warnings: ['Row 2: Margin is under 20%.'] };
       throw new Error(`unexpected ${path}`);
     });
-    upload.mockResolvedValue({ id: 'art1', url: '/api/media/art1/image?w=1600', width: 4000, height: 6000, alt: '' });
+    let n = 0;
+    upload.mockImplementation(async (file: File) =>
+      file.name.endsWith('.jpg') && file.name !== 'murugan.jpg'
+        ? { id: `auto${++n}`, url: `/api/media/auto${n}/image?w=1600`, width: 1600, height: 1600, alt: '' }
+        : { id: 'art1', url: '/api/media/art1/image?w=1600', width: 4000, height: 6000, alt: '' }
+    );
+    makeProductPhotos.mockReset();
+    makeProductPhotos.mockResolvedValue(
+      (['framed', 'sizes', 'frame', 'wall', 'picture'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/' }))
+    );
   });
 
   it('builds a ready-made frame end to end: type, name, generated details, artwork, two frame models, priced sizes, then publishes', async () => {
@@ -45,9 +59,10 @@ describe('guided product editor', () => {
 
     // Teak is pre-selected as the default; add Royal Gold.
     fireEvent.click(screen.getByRole('button', { name: /Royal Gold/ }));
-    // Two sizes → 2 sizes × 2 frames = 4 price lines.
-    fireEvent.click(screen.getByRole('button', { name: '8×12' }));
-    fireEvent.click(screen.getByRole('button', { name: '12×18' }));
+    // Two sizes → 2 sizes × 2 frames = 4 price lines. The artwork is portrait, so 12×8 hangs as 8 wide × 12 high.
+    expect(screen.getByRole('button', { name: /Portrait/, pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '12×8' }));
+    fireEvent.click(screen.getByRole('button', { name: '18×12' }));
     const set = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
     set('MRP 8x12 in Teak Classic', '999');
     set('Selling price 8x12 in Teak Classic', '799');
@@ -79,6 +94,10 @@ describe('guided product editor', () => {
     expect(body.rows.every((r: { cost: number }) => r.cost > 0)).toBe(true); // making costs suggested
     expect(body.descriptionHtml).toContain('<h3>Sizes and frames</h3>');
     expect(body.faq.length).toBeGreaterThanOrEqual(4);
+    // The five shop photos were made from the artwork and default frame, uploaded and put first.
+    expect(makeProductPhotos).toHaveBeenCalledWith(expect.objectContaining({ isSample: false, sizes: [{ widthIn: 8, heightIn: 12 }, { widthIn: 12, heightIn: 18 }], frames: [expect.objectContaining({ name: 'Teak Classic' }), expect.objectContaining({ name: 'Royal Gold' })] }));
+    expect(body.gallery).toEqual([1, 2, 3, 4, 5].map((i) => expect.objectContaining({ mediaId: `auto${i}`, auto: true })));
+    expect(typeof body.autoPhotoKey).toBe('string');
   });
 
   it('will not publish until the essentials are done, and says what is missing', async () => {
@@ -95,9 +114,9 @@ describe('guided product editor', () => {
   it('flags a selling price above the MRP on the line itself', async () => {
     render(<ProductEditor productId={null} />);
     fireEvent.click(await screen.findByRole('button', { name: /Single photo frame/ }));
-    fireEvent.click(screen.getByRole('button', { name: '8×10' }));
-    fireEvent.change(screen.getByLabelText('MRP 8x10 in Teak Classic'), { target: { value: '500' } });
-    fireEvent.change(screen.getByLabelText('Selling price 8x10 in Teak Classic'), { target: { value: '600' } });
+    fireEvent.click(screen.getByRole('button', { name: '8×6' }));
+    fireEvent.change(screen.getByLabelText('MRP 8x6 in Teak Classic'), { target: { value: '500' } });
+    fireEvent.change(screen.getByLabelText('Selling price 8x6 in Teak Classic'), { target: { value: '600' } });
     expect(screen.getByText('Selling price is more than the MRP.')).toBeTruthy();
   });
 
@@ -141,5 +160,31 @@ describe('guided product editor', () => {
       ['v_12_blk', 'teak'], ['v_12_wht', 'gold'], ['v_8_blk', 'teak'], ['v_8_wht', 'gold'],
     ]);
     expect(body.gallery).toEqual([]); // older photos are kept on the server, not resent
+  });
+
+  it('keeps the chosen frame models when the editor reloads its lists (e.g. the sign-in refreshes)', async () => {
+    const { rerender } = render(<ProductEditor productId={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Royal Gold/ }));
+    fireEvent.click(screen.getByRole('button', { name: '12×8' }));
+    expect(screen.getByLabelText('MRP 12x8 in Royal Gold')).toBeTruthy();
+    // A new api function (as after a token refresh) makes the editor fetch its lists again.
+    const before = api.mock.calls.filter(([p]) => p === '/api/admin/products/setup/options').length;
+    apiHolder.current = (...a: unknown[]) => (api as (...x: unknown[]) => unknown)(...a);
+    rerender(<ProductEditor productId={null} />);
+    await waitFor(() => expect(api.mock.calls.filter(([p]) => p === '/api/admin/products/setup/options').length).toBe(before + 1));
+    expect(screen.getByRole('button', { name: /Royal Gold/, pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Teak Classic/, pressed: true })).toBeTruthy();
+  });
+
+  it('turns every size line the other way with the Landscape / Portrait switch', async () => {
+    render(<ProductEditor productId={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Single photo frame/ }));
+    fireEvent.click(screen.getByRole('button', { name: '12×8' }));
+    fireEvent.click(screen.getByRole('button', { name: '24×16' }));
+    expect(screen.getByLabelText('MRP 12x8 in Teak Classic')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Portrait/ }));
+    expect(screen.getByLabelText('MRP 8x12 in Teak Classic')).toBeTruthy();
+    expect(screen.getByLabelText('MRP 16x24 in Teak Classic')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '12×8', pressed: true })).toBeTruthy();
   });
 });

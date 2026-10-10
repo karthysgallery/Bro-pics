@@ -75,7 +75,10 @@ export const ProductSetupBodySchema = z
     /** First = the default frame the product page opens with. */
     frameModelIds: z.array(z.string().min(1)).min(1, 'Choose at least one frame model.').max(12),
     rows: z.array(PriceRowSchema).min(1, 'Add at least one size.').max(120),
-    gallery: z.array(z.object({ mediaId: z.string().min(1), alt: z.string().trim().max(160).default('') }).strict()).max(20).default([]),
+    // `auto`: one of the five shop photos the editor makes from the picture and frame (replaced when they change).
+    gallery: z.array(z.object({ mediaId: z.string().min(1), alt: z.string().trim().max(160).default(''), auto: z.boolean().default(false) }).strict()).max(20).default([]),
+    /** What the automatic photos were made from (so the editor knows when to remake them); null = not made. */
+    autoPhotoKey: z.string().max(4000).nullable().default(null),
     /** Ready-made: the high-resolution artwork (media library id). */
     artworkMediaId: z.string().min(1).nullable().default(null),
     /** Collage: the design made in the template builder. */
@@ -268,7 +271,7 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
   const keep = new Set(gallery.map((g) => `g_${g.mediaId}`));
   for (const d of oldMedia.docs) if (!keep.has(d.id) && d.id.startsWith('g_')) batch.delete(d.ref);
   gallery.forEach((g, i) => {
-    batch.set(ref.collection('media').doc(`g_${g.mediaId}`), { id: `g_${g.mediaId}`, productId: id, variantId: null, type: 'image', url: mediaImageUrl(g.mediaId), alt: g.alt || body.seo.imageAlt || body.title, sortOrder: i });
+    batch.set(ref.collection('media').doc(`g_${g.mediaId}`), { id: `g_${g.mediaId}`, productId: id, variantId: null, type: 'image', url: mediaImageUrl(g.mediaId), alt: g.alt || body.seo.imageAlt || body.title, sortOrder: i, auto: 'auto' in g ? Boolean(g.auto) : false });
   });
   // Legacy (seeded) gallery docs stay as they are; the card images come from the new gallery when it has any.
   const legacyImages = oldMedia.docs.filter((d) => !d.id.startsWith('g_') && d.get('variantId') === null && d.get('type') === 'image').sort((a, b) => a.get('sortOrder') - b.get('sortOrder')).map((d) => String(d.get('url')));
@@ -303,6 +306,7 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     subject: body.subject,
     frameModelIds: body.frameModelIds,
     artwork,
+    autoPhotoKey: body.autoPhotoKey,
     photoSlots,
     personalizationTemplateId: productTemplateId,
     basePrice: Math.min(...(activeRows.length ? activeRows : body.rows).map((r) => r.price)),
@@ -378,7 +382,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
     .map((d) => {
       const url = String(d.get('url'));
       const fromLibrary = /^\/api\/media\/([^/]+)\/image/.exec(url);
-      return { mediaId: fromLibrary ? decodeURIComponent(fromLibrary[1]!) : null, url, alt: String(d.get('alt') ?? '') };
+      return { mediaId: fromLibrary ? decodeURIComponent(fromLibrary[1]!) : null, url, alt: String(d.get('alt') ?? ''), auto: d.get('auto') === true };
     });
   return {
     product: {
@@ -414,6 +418,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
       },
       frameModelIds,
       artwork: p.artwork ?? null,
+      autoPhotoKey: (p as Product & { autoPhotoKey?: string | null }).autoPhotoKey ?? null,
       collageTemplateId: productType === 'collage' ? (p.personalizationTemplateId ?? null) : null,
       primaryImageUrl: p.primaryImageUrl ?? '',
     },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkPriceRows, discountPercent, sizeLabelOf, skuFor, variantFromRow, variantIdFor, PriceRowSchema } from './product-pricing';
+import { STANDARD_FRAME_SIZES, orientSize, checkPriceRows, discountPercent, sizeLabelOf, skuFor, variantFromRow, variantIdFor, PriceRowSchema } from './product-pricing';
 import { marginPercent, publicFrameModel, suggestMakingCost, DEFAULT_FRAMING_COST_RATES, type FrameModel } from './frame-model';
 import { VariantSchema } from '../schemas/variant';
 
@@ -50,5 +50,11 @@ describe('size × frame model pricing', () => {
     expect(pub).not.toHaveProperty('costPerFoot');
     expect(pub).not.toHaveProperty('priceDelta');
     expect(pub.image).toEqual({ url: 'https://x/teak.png', widthPx: 1000, heightPx: 1000, borderPx: 120 });
+  });
+
+  it("offers the shop's own seven sizes, turned landscape or portrait", () => {
+    expect(STANDARD_FRAME_SIZES.map((z) => `${z.widthIn}x${z.heightIn}`)).toEqual(['4x3', '6x4', '8x6', '12x8', '18x12', '20x16', '24x16']);
+    expect(orientSize({ widthIn: 12, heightIn: 8 }, 'portrait')).toEqual({ widthIn: 8, heightIn: 12 });
+    expect(orientSize({ widthIn: 8, heightIn: 12 }, 'landscape')).toEqual({ widthIn: 12, heightIn: 8 });
   });
 });

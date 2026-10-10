@@ -52,7 +52,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
       { widthIn: 12, heightIn: 18, frameModelId: gold, mrp: 179900, price: 149900, cost: 60000, isActive: true },
       { widthIn: 8, heightIn: 10, frameModelId: gold, mrp: 89900, price: 69900, cost: 28000, isActive: true },
     ],
-    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null,
+    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null, autoPhotoKey: null,
     ...over,
   });
 
@@ -114,7 +114,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
   it('single photo: a one-photo design per shape, the chosen photos as the gallery', async () => {
     const result = await saveProductSetup(db, store, null, body({
       productType: 'single_photo', title: 'Classic Photo Frame', slug: `classic-photo-frame-${run}`, productCode: 'CLASSIC', artworkMediaId: null,
-      gallery: [{ mediaId: `photo_${run}`, alt: 'Classic photo frame' }],
+      gallery: [{ mediaId: `photo_${run}`, alt: 'Classic photo frame', auto: false }],
     }));
     const product = (await db.collection('products').doc(result.productId).get()).data() as Product;
     expect(product).toMatchObject({ productType: 'single_photo', photoSlots: 1, artwork: null, primaryImageUrl: `/api/media/photo_${run}/image?w=1600` });
@@ -127,7 +127,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
     const design = await publishAutoDesign(db, { ...sixPhotoTemplate, id: `collage_${run}`, layers: sixPhotoTemplate.layers.filter((l) => l.kind !== 'fixed') }, new Date());
     const result = await saveProductSetup(db, store, null, body({
       productType: 'collage', title: 'Six Memories Collage', slug: `six-memories-${run}`, productCode: 'SIX', artworkMediaId: null, collageTemplateId: design.id,
-      gallery: [{ mediaId: `photo_${run}`, alt: '' }],
+      gallery: [{ mediaId: `photo_${run}`, alt: '', auto: false }],
       rows: [
         { widthIn: 18, heightIn: 12, frameModelId: teak, mrp: 199900, price: 159900, cost: 50000, isActive: true },
         { widthIn: 12, heightIn: 12, frameModelId: teak, mrp: 99900, price: 89900, cost: 30000, isActive: true },

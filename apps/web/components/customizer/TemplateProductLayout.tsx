@@ -8,6 +8,7 @@ import {
   type PersonalizationState,
   type PersonalizationTemplate,
   type Product,
+  type ProductMedia,
   type PublicFrameModel,
   type Variant,
 } from '@bro-pics/shared';
@@ -37,6 +38,8 @@ export interface TemplateProductLayoutProps {
   editPersonalizationId?: string;
   /** Frame models the product offers: the preview wraps the design in the selected size's model. */
   frameModels?: PublicFrameModel[];
+  /** Product photos, shown as a strip under the preview. */
+  media?: ProductMedia[];
 }
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -82,6 +85,7 @@ function TemplateEditorSession({
   onSelectOrientation,
   editPersonalizationId,
   frameModels = [],
+  media = [],
   initialState,
   onStateChange,
 }: SessionProps) {
@@ -234,7 +238,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={media.filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id))} />
         <BuyBox
           product={product}
           variants={variants}

@@ -20,7 +20,9 @@ import { useAdminApi } from '../template-builder/use-admin-api';
 import { useToast } from '../../ui/Toast';
 import { ProductSeoPanel, type ProductSeoValue } from '../ProductSeoPanel';
 import { PricingGrid, newRowKey, syncRowsWithModels, type EditorRow } from './PricingGrid';
-import { FramedPreview, lookOf } from './FramedPreview';
+import { FramedPreview, SAMPLE_PHOTO, lookOf } from './FramedPreview';
+import { makeProductPhotos } from './product-photos';
+import { latestDesign, renderCollagePicture } from './collage-picture';
 import { htmlToText, textToHtml } from './rich-text';
 import { inr, useCatalogueUpload } from './use-catalogue-upload';
 import { templateIdFromName } from '../template-builder/template-draft';
@@ -36,6 +38,9 @@ interface GalleryItem {
   mediaId: string | null;
   url: string;
   alt: string;
+  /** One of the five shop photos made automatically. */
+  auto?: boolean;
+  label?: string;
 }
 
 interface State {
@@ -66,6 +71,11 @@ interface State {
   gallery: GalleryItem[];
   artwork: { mediaId: string; url: string; widthPx: number; heightPx: number } | null;
   collageTemplateId: string | null;
+  /** Make the five shop photos automatically (remade on save when the picture, frames or sizes change). */
+  autoPhotos: boolean;
+  autoPhotoKey: string | null;
+  /** Photo/collage frames: the example picture the shop photos show (the stock sample when none). */
+  samplePhotoUrl: string | null;
 }
 
 const EMPTY: State = {
@@ -96,6 +106,9 @@ const EMPTY: State = {
   gallery: [],
   artwork: null,
   collageTemplateId: null,
+  autoPhotos: true,
+  autoPhotoKey: null,
+  samplePhotoUrl: null,
 };
 
 const TYPES: Array<{ type: ProductType; title: string; text: string; example: string; art: ReactNode }> = [
@@ -146,6 +159,9 @@ const TYPES: Array<{ type: ProductType; title: string; text: string; example: st
   },
 ];
 
+/** The automatic photos, in the order they are made. */
+const AUTO_LABELS = ['Framed', 'Sizes', 'Frame', 'On the wall', 'The picture'];
+
 const field = 'h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-ink';
 const area = 'w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-ink';
 const label = 'mb-1 block text-2xs font-bold uppercase tracking-wider text-ink/60';
@@ -190,6 +206,9 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const artworkInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const collageInput = useRef<HTMLInputElement>(null);
+  const loadedOnce = useRef(false);
+  const sampleInput = useRef<HTMLInputElement>(null);
+  const [photoStatus, setPhotoStatus] = useState<string | null>(null);
   const [newCollage, setNewCollage] = useState<{ id: string; found: number } | null>(null);
 
   const set = useCallback((patch: Partial<State>) => {
@@ -208,11 +227,20 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       try {
         const o = await loadOptions();
         if (productId === null) {
-          setS((prev) => ({ ...prev, categoryId: prev.categoryId || o.categories[0]?.id || '', frameModelIds: o.frameModels.filter((m) => m.isActive).slice(0, 1).map((m) => m.id) }));
+          // Starting choices for a new frame, only where nothing is chosen yet: this also runs again when the
+          // sign-in refreshes, and must never undo what the owner picked.
+          setS((prev) => ({
+            ...prev,
+            categoryId: prev.categoryId || o.categories[0]?.id || '',
+            frameModelIds: prev.frameModelIds.length ? prev.frameModelIds : o.frameModels.filter((m) => m.isActive).slice(0, 1).map((m) => m.id),
+          }));
           return;
         }
+        // An existing product is loaded once; a later re-run (sign-in refresh) must not throw away unsaved edits.
+        if (loadedOnce.current) return;
+        loadedOnce.current = true;
         const r = await api<{
-          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery'> & {
+          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery' | 'autoPhotos' | 'samplePhotoUrl'> & {
             descriptionHtml: string;
             highlights: string[];
             howItWorks: string[];
@@ -233,6 +261,9 @@ export function ProductEditor({ productId }: { productId: string | null }) {
           seo: { seoTitle: p.seo.title, seoDesc: p.seo.description, focusKeyword: p.seo.focusKeyword, keywords: p.seo.keywords, imageAlt: p.seo.imageAlt, noindex: p.seo.noindex },
           rows: r.rows.map((row) => ({ ...row, key: newRowKey() })),
           gallery: r.gallery,
+          // A product that already has its own photos and no automatic ones keeps them as they are until switched on.
+          autoPhotos: Boolean(p.autoPhotoKey) || r.gallery.length === 0 || r.gallery.some((g) => g.auto),
+          autoPhotoKey: p.autoPhotoKey ?? null,
         });
         setLoaded(true);
         try {
@@ -265,7 +296,9 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const defaultModel = byId.get(s.frameModelIds[0] ?? '') ?? null;
   const activeRows = s.rows.filter((r) => r.isActive);
   const sizeLabels = [...new Set([...activeRows].sort((a, b) => a.widthIn * a.heightIn - b.widthIn * b.heightIn).map((r) => sizeLabelOf(r.widthIn, r.heightIn)))];
-  const hasImage = s.gallery.length > 0 || Boolean(s.artwork);
+  // The automatic shop photos are made on save, so they count as photos already.
+  const autoWillMake = s.autoPhotos && Boolean(s.productType) && s.frameModelIds.length > 0 && activeRows.length > 0 && (s.productType !== 'ready_made' || Boolean(s.artwork)) && (s.productType !== 'collage' || Boolean(s.collageTemplateId));
+  const hasImage = s.gallery.length > 0 || Boolean(s.artwork) || autoWillMake;
   const descriptionHtml = useMemo(() => textToHtml(s.description), [s.description]);
   const seoReport = analyseProductSeo({
     title: s.title,
@@ -410,6 +443,69 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     set({ gallery: g });
   };
 
+  // --- The five automatic shop photos --------------------------------------------------------
+  const photoSizes = [...new Map([...activeRows].sort((a, b) => a.widthIn * a.heightIn - b.widthIn * b.heightIn).map((r) => [`${r.widthIn}x${r.heightIn}`, { widthIn: r.widthIn, heightIn: r.heightIn }])).values()];
+  // The default frame's sizes first, so the framed photos show a size it is really sold in.
+  const defaultSizes = photoSizes.filter((z) => activeRows.some((r) => r.frameModelId === s.frameModelIds[0] && r.widthIn === z.widthIn && r.heightIn === z.heightIn));
+  const orderedSizes = [...defaultSizes, ...photoSizes.filter((z) => !defaultSizes.includes(z))];
+  const pictureSource = s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : s.productType === 'collage' ? (s.collageTemplateId ? `${s.collageTemplateId}|${s.samplePhotoUrl ?? 'sample'}` : null) : (s.samplePhotoUrl ?? 'sample');
+  const photoKey = JSON.stringify({
+    t: s.productType,
+    n: s.title,
+    p: pictureSource,
+    f: s.frameModelIds.map((id) => byId.get(id)).filter(Boolean).map((m) => [m!.id, m!.name, m!.material, m!.colour, m!.colourHex, m!.mouldingWidthIn, m!.image?.url ?? '', m!.image?.borderPx ?? 0]),
+    s: orderedSizes.map((z) => `${z.widthIn}x${z.heightIn}`),
+  });
+  const canMakePhotos = Boolean(s.productType && pictureSource && orderedSizes.length && s.frameModelIds.length);
+  const photosStale = s.autoPhotos && canMakePhotos && s.autoPhotoKey !== photoKey;
+
+  /** Draws the five photos, uploads them and puts them first in the gallery (the owner's own photos follow). */
+  const makePhotos = async (): Promise<{ gallery: GalleryItem[]; key: string } | null> => {
+    if (!canMakePhotos) return null;
+    setPhotoStatus('Making the shop photos…');
+    try {
+      let pictureUrl: string;
+      if (s.productType === 'ready_made') pictureUrl = s.artwork!.url.replace(/w=\d+/, 'w=2400');
+      else if (s.productType === 'collage') {
+        const r = await api<{ versions: import('@bro-pics/shared').PersonalizationTemplate[] }>(`/api/admin/personalization-templates/${s.collageTemplateId}`);
+        const design = latestDesign(r.versions);
+        if (!design) throw new Error('The collage design could not be found.');
+        pictureUrl = await renderCollagePicture(design, s.samplePhotoUrl ?? SAMPLE_PHOTO);
+      } else pictureUrl = s.samplePhotoUrl ?? SAMPLE_PHOTO;
+      const frames = s.frameModelIds
+        .map((id) => byId.get(id))
+        .filter((m): m is FrameModel => Boolean(m))
+        .map((m) => ({ name: m.name, material: m.material, colour: m.colour, colourHex: m.colourHex, mouldingWidthIn: m.mouldingWidthIn, look: lookOf(m) }));
+      const photos = await makeProductPhotos({ title: s.title, pictureUrl, isSample: s.productType !== 'ready_made', frames, sizes: orderedSizes });
+      setPhotoStatus('Uploading the shop photos…');
+      const uploaded: GalleryItem[] = [];
+      for (const ph of photos) {
+        const blob = await (await fetch(ph.dataUrl)).blob();
+        const img = await upload(new File([blob], `${slugify(s.title) || 'frame'}-${ph.key}.jpg`, { type: 'image/jpeg' }), { alt: ph.alt, tag: 'auto-product-photo' });
+        uploaded.push({ mediaId: img.id, url: img.url, alt: ph.alt, auto: true, label: ph.label });
+      }
+      const gallery = [...uploaded, ...s.gallery.filter((g) => !g.auto)];
+      set({ gallery, autoPhotoKey: photoKey });
+      setPhotoStatus(null);
+      return { gallery, key: photoKey };
+    } catch (e) {
+      setPhotoStatus(null);
+      throw e;
+    }
+  };
+
+  const uploadSample = async (file: File) => {
+    setUploading('sample');
+    try {
+      const img = await upload(file, { alt: 'Sample photo', tag: 'sample-photo' });
+      set({ samplePhotoUrl: img.url.replace(/w=\d+/, 'w=2000') });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Upload failed', 'error');
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const checklist: Array<{ ok: boolean; text: string; href: string }> = [
     { ok: Boolean(s.productType), text: 'Kind of frame chosen', href: '#type' },
     { ok: s.title.trim().length >= 3 && Boolean(s.categoryId), text: 'Name and category', href: '#details' },
@@ -442,6 +538,16 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     setSaving(true);
     setError(null);
     try {
+      let gallery = s.gallery;
+      let autoPhotoKey = s.autoPhotos ? s.autoPhotoKey : null;
+      if (photosStale) {
+        const made = await makePhotos();
+        if (made) {
+          gallery = made.gallery;
+          autoPhotoKey = made.key;
+        }
+      }
+      if (!s.autoPhotos) gallery = gallery.filter((g) => !g.auto);
       const body = {
         productType: s.productType,
         title: s.title.trim(),
@@ -466,7 +572,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         seo: { title: s.seo.seoTitle, description: s.seo.seoDesc, focusKeyword: s.seo.focusKeyword, keywords: s.seo.keywords, imageAlt: s.seo.imageAlt, noindex: s.seo.noindex },
         frameModelIds: s.frameModelIds,
         rows: s.rows.map(({ key: _k, legacyFinish: _l, ...r }) => ({ ...r, frameModelId: r.frameModelId! })),
-        gallery: s.gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt })),
+        gallery: gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt, auto: Boolean(g.auto) })),
+        autoPhotoKey,
         artworkMediaId: s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : null,
         collageTemplateId: s.productType === 'collage' ? s.collageTemplateId : null,
       };
@@ -476,7 +583,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       });
       setWarnings(result.warnings);
       setDirty(false);
-      set({ status });
+      set({ status, gallery, autoPhotoKey });
       setDirty(false);
       showToast(status === 'published' ? 'Saved and live on the shop' : 'Saved', 'success');
       if (!productId) {
@@ -836,47 +943,101 @@ export function ProductEditor({ productId }: { productId: string | null }) {
 
           {/* 6. Photos */}
           <Section id="photos" step={6} title="Product photos" hint="Shown on the shop and in Google. The first photo is the main one." done={hasImage}>
-            <input ref={galleryInput} type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files && void uploadGallery(e.target.files)} />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {s.gallery.map((g, i) => (
-                <figure key={`${g.url}${i}`} className="space-y-1.5 rounded-xl border border-line p-2">
-                  <div className="relative aspect-square overflow-hidden rounded-lg bg-field">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={g.url.replace(/w=\d+/, 'w=400')} alt={g.alt} className="h-full w-full object-cover" />
-                    {i === 0 && <span className="absolute left-1.5 top-1.5 rounded-full bg-ink px-2 py-0.5 text-[10px] font-bold text-paper">Main</span>}
-                  </div>
-                  {g.mediaId ? (
-                    <>
-                      <input aria-label="Photo description" className="h-8 w-full rounded-lg border border-line px-2 text-2xs" value={g.alt} onChange={(e) => set({ gallery: s.gallery.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)) })} placeholder="Describe the photo" />
-                      <div className="flex justify-between text-2xs">
-                        <span className="flex gap-1">
-                          <button type="button" disabled={i === 0} onClick={() => moveGallery(i, -1)} className="rounded px-1.5 hover:bg-field disabled:opacity-30" aria-label="Move left">
-                            ←
-                          </button>
-                          <button type="button" disabled={i === s.gallery.length - 1} onClick={() => moveGallery(i, 1)} className="rounded px-1.5 hover:bg-field disabled:opacity-30" aria-label="Move right">
-                            →
-                          </button>
-                        </span>
-                        <button type="button" onClick={() => set({ gallery: s.gallery.filter((_, j) => j !== i) })} className="font-semibold text-alert">
-                          Remove
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-line p-4">
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1a1a1a]" checked={s.autoPhotos} onChange={(e) => set({ autoPhotos: e.target.checked })} />
+                  <span>
+                    <strong className="block text-sm text-ink">Make the 5 shop photos automatically</strong>
+                    <span className="text-xs text-ink/60">
+                      Framed picture · sizes with measurements · frame close-up and details · on a room wall · the picture itself. Made from {s.productType === 'ready_made' ? 'your artwork' : 'a sample photo'} and your default frame, and remade when you save after changing the picture, frames or sizes.
+                    </span>
+                  </span>
+                </label>
+                {s.autoPhotos && (
+                  <div className="mt-3 space-y-3 pl-7">
+                    {s.productType && s.productType !== 'ready_made' && (
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={(s.samplePhotoUrl ?? SAMPLE_PHOTO).replace(/w=\d+/, 'w=200')} alt="Sample photo" className="h-12 w-12 rounded-lg object-cover" />
+                        <span className="min-w-0 flex-1 text-ink/65">Sample photo shown in the frame (marked &ldquo;Sample photo&rdquo; on the shop photos).</span>
+                        <input ref={sampleInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadSample(e.target.files[0])} />
+                        <button type="button" disabled={uploading === 'sample'} onClick={() => sampleInput.current?.click()} className="h-8 rounded-lg border border-line px-3 font-semibold text-ink hover:bg-field">
+                          {uploading === 'sample' ? 'Uploading…' : 'Use my own sample photo'}
                         </button>
                       </div>
-                    </>
-                  ) : (
-                    <p className="text-2xs text-ink/50">Older photo (kept)</p>
-                  )}
-                </figure>
-              ))}
-              <button
-                type="button"
-                disabled={uploading === 'gallery'}
-                onClick={() => galleryInput.current?.click()}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-xs font-semibold text-ink/65 hover:border-ink/40 hover:text-ink"
-              >
-                {uploading === 'gallery' ? 'Uploading…' : '+ Add photos'}
-              </button>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={!canMakePhotos || photoStatus !== null}
+                        title={canMakePhotos ? undefined : 'Needs the kind of frame, the picture, a frame model and a size'}
+                        onClick={() =>
+                          void makePhotos().catch((e) => showToast(e instanceof Error ? e.message : 'The photos could not be made.', 'error'))
+                        }
+                        className="h-9 rounded-xl bg-ink px-4 text-xs font-semibold text-paper disabled:opacity-40"
+                      >
+                        {photoStatus ?? (s.gallery.some((g) => g.auto) ? 'Remake the photos now' : 'Make the photos now')}
+                      </button>
+                      <span className={`text-2xs ${photosStale ? 'text-amber-700' : 'text-ink/50'}`}>
+                        {!canMakePhotos
+                          ? 'Add the picture, a frame model and a size first.'
+                          : photosStale
+                            ? s.gallery.some((g) => g.auto)
+                              ? 'Out of date — they are remade when you save.'
+                              : 'They are made when you save.'
+                            : 'Up to date.'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <input ref={galleryInput} type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files && void uploadGallery(e.target.files)} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {s.gallery.map((g, i) => (
+                  <figure key={`${g.url}${i}`} className="space-y-1.5 rounded-xl border border-line p-2">
+                    <div className="relative aspect-square overflow-hidden rounded-lg bg-field">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.url.replace(/w=\d+/, 'w=400')} alt={g.alt} className="h-full w-full object-cover" />
+                      {i === 0 && <span className="absolute left-1.5 top-1.5 rounded-full bg-ink px-2 py-0.5 text-[10px] font-bold text-paper">Main</span>}
+                      {g.auto && <span className="absolute right-1.5 top-1.5 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold text-ink">Auto · {g.label ?? AUTO_LABELS[s.gallery.filter((x) => x.auto).indexOf(g)] ?? 'Photo'}</span>}
+                    </div>
+                    {g.auto ? (
+                      <p className="text-2xs text-ink/50">Made automatically</p>
+                    ) : g.mediaId ? (
+                      <>
+                        <input aria-label="Photo description" className="h-8 w-full rounded-lg border border-line px-2 text-2xs" value={g.alt} onChange={(e) => set({ gallery: s.gallery.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)) })} placeholder="Describe the photo" />
+                        <div className="flex justify-between text-2xs">
+                          <span className="flex gap-1">
+                            <button type="button" disabled={i === 0} onClick={() => moveGallery(i, -1)} className="rounded px-1.5 hover:bg-field disabled:opacity-30" aria-label="Move left">
+                              ←
+                            </button>
+                            <button type="button" disabled={i === s.gallery.length - 1} onClick={() => moveGallery(i, 1)} className="rounded px-1.5 hover:bg-field disabled:opacity-30" aria-label="Move right">
+                              →
+                            </button>
+                          </span>
+                          <button type="button" onClick={() => set({ gallery: s.gallery.filter((_, j) => j !== i) })} className="font-semibold text-alert">
+                            Remove
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-2xs text-ink/50">Older photo (kept)</p>
+                    )}
+                  </figure>
+                ))}
+                <button
+                  type="button"
+                  disabled={uploading === 'gallery'}
+                  onClick={() => galleryInput.current?.click()}
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-xs font-semibold text-ink/65 hover:border-ink/40 hover:text-ink"
+                >
+                  {uploading === 'gallery' ? 'Uploading…' : '+ Add your own photos'}
+                </button>
+              </div>
+              {s.productType === 'ready_made' && s.gallery.length === 0 && s.artwork && !s.autoPhotos && <p className="text-2xs text-ink/55">No photos added: the artwork itself is used as the product photo.</p>}
             </div>
-            {s.productType === 'ready_made' && s.gallery.length === 0 && s.artwork && <p className="mt-2 text-2xs text-ink/55">No photos added: the artwork itself is used as the product photo.</p>}
           </Section>
 
           {/* 7. Description */}

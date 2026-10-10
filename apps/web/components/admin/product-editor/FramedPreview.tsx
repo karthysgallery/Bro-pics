@@ -2,30 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { frameDesign, STOCK_FRAME, type FrameLook } from '../../customizer/frame-moulding';
+import { cropToShape } from './product-photos';
 
 export const SAMPLE_PHOTO = '/placeholders/home/hero-sample-photo.jpg';
-
-/** Crops a picture to a print shape (centre) in the browser, so the preview has the real proportions. */
-async function cropToShape(src: string, widthIn: number, heightIn: number): Promise<string | null> {
-  const img = await new Promise<HTMLImageElement | null>((resolve) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => resolve(null);
-    i.src = src;
-  });
-  if (!img) return null;
-  const target = widthIn / heightIn;
-  let w = img.naturalWidth;
-  let h = img.naturalHeight;
-  if (w / h > target) w = Math.round(h * target);
-  else h = Math.round(w / target);
-  const scale = Math.min(1, 900 / Math.max(w, h));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
-  canvas.getContext('2d')?.drawImage(img, (img.naturalWidth - w) / 2, (img.naturalHeight - h) / 2, w, h, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.9);
-}
 
 /** A picture shown inside a frame model at a size — what the customer will see. */
 export function FramedPreview({

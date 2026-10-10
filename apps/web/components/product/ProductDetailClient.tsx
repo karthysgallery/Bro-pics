@@ -1038,6 +1038,7 @@ export function ProductDetailClient({
         onSelectOrientation={handleSelectOrientation}
         editPersonalizationId={editPersonalizationId}
         frameModels={frameModels}
+        media={media}
       />
     );
   }

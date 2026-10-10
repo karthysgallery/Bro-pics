@@ -114,6 +114,8 @@ export const ProductSchema = z.object({
   frameModelIds: z.array(z.string()).optional(),
   // Ready-made: the shop's high-resolution artwork (media library), printed for each order.
   artwork: z.object({ mediaId: z.string(), url: z.string(), widthPx: z.number().int().positive(), heightPx: z.number().int().positive() }).nullable().optional(),
+  // What the five automatic shop photos were made from; the editor remakes them when it changes.
+  autoPhotoKey: z.string().nullable().optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;

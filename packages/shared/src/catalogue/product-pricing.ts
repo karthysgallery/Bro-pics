@@ -10,23 +10,26 @@ import type { FrameModel } from './frame-model';
  * plus a private cost record (`variantCosts/{variantId}`).
  */
 
-/** Common photo-frame sizes in Indian shops, in inches (width × height, portrait). */
+/**
+ * The shop's standard frame sizes, as the shop names them: long side × short side, in inches.
+ * A product hangs them landscape (12 wide × 8 high) or portrait (8 wide × 12 high).
+ */
 export const STANDARD_FRAME_SIZES: ReadonlyArray<{ widthIn: number; heightIn: number }> = [
-  { widthIn: 4, heightIn: 6 },
-  { widthIn: 5, heightIn: 7 },
-  { widthIn: 6, heightIn: 8 },
-  { widthIn: 8, heightIn: 10 },
-  { widthIn: 8, heightIn: 12 },
-  { widthIn: 10, heightIn: 12 },
-  { widthIn: 10, heightIn: 15 },
-  { widthIn: 12, heightIn: 15 },
-  { widthIn: 12, heightIn: 18 },
-  { widthIn: 16, heightIn: 20 },
-  { widthIn: 18, heightIn: 24 },
-  { widthIn: 20, heightIn: 24 },
-  { widthIn: 20, heightIn: 30 },
-  { widthIn: 24, heightIn: 36 },
+  { widthIn: 4, heightIn: 3 },
+  { widthIn: 6, heightIn: 4 },
+  { widthIn: 8, heightIn: 6 },
+  { widthIn: 12, heightIn: 8 },
+  { widthIn: 18, heightIn: 12 },
+  { widthIn: 20, heightIn: 16 },
+  { widthIn: 24, heightIn: 16 },
 ];
+
+/** A standard size turned to an orientation (square sizes stay as they are). */
+export function orientSize(size: { widthIn: number; heightIn: number }, orientation: 'landscape' | 'portrait'): { widthIn: number; heightIn: number } {
+  const long = Math.max(size.widthIn, size.heightIn);
+  const short = Math.min(size.widthIn, size.heightIn);
+  return orientation === 'landscape' ? { widthIn: long, heightIn: short } : { widthIn: short, heightIn: long };
+}
 
 const num = (n: number) => String(Math.round(n * 100) / 100);
 export function sizeLabelOf(widthIn: number, heightIn: number): string {

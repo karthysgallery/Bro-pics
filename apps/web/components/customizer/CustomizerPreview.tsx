@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { canvasPrintWidthIn, MAX_SCALE, type Variant } from '@bro-pics/shared';
+import { canvasPrintWidthIn, MAX_SCALE, type ProductMedia, type Variant } from '@bro-pics/shared';
+import { GalleryStrip } from '../product/GalleryStrip';
 import { PreviewGallery, type PreviewViewId } from '../editor/PreviewGallery';
 import { TemplateCanvas } from './TemplateCanvas';
 import { frameDesign, STOCK_FRAME, type FrameLook } from './frame-moulding';
@@ -17,6 +18,8 @@ interface CustomizerPreviewProps {
   productTitle?: string;
   /** The chosen frame model's look (the stock frame when absent). */
   frameLook?: FrameLook | null;
+  /** The product's photos (sizes, frame close-up, room…): a strip under the preview, each opens large. */
+  photos?: ProductMedia[];
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -39,7 +42,7 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [] }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<PreviewViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
@@ -139,6 +142,12 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         </div>
       )}
       {editing && <p className="text-center text-xs text-ink/55">Tap a space to add a photo · drag to move it · pinch or Ctrl + scroll to zoom</p>}
+      {photos.length > 0 && (
+        <div className="space-y-1.5 border-t border-line/70 pt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/55">Product photos</p>
+          <GalleryStrip media={photos} productTitle={productTitle} />
+        </div>
+      )}
     </div>
   );
 }
