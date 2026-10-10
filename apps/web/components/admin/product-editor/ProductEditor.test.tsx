@@ -51,6 +51,9 @@ describe('guided product editor', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Ready-made frame/ }));
     fireEvent.change(screen.getByPlaceholderText('Lord Murugan Photo Frame'), { target: { value: 'Lord Murugan' } });
     fireEvent.change(within(document.getElementById('details')!).getByPlaceholderText('Lord Murugan'), { target: { value: 'Lord Murugan' } });
+    // No category is pre-chosen: the owner picks where it is listed.
+    expect((document.querySelector('#details select') as HTMLSelectElement).value).toBe('');
+    fireEvent.change(document.querySelector('#details select')!, { target: { value: 'devotional' } });
 
     // Artwork
     const file = new File(['x'], 'murugan.jpg', { type: 'image/jpeg' });

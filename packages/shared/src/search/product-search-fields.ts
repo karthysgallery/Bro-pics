@@ -13,12 +13,16 @@ export interface ProductSearchFields {
 
 /**
  * Words a shopper can search by: lowercased, split on anything that is not a
- * letter or digit (so "Vijay," and "vijay" match), at least 3 characters.
+ * letter or digit (so "Vijay," and "vijay" match), at least 2 characters,
+ * without filler words.
  * Shared by the product write path and the search query, so both sides agree.
  * Letters of any script are kept (Tamil, Hindi…).
  */
+const FILLER = new Set(['of', 'to', 'in', 'on', 'at', 'by', 'an', 'is', 'it', 'or', 'as', 'be', 'we', 'my', 'the', 'and', 'for', 'with', 'you', 'your', 'our']);
+
 export function searchWordsOf(text: string): string[] {
-  return [...new Set(text.toLowerCase().split(/[^\p{L}\p{M}\p{N}]+/u).filter((token) => token.length > 2))];
+  // Two-letter words count ("cm", "tv"); filler words ("of", "the") never do.
+  return [...new Set(text.toLowerCase().split(/[^\p{L}\p{M}\p{N}]+/u).filter((token) => token.length >= 2 && !FILLER.has(token)))];
 }
 
 /**

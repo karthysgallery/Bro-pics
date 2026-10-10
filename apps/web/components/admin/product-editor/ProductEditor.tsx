@@ -231,7 +231,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
           // sign-in refreshes, and must never undo what the owner picked.
           setS((prev) => ({
             ...prev,
-            categoryId: prev.categoryId || o.categories[0]?.id || '',
+            // No category is chosen for the owner: a wrong default hides a frame in the wrong collection.
+            categoryId: prev.categoryId,
             frameModelIds: prev.frameModelIds.length ? prev.frameModelIds : o.frameModels.filter((m) => m.isActive).slice(0, 1).map((m) => m.id),
           }));
           return;
@@ -718,7 +719,10 @@ export function ProductEditor({ productId }: { productId: string | null }) {
               )}
               <label className="block">
                 <span className={label}>Category</span>
-                <select className={field} value={s.categoryId} onChange={(e) => set({ categoryId: e.target.value })}>
+                <select className={`${field} ${s.categoryId ? '' : 'border-amber-500 text-ink/60'}`} value={s.categoryId} onChange={(e) => set({ categoryId: e.target.value })}>
+                  <option value="" disabled>
+                    Choose where it is listed…
+                  </option>
                   {options.categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
