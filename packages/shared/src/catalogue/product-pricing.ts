@@ -44,15 +44,18 @@ export const PriceRowSchema = z
     heightIn: z.number().min(2).max(96),
     frameModelId: z.string().min(1),
     /** MRP (printed price), paise. */
-    mrp: z.number().int().positive(),
+    mrp: z.number().int().nonnegative(),
     /** Selling price, paise. */
-    price: z.number().int().positive(),
+    price: z.number().int().nonnegative(),
     /** Making cost, paise (private). */
     cost: z.number().int().nonnegative(),
     isActive: z.boolean().default(true),
   })
   .strict()
-  .refine((r) => r.price <= r.mrp, { message: 'Selling price cannot be more than the MRP.', path: ['price'] });
+  // A size that is switched off (not sold) may be left without prices; one that is sold needs both.
+  .refine((r) => !r.isActive || r.mrp > 0, { message: 'Enter the MRP.', path: ['mrp'] })
+  .refine((r) => !r.isActive || r.price > 0, { message: 'Enter a selling price.', path: ['price'] })
+  .refine((r) => !r.isActive || r.price <= r.mrp, { message: 'Selling price cannot be more than the MRP.', path: ['price'] });
 export type PriceRow = z.infer<typeof PriceRowSchema>;
 
 export interface PriceRowProblem {
@@ -69,9 +72,10 @@ export function checkPriceRows(rows: Array<Pick<PriceRow, 'widthIn' | 'heightIn'
     const key = `${sizeLabelOf(r.widthIn, r.heightIn)}|${r.frameModelId}`;
     if (seen.has(key)) problems.push({ index, severity: 'error', message: 'This size and frame model is listed twice.' });
     seen.add(key);
-    if (!(r.price > 0)) problems.push({ index, severity: 'error', message: 'Enter a selling price.' });
-    if (!(r.mrp > 0)) problems.push({ index, severity: 'error', message: 'Enter the MRP.' });
-    if (r.price > r.mrp) problems.push({ index, severity: 'error', message: 'Selling price is more than the MRP.' });
+    // Switched-off sizes are not sold, so their prices are not checked.
+    if (r.isActive && !(r.price > 0)) problems.push({ index, severity: 'error', message: 'Enter a selling price.' });
+    if (r.isActive && !(r.mrp > 0)) problems.push({ index, severity: 'error', message: 'Enter the MRP.' });
+    if (r.isActive && r.price > r.mrp) problems.push({ index, severity: 'error', message: 'Selling price is more than the MRP.' });
     if (r.isActive && r.cost > 0 && r.price <= r.cost) problems.push({ index, severity: 'warning', message: 'Selling below making cost — this loses money.' });
     else if (r.isActive && r.cost > 0 && (r.price - r.cost) / r.price < 0.2) problems.push({ index, severity: 'warning', message: 'Margin is under 20%.' });
   });

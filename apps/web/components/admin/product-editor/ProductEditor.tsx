@@ -9,6 +9,7 @@ import {
   type PersonalizationTemplate,
   type SlotDetectionResult,
   analyseProductSeo,
+  checkPriceRows,
   generateProductDetails,
   sizeLabelOf,
   slugify,
@@ -529,6 +530,16 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     }
     if (s.rows.some((r) => !r.frameModelId)) {
       showToast('Choose a frame model for every size line.', 'error');
+      return;
+    }
+    // The same price check the server makes, named by size and frame, before anything is sent.
+    const priceProblem = checkPriceRows(s.rows.map((r) => ({ ...r, frameModelId: r.frameModelId! }))).find((p) => p.severity === 'error');
+    if (priceProblem) {
+      const r = priceProblem.index >= 0 ? s.rows[priceProblem.index] : undefined;
+      const msg = r ? `${sizeLabelOf(r.widthIn, r.heightIn)} · ${byId.get(r.frameModelId ?? '')?.name ?? 'frame'}: ${priceProblem.message} (or untick “Sell” for that line)` : priceProblem.message;
+      setError(msg);
+      showToast(msg, 'error');
+      document.getElementById('prices')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     const status = publish ? 'published' : s.status;

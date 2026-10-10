@@ -427,3 +427,46 @@ export async function loadProductSetup(db: Firestore, productId: string) {
     gallery,
   };
 }
+
+const FIELD_NAMES: Record<string, string> = {
+  title: 'Frame name',
+  slug: 'Web address',
+  productCode: 'Product code',
+  categoryId: 'Category',
+  subject: 'What the picture shows',
+  shortDesc: 'Short description',
+  descriptionHtml: 'Description',
+  highlights: 'Highlights',
+  howItWorks: 'How it works',
+  careText: 'Care',
+  faq: 'Questions customers ask',
+  badges: 'Badges',
+  dispatchDaysMin: 'Dispatch days',
+  dispatchDaysMax: 'Dispatch days',
+  hsnCode: 'HSN code',
+  seo: 'SEO',
+  frameModelIds: 'Frame models',
+  rows: 'Sizes and prices',
+  gallery: 'Product photos',
+  artworkMediaId: 'Artwork',
+  collageTemplateId: 'Collage design',
+};
+
+/**
+ * A save problem in the owner's words: which size and frame (or which field) and what to do,
+ * never a raw "Number must be greater than 0".
+ */
+export function describeSetupIssue(issue: z.ZodIssue | undefined, raw: unknown): string {
+  if (!issue) return 'Some details are missing.';
+  const [field, index, sub] = issue.path;
+  const plain = issue.message.replace(/^Number must be greater than 0$/, 'Enter an amount above ₹0.');
+  if (field === 'rows' && typeof index === 'number') {
+    const row = (raw as { rows?: Array<{ widthIn?: number; heightIn?: number; frameModelId?: string }> } | null)?.rows?.[index];
+    const frame = String(row?.frameModelId ?? '').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const what = sub === 'mrp' ? 'MRP' : sub === 'price' ? 'Selling price' : sub === 'cost' ? 'Making cost' : null;
+    const where = row?.widthIn && row?.heightIn ? `${row.widthIn}x${row.heightIn} in${frame ? ` · ${frame}` : ''}` : `Price line ${index + 1}`;
+    return `${where}: ${what && !plain.toLowerCase().includes(what.toLowerCase()) ? `${what} — ` : ''}${plain}`;
+  }
+  const name = typeof field === 'string' ? FIELD_NAMES[field] : undefined;
+  return name && !plain.toLowerCase().startsWith(name.toLowerCase()) ? `${name}: ${plain}` : plain;
+}

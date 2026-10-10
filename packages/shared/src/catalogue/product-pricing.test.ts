@@ -57,4 +57,12 @@ describe('size × frame model pricing', () => {
     expect(orientSize({ widthIn: 12, heightIn: 8 }, 'portrait')).toEqual({ widthIn: 8, heightIn: 12 });
     expect(orientSize({ widthIn: 8, heightIn: 12 }, 'landscape')).toEqual({ widthIn: 12, heightIn: 8 });
   });
+
+  it('lets a switched-off size stay without prices, but a sold one needs both', () => {
+    expect(PriceRowSchema.safeParse({ ...row, mrp: 0, price: 0, isActive: false }).success).toBe(true);
+    expect(checkPriceRows([row, { ...row, frameModelId: 'gold', mrp: 0, price: 0, isActive: false }])).toEqual([]);
+    const sold = PriceRowSchema.safeParse({ ...row, price: 0 });
+    expect(sold.success).toBe(false);
+    expect(sold.error!.issues[0]!.message).toBe('Enter a selling price.');
+  });
 });

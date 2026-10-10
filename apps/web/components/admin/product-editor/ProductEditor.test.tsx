@@ -190,4 +190,25 @@ describe('guided product editor', () => {
     expect(screen.getByLabelText('MRP 16x24 in Teak Classic')).toBeTruthy();
     expect(screen.getByRole('button', { name: '12×8', pressed: true })).toBeTruthy();
   });
+
+  it('publishes with a switched-off size left at ₹0, and names the line when a sold size has no price', async () => {
+    render(<ProductEditor productId={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Single photo frame/ }));
+    fireEvent.change(screen.getByPlaceholderText('Classic Family Photo Frame'), { target: { value: 'Family Frame' } });
+    fireEvent.change(document.querySelector('#details select')!, { target: { value: 'devotional' } });
+    fireEvent.click(screen.getByRole('button', { name: /Royal Gold/ }));
+    fireEvent.click(screen.getByRole('button', { name: '12×8' }));
+    fireEvent.change(screen.getByLabelText('MRP 12x8 in Teak Classic'), { target: { value: '599' } });
+    fireEvent.change(screen.getByLabelText('Selling price 12x8 in Teak Classic'), { target: { value: '444' } });
+    // Royal Gold left at ₹0 but still ticked: Save names that line instead of a raw error.
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+    expect(await screen.findAllByText(/12x8 in · Royal Gold: Enter a selling price/)).toBeTruthy();
+    expect(api.mock.calls.some(([p]) => p === '/api/admin/products/setup')).toBe(false);
+    // Untick "Sell" for it: now it saves.
+    fireEvent.click(screen.getByLabelText('Sell 12x8 in Royal Gold'));
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+    await waitFor(() => expect(api.mock.calls.some(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')).toBe(true));
+    const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')![1].body));
+    expect(body.rows.find((r: { frameModelId: string }) => r.frameModelId === 'gold')).toMatchObject({ isActive: false, price: 0, mrp: 0 });
+  });
 });

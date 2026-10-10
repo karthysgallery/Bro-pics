@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@bro-pics/shared';
 import { catalogueGuard } from '../../../../../lib/catalogue/guard';
-import { ProductSetupBodySchema, saveProductSetup, SetupError } from '../../../../../lib/catalogue/product-setup';
+import { describeSetupIssue, ProductSetupBodySchema, saveProductSetup, SetupError } from '../../../../../lib/catalogue/product-setup';
 import { storageArtworkStore } from '../../../../../lib/catalogue/artwork-store';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
@@ -11,8 +11,9 @@ import { revalidateCategoryPage, revalidateHomepage, revalidateProductPage } fro
 export async function POST(request: Request): Promise<NextResponse> {
   const g = await catalogueGuard(request, 'catalogue:write');
   if (!g.ok) return g.response;
-  const parsed = ProductSetupBodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return adminApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Some details are missing.', { issues: parsed.error.issues });
+  const raw = await request.json().catch(() => null);
+  const parsed = ProductSetupBodySchema.safeParse(raw);
+  if (!parsed.success) return adminApiError(400, 'invalid_request', describeSetupIssue(parsed.error.issues[0], raw), { issues: parsed.error.issues });
   try {
     const result = await saveProductSetup(g.db, storageArtworkStore(), null, parsed.data);
     await writeAuditLog(g.db, { actorUid: g.uid, action: 'product.create', resource: 'product', resourceId: result.productId, details: { slug: result.slug, type: parsed.data.productType, variants: result.variants } }).catch((error) =>
