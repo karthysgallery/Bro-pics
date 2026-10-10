@@ -6,17 +6,17 @@ import { createEmptyState } from '../personalization/state';
 import { buildOrderSnapshot } from '../personalization/versioning';
 
 describe('auto-made product designs', () => {
-  it('groups sizes by print shape and draws each shape at its largest size', () => {
+  it('groups sizes by print shape: drawn at the smallest size, sharpness checked at the largest', () => {
     const groups = groupSizesByShape([
       { widthIn: 8, heightIn: 12 },
       { widthIn: 12, heightIn: 18 },
       { widthIn: 8, heightIn: 10 },
       { widthIn: 12, heightIn: 8 },
     ]);
-    expect(groups.map((g) => [g.key, g.largest, g.sizes.length])).toEqual([
-      ['P1.50', { widthIn: 12, heightIn: 18 }, 2],
-      ['P1.25', { widthIn: 8, heightIn: 10 }, 1],
-      ['L1.50', { widthIn: 12, heightIn: 8 }, 1],
+    expect(groups.map((g) => [g.key, g.smallest, g.largest, g.sizes.length])).toEqual([
+      ['P1.50', { widthIn: 8, heightIn: 12 }, { widthIn: 12, heightIn: 18 }, 2],
+      ['P1.25', { widthIn: 8, heightIn: 10 }, { widthIn: 8, heightIn: 10 }, 1],
+      ['L1.50', { widthIn: 12, heightIn: 8 }, { widthIn: 12, heightIn: 8 }, 1],
     ]);
     expect(shapeKey({ widthIn: 6, heightIn: 6 })).toBe('L1.00');
     expect([shapeLabel({ widthIn: 12, heightIn: 18 }), shapeLabel({ widthIn: 10, heightIn: 8 }), shapeLabel({ widthIn: 6, heightIn: 6 }), shapeLabel({ widthIn: 12, heightIn: 15 })]).toEqual(['2:3 portrait', '5:4 landscape', 'square', '4:5 portrait']);

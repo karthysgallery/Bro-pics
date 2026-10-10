@@ -100,4 +100,46 @@ describe('guided product editor', () => {
     fireEvent.change(screen.getByLabelText('Selling price 8x10 in Teak Classic'), { target: { value: '600' } });
     expect(screen.getByText('Selling price is more than the MRP.')).toBeTruthy();
   });
+
+  it('converts an older product whose finishes match no frame model, keeping every old size id and adding no duplicates', async () => {
+    const old = (id: string, w: number, h: number, finish: string, price: number) => ({ variantId: id, widthIn: w, heightIn: h, frameModelId: null, legacyFinish: finish, mrp: price, price, cost: 0, isActive: true });
+    api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/admin/products/setup/options')
+        return { categories: [{ id: 'frames', name: 'Frames', slug: 'frames' }], frameModels: [model('teak', 'Teak Classic'), model('gold', 'Royal Gold', 20000)], rates: DEFAULT_FRAMING_COST_RATES, collageTemplates: [] };
+      if (path === '/api/admin/products/old1/setup' && !init) {
+        return {
+          product: {
+            id: 'old1', productType: 'single_photo', isLegacy: true, title: 'Classic Wooden Frame', slug: 'classic-wooden-frame', productCode: 'CWF', categoryId: 'frames', subject: '',
+            shortDesc: '', descriptionHtml: '', highlights: [], howItWorks: [], careText: '', faq: [], badges: [], occasionTags: [], status: 'published', isFeatured: false,
+            allowsTextPersonalization: false, dispatchDaysMin: 2, dispatchDaysMax: 4, hsnCode: '', seo: { title: '', description: '', focusKeyword: '', keywords: [], imageAlt: '', noindex: false },
+            frameModelIds: [], artwork: null, collageTemplateId: null, primaryImageUrl: '/x.jpg',
+          },
+          rows: [old('v_8_blk', 8, 12, 'Black', 79900), old('v_8_wht', 8, 12, 'White', 79900), old('v_12_blk', 12, 18, 'Black', 129900), old('v_12_wht', 12, 18, 'White', 129900)],
+          gallery: [{ mediaId: null, url: '/x.jpg', alt: '' }],
+        };
+      }
+      if (path === '/api/admin/products/old1/setup' && init?.method === 'PUT') return { productId: 'old1', warnings: [] };
+      throw new Error(`unexpected ${path}`);
+    });
+    render(<ProductEditor productId="old1" />);
+    const pick = async (index: number, value: string) => {
+      const selects = await screen.findAllByLabelText('Frame model for this size');
+      fireEvent.change(selects[index]!, { target: { value } });
+    };
+    // Black (8x12) → Teak: every Black line follows; White → Royal Gold.
+    await pick(0, 'teak');
+    expect(screen.getAllByLabelText('Frame model for this size')).toHaveLength(2);
+    await pick(0, 'gold');
+    expect(screen.queryAllByLabelText('Frame model for this size')).toHaveLength(0);
+    expect(screen.queryByText('This size and frame model is listed twice.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.mock.calls.some(([p, i]) => p === '/api/admin/products/old1/setup' && i?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/old1/setup' && i?.method === 'PUT')![1].body));
+    expect(body.frameModelIds).toEqual(['teak', 'gold']);
+    expect(body.rows.map((r: { variantId?: string; frameModelId: string }) => [r.variantId, r.frameModelId]).sort()).toEqual([
+      ['v_12_blk', 'teak'], ['v_12_wht', 'gold'], ['v_8_blk', 'teak'], ['v_8_wht', 'gold'],
+    ]);
+    expect(body.gallery).toEqual([]); // older photos are kept on the server, not resent
+  });
 });

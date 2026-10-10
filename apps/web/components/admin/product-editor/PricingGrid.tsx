@@ -75,6 +75,7 @@ export function PricingGrid({
   selectedModelIds,
   rates,
   artwork,
+  onPickModel,
 }: {
   rows: EditorRow[];
   onChange: (rows: EditorRow[]) => void;
@@ -82,6 +83,8 @@ export function PricingGrid({
   selectedModelIds: string[];
   rates: FramingCostRates;
   artwork: { widthPx: number; heightPx: number } | null;
+  /** An older line was given a frame model (which may not be ticked yet). */
+  onPickModel: (rowKey: string, modelId: string) => void;
 }) {
   const [custom, setCustom] = useState({ w: '', h: '' });
   const byId = new Map(models.map((m) => [m.id, m]));
@@ -222,10 +225,10 @@ export function PricingGrid({
                                 aria-label="Frame model for this size"
                                 className="h-8 rounded-lg border border-alert bg-red-50 px-2 text-xs"
                                 value=""
-                                onChange={(e) => update(r.key, { frameModelId: e.target.value })}
+                                onChange={(e) => e.target.value && onPickModel(r.key, e.target.value)}
                               >
                                 <option value="">{r.legacyFinish ? `Old finish “${r.legacyFinish}” → choose…` : 'Choose frame model…'}</option>
-                                {selectedModels.map((sm) => (
+                                {models.filter((sm) => sm.isActive || selectedModelIds.includes(sm.id)).map((sm) => (
                                   <option key={sm.id} value={sm.id}>
                                     {sm.name}
                                   </option>
@@ -263,6 +266,11 @@ export function PricingGrid({
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums text-ink/70">{off ? `${off}%` : '—'}</td>
                           <td className="px-2 py-1.5 text-center">
+                            {!r.variantId && (
+                              <button type="button" aria-label={`Remove line ${sizeLabelOf(r.widthIn, r.heightIn)} ${m?.name ?? ''}`} title="Remove this line (not saved yet)" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} className="mr-1 text-ink/35 hover:text-alert">
+                                ×
+                              </button>
+                            )}
                             <input type="checkbox" aria-label={`Sell ${sizeLabelOf(r.widthIn, r.heightIn)} ${m?.name ?? ''}`} checked={r.isActive} onChange={(e) => update(r.key, { isActive: e.target.checked })} className="h-4 w-4 accent-[#1a1a1a]" />
                           </td>
                         </tr>
@@ -281,10 +289,13 @@ export function PricingGrid({
   );
 }
 
-/** Lines for newly selected frame models (for every size already in the grid), and without removed ones. */
-export function syncRowsWithModels(rows: EditorRow[], modelIds: string[], models: FrameModel[], rates: FramingCostRates): EditorRow[] {
+/**
+ * Lines for newly selected frame models (for every size already in the grid), and without removed ones.
+ * `finishOf` maps a model to the old finish the owner chose it for, so every size's matching old line is claimed.
+ */
+export function syncRowsWithModels(rows: EditorRow[], modelIds: string[], models: FrameModel[], rates: FramingCostRates, finishOf: Record<string, string> = {}): EditorRow[] {
   const byId = new Map(models.map((m) => [m.id, m]));
-  const kept = rows.filter((r) => r.frameModelId === null || modelIds.includes(r.frameModelId));
+  const kept = rows.filter((r) => r.frameModelId === null || modelIds.includes(r.frameModelId)).map((r) => ({ ...r }));
   const sizes = [...new Map(kept.map((r) => [sizeKey(r), { widthIn: r.widthIn, heightIn: r.heightIn }])).values()];
   const first = byId.get(modelIds[0] ?? '');
   const out = [...kept];
@@ -293,6 +304,16 @@ export function syncRowsWithModels(rows: EditorRow[], modelIds: string[], models
     if (!m) continue;
     for (const s of sizes) {
       if (out.some((r) => sizeKey(r) === sizeKey(s) && r.frameModelId === id)) continue;
+      // An older line of this size without a model is claimed first (keeping its variant id, so carts and
+      // past orders keep working): the one whose old finish names this model, or the only one there is.
+      const unassigned = out.filter((r) => sizeKey(r) === sizeKey(s) && r.frameModelId === null);
+      const finish = (r: EditorRow) => (r.legacyFinish ?? '').trim().toLowerCase();
+      const alias = finishOf[id]?.trim().toLowerCase();
+      const claim = unassigned.find((r) => finish(r) && (finish(r) === alias || finish(r) === m.name.toLowerCase() || finish(r) === m.colour.toLowerCase())) ?? (unassigned.length === 1 ? unassigned[0] : undefined);
+      if (claim) {
+        claim.frameModelId = id;
+        continue;
+      }
       const base = out.find((r) => sizeKey(r) === sizeKey(s) && r.frameModelId === modelIds[0]);
       const delta = m.priceDelta - (first?.priceDelta ?? 0);
       out.push({

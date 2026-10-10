@@ -122,3 +122,20 @@ describe('renderPrintJob for a ready-made frame (shop artwork, nothing from the 
     expect([data[i], data[i + 1], data[i + 2]]).toEqual([30, 90, 200]);
   }, 60_000);
 });
+
+describe('a design shared by several sizes of one shape', () => {
+  it('prints each order at its own size: 8x12 → 2400×3600, 12x18 → 3600×5400, 20x30 → 6000×9000', async () => {
+    const { buildReadyMadeTemplate, groupSizesByShape } = await import('@bro-pics/shared/src/catalogue/product-designs');
+    const sizes = [{ widthIn: 8, heightIn: 12 }, { widthIn: 12, heightIn: 18 }, { widthIn: 20, heightIn: 30 }];
+    const [group] = groupSizesByShape(sizes);
+    const t = buildReadyMadeTemplate({ productId: 'p', name: 'p', size: group!.smallest, artwork: { assetId: 'a' } });
+    const snap = buildOrderSnapshot(t, createEmptyState(t.id, t.version));
+    for (const s of sizes) {
+      const px = { printWidthPx: s.widthIn * 300, printHeightPx: s.heightIn * 300 };
+      const { deps, calls } = fakeDeps(snap, { getVariant: vi.fn(async () => px) });
+      await renderPrintJob(deps, 'job1');
+      const meta = await sharp(calls.upload[0].buffer).metadata();
+      expect([meta.width, meta.height]).toEqual([px.printWidthPx, px.printHeightPx]);
+    }
+  }, 120_000);
+});

@@ -38,7 +38,7 @@ Go to **Admin → Products → + Add frame** and fill in the nine numbered secti
 3. **Design:**
    - Ready-made: upload the artwork at the highest resolution you have.
    - Single photo: nothing to do.
-   - Collage: pick the design, or open the designer.
+   - Collage: upload the finished collage design here. The photo spaces are found and a draft design is linked to this product; open the collage designer to check it, add any name or date spaces, then publish it. Or pick a design you already made.
 4. **Frame models:** tick the ones this product comes in. The ★ marks the frame the product page opens with.
 5. **Sizes and prices:** tap the sizes you sell; each size gets one line per frame model.
    - Enter the MRP, selling price and making cost (↺ suggests a cost).
@@ -68,7 +68,7 @@ One **Save** writes everything:
 
 ## Older products
 
-Products made before this editor open in it marked "old setup". Each older size is matched to a frame model by name or colour; pick a model where none matches, then save. The old sizes keep their IDs, so carts and past orders keep working.
+Products made before this editor open in it marked "old setup". Each older size is matched to a frame model by name or colour. Where nothing matches, choose a model on the line, for example "Old finish Black → Teak Classic". Every size with that old finish follows, and no duplicate lines are made. Then save. The old sizes keep their IDs, so carts and past orders keep working. This was checked live on Classic Wooden Frame (Black and White → Teak Classic and Royal Gold).
 
 ## Tested (local emulators)
 
@@ -82,9 +82,15 @@ Products made before this editor open in it marked "old setup". Each older size 
 - Collage linking, unchanged re-saves (no duplicate designs), switched-off sizes and old-product conversion are covered by emulator tests.
 - Ready-made print rendering is covered by a print-service test; the print service wasn't run locally.
 
+## Print size
+
+Sizes of the same shape (8×12, 12×18, 20×30) share one design. It is drawn at the smallest size and scaled up to each order's exact print size: 8×12 prints at 2400×3600 pixels, 12×18 at 3600×5400 and 20×30 at 6000×9000. A test covers this.
+
 ## Known limits
 
 - Artwork is cut to each frame shape from the centre. A different-shaped size trims the edges, and the save warns you.
 - The single-photo design fills the whole print. For a printed name or caption, design it as a collage.
 - Renaming a frame model updates a product's size labels only when that product is next saved.
 - Uploads are limited to 30 MB per picture.
+- A ready-made frame with no product photos uses the plain artwork as its shop card picture. Add a framed photo or mockup for a better card.
+- Product cards currently show 4.9 ★ (128) on any product with no reviews (existing code, not part of this work). Needs the owner's decision.

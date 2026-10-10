@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DEFAULT_FRAMING_COST_RATES,
+  templateDraftFromDetection,
+  type PersonalizationTemplate,
+  type SlotDetectionResult,
   analyseProductSeo,
   generateProductDetails,
   sizeLabelOf,
@@ -20,6 +23,7 @@ import { PricingGrid, newRowKey, syncRowsWithModels, type EditorRow } from './Pr
 import { FramedPreview, lookOf } from './FramedPreview';
 import { htmlToText, textToHtml } from './rich-text';
 import { inr, useCatalogueUpload } from './use-catalogue-upload';
+import { templateIdFromName } from '../template-builder/template-draft';
 
 interface Options {
   categories: Array<{ id: string; name: string; slug: string }>;
@@ -185,6 +189,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const [slugTouched, setSlugTouched] = useState(productId !== null);
   const artworkInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
+  const collageInput = useRef<HTMLInputElement>(null);
+  const [newCollage, setNewCollage] = useState<{ id: string; found: number } | null>(null);
 
   const set = useCallback((patch: Partial<State>) => {
     setS((prev) => ({ ...prev, ...patch }));
@@ -286,6 +292,19 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     const ids = s.frameModelIds.includes(id) ? s.frameModelIds.filter((m) => m !== id) : [...s.frameModelIds, id];
     set({ frameModelIds: ids, rows: syncRowsWithModels(s.rows, ids, models, rates) });
   };
+  /** An older line given a model: tick the model if needed; other sizes' old lines are matched to it too. */
+  const pickModel = (rowKey: string, modelId: string) => {
+    const picked = s.rows.find((r) => r.key === rowKey);
+    if (!picked) return;
+    const sameFinish = (r: EditorRow) => r.frameModelId === null && picked.legacyFinish && r.legacyFinish === picked.legacyFinish;
+    const claimed = s.rows.filter((r) => r.key === rowKey || sameFinish(r));
+    const assigned = s.rows
+      // A new, unsaved line for a size and model an old line now covers would be a duplicate: the old line takes its place.
+      .filter((r) => !(!r.variantId && r.frameModelId === modelId && claimed.some((c) => c.widthIn === r.widthIn && c.heightIn === r.heightIn)))
+      .map((r) => (r.key === rowKey || sameFinish(r) ? { ...r, frameModelId: modelId } : r));
+    const ids = s.frameModelIds.includes(modelId) ? s.frameModelIds : [...s.frameModelIds, modelId];
+    set({ frameModelIds: ids, rows: syncRowsWithModels(assigned, ids, models, rates, picked.legacyFinish ? { [modelId]: picked.legacyFinish } : {}) });
+  };
   const makeDefault = (id: string) => set({ frameModelIds: [id, ...s.frameModelIds.filter((m) => m !== id)] });
 
   const generate = (mode: 'empty' | 'all') => {
@@ -354,6 +373,36 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       setUploading(null);
     }
   };
+  /**
+   * Upload a finished collage design: the photo spaces are found automatically (same as Collage Templates),
+   * a draft design is made and linked to this product, then the owner fine-tunes and publishes it in the builder.
+   */
+  const createCollage = async (file: File) => {
+    setUploading('collage');
+    try {
+      const img = await upload(file, { alt: `${s.title || 'Collage'} design`, tag: 'collage-artwork' });
+      const size = activeRows[0];
+      const result = await api<{ detection: SlotDetectionResult; artwork: { assetId: string }; canvas: { width: number; height: number; dpi: number } }>('/api/admin/personalization-templates/detect', {
+        method: 'POST',
+        body: JSON.stringify({ mediaId: img.id, ...(size && { widthIn: size.widthIn, heightIn: size.heightIn }) }),
+      });
+      const found = result.detection.slots.length;
+      const detection: SlotDetectionResult = found
+        ? result.detection
+        : { ...result.detection, artworkPlacement: 'below-photos', slots: [{ x: 0.3, y: 0.3, width: 0.4, height: 0.4, rotationDeg: 0, shape: 'rect', confidence: 0, source: 'placeholder' }] };
+      const name = (s.title || 'Collage').trim();
+      const draft = templateDraftFromDetection({ id: templateIdFromName(name), name, artwork: { assetId: result.artwork.assetId }, canvas: result.canvas, detection });
+      const created = await api<PersonalizationTemplate>('/api/admin/personalization-templates', { method: 'POST', body: JSON.stringify(draft) });
+      await loadOptions();
+      set({ collageTemplateId: created.id });
+      setNewCollage({ id: created.id, found });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The collage design could not be read.', 'error');
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const moveGallery = (i: number, by: number) => {
     const g = [...s.gallery];
     const [item] = g.splice(i, 1);
@@ -669,20 +718,34 @@ export function ProductEditor({ productId }: { productId: string | null }) {
               <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_16rem]">
                 <div className="space-y-2 text-sm text-ink/75">
                   <p>Nothing to design: the customer&rsquo;s photo fills the whole print. A design is made for each frame shape when you save, and customers see their photo in the frame model they pick.</p>
-                  <label className="flex items-start gap-2 rounded-xl border border-line p-3 text-xs">
-                    <input type="checkbox" checked={s.allowsTextPersonalization} onChange={(e) => set({ allowsTextPersonalization: e.target.checked })} className="mt-0.5" />
-                    <span>
-                      <strong className="block text-ink">Customer can add a name or message</strong>
-                      For a printed caption, design it as a collage instead (it needs a text space).
-                    </span>
-                  </label>
+                  <p className="text-xs text-ink/55">Want a printed name or date as well? Make it a collage frame and add a text space in the collage designer.</p>
                 </div>
                 <FramedPreview look={lookOf(defaultModel)} widthIn={firstPreviewRow?.widthIn ?? 8} heightIn={firstPreviewRow?.heightIn ?? 12} label="Sample photo" />
               </div>
             )}
             {s.productType === 'collage' && (
               <div className="space-y-3">
-                <p className="text-xs text-ink/65">Pick the collage layout made in the collage designer, or design a new one. Upload the designer&rsquo;s artwork there and it finds the photo and text spaces for you.</p>
+                <p className="text-xs text-ink/65">Upload the finished collage design (photo areas left transparent or filled with sample photos) and the photo spaces are found for you; then fine-tune and publish it in the collage designer. Or pick a design you already made.</p>
+                <input ref={collageInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && void createCollage(e.target.files[0])} />
+                <button
+                  type="button"
+                  disabled={uploading === 'collage'}
+                  onClick={() => collageInput.current?.click()}
+                  className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-line text-sm font-semibold text-ink/70 hover:border-ink/40 hover:text-ink"
+                >
+                  {uploading === 'collage' ? 'Finding the photo spaces…' : 'Upload a new collage design'}
+                  <span className="text-2xs font-normal text-ink/50">The design picture from your designer · JPG, PNG or WebP</span>
+                </button>
+                {newCollage && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+                    <span className="min-w-0 flex-1">
+                      {newCollage.found ? `Found ${newCollage.found} photo space${newCollage.found === 1 ? '' : 's'}.` : 'No photo spaces were found — draw them in the designer.'} Check them, add any name or date spaces, then publish the design.
+                    </span>
+                    <Link href={`/admin/personalization-templates/${newCollage.id}`} target="_blank" className="rounded-lg bg-ink px-3 py-2 font-semibold text-paper">
+                      Open the collage designer ↗
+                    </Link>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <select className={`${field} max-w-md`} value={s.collageTemplateId ?? ''} onChange={(e) => set({ collageTemplateId: e.target.value || null })}>
                     <option value="">Choose a collage design…</option>
@@ -693,9 +756,6 @@ export function ProductEditor({ productId }: { productId: string | null }) {
                       </option>
                     ))}
                   </select>
-                  <Link href="/admin/personalization-templates" target="_blank" className="h-10 rounded-xl border border-line px-3 text-sm font-semibold leading-10 text-ink hover:bg-field">
-                    Design a new collage ↗
-                  </Link>
                   <button type="button" onClick={() => void loadOptions()} className="h-10 rounded-xl px-3 text-sm font-semibold text-ink/70 hover:bg-field">
                     Refresh list
                   </button>
@@ -771,7 +831,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
 
           {/* 5. Prices */}
           <Section id="prices" step={5} title="Sizes and prices" hint="Tap the sizes you sell. Each size gets a line per frame model: MRP, your selling price and what it costs you to make." done={activeRows.length > 0 && activeRows.every((r) => r.frameModelId && r.price > 0 && r.mrp >= r.price)}>
-            <PricingGrid rows={s.rows} onChange={(rows) => set({ rows })} models={models} selectedModelIds={s.frameModelIds} rates={rates} artwork={s.productType === 'ready_made' ? s.artwork : null} />
+            <PricingGrid rows={s.rows} onChange={(rows) => set({ rows })} models={models} selectedModelIds={s.frameModelIds} rates={rates} artwork={s.productType === 'ready_made' ? s.artwork : null} onPickModel={pickModel} />
           </Section>
 
           {/* 6. Photos */}

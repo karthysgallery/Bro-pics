@@ -10,8 +10,8 @@ import { PersonalizationTemplateSchema, type PersonalizationTemplate } from '../
  *
  * Collages are still designed by hand in the template builder.
  *
- * One design per print SHAPE: 8x12 and 12x18 share a design (the print is
- * scaled to the frame's own resolution when it is made), 8x10 needs its own.
+ * One design per print SHAPE: 8x12 and 12x18 share a design (drawn at the
+ * smaller size and scaled up to each frame's own resolution when printed); 8x10 needs its own.
  */
 
 export const PRODUCT_TYPES = ['ready_made', 'single_photo', 'collage'] as const;
@@ -38,8 +38,12 @@ export function shapeLabel(size: SizeInches): string {
   return `${size.widthIn > size.heightIn ? named.split(':').reverse().join(':') : named} ${size.widthIn > size.heightIn ? 'landscape' : 'portrait'}`;
 }
 
-/** Groups sizes by print shape; each group's design is drawn at its LARGEST size. */
-export function groupSizesByShape<T extends SizeInches>(sizes: T[]): Array<{ key: string; largest: T; sizes: T[] }> {
+/**
+ * Groups sizes by print shape. Each shape's design is drawn at its SMALLEST size: an order is printed by
+ * scaling the design UP to that order's exact print pixels (never down), so every size comes out right.
+ * The LARGEST size is what artwork sharpness is checked against.
+ */
+export function groupSizesByShape<T extends SizeInches>(sizes: T[]): Array<{ key: string; smallest: T; largest: T; sizes: T[] }> {
   const groups = new Map<string, T[]>();
   for (const s of sizes) {
     const key = shapeKey(s);
@@ -48,6 +52,7 @@ export function groupSizesByShape<T extends SizeInches>(sizes: T[]): Array<{ key
   return [...groups.entries()].map(([key, list]) => ({
     key,
     sizes: list,
+    smallest: list.reduce((a, b) => (b.widthIn * b.heightIn < a.widthIn * a.heightIn ? b : a)),
     largest: list.reduce((a, b) => (b.widthIn * b.heightIn > a.widthIn * a.heightIn ? b : a)),
   }));
 }
