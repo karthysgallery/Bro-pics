@@ -312,7 +312,8 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     basePrice: Math.min(...(activeRows.length ? activeRows : body.rows).map((r) => r.price)),
     primaryImageUrl: cardImages[0] ?? before?.primaryImageUrl ?? '',
     hoverImageUrl: cardImages[1] ?? null,
-    ...buildProductSearchFields(body.title, body.shortDesc, body.seo.keywords),
+    // Found by what the picture shows ("Vijay"), its search phrase and code too, not only by its name.
+    ...buildProductSearchFields(body.title, body.shortDesc, body.seo.keywords, [body.subject, body.seo.focusKeyword, body.productCode, ...body.occasionTags]),
     updatedAt: now,
   };
   if (before) {

@@ -16,3 +16,12 @@ describe('buildProductSearchFields', () => {
     expect(searchTokens.filter((t) => t === 'frame')).toHaveLength(1);
   });
 });
+
+describe('search words', () => {
+  it('ignores punctuation, keeps Tamil, and finds a product by what its picture shows', async () => {
+    const { buildProductSearchFields, searchWordsOf } = await import('./product-search-fields');
+    expect(searchWordsOf('Vijay, the CM. முருகன்!')).toEqual(['vijay', 'the', 'முருகன்']);
+    const fields = buildProductSearchFields('Cm Of Tamilnadu Photo Frame', 'Printed sharp.', ['cm photo'], ['Vijay', 'VIJAY01']);
+    expect(fields.searchTokens).toEqual(expect.arrayContaining(['vijay', 'tamilnadu', 'frame', 'vijay01', 'sharp']));
+  });
+});

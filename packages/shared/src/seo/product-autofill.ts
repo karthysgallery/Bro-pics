@@ -88,7 +88,12 @@ export function generateProductDetails(input: AutofillInput): AutofillOutput {
   const keyword = focusKeywordFor(input);
   // The product name must carry the search phrase (Google weighs the page heading); keep the owner's
   // own wording when it already does, otherwise name it by the phrase.
-  const finalTitle = name && containsPhrase(name, keyword) ? titleCase(name) : titleCase(keyword);
+  // The owner's own words are never dropped: words of the name that the phrase lacks go in front of it
+  // ("Vijay" + "cm of tamilnadu photo frame" → "Vijay Cm Of Tamilnadu Photo Frame").
+  const keywordWords = new Set(keyword.split(' '));
+  const ownWords = clean(name).split(' ').filter((w) => w && !keywordWords.has(w.toLowerCase()) && !/^(photo|frame|frames)$/i.test(w));
+  const combined = clean([...ownWords, keyword].join(' '));
+  const finalTitle = name && containsPhrase(name, keyword) ? titleCase(name) : combined.length <= 60 ? titleCase(combined) : titleCase(keyword);
   const sizes = input.sizeLabels.length ? input.sizeLabels : ['several sizes'];
   const models = input.frameModels;
   const modelNames = models.map((m) => m.name);

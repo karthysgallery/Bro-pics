@@ -11,16 +11,24 @@ export interface ProductSearchFields {
   searchTokens: string[];
 }
 
-export function buildProductSearchFields(title: string, shortDesc: string, keywords: readonly string[] = []): ProductSearchFields {
+/**
+ * Words a shopper can search by: lowercased, split on anything that is not a
+ * letter or digit (so "Vijay," and "vijay" match), at least 3 characters.
+ * Shared by the product write path and the search query, so both sides agree.
+ * Letters of any script are kept (Tamil, Hindi…).
+ */
+export function searchWordsOf(text: string): string[] {
+  return [...new Set(text.toLowerCase().split(/[^\p{L}\p{M}\p{N}]+/u).filter((token) => token.length > 2))];
+}
+
+/**
+ * `extra`: other words the product should be found by that are not in its
+ * name or description — what the picture shows ("Vijay"), its search phrase,
+ * its product code.
+ */
+export function buildProductSearchFields(title: string, shortDesc: string, keywords: readonly string[] = [], extra: readonly string[] = []): ProductSearchFields {
   return {
     titleLower: title.toLowerCase(),
-    searchTokens: [
-      ...new Set(
-        `${title} ${shortDesc} ${keywords.join(' ')}`
-          .toLowerCase()
-          .split(/\s+/)
-          .filter((token) => token.length > 2)
-      ),
-    ],
+    searchTokens: searchWordsOf(`${title} ${shortDesc} ${keywords.join(' ')} ${extra.join(' ')}`),
   };
 }

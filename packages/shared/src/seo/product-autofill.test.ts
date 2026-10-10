@@ -52,4 +52,11 @@ describe('generateProductDetails (free, rule-based)', () => {
     expect(out.faq.find((f) => f.question === 'Do I need to send a photo?')?.answer).toMatch(/^No\./);
     expect(out.descriptionHtml).not.toMatch(/<script|undefined|NaN/);
   });
+
+  it("keeps the owner's own words in the name when the picture's subject is different", () => {
+    const out = generateProductDetails({ ...base, name: 'Vijay', subject: 'CM of Tamilnadu' });
+    expect(out.title).toBe('Vijay Cm Of Tamilnadu Photo Frame');
+    expect(out.seo.focusKeyword).toBe('cm of tamilnadu photo frame');
+    expect(autofillScore(out)).toBe(100);
+  });
 });

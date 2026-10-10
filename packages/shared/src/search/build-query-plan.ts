@@ -1,3 +1,4 @@
+import { searchWordsOf } from './product-search-fields';
 import type { SearchFilters } from './types';
 
 export interface ProductQueryConstraint {
@@ -87,7 +88,7 @@ export function buildProductQueryPlan(
   // query), but the ordering has to be decided somehow.
   const queryTokens =
     query.trim().length > 0
-      ? [...new Set(query.trim().toLowerCase().split(/\s+/).filter((token) => token.length > 2))].slice(0, 30)
+      ? searchWordsOf(query).slice(0, 30)
       : [];
 
   const arrayFilters: Array<{ field: string; values: string[] | undefined }> = [
