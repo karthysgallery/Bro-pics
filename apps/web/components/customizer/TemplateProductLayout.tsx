@@ -101,6 +101,19 @@ function TemplateEditorSession({
   const sessionRef = useRef<string | null>(null);
   const sessionId = useCallback(() => (sessionRef.current ??= getOrCreateSessionId()), []);
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
+  // The product photos for the gallery, named for what they show (the five automatic ones in their order).
+  const galleryPhotos = useMemo(() => {
+    const AUTO = ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print'];
+    let auto = 0;
+    let own = 0;
+    return media
+      .filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id))
+      .map((m) => ({
+        url: m.url,
+        alt: m.alt || product.title,
+        label: (m as { auto?: boolean }).auto ? (AUTO[auto++] ?? 'Photo') : `Photo ${++own}`,
+      }));
+  }, [media, selectedVariant.id, product.title]);
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
   const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
   const frameLook = model?.image ? { src: model.image.url, borderPx: model.image.borderPx, mouldingWidthIn: model.mouldingWidthIn } : null;
@@ -238,7 +251,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={media.filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id))} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} />
         <BuyBox
           product={product}
           variants={variants}

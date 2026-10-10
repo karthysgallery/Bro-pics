@@ -165,3 +165,62 @@ describe('PreviewGallery', () => {
     });
   });
 });
+
+describe('PreviewGallery — browsing views and product photos together', () => {
+  const photos = [
+    { url: '/api/media/a/image?w=1600', alt: 'Sizes photo', label: 'Sizes' },
+    { url: '/api/media/b/image?w=1600', alt: 'Wall photo', label: 'On the wall' },
+  ];
+  const setup = () =>
+    render(
+      <PreviewGallery defaultImageUrl="/product.jpg" personalizedImageUrl={null} hasPersonalization={false} alt="Frame" photos={photos}>
+        <div>editor</div>
+      </PreviewGallery>
+    );
+
+  it('steps through all six pictures with the arrows, wrapping around, and the strip jumps straight to one', () => {
+    setup();
+    expect(screen.getByText('1 / 6')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }));
+    expect(screen.getByText('6 / 6')).toBeTruthy();
+    const main = screen.getByTestId('preview-main-picture');
+    expect(main.getAttribute('data-view')).toBe('photo-1');
+    // Photos are asked for at the size they are shown: 1200 on the stage, 240 in the strip.
+    expect(within(main).getByRole('img').getAttribute('src')).toBe('/api/media/b/image?w=1200');
+    fireEvent.click(screen.getByRole('button', { name: 'Next picture' }));
+    expect(screen.getByText('1 / 6')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sizes photo' }));
+    expect(screen.getByTestId('preview-main-picture').getAttribute('data-view')).toBe('photo-0');
+  });
+
+  it('opens a picture full screen; arrow keys move, Escape closes', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Sizes photo' }));
+    fireEvent.click(screen.getByTestId('preview-main-picture'));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-label')).toBe('Sizes — picture 5 of 6');
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('On the wall — picture 6 of 6');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('swipes to the next picture on a touch screen', () => {
+    // jsdom has no PointerEvent: a MouseEvent carrying pointerType stands in for a finger.
+    class TouchPointer extends MouseEvent {
+      pointerType: string;
+      constructor(type: string, init: MouseEventInit & { pointerType?: string } = {}) {
+        super(type, init);
+        this.pointerType = init.pointerType ?? 'mouse';
+      }
+    }
+    vi.stubGlobal('PointerEvent', TouchPointer);
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Hall view' }));
+    const stage = screen.getByTestId('preview-main-picture').parentElement!.parentElement!;
+    fireEvent.pointerDown(stage, { pointerType: 'touch', clientX: 300, clientY: 200 });
+    fireEvent.pointerUp(stage, { pointerType: 'touch', clientX: 120, clientY: 210 });
+    expect(screen.getByText('4 / 6')).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+});

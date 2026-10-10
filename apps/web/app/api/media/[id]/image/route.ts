@@ -34,7 +34,8 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     const image = await readStorageImage(media.path, width);
     return new NextResponse(new Uint8Array(image.body), {
       status: 200,
-      headers: { 'Content-Type': image.contentType, 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' },
+      headers: { 'Content-Type': image.contentType, // A media id always shows the same picture (a new upload gets a new id): browsers and CDNs may keep it.
+        'Cache-Control': 'public, max-age=31536000, immutable' },
     });
   } catch {
     return NextResponse.json({ error: 'Image could not be read' }, { status: 404 });
