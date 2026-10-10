@@ -3,6 +3,10 @@ import { afterEach, expect } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { toHaveNoViolations } from 'jest-axe';
 
+// Route tests check permissions, not the authenticator step (tested on its own in lib/security).
+// Production ignores this switch: the authenticator is always required there.
+process.env.ADMIN_MFA = 'off';
+
 // [FE-44] jest-axe's matcher is jest-shaped but works with vitest's
 // expect.extend unchanged — this is the one place it's registered, so
 // every *.test.tsx file in this project can call

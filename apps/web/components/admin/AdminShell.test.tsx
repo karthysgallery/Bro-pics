@@ -13,6 +13,8 @@ vi.mock('../../lib/auth-context', () => ({
 }));
 
 const mockPaymentMode = vi.fn();
+// The authenticator step has its own tests (AdminMfaGate.test.tsx); here it lets the shell through.
+vi.mock('./AdminMfaGate', () => ({ AdminMfaGate: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('../../lib/payment-mode-client', () => ({ getPaymentModeClient: () => mockPaymentMode() }));
 
 describe('AdminShell [AFE-01]', () => {

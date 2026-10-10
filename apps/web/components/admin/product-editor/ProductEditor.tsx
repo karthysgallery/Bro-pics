@@ -539,7 +539,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       const msg = r ? `${sizeLabelOf(r.widthIn, r.heightIn)} · ${byId.get(r.frameModelId ?? '')?.name ?? 'frame'}: ${priceProblem.message} (or untick “Sell” for that line)` : priceProblem.message;
       setError(msg);
       showToast(msg, 'error');
-      document.getElementById('prices')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('prices')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       return;
     }
     const status = publish ? 'published' : s.status;

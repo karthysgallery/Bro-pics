@@ -8,6 +8,8 @@ export interface SessionData {
   email?: string | null;
   status: string;
   expiresAt: number;
+  /** Staff only: proof that this browser entered the authenticator-app code (see lib/security/admin-mfa.ts). */
+  adminMfa?: { uid: string; until: number; v: number };
 }
 
 // Firebase Hosting (in front of Cloud Run) forwards ONLY a cookie named
@@ -21,7 +23,7 @@ const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 const DEV_SESSION_SECRET = 'karthys-gallery-dev-secret-do-not-use-in-production-min32chars';
 
-function getSessionSecret(): string {
+export function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (secret && secret.length >= 32) return secret;
   // A hard-coded fallback in production would let anyone who has read this

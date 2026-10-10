@@ -85,6 +85,23 @@ const ROLE_LABELS: Record<Role, { title: string; desc: string; badge: string }> 
 export default function AdminTeamSettingsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [resettingMfa, setResettingMfa] = useState<{ uid: string } | null>(null);
+  const resetMfa = async () => {
+    if (!user || !resettingMfa) return;
+    try {
+      const res = await fetch('/api/admin/mfa/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ uid: resettingMfa.uid }),
+      });
+      if (!res.ok) throw new Error();
+      showToast('Authenticator reset — they set up a new app at their next sign-in', 'success');
+    } catch {
+      showToast('Could not reset the authenticator', 'error');
+    } finally {
+      setResettingMfa(null);
+    }
+  };
 
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -474,6 +491,16 @@ export default function AdminTeamSettingsPage() {
 
                         {m.uid !== user?.uid && (
                           <button
+                            onClick={() => setResettingMfa(m)}
+                            title="Lost or changed phone: they set up their authenticator app again at the next sign-in"
+                            className="px-2.5 py-1 rounded bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
+                          >
+                            Reset authenticator
+                          </button>
+                        )}
+
+                        {m.uid !== user?.uid && (
+                          <button
                             onClick={() => setTogglingMember(m)}
                             className={`px-2.5 py-1 rounded text-2xs font-bold transition-colors ${
                               m.active
@@ -699,6 +726,16 @@ export default function AdminTeamSettingsPage() {
       </AdminModal>
 
       {/* Disable / Enable Confirmation Modal */}
+      <ConfirmModal
+        isOpen={resettingMfa !== null}
+        onClose={() => setResettingMfa(null)}
+        onConfirm={resetMfa}
+        title="Reset authenticator"
+        message={`Remove the authenticator app from UID ${resettingMfa?.uid.slice(0, 10)}...? They are signed out of the admin and set up a new app (new QR code) at their next sign-in. Use this when they lose or change their phone.`}
+        variant="danger"
+        confirmText="Reset"
+      />
+
       <ConfirmModal
         isOpen={!!togglingMember}
         onClose={() => setTogglingMember(null)}

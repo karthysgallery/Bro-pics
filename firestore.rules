@@ -14,6 +14,9 @@ service cloud.firestore {
     // Must stay in lockstep with getStaffUserIdFromAuthHeader (verify-id-token.ts):
     // super_admin is a superset of admin, so it can never be locked out of
     // anything a plain admin can read.
+    // Staff and admins never read the database directly from the browser: every admin screen goes through
+    // the server's admin API, which also requires the authenticator-app code. A stolen staff password alone
+    // therefore cannot read orders or customers here. (Kept for any rule that still needs to name staff.)
     function isStaffOrAdmin() {
       return isSignedIn() &&
         (request.auth.token.role == 'admin' ||
@@ -99,7 +102,7 @@ service cloud.firestore {
     }
 
     match /reviews/{id} {
-      allow read: if resource.data.status == 'approved' || isStaffOrAdmin();
+      allow read: if resource.data.status == 'approved';
       allow write: if false;
     }
 
@@ -110,38 +113,38 @@ service cloud.firestore {
 
     // Customer-owned data — readable only by the owner or staff/admin.
     match /orders/{orderId} {
-      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
+      allow read: if isOwner(resource.data.userId);
       allow write: if false;
 
       match /items/{itemId} {
-        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId);
         allow write: if false;
       }
       match /events/{eventId} {
-        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId);
         allow write: if false;
       }
 
       // [ABE-23] Admin ad-hoc refunds — same owner-or-staff read, admin-
       // SDK-only write pattern as items/events above.
       match /refunds/{refundId} {
-        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaffOrAdmin();
+        allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId);
         allow write: if false;
       }
     }
 
     match /uploads/{uploadId} {
-      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
+      allow read: if isOwner(resource.data.userId);
       allow write: if false;
     }
 
     match /customizations/{id} {
-      allow read: if isOwner(resource.data.userId) || isStaffOrAdmin();
+      allow read: if isOwner(resource.data.userId);
       allow write: if false;
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isStaffOrAdmin();
+      allow read: if isOwner(userId);
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly(clientProfileKeys())
         && request.resource.data.get('phone', '') in ['', request.auth.token.get('phone_number', '')];
@@ -150,7 +153,7 @@ service cloud.firestore {
       allow delete: if false;
 
       match /addresses/{addressId} {
-        allow read: if isOwner(userId) || isStaffOrAdmin();
+        allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
 
@@ -165,7 +168,7 @@ service cloud.firestore {
     }
 
     match /coupons/{code} {
-      allow read: if isStaffOrAdmin();
+      allow read: if false; // staff read through the admin API (signed in + authenticator code), never directly
       allow write: if false;
     }
 
@@ -218,11 +221,11 @@ service cloud.firestore {
     // customer could ever need (published, or archived for saved carts/orders) is
     // readable. All writes go through the admin API (Admin SDK), never the client.
     match /personalizationTemplates/{templateId} {
-      allow read: if isStaffOrAdmin();
+      allow read: if false; // staff read through the admin API (signed in + authenticator code), never directly
       allow write: if false;
 
       match /versions/{version} {
-        allow read: if resource.data.status in ['published', 'archived'] || isStaffOrAdmin();
+        allow read: if resource.data.status in ['published', 'archived'];
         allow write: if false;
       }
     }
@@ -285,7 +288,7 @@ service cloud.firestore {
 
     // [ABE-29] Daily analytics roll-ups — readable by staff/admin, server-write-only.
     match /analyticsDaily/{date} {
-      allow read: if isStaffOrAdmin();
+      allow read: if false; // staff read through the admin API (signed in + authenticator code), never directly
       allow write: if false;
     }
   }

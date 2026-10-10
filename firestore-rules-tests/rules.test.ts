@@ -61,12 +61,12 @@ describe('orders collection', () => {
     await assertFails(userB.firestore().doc('orders/order_1').get());
   });
 
-  it('allows staff to read any order', async () => {
+  it('does not let staff read orders directly (only through the admin API, which needs the authenticator code)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc('orders/order_1').set({ userId: 'user_a' });
     });
     const staff = testEnv.authenticatedContext('staff_1', { role: 'staff' });
-    await assertSucceeds(staff.firestore().doc('orders/order_1').get());
+    await assertFails(staff.firestore().doc('orders/order_1').get());
   });
 
   it('denies any direct client write to an order', async () => {
@@ -146,27 +146,27 @@ describe('users collection', () => {
     await assertFails(userB.firestore().doc('users/user_a').set({ displayName: 'x' }));
   });
 
-  it('allows staff to read but not write another user\'s profile', async () => {
+  it('lets staff neither read nor write another user\'s profile directly', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc('users/user_a').set({ phone: '+91123' });
     });
     const staff = testEnv.authenticatedContext('staff_1', { role: 'staff' });
     const db = staff.firestore();
-    await assertSucceeds(db.doc('users/user_a').get());
+    await assertFails(db.doc('users/user_a').get());
     await assertFails(db.doc('users/user_a').set({ displayName: 'x' }));
   });
 });
 
 describe('super_admin role', () => {
-  it('can read any order and user, exactly like admin (the owner account is super_admin)', async () => {
+  it('cannot read orders or users directly either — the owner uses the admin API too', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const seedDb = ctx.firestore();
       await seedDb.doc('orders/order_1').set({ userId: 'user_a' });
       await seedDb.doc('users/user_a').set({ phone: '+91123' });
     });
     const db = testEnv.authenticatedContext('owner', { role: 'super_admin' }).firestore();
-    await assertSucceeds(db.doc('orders/order_1').get());
-    await assertSucceeds(db.doc('users/user_a').get());
+    await assertFails(db.doc('orders/order_1').get());
+    await assertFails(db.doc('users/user_a').get());
     await assertFails(db.doc('orders/order_1').set({ userId: 'x' }));
   });
 
@@ -265,12 +265,12 @@ describe('customizations collection', () => {
     await assertFails(userB.firestore().doc('customizations/c1').get());
   });
 
-  it('allows staff to read any customization', async () => {
+  it('does not let staff read customizations directly', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc('customizations/c1').set({ userId: 'user_a' });
     });
     const staff = testEnv.authenticatedContext('staff_1', { role: 'staff' });
-    await assertSucceeds(staff.firestore().doc('customizations/c1').get());
+    await assertFails(staff.firestore().doc('customizations/c1').get());
   });
 });
 
@@ -301,16 +301,16 @@ describe('personalizationTemplates', () => {
     await assertFails(testEnv.unauthenticatedContext().firestore().doc('personalizationTemplates/t1/versions/2').get());
   });
 
-  it('keeps the admin summary list staff-only', async () => {
+  it('keeps the admin summary list off the client entirely (staff read it through the admin API)', async () => {
     await seed();
     await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('personalizationTemplates/t1').get());
-    await assertSucceeds(testEnv.authenticatedContext('s', { role: 'staff' }).firestore().doc('personalizationTemplates/t1').get());
+    await assertFails(testEnv.authenticatedContext('s', { role: 'staff' }).firestore().doc('personalizationTemplates/t1').get());
   });
 
-  it('lets staff read drafts, but nobody — not even an admin — write from the client', async () => {
+  it('lets nobody — not even an admin — read drafts or write from the client', async () => {
     await seed();
     const admin = testEnv.authenticatedContext('a', { role: 'super_admin' }).firestore();
-    await assertSucceeds(admin.doc('personalizationTemplates/t1/versions/2').get());
+    await assertFails(admin.doc('personalizationTemplates/t1/versions/2').get());
     await assertFails(admin.doc('personalizationTemplates/t1/versions/2').set({ status: 'published' }));
     await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('personalizationTemplates/t9').set({ x: 1 }));
   });

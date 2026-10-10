@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminMfaGate } from './AdminMfaGate';
+
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -447,6 +449,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
     setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
   };
 
+  /** Signs out of the admin completely: the verified state, the server session and Firebase. */
+  const handleSignOut = async () => {
+    await fetch('/api/admin/mfa/sign-out', { method: 'POST' }).catch(() => undefined);
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    await signOut();
+  };
+
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const handleDevAdminLogin = async () => {
     setDevLoginLoading(true);
@@ -511,24 +520,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <PhoneSignIn onSignedIn={() => { router.refresh(); }} />
           </div>
 
-          <div className="rounded-xl bg-amber-950/20 border border-amber-800/30 p-3.5 text-2xs text-amber-300/80 space-y-1">
-            <div className="font-semibold text-amber-400 flex items-center gap-1.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-              <span>Test Admin Credentials</span>
-            </div>
-            <p>Phone: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-200">+91 9999999999</code> · OTP: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-200">123456</code></p>
-          </div>
-
-          <div className="pt-2 text-center">
-            <Link
-              href="/"
-              className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-            >
-              ← Return to customer storefront
-            </Link>
-          </div>
+          {/* (A "test admin credentials" box used to be shown here to every visitor — removed: never advertise an admin account.) */}
         </div>
       </div>
     );
@@ -578,7 +570,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   const roleFormatted = role.replace(/_/g, ' ').toUpperCase();
 
-  return (
+  const shell = (
     <div className="min-h-screen bg-field flex flex-col antialiased">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 h-14 sm:h-16 bg-paper border-b border-line px-4 md:px-6 flex items-center justify-between gap-4">
@@ -671,7 +663,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
           <button
             type="button"
-            onClick={() => signOut()}
+            onClick={() => void handleSignOut()}
             className="px-2.5 py-1.5 rounded-lg text-ink/70 hover:text-alert hover:bg-red-50 text-xs font-medium transition-colors"
             title="Sign out of backoffice"
           >
@@ -780,4 +772,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </div>
     </div>
   );
+
+  // Second step: the authenticator-app code (the server also refuses every admin API call without it).
+  return <AdminMfaGate onSignOut={handleSignOut}>{shell}</AdminMfaGate>;
 }

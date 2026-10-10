@@ -11,6 +11,7 @@
     "set-user-role": "tsx src/set-user-role.ts",
     "migrate-storage-paths": "tsx src/migrate-storage-paths.ts",
     "bootstrap-admin": "tsx src/bootstrap-admin.ts",
+    "reset-admin-mfa": "tsx src/reset-admin-mfa.ts",
     "seed-emulator-users": "tsx src/seed-emulator-users.ts",
     "audit-live-data": "tsx src/audit-live-data.ts"
   },

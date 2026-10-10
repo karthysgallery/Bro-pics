@@ -1,6 +1,8 @@
 import 'server-only';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
+import { hasMfaProof, mfaEnforced } from './security/admin-mfa';
 import { isValidRole, roleHasPermission, type PermissionKey, type Role } from '@bro-pics/shared';
 
 export type AuthResult =
@@ -51,5 +53,8 @@ export async function requirePermission(request: Request, key: PermissionKey): P
   const ctx = await getPermissionContext(request);
   if (!ctx.authenticated) return { ok: false, status: 401 };
   if (!ctx.role || !roleHasPermission(ctx.role, key)) return { ok: false, status: 403 };
+  // Second step for every staff/admin call: a password (or a stolen sign-in token) alone is not enough —
+  // the browser must also have entered the authenticator-app code within the last 12 hours.
+  if (mfaEnforced() && !(await hasMfaProof(getFirestore(getAdminApp()), request, ctx.uid))) return { ok: false, status: 401 };
   return { ok: true, uid: ctx.uid };
 }

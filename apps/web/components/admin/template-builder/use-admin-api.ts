@@ -34,7 +34,11 @@ export function useAdminApi() {
         },
       });
       const body = await res.json().catch(() => null);
-      if (!res.ok) throw new AdminApiError(res.status, errorMessage(body, res.status));
+      if (!res.ok) {
+        // A refused admin call may mean the 12-hour authenticator step ran out: ask for the code again.
+        if (res.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('kg:admin-reverify'));
+        throw new AdminApiError(res.status, errorMessage(body, res.status));
+      }
       return body as T;
     },
     [user]
