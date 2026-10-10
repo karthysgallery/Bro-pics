@@ -1,7 +1,7 @@
 import 'server-only';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
-import { generateSecret, otpauthUri, stepAt, verifyTotp } from './totp';
+import { clockOffsetSteps, generateSecret, otpauthUri, stepAt, verifyTotp } from './totp';
 import { createSessionToken, getSessionFromRequest, getSessionSecret, type SessionData } from '../services/session';
 
 /**
@@ -155,7 +155,16 @@ export async function confirmEnrolment(db: Firestore, uid: string, code: string,
     if (rec.pendingAt && now.getTime() - Date.parse(rec.pendingAt) > 15 * 60_000) throw new MfaError(400, 'The QR code has expired. Start the set-up again.');
     const secret = decryptSecret(rec.pendingSecret);
     const step = verifyTotp(secret, code, now.getTime());
-    if (step === null) throw new MfaError(400, 'That code is not right. Check the time on your phone is automatic, and type the code currently shown.');
+    if (step === null) {
+      // A phone with the wrong time makes every code fail: say so (set-up only; the secret is known to this person alone).
+      const off = clockOffsetSteps(secret, code, now.getTime());
+      if (off !== null) {
+        const secs = Math.abs(off) * 30;
+        const span = secs >= 120 ? `${Math.round(secs / 60)} minutes` : `${secs} seconds`;
+        throw new MfaError(400, `Your phone's clock is about ${span} ${off < 0 ? 'behind' : 'ahead'}. Set Date & Time to “Automatic” on the phone, then type the new code.`);
+      }
+      throw new MfaError(400, 'That code is not right. Open the entry named “KarthysGallery Admin” in your app — if you see two, delete the older one and scan again — and type the code it shows now.');
+    }
     const codes = newRecoveryCodes();
     const next: MfaRecord = {
       ...rec, secret: rec.pendingSecret, pendingSecret: null, pendingAt: null, enabledAt: now.toISOString(), lastStep: step,

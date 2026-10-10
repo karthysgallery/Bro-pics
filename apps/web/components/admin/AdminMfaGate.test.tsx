@@ -30,6 +30,10 @@ describe('AdminMfaGate — the authenticator step', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Show the QR code' }));
     expect(screen.queryByText('ADMIN CONTENT')).toBeNull();
     expect((await screen.findByAltText(/QR code/)).getAttribute('src')).toBe('data:image/png;base64,AAA');
+    // The setup key is always visible (not tucked away), with a copy button.
+    expect(screen.getByTestId('setup-key').textContent).toBe('ABCD EFGH');
+    expect(screen.getByRole('button', { name: 'Copy key' })).toBeTruthy();
+    expect(screen.getByText(/Delete it first/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Code from the app'), { target: { value: '12 34 56' } });
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
     expect(await screen.findByText('AAAA-BBBB')).toBeTruthy();

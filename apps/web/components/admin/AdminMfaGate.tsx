@@ -241,13 +241,24 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
               void submit('confirm');
             }}
           >
-            <p className="mb-3 text-center text-sm text-slate-300">In the app, tap <strong className="text-slate-100">+</strong> and scan this code:</p>
+            <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-200">
+              Already see an entry named <strong>KarthysGallery Admin</strong> in your app? <strong>Delete it first</strong> — this is a new code.
+            </p>
+            <p className="mb-3 text-center text-sm text-slate-300">In the app, tap <strong className="text-slate-100">+</strong> → <strong className="text-slate-100">Scan a QR code</strong>:</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={enrol.qrImage} alt="QR code to scan with your authenticator app" className="mx-auto mb-3 w-52 rounded-xl bg-white p-2" />
-            <details className="mb-4 text-center text-xs text-slate-400">
-              <summary className="cursor-pointer">Can&rsquo;t scan? Type this key instead</summary>
-              <code className="mt-2 block select-all break-all rounded-lg bg-slate-950 px-3 py-2 font-mono text-sm tracking-wider text-slate-100">{enrol.secret}</code>
-            </details>
+            <img src={enrol.qrImage} alt="QR code to scan with your authenticator app" style={{ imageRendering: 'pixelated' }} className="mx-auto mb-3 w-64 max-w-full rounded-xl bg-white p-3" />
+            <div className="mb-4 rounded-xl border border-slate-700 bg-slate-950 p-3 text-center">
+              <p className="text-xs text-slate-400">Can&rsquo;t scan? In the app choose <strong className="text-slate-200">Enter a setup key</strong>, name it <em>KarthysGallery Admin</em>, type of key <strong className="text-slate-200">Time based</strong>, and type:</p>
+              <code className="mt-2 block select-all font-mono text-lg font-semibold tracking-widest text-amber-300" aria-label={`Setup key: ${enrol.secret}`}>
+                <span data-testid="setup-key" className="sr-only">{enrol.secret}</span>
+                {enrol.secret.split(' ').map((group, i) => (
+                  <span key={i} aria-hidden="true" className="mx-1.5 inline-block">{group}</span>
+                ))}
+              </code>
+              <button type="button" onClick={() => void navigator.clipboard?.writeText(enrol.secret.replace(/\s/g, ''))} className="mt-2 h-8 rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-800">
+                Copy key
+              </button>
+            </div>
             <label className="mb-1 block text-center text-xs font-semibold text-slate-400" htmlFor="mfa-code">
               Code from the app
             </label>
@@ -265,6 +276,9 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
             {error && <p className="mt-3 rounded-lg bg-rose-950/40 px-3 py-2 text-center text-xs text-rose-300">{error}</p>}
             <button type="submit" disabled={busy || code.length !== 6} className={`${primary} mt-4`}>
               {busy ? 'Checking…' : 'Turn on'}
+            </button>
+            <button type="button" onClick={() => void startEnrol()} className="mt-3 w-full text-center text-xs text-amber-400 hover:text-amber-300">
+              Start again with a new QR code
             </button>
           </form>
         )}

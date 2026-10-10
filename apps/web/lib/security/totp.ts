@@ -83,3 +83,21 @@ export function otpauthUri(issuer: string, account: string, secretB32: string): 
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secretB32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${DIGITS}&period=${STEP_SECONDS}`;
 }
+
+/**
+ * How many 30-second steps a code is away from now (for explaining a wrong phone clock during set-up), or
+ * null when it matches no time within `maxSteps`. Never used to accept a code — only to explain a refusal.
+ */
+export function clockOffsetSteps(secretB32: string, code: string, nowMs: number, maxSteps = 120): number | null {
+  const digits = code.replace(/\s/g, '');
+  if (!/^\d{6}$/.test(digits)) return null;
+  const secret = base32Decode(secretB32);
+  const now = stepAt(nowMs);
+  for (let d = 2; d <= maxSteps; d++) {
+    for (const sign of [-1, 1]) {
+      const expected = Buffer.from(hotp(secret, now + sign * d));
+      if (timingSafeEqual(expected, Buffer.from(digits))) return sign * d;
+    }
+  }
+  return null;
+}

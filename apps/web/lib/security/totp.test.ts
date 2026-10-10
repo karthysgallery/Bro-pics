@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { base32Decode, base32Encode, generateSecret, hotp, otpauthUri, verifyTotp } from './totp';
+import { base32Decode, base32Encode, clockOffsetSteps, generateSecret, hotp, otpauthUri, verifyTotp } from './totp';
 
 // RFC 6238 appendix B (SHA-1, secret "12345678901234567890").
 const RFC_SECRET = base32Encode(Buffer.from('12345678901234567890'));
@@ -37,5 +37,15 @@ describe('TOTP', () => {
       'otpauth://totp/KarthysGallery%20Admin%3A%2B919999999999?secret=ABC&issuer=KarthysGallery%20Admin&algorithm=SHA1&digits=6&period=30'
     );
     expect(base32Decode(base32Encode(Buffer.from('hello world'))).toString()).toBe('hello world');
+  });
+
+  it('explains a wrong phone clock without ever accepting the code', () => {
+    const now = 1_760_000_000_000;
+    const s = base32Decode(RFC_SECRET);
+    const step = Math.floor(now / 30000);
+    const fiveMinutesBehind = hotp(s, step - 10);
+    expect(verifyTotp(RFC_SECRET, fiveMinutesBehind, now)).toBeNull();
+    expect(clockOffsetSteps(RFC_SECRET, fiveMinutesBehind, now)).toBe(-10);
+    expect(clockOffsetSteps(RFC_SECRET, '123456', now)).toBeNull();
   });
 });

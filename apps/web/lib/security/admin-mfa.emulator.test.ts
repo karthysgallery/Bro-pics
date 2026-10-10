@@ -34,7 +34,9 @@ describe.skipIf(!enabled)('admin authenticator (Firestore emulator)', { timeout:
     const stored = await readMfa(db, uid);
     expect(stored!.pendingSecret).not.toContain(secret);
     expect(decryptSecret(stored!.pendingSecret!)).toBe(secret);
-    await expect(confirmEnrolment(db, uid, '000000', at(5))).rejects.toThrow(MfaError);
+    await expect(confirmEnrolment(db, uid, '000000', at(5))).rejects.toThrow(/delete the older one/);
+    // A phone running 5 minutes behind is told so, and its code is still not accepted.
+    await expect(confirmEnrolment(db, uid, codeAt(at(5 - 300)), at(5))).rejects.toThrow(/clock is about 5 minutes behind/);
     const confirmed = await confirmEnrolment(db, uid, codeAt(at(5)), at(5));
     recovery = confirmed.recoveryCodes;
     expect(recovery).toHaveLength(10);

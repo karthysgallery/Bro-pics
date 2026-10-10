@@ -10,7 +10,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const { secret, uri } = await startEnrolment(who.db, who.uid, who.account);
     // An image (PNG data URL), not markup: the page shows it in an <img>, never as HTML.
-    const qrImage = await QRCode.toDataURL(uri, { margin: 1, width: 360, errorCorrectionLevel: 'M' });
+    const qrImage = await QRCode.toDataURL(uri, { margin: 2, width: 512, errorCorrectionLevel: 'M' });
     await audit(who.db, who.uid, 'mfa.enrolment_started');
     return NextResponse.json({ qrImage, secret: secret.replace(/(.{4})/g, '$1 ').trim(), account: who.account }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
