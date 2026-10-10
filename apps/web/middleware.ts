@@ -23,8 +23,11 @@ import { NextResponse, type NextRequest } from 'next/server';
  * - Nothing is indexed by search engines (it must not compete with the real domain).
  * - Every way of signing in is refused, so no one can sign in as anyone
  *   until real WhatsApp OTP is configured. Logging out and "who am I" still work.
+ * - The one exception is password sign-in, so the owner and staff can reach the admin (which also asks for
+ *   the authenticator-app code). That route itself refuses every non-staff account in preview mode with the
+ *   ordinary "wrong number or password" answer, so customers stay locked out and staff numbers are not revealed.
  */
-const PREVIEW_ALLOWED_AUTH = new Set(['/api/auth/logout', '/api/auth/me']);
+const PREVIEW_ALLOWED_AUTH = new Set(['/api/auth/logout', '/api/auth/me', '/api/auth/login-with-password']);
 
 export function isSignInBlockedInPreview(pathname: string): boolean {
   if (pathname.startsWith('/api/auth/')) return !PREVIEW_ALLOWED_AUTH.has(pathname.replace(/\/$/, ''));

@@ -70,7 +70,7 @@ function SignInContent() {
   const redirectQuery = redirectTarget !== '/account' ? `&redirect=${encodeURIComponent(redirectTarget)}` : '';
 
   // Step state: 'phone' | 'otp' | 'password'
-  const [authMode, setAuthMode] = useState<'otp_phone' | 'otp_verify' | 'password'>('otp_phone');
+  const [authMode, setAuthMode] = useState<'otp_phone' | 'otp_verify' | 'password'>(searchParams.get('mode') === 'password' ? 'password' : 'otp_phone');
 
   // Fields
   const [phone, setPhone] = useState('');

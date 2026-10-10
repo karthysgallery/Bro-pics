@@ -9,6 +9,7 @@ import { UserStore } from '../../../../lib/services/user-store';
 import { verifyPassword } from '../../../../lib/services/password';
 import { createSessionToken, attachSessionCookie } from '../../../../lib/services/session';
 import { logAuthEvent } from '../../../../lib/services/auth-audit';
+import { isValidRole } from '@bro-pics/shared';
 
 async function handlePost(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'write');
@@ -47,6 +48,19 @@ async function handlePost(request: Request): Promise<NextResponse> {
 
   const maskedPhone = maskPhoneNumber(normalizedPhone);
   const existingUser = await UserStore.findByPhone(normalizedPhone);
+
+  // Preview site: only staff and admin accounts may sign in (customer sign-in opens with the real launch).
+  // Everyone else — customers and unknown numbers — gets the ordinary wrong-password answer, so the preview
+  // cannot be used to find out which numbers belong to staff.
+  if (process.env.SITE_PREVIEW === '1' && !(existingUser && isValidRole(await UserStore.getEffectiveRole(existingUser)))) {
+    await logAuthEvent({
+      event: 'login_failed',
+      phoneNumberMasked: maskedPhone,
+      request,
+      details: { reason: 'preview_staff_only', method: 'password' },
+    });
+    return NextResponse.json({ error: 'Invalid mobile number or password.' }, { status: 401 });
+  }
 
   if (!existingUser) {
     await logAuthEvent({

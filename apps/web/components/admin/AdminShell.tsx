@@ -516,9 +516,20 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </button>
           )}
 
-          <div className="bg-slate-950/70 rounded-xl p-4 border border-slate-800/80">
-            <PhoneSignIn onSignedIn={() => { router.refresh(); }} />
-          </div>
+          <Link
+            href="/signin?mode=password&redirect=/admin"
+            className="flex w-full items-center justify-center rounded-xl bg-amber-500 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+          >
+            Sign in with your password
+          </Link>
+          <p className="-mt-3 text-center text-2xs text-slate-400">Staff and admin accounts sign in with a password, then enter the code from their authenticator app.</p>
+
+          <details className="rounded-xl border border-slate-800/80 bg-slate-950/70 p-4 text-slate-300">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-400">Sign in with a WhatsApp code instead</summary>
+            <div className="mt-3">
+              <PhoneSignIn onSignedIn={() => { router.refresh(); }} />
+            </div>
+          </details>
 
           {/* (A "test admin credentials" box used to be shown here to every visitor — removed: never advertise an admin account.) */}
         </div>

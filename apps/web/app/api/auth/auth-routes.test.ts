@@ -280,6 +280,39 @@ describe('WhatsApp OTP Authentication API Routes', () => {
     });
   });
 
+  describe('POST /api/auth/login-with-password on the preview site (SITE_PREVIEW=1)', () => {
+    const login = (phone: string, password: string) =>
+      loginWithPasswordHandler(createJsonRequest('http://localhost:3000/api/auth/login-with-password', { phone, password }));
+    const register = async (phone: string, name: string) => {
+      const sent = await (await sendOtpHandler(createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone, purpose: 'register' }))).json();
+      await verifyOtpHandler(createJsonRequest('http://localhost:3000/api/auth/verify-whatsapp-otp', { phone, otp: sent.devOtp, purpose: 'register', fullName: name, password: 'MyPassword123' }));
+    };
+
+    it('refuses customers and unknown numbers with the ordinary wrong-password answer, so staff numbers are not revealed', async () => {
+      await register('9876543210', 'A Customer');
+      vi.stubEnv('SITE_PREVIEW', '1');
+      for (const phone of ['9876543210', '9123456780']) {
+        const res = await login(phone, 'MyPassword123');
+        expect(res.status).toBe(401);
+        expect(await res.json()).toEqual({ error: 'Invalid mobile number or password.' });
+      }
+      vi.unstubAllEnvs();
+    });
+
+    it('lets a staff account sign in with its password, still refusing a wrong password', async () => {
+      await register('9876543211', 'A Staff Member');
+      // This account holds an admin role (set on the Firebase sign-in claim, as bootstrap-admin does).
+      const effectiveRole = vi.spyOn(UserStore, 'getEffectiveRole').mockResolvedValue('admin');
+      vi.stubEnv('SITE_PREVIEW', '1');
+      expect((await login('9876543211', 'WrongPassword!')).status).toBe(401);
+      const res = await login('9876543211', 'MyPassword123');
+      expect(res.status).toBe(200);
+      expect(res.cookies.get('__session')?.value).toBeDefined();
+      effectiveRole.mockRestore();
+      vi.unstubAllEnvs();
+    });
+  });
+
   describe('GET /api/auth/me and POST /api/auth/logout', () => {
     it('returns user profile when session cookie is provided', async () => {
       // 1. Register user to get session cookie
