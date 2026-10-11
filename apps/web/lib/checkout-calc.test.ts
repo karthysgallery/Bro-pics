@@ -129,3 +129,31 @@ describe('calculateShipping', () => {
     expect(calculateShipping(100000, customSettings, 'express')).toBe(25000);
   });
 });
+
+describe('priceCartLines — glitter finish', () => {
+  const variantsById = new Map([['var_1', makeVariant({ price: 79900 })]]);
+  const glitterLine = { ...cartLine, finish: 'glitter' as const };
+
+  it('adds the product\'s glitter extra to the unit price and records the finish', () => {
+    const { priced, unavailable } = priceCartLines([glitterLine], variantsById, new Map([['prod_1', 10000]]));
+    expect(unavailable).toEqual([]);
+    expect(priced[0]).toMatchObject({ unitPrice: 89900, finish: 'glitter', finishExtra: 10000 });
+  });
+
+  it('never trusts a price from the cart: the extra comes only from the product map', () => {
+    const { priced } = priceCartLines([{ ...glitterLine, finishExtra: 1 } as never], variantsById, new Map([['prod_1', 10000]]));
+    expect(priced[0]!.unitPrice).toBe(89900);
+  });
+
+  it('refuses glitter on a product that does not offer it (or stopped offering it)', () => {
+    const { priced, unavailable } = priceCartLines([glitterLine], variantsById);
+    expect(priced).toEqual([]);
+    expect(unavailable).toEqual([{ variantId: 'var_1', reason: 'finish_unavailable' }]);
+  });
+
+  it('leaves a normal (matte) line exactly as before, even when the product offers glitter', () => {
+    const { priced } = priceCartLines([cartLine], variantsById, new Map([['prod_1', 10000]]));
+    expect(priced[0]!.unitPrice).toBe(79900);
+    expect(priced[0]).not.toHaveProperty('finish');
+  });
+});

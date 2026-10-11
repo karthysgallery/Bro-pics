@@ -22,6 +22,10 @@ export interface CartLine {
   // combo instance) that keeps every included frame's own variant, personalization and uploads. It
   // is expanded into ordinary per-frame order items on the server at checkout.
   combo?: CartCombo;
+  // Printing finish the customer chose ("glitter"); absent = the normal matte print. `finishExtra` (paise)
+  // is only what the cart showed: the server prices the finish itself from the product (see order-pricing).
+  finish?: 'glitter';
+  finishExtra?: number;
 }
 
 function lineKey(line: CartLine): string {

@@ -78,6 +78,9 @@ export const OrderSchema = z
     // Combo Offers bought in this order (one entry per combo line); their frames are the order
     // items carrying a matching `combo.instanceId`. Optional: most orders have none.
     combos: z.array(OrderComboSchema).optional(),
+    // True when any item is printed with the glitter finish: the production board and order list show it,
+    // because the workshop must not miss it.
+    hasGlitter: z.boolean().optional(),
     // One per checkout attempt (generated client-side, stable across
     // retries of that same attempt) — lets create-order detect a
     // double-click/retried request and return the existing order instead

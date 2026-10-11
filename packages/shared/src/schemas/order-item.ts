@@ -30,6 +30,10 @@ export const OrderItemSchema = z.object({
   // combo price (the shares add up to exactly what was charged), so order totals, GST, invoices
   // and refunds work from item prices as for any order.
   combo: OrderItemComboSchema.optional(),
+  // Printing finish chosen at purchase ("glitter") and the extra it added to unitPrice (paise).
+  // The workshop must see it on the order: a glitter print is made differently.
+  finish: z.literal('glitter').optional(),
+  finishExtra: z.number().int().nonnegative().optional(),
 });
 
 export type OrderItem = z.infer<typeof OrderItemSchema>;

@@ -13,7 +13,8 @@ vi.mock('./firestore-settings', () => ({ getShippingSettings: () => mockShipping
 const mockPaidUses = vi.fn();
 const ordersQuery: { where: ReturnType<typeof vi.fn>; get: () => unknown } = { where: vi.fn(), get: () => mockPaidUses() };
 ordersQuery.where.mockReturnValue(ordersQuery);
-const db = { collection: (name: string) => (name === 'orders' ? ordersQuery : { doc: () => ({ get: () => ({ exists: false }) }) }) } as never;
+const mockProduct = vi.fn();
+const db = { collection: (name: string) => (name === 'orders' ? ordersQuery : { doc: (id: string) => ({ get: () => mockProduct(name, id) ?? { exists: false } }) }) } as never;
 
 import { computeOrderPricing } from './order-pricing';
 
@@ -94,5 +95,30 @@ describe('computeOrderPricing', () => {
     const result = await run();
     expect(result.total).toBe(200000); // unchanged by GST
     expect(result.taxLines).toEqual([{ gstin: '33ABCDE1234F1Z5', rate: 18, amount: 30508 }]);
+  });
+
+  describe('glitter finish', () => {
+    const glitterCart = [{ variantId: 'v1', personalizationId: 'pz1', title: 'Frame', qty: 1, finish: 'glitter' }];
+    it('charges the product\'s own glitter extra on top of the size price, read from the product — not from the cart', async () => {
+      mockProduct.mockReturnValue({ exists: true, data: () => ({ isActive: true, glitter: { enabled: true, extraPrice: 10000 } }) });
+      const result = await run({ cartItems: [{ ...glitterCart[0], finishExtra: 5 }] });
+      expect(result.unavailable).toEqual([]);
+      expect(result.priced[0]).toMatchObject({ unitPrice: 110000, finish: 'glitter', finishExtra: 10000 });
+      expect(result.subtotal).toBe(110000);
+      expect(result.total).toBe(result.subtotal - result.discount + result.shipping);
+    });
+    it('makes the line unavailable when the product has glitter off, was unpublished, or is gone', async () => {
+      for (const doc of [
+        { exists: true, data: () => ({ isActive: true, glitter: { enabled: false, extraPrice: 10000 } }) },
+        { exists: true, data: () => ({ isActive: true }) },
+        { exists: true, data: () => ({ isActive: false, glitter: { enabled: true, extraPrice: 10000 } }) },
+        { exists: false },
+      ]) {
+        mockProduct.mockReturnValue(doc);
+        const result = await run({ cartItems: glitterCart });
+        expect(result.unavailable).toEqual([{ variantId: 'v1', reason: 'finish_unavailable' }]);
+        expect(result.total).toBe(0);
+      }
+    });
   });
 });

@@ -244,7 +244,7 @@ export interface OrderForInvoice {
   razorpayPaymentId?: string | null;
   paymentProvider?: string | null;
   placedAt: string;
-  items: Array<{ productId: string; variantId?: string | null; title: string; sizeLabel?: string | null; frameColour?: string | null; sku?: string | null; qty: number; unitPrice: number }>;
+  items: Array<{ productId: string; variantId?: string | null; title: string; sizeLabel?: string | null; frameColour?: string | null; sku?: string | null; qty: number; unitPrice: number; finish?: string | null }>;
 }
 
 /** The address an order was shipped to, as printable lines. */
@@ -265,7 +265,7 @@ export function buildOnlineInvoice(input: InvoiceBase & { order: OrderForInvoice
     productId: i.productId,
     variantId: i.variantId ?? null,
     title: i.title,
-    variantLabel: [i.sizeLabel, i.frameColour].filter(Boolean).join(' · ') || null,
+    variantLabel: [i.sizeLabel, i.frameColour, i.finish === 'glitter' ? 'Glitter finish' : null].filter(Boolean).join(' · ') || null,
     sku: i.sku ?? null,
     qty: i.qty,
     unitPrice: i.unitPrice,

@@ -116,6 +116,10 @@ export const ProductSchema = z.object({
   artwork: z.object({ mediaId: z.string(), url: z.string(), widthPx: z.number().int().positive(), heightPx: z.number().int().positive() }).nullable().optional(),
   // What the five automatic shop photos were made from; the editor remakes them when it changes.
   autoPhotoKey: z.string().nullable().optional(),
+
+  // Glitter-finish printing: an optional extra the customer can choose on the product page.
+  // `extraPrice` (paise) is added to the size's price per frame; set by the owner, never by the browser.
+  glitter: z.object({ enabled: z.boolean(), extraPrice: z.number().int().nonnegative() }).optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;

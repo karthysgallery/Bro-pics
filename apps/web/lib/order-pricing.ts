@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Firestore } from 'firebase-admin/firestore';
-import { calculateCouponDiscount, splitGstFromInclusiveTotal, type DeliveryMethod } from '@bro-pics/shared';
+import { calculateCouponDiscount, glitterOffer, splitGstFromInclusiveTotal, type DeliveryMethod } from '@bro-pics/shared';
 import { getShippingSettings, getGstSettings } from './firestore-settings';
 import { findVariantById } from './variant-lookup';
 import { isComboLine, priceComboLines, type PricedCombo } from './combo-pricing';
@@ -74,7 +74,26 @@ export async function computeOrderPricing(
     variantEntries.filter(([, variant]) => variant !== null) as [string, NonNullable<(typeof variantEntries)[number][1]>][]
   );
 
-  const regular = priceCartLines(regularCartLines, variantsById);
+  // Glitter is priced from the product the customer is buying, read here — a price in the cart is never used.
+  const glitterProductIds = [
+    ...new Set(
+      regularCartLines
+        .filter((item) => item.finish === 'glitter')
+        .map((item) => variantsById.get(item.variantId)?.productId)
+        .filter((id): id is string => typeof id === 'string')
+    ),
+  ];
+  const glitterExtraByProductId = new Map<string, number>();
+  await Promise.all(
+    glitterProductIds.map(async (productId) => {
+      const snap = await db.collection('products').doc(productId).get();
+      const offer = snap.exists ? glitterOffer((snap.data() as { glitter?: { enabled: boolean; extraPrice: number } }) ?? {}) : null;
+      const status = snap.exists ? (snap.data() as { isActive?: boolean }).isActive : false;
+      if (offer && status !== false) glitterExtraByProductId.set(productId, offer.extraPrice);
+    })
+  );
+
+  const regular = priceCartLines(regularCartLines, variantsById, glitterExtraByProductId);
   const comboResult = comboCartLines.length > 0 ? await priceComboLines(comboCartLines, firestoreComboDeps(db)) : { priced: [], combos: [], unavailable: [] };
   const priced = [...regular.priced, ...comboResult.priced];
   const unavailable = [...regular.unavailable, ...comboResult.unavailable];

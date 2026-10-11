@@ -85,6 +85,17 @@ describe('invoice engine', () => {
     expect(() => buildOnlineInvoice({ ...base, id: 'x', invoiceNo: 'x', order: { ...order, total: 1 }, customerId: null, phone: null, email: null })).toThrow(/order total/);
   });
 
+  it('names the glitter finish on an invoice line, with the frame price including its extra', () => {
+    const order = {
+      id: 'o2', orderNo: 'BP-2026-00002', subtotal: 139900, discount: 0, shipping: 0, total: 139900, customerName: 'Asha',
+      addressJson: { recipientName: 'Asha', line1: '1 Main Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001' },
+      placedAt: '2026-10-11T10:00:00Z',
+      items: [{ productId: 'p1', variantId: 'v1', title: 'Lord Murugan Photo Frame', sizeLabel: '12x18 in', frameColour: 'Royal Gold', qty: 1, unitPrice: 139900, finish: 'glitter' }],
+    };
+    const inv = buildOnlineInvoice({ ...base, id: 'order_o2', invoiceNo: 'KG-INV-2026-000003', order, customerId: null, phone: null, email: null });
+    expect(inv.lines[0]).toMatchObject({ variantLabel: '12x18 in · Royal Gold · Glitter finish', unitPrice: 139900, lineTotal: 139900 });
+  });
+
   it('renders a valid multi-page A4 PDF for a long bill, with ₹ and unsupported characters handled', async () => {
     const lines = Array.from({ length: 34 }, (_, i) => priceLine({ ...frame, title: i === 3 ? 'Frame with a very long name that needs to wrap onto a second line in the item column' : `${frame.title} ${i + 1}` }, { qty: 1 + (i % 3), discountPercent: i % 4 === 0 ? 5 : undefined }, { maxDiscountPercent: 10, canOverride: false }));
     const total = totalsOf(lines).total;

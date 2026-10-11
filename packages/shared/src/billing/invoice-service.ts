@@ -232,8 +232,8 @@ export async function createOnlineInvoice(db: Firestore, orderId: string): Promi
       paymentProvider: typeof order.paymentProvider === 'string' ? order.paymentProvider : null,
       placedAt: placed.toISOString(),
       items: itemsSnap.docs.map((d) => {
-        const i = d.data() as { productId: string; variantId?: string; title: string; sizeLabel?: string; frameColour?: string; sku?: string; qty: number; unitPrice: number };
-        return { productId: i.productId, variantId: i.variantId ?? null, title: i.title, sizeLabel: i.sizeLabel ?? null, frameColour: i.frameColour ?? null, sku: i.sku ?? null, qty: i.qty, unitPrice: i.unitPrice };
+        const i = d.data() as { productId: string; variantId?: string; title: string; sizeLabel?: string; frameColour?: string; sku?: string; qty: number; unitPrice: number; finish?: string };
+        return { productId: i.productId, variantId: i.variantId ?? null, title: i.title, sizeLabel: i.sizeLabel ?? null, frameColour: i.frameColour ?? null, sku: i.sku ?? null, qty: i.qty, unitPrice: i.unitPrice, finish: i.finish ?? null };
       }),
     };
     const issuedAt = new Date().toISOString();

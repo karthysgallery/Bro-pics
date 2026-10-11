@@ -341,6 +341,54 @@ describe('POST /api/checkout/create-order', () => {
     });
   });
 
+  describe('glitter finish', () => {
+    const cartWith = (item: Record<string, unknown>) =>
+      mockCartDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ items: [{ variantId: 'v1', personalizationId: 'p1', title: 'A', qty: 2, previewPath: 'x.png', ...item }] }) });
+    const glitterProduct = { exists: true, data: () => ({ title: 'Lord Murugan', isActive: true, glitter: { enabled: true, extraPrice: 10000 }, personalizationTemplateId: null, photoSlots: 1 }) };
+
+    it('returns 400 for a finish this shop does not have, without opening a payment', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWith({ finish: 'sparkle' });
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      expect(response.status).toBe(400);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 finish_unavailable when the product does not offer glitter', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWith({ finish: 'glitter' });
+      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
+      mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+      // (no shipping value is queued: pricing stops at the unavailable line before it is read)
+      mockProductDocGet.mockResolvedValue({ exists: true, data: () => ({ title: 'Lord Murugan', isActive: true }) });
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      mockProductDocGet.mockResolvedValue({ exists: false });
+      expect(response.status).toBe(409);
+      expect((await response.json()).unavailable).toEqual([{ variantId: 'v1', reason: 'finish_unavailable' }]);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+    });
+
+    it('charges the product\'s glitter extra per frame and freezes the finish on the order and its item', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      cartWith({ finish: 'glitter', finishExtra: 1 }); // the cart\'s own number is ignored
+      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
+      mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
+      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockProductDocGet.mockResolvedValue(glitterProduct);
+      mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
+      mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
+
+      const response = await POST(makeRequest({ addressId: 'addr_1' }));
+      mockProductDocGet.mockResolvedValue({ exists: false });
+      expect(response.status).toBe(200);
+      expect((await response.json()).amount).toBe(2 * (1000 + 10000) + 5000);
+      const [, order] = mockBatchCreate.mock.calls[0];
+      expect(order).toMatchObject({ subtotal: 22000, total: 27000, hasGlitter: true });
+      const item = mockBatchSet.mock.calls.map(([, data]) => data).find((d) => d.variantId === 'v1');
+      expect(item).toMatchObject({ unitPrice: 11000, finish: 'glitter', finishExtra: 10000, qty: 2 });
+    });
+  });
+
   function setUpValidCartAndAddress() {
     mockCartDoc.get.mockResolvedValueOnce({
       exists: true,

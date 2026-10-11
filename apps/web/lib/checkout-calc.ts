@@ -19,6 +19,9 @@ export interface PricedCartLine {
   personalization?: import('@bro-pics/shared').OrderPersonalizationSnapshot;
   /** Set when this line is one frame of a Combo Offer (see lib/combo-pricing.ts); its unitPrice is that frame's share. */
   combo?: import('@bro-pics/shared').OrderItemCombo;
+  /** The printing finish chosen ("glitter") and the extra it added to unitPrice, worked out here from the product. */
+  finish?: 'glitter';
+  finishExtra?: number;
 }
 
 export interface UnavailableLine {
@@ -31,7 +34,9 @@ export interface UnavailableLine {
     // added (price or contents), or not matching its definition.
     | 'combo_unavailable'
     | 'combo_changed'
-    | 'combo_invalid';
+    | 'combo_invalid'
+    // The line asks for a finish (glitter) the product does not offer (any more).
+    | 'finish_unavailable';
 }
 
 export interface CartLineInput {
@@ -47,6 +52,8 @@ export interface CartLineInput {
   personalization?: { templateId: string; templateVersion: number; state: unknown };
   /** A Combo Offer parent line: carries every frame's own variant, personalization and uploads. */
   combo?: import('@bro-pics/shared').CartCombo;
+  /** A printing finish as CLAIMED by the browser; only honoured when the product offers it, and priced here. */
+  finish?: 'glitter';
 }
 
 /**
@@ -59,7 +66,9 @@ export interface CartLineInput {
  */
 export function priceCartLines(
   cartItems: CartLineInput[],
-  variantsById: Map<string, Variant>
+  variantsById: Map<string, Variant>,
+  // productId -> the glitter extra (paise) for products that currently offer glitter; others are absent.
+  glitterExtraByProductId: ReadonlyMap<string, number> = new Map()
 ): { priced: PricedCartLine[]; unavailable: UnavailableLine[] } {
   const priced: PricedCartLine[] = [];
   const unavailable: UnavailableLine[] = [];
@@ -78,12 +87,23 @@ export function priceCartLines(
       unavailable.push({ variantId: item.variantId, reason: 'out_of_stock' });
       continue;
     }
+    // The finish extra comes from the product, never from the cart line.
+    let finishExtra = 0;
+    if (item.finish !== undefined) {
+      const extra = item.finish === 'glitter' ? glitterExtraByProductId.get(variant.productId) : undefined;
+      if (extra === undefined) {
+        unavailable.push({ variantId: item.variantId, reason: 'finish_unavailable' });
+        continue;
+      }
+      finishExtra = extra;
+    }
     priced.push({
       variantId: item.variantId,
       productId: variant.productId,
       personalizationId: item.personalizationId,
       title: item.title,
-      unitPrice: variant.price,
+      unitPrice: variant.price + finishExtra,
+      ...(item.finish !== undefined && { finish: item.finish, finishExtra }),
       qty: item.qty,
       previewPath: item.previewPath ?? null,
       sku: variant.sku,

@@ -36,6 +36,7 @@ function isMalformedCartLine(item: CartLineInput): boolean {
   const isCombo = typeof item.variantId === 'string' && item.variantId.startsWith(COMBO_VARIANT_PREFIX);
   if (isCombo) {
     return (
+      item.finish !== undefined || // a combo is priced as a whole; no finish on it
       item.qty !== 1 ||
       typeof item.personalizationId !== 'string' ||
       item.personalizationId.length === 0 ||
@@ -44,6 +45,8 @@ function isMalformedCartLine(item: CartLineInput): boolean {
     );
   }
   if (item.combo !== undefined) return true; // only a combo line may carry combo data
+  // A printing finish must be exactly one we know ("glitter"); anything else is a hand-made cart line.
+  if (item.finish !== undefined && item.finish !== 'glitter') return true;
   return (
     typeof item.variantId !== 'string' ||
     item.variantId.length === 0 ||
@@ -467,6 +470,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     ...(appliedCouponId && { couponId: appliedCouponId }),
     ...(orderCombos.length > 0 && { combos: orderCombos }),
     ...(stockReservation && { stockReservation }),
+    ...(priced.some((line) => line.finish === 'glitter') && { hasGlitter: true }),
   });
 
   const batch = db.batch();
@@ -573,7 +577,7 @@ function deterministicOrderId(userId: string, idempotencyKey: string): string {
 // are included on purpose: if a price moved between attempts, the retry must
 // be a new order at the new price, not a revived order at the old one.
 function fingerprintOrder(input: {
-  priced: Array<{ variantId: string; personalizationId: string; qty: number; unitPrice: number; personalizationFp?: string }>;
+  priced: Array<{ variantId: string; personalizationId: string; qty: number; unitPrice: number; personalizationFp?: string; finish?: string }>;
   address: Record<string, unknown>;
   couponId: string | null;
   deliveryMethod: string;
@@ -583,7 +587,7 @@ function fingerprintOrder(input: {
   total: number;
 }): string {
   const lines = input.priced
-    .map((l) => `${l.variantId}|${l.personalizationId}|${l.qty}|${l.unitPrice}|${l.personalizationFp ?? ''}`)
+    .map((l) => `${l.variantId}|${l.personalizationId}|${l.qty}|${l.unitPrice}|${l.personalizationFp ?? ''}${l.finish ? `|${l.finish}` : ''}`)
     .sort();
   const addressKeys = Object.keys(input.address).sort();
   const address = addressKeys.map((k) => `${k}=${JSON.stringify(input.address[k])}`);
