@@ -160,6 +160,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-ink line-clamp-2">{item.title}</p>
+                    {item.finish === 'glitter' && <p className="text-2xs font-semibold text-gold-deep">✨ Glitter finish</p>}
                     {combo && (
                       <details className="mt-1 text-2xs text-ink/60">
                         <summary className="cursor-pointer select-none">Combo · {combo.frames.length} frames</summary>

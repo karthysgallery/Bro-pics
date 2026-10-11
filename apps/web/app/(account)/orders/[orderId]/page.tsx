@@ -528,9 +528,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <li key={i} className="py-4 flex flex-col sm:flex-row gap-4 items-start justify-between">
                     <div>
                       <h3 className="font-display text-base font-bold text-ink">{item.title}</h3>
-                      {(item.sizeLabel || item.frameColour || item.material) && (
+                      {(item.sizeLabel || item.frameColour || item.material || item.finish) && (
                         <p className="text-xs text-ink/70 mt-0.5">
-                          {[item.sizeLabel, item.frameColour, item.material].filter(Boolean).join(' · ')}
+                          {[item.sizeLabel, item.frameColour, item.material, item.finish === 'glitter' ? 'Glitter finish' : null].filter(Boolean).join(' · ')}
                         </p>
                       )}
                       <p className="text-xs text-ink/60 mt-0.5">Quantity: {item.qty} · {formatPaise(item.unitPrice ?? 0)} each</p>

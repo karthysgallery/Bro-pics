@@ -343,6 +343,9 @@ export default function AdminOrdersPage() {
                         >
                           #{o.orderNo}
                         </Link>
+                        {o.hasGlitter && (
+                          <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase text-amber-800">✨ Glitter</span>
+                        )}
                       </td>
 
                       <td className="p-3 text-ink/70 font-mono text-2xs">

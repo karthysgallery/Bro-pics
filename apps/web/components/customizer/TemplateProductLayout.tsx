@@ -11,6 +11,7 @@ import {
   type ProductMedia,
   type PublicFrameModel,
   type Variant,
+  glitterOffer,
 } from '@bro-pics/shared';
 import { AuthContext } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
@@ -103,7 +104,7 @@ function TemplateEditorSession({
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
   // The product photos for the gallery, named for what they show (the five automatic ones in their order).
   const galleryPhotos = useMemo(() => {
-    const AUTO = ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print'];
+    const AUTO = ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print', 'Matte vs glitter'];
     let auto = 0;
     let own = 0;
     return media
@@ -164,6 +165,15 @@ function TemplateEditorSession({
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Glitter printing, when the product offers it (never inside a combo).
+  const glitter = comboFrame ? null : glitterOffer(product);
+  const [chosenFinish, setChosenFinish] = useState<'glitter' | undefined>(undefined);
+  const finish = glitter ? chosenFinish : undefined;
+  const finishExtra = glitter && finish ? glitter.extraPrice : 0;
+  // Re-editing a glitter line starts with glitter chosen.
+  useEffect(() => {
+    if (editingLine?.finish === 'glitter') setChosenFinish('glitter');
+  }, [editingLine?.finish]);
 
   const uploadCartPreview = async (personalizationId: string): Promise<string | undefined> => {
     const dataUrl = customizer.exportDesign(900, true);
@@ -203,13 +213,14 @@ function TemplateEditorSession({
       const previewPath = await uploadCartPreview(personalizationId);
       const line = {
         title: `${product.title} — ${selectedVariant.sizeLabel}`,
-        unitPriceSnapshot: selectedVariant.price,
+        unitPriceSnapshot: selectedVariant.price + finishExtra,
         ...(previewPath && { previewPath }),
+        ...(finish && { finish, finishExtra }),
         personalization: { templateId: template.id, templateVersion: template.version, state: cleanState },
       };
       if (editing && editingLine) {
         if (editingLine.variantId === selectedVariant.id) {
-          updateItem(selectedVariant.id, personalizationId, line);
+          updateItem(selectedVariant.id, personalizationId, { ...line, finish, finishExtra: finish ? finishExtra : undefined });
         } else {
           removeItem(editingLine.variantId, personalizationId);
           addItem({ ...line, variantId: selectedVariant.id, personalizationId, qty: editingLine.qty, productSlug: product.slug });
@@ -251,7 +262,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} />
         <BuyBox
           product={product}
           variants={variants}
@@ -269,6 +280,8 @@ function TemplateEditorSession({
           onAddToCart={(quantity) => void handleAddToCart(quantity)}
           isEditingCartLine={editing}
           frameModels={frameModels}
+          finish={finish}
+          onFinishChange={setChosenFinish}
         >
           {!fixedDesign && <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />}
         </BuyBox>

@@ -19,6 +19,8 @@ interface CustomizerPreviewProps {
   frameLook?: FrameLook | null;
   /** The product's photos (sizes, frame close-up, room…), browsed in the same gallery after the views. */
   photos?: GalleryPhoto[];
+  /** Show the print with the glitter finish (an illustration: a real glitter print sparkles with the light). */
+  glitter?: boolean;
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -41,7 +43,7 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [] }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<GalleryViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
     const timer = setTimeout(async () => {
       const design = customizer.exportDesign(1000, true);
       if (!design) return; // a photo is still loading; this runs again once it has
-      const framed = await frameDesign(design, printWidthIn, look);
+      const framed = await frameDesign(design, printWidthIn, look, { glitter });
       if (alive) setRoomImage(framed ?? design);
     }, 250);
     return () => {
@@ -72,7 +74,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, customizer.render.version, printWidthIn, photoCount, fixedDesign, look.src, look.borderPx, look.mouldingWidthIn]);
+  }, [state, customizer.render.version, printWidthIn, photoCount, fixedDesign, look.src, look.borderPx, look.mouldingWidthIn, glitter]);
 
   const activeSlot = template.photoSlots.find((s) => s.id === activeSlotId) ?? null;
   const activePhoto = activeSlotId ? state.slots[activeSlotId] : undefined;
@@ -106,6 +108,10 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
           <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} />
         </div>
       </PreviewGallery>
+
+      {glitter && roomImage && (
+        <p className="px-1 text-center text-2xs text-ink/55">Glitter finish preview. It is an illustration: a real glitter print sparkles as it catches the light.</p>
+      )}
 
       {editing && activeSlot && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line/80 px-2 py-1.5">

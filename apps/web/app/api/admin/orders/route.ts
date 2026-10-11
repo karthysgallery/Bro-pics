@@ -100,7 +100,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const hasMore = snapshot.docs.length > query.limit;
 
   const orders = docs.map((doc) => {
-    const data = doc.data() as { orderNo: string; status: string; total: number; placedAt: FirebaseFirestore.Timestamp; addressJson: Record<string, unknown> };
+    const data = doc.data() as { orderNo: string; status: string; total: number; placedAt: FirebaseFirestore.Timestamp; addressJson: Record<string, unknown>; hasGlitter?: boolean };
     return {
       id: doc.id,
       orderNo: data.orderNo,
@@ -108,6 +108,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       total: data.total,
       placedAt: data.placedAt,
       addressJson: data.addressJson,
+      ...(data.hasGlitter && { hasGlitter: true }),
     };
   });
 

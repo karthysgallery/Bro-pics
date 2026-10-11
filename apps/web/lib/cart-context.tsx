@@ -41,7 +41,7 @@ export interface CartContextValue {
   updateItem: (
     variantId: string,
     personalizationId: string,
-    updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization'>>
+    updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization' | 'finish' | 'finishExtra'>>
   ) => void;
   clearCart: () => void;
   totalCount: number;
@@ -256,12 +256,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const updateItem = (
       variantId: string,
       personalizationId: string,
-      updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization'>>
+      updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization' | 'finish' | 'finishExtra'>>
     ) => {
       const applyUpdate = (current: CartItem[]) =>
-        current.map((i) =>
-          i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, ...updates } : i
-        );
+        current.map((i) => {
+          if (i.variantId !== variantId || i.personalizationId !== personalizationId) return i;
+          const next = { ...i, ...updates };
+          // Back to the matte print: the field goes away (the cart store cannot hold `undefined`).
+          if (next.finish === undefined) delete next.finish;
+          if (next.finishExtra === undefined) delete next.finishExtra;
+          return next;
+        });
       applyLocal(applyUpdate);
       if (user) {
         runFirestoreOp(applyUpdate);

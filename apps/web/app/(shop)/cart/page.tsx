@@ -93,7 +93,10 @@ export default function CartPage() {
                   <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
                     <div>
                       <div className="flex items-start justify-between gap-4">
-                        <h2 className="font-display text-lg font-bold text-ink">{item.title}</h2>
+                        <h2 className="font-display text-lg font-bold text-ink">
+                          {item.title}
+                          {item.finish === 'glitter' && <span className="mt-0.5 block text-xs font-semibold text-gold-deep">✨ Glitter finish</span>}
+                        </h2>
                         <span className="font-display text-lg font-bold text-ink">
                           {formatPaise(item.unitPriceSnapshot * item.qty)}
                         </span>
@@ -185,7 +188,7 @@ export default function CartPage() {
             <div className="space-y-2 mb-4 text-sm">
               {items.map((item) => (
                 <div key={`summary-${item.variantId}-${item.personalizationId}`} className="flex justify-between text-xs text-ink/80">
-                  <span className="truncate pr-2">{item.title} × {item.qty}</span>
+                  <span className="truncate pr-2">{item.title} × {item.qty}{item.finish === 'glitter' && ' · ✨ Glitter'}</span>
                   <span className="font-semibold text-ink">{formatPaise(item.unitPriceSnapshot * item.qty)}</span>
                 </div>
               ))}

@@ -87,7 +87,7 @@ export default function CheckoutPage() {
 
   // Re-quote whenever anything that affects the price changes. Debounced a little
   // so flipping options quickly doesn't fire a request per click.
-  const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}`;
+  const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}:${i.finish ?? ''}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}`;
   useEffect(() => {
     if (!user || items.length === 0 || orderId) return;
     const controller = new AbortController();
@@ -396,6 +396,7 @@ export default function CheckoutPage() {
       ? { rate: gst.taxRate, amount: splitGstFromInclusiveTotal(grandTotal, gst.taxRate).gstAmountPaise }
       : null;
   const hasUnavailableItems = quote !== null && quote.unavailable.length > 0;
+  const hasChangedFinish = quote !== null && quote.unavailable.some((u) => u.reason === 'finish_unavailable');
   const hasChangedCombo = quote !== null && quote.unavailable.some((u) => u.variantId.startsWith('combo:'));
   // A combo is priced as a whole, so its summary line shows the combo's price rather than a frame's.
   const quotedComboPrice = (item: { personalizationId: string; combo?: unknown }) =>
@@ -544,7 +545,7 @@ export default function CheckoutPage() {
             <div className="space-y-2 mb-4">
               {items.map((item) => (
                 <div key={`${item.variantId}-${item.personalizationId}`} className="flex justify-between text-xs text-ink/80">
-                  <span className="truncate pr-2">{item.title} × {item.qty}</span>
+                  <span className="truncate pr-2">{item.title} × {item.qty}{item.finish === 'glitter' && ' · ✨ Glitter finish'}</span>
                   <span className="font-semibold text-ink">
                     {formatPaise(item.combo ? (quotedComboPrice(item) ?? item.unitPriceSnapshot) : (quotedUnitPrice(item) ?? item.unitPriceSnapshot) * item.qty)}
                   </span>
@@ -619,7 +620,9 @@ export default function CheckoutPage() {
               <p role="alert" className="text-xs text-alert my-2">
                 {hasChangedCombo
                   ? 'A combo in your bag has changed or is no longer available. Remove it from your bag and add it again.'
-                  : 'Some items in your bag are no longer available. Please review your bag before checking out.'}
+                  : hasChangedFinish
+                    ? 'Glitter finish is no longer offered on a frame in your bag. Remove that frame and add it again with the matte finish.'
+                    : 'Some items in your bag are no longer available. Please review your bag before checking out.'}
               </p>
             )}
             {paymentConfirming && (

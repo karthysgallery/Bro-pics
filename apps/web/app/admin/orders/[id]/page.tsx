@@ -395,6 +395,9 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                     </div>
                     <div>
                       <h3 className="text-xs font-bold text-ink">{frameLabel ? `${frameLabel} · ` : ''}{item.title}</h3>
+                      {item.finish === 'glitter' && (
+                        <p className="mb-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-2xs font-bold uppercase text-amber-800">✨ Glitter finish — print with glitter</p>
+                      )}
                       {(item.sizeLabel || item.frameColour || item.material) && (
                         <p className="text-2xs text-ink/70">
                           {[item.sizeLabel, item.frameColour, item.material].filter(Boolean).join(' · ')}

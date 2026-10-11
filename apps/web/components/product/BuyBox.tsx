@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Product, PublicFrameModel, Variant } from '@bro-pics/shared';
+import { glitterOffer, type Product, type PublicFrameModel, type Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { useComboFrame } from '../../lib/combo-frame-context';
 import { useSiteText } from '../layout/SiteTextContext';
@@ -78,6 +78,9 @@ interface BuyBoxProps {
   isEditingCartLine?: boolean;
   /** Frame models the product offers: the finish choice becomes "Frame", shown with each model's photo. */
   frameModels?: PublicFrameModel[];
+  /** The printing finish chosen (absent = normal matte print). Pass with `onFinishChange` to control it from the page. */
+  finish?: 'glitter';
+  onFinishChange?: (finish: 'glitter' | undefined) => void;
   children?: React.ReactNode;
 }
 
@@ -98,9 +101,14 @@ export function BuyBox({
   onAddToCart,
   isEditingCartLine,
   frameModels = [],
+  finish: finishProp,
+  onFinishChange,
   children,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
+  const [ownFinish, setOwnFinish] = useState<'glitter' | undefined>(undefined);
+  const controlled = onFinishChange !== undefined;
+  const finishChoice = controlled ? finishProp : ownFinish;
   const text = useSiteText();
   const { addItem, updateItem } = useCart();
   // Inside a combo this box saves one frame into the combo instead of adding a product to the cart.
@@ -128,7 +136,15 @@ export function BuyBox({
   const orientations = [
     ...new Set(variants.map((v) => orientationFromDimensions(v.widthIn, v.heightIn))),
   ];
-  const price = selectedVariant?.price ?? product.minPrice;
+  // Glitter printing is an extra the product may offer; it is not part of a combo's included frame.
+  const glitter = comboFrame ? null : glitterOffer(product);
+  const finish = glitter ? finishChoice : undefined;
+  const finishExtra = glitter && finish ? glitter.extraPrice : 0;
+  const chooseFinish = (next: 'glitter' | undefined) => {
+    if (controlled) onFinishChange?.(next);
+    else setOwnFinish(next);
+  };
+  const price = (selectedVariant?.price ?? product.minPrice) + finishExtra;
   const compareAtPrice = selectedVariant?.compareAtPrice;
   // [FE-32] `inStock` gates purchasability (Add to cart, the delivery
   // timeline) — unchanged: 'backorder' stays non-purchasable here, same
@@ -155,8 +171,10 @@ export function BuyBox({
         // the preview thumbnail, always). qty is deliberately untouched.
         updateItem(selectedVariant.id, personalizationId, {
           title: `${product.title} — ${selectedVariant.sizeLabel}`,
-          unitPriceSnapshot: selectedVariant.price,
+          unitPriceSnapshot: selectedVariant.price + finishExtra,
           previewPath,
+          finish,
+          finishExtra: finish ? finishExtra : undefined,
         });
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('karthys:open-cart'));
@@ -167,10 +185,11 @@ export function BuyBox({
         variantId: selectedVariant.id,
         personalizationId,
         title: `${product.title} — ${selectedVariant.sizeLabel}`,
-        unitPriceSnapshot: selectedVariant.price,
+        unitPriceSnapshot: selectedVariant.price + finishExtra,
         qty: quantity,
         previewPath,
         productSlug: product.slug,
+        ...(finish && { finish, finishExtra }),
       });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('karthys:open-cart'));
@@ -255,6 +274,33 @@ export function BuyBox({
           swatches={Object.fromEntries(frameModels.map((m) => [m.name, { imageUrl: m.image?.url, hex: m.colourHex, borderPx: m.image?.borderPx, widthPx: m.image?.widthPx }]))}
         />
       </div>
+
+      {glitter && (
+        <div className="my-3" data-testid="finish-choice">
+          <p className="mb-1.5 text-xs font-semibold text-ink">Printing finish</p>
+          <div role="radiogroup" aria-label="Printing finish" className="grid grid-cols-2 gap-2">
+            {([
+              { value: undefined, name: 'Matte', note: 'Standard print' },
+              { value: 'glitter' as const, name: '✨ Glitter', note: `+${formatPaise(glitter.extraPrice)}` },
+            ]).map((o) => {
+              const on = finish === o.value;
+              return (
+                <button
+                  key={o.name}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => chooseFinish(o.value)}
+                  className={`rounded-2xl border px-3 py-2 text-left transition-colors ${on ? 'border-ink bg-paper ring-1 ring-ink' : 'border-line bg-field hover:border-ink/60'}`}
+                >
+                  <span className="block text-sm font-semibold text-ink">{o.name}</span>
+                  <span className="block text-2xs text-ink/60">{o.note}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {children}
 
