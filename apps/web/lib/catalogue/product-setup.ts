@@ -2,6 +2,8 @@ import 'server-only';
 import { z } from 'zod';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
+  DEFAULT_GLITTER_EXTRA,
+  MAX_GLITTER_EXTRA,
   PriceRowSchema,
   ProductSchema,
   buildProductSearchFields,
@@ -79,6 +81,11 @@ export const ProductSetupBodySchema = z
     gallery: z.array(z.object({ mediaId: z.string().min(1), alt: z.string().trim().max(160).default(''), auto: z.boolean().default(false) }).strict()).max(20).default([]),
     /** What the automatic photos were made from (so the editor knows when to remake them); null = not made. */
     autoPhotoKey: z.string().max(4000).nullable().default(null),
+    /** Glitter-finish printing: offered on this product or not, and the extra per frame (paise). */
+    glitter: z
+      .object({ enabled: z.boolean(), extraPrice: z.number().int().min(0, 'The glitter extra cannot be negative.').max(MAX_GLITTER_EXTRA, 'That glitter extra is too large — enter the amount in rupees, e.g. 100.') })
+      .strict()
+      .default({ enabled: false, extraPrice: DEFAULT_GLITTER_EXTRA }),
     /** Ready-made: the high-resolution artwork (media library id). */
     artworkMediaId: z.string().min(1).nullable().default(null),
     /** Collage: the design made in the template builder. */
@@ -307,6 +314,7 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     frameModelIds: body.frameModelIds,
     artwork,
     autoPhotoKey: body.autoPhotoKey,
+    glitter: body.glitter,
     photoSlots,
     personalizationTemplateId: productTemplateId,
     basePrice: Math.min(...(activeRows.length ? activeRows : body.rows).map((r) => r.price)),
@@ -420,6 +428,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
       frameModelIds,
       artwork: p.artwork ?? null,
       autoPhotoKey: (p as Product & { autoPhotoKey?: string | null }).autoPhotoKey ?? null,
+      glitter: p.glitter ?? { enabled: false, extraPrice: DEFAULT_GLITTER_EXTRA },
       collageTemplateId: productType === 'collage' ? (p.personalizationTemplateId ?? null) : null,
       primaryImageUrl: p.primaryImageUrl ?? '',
     },

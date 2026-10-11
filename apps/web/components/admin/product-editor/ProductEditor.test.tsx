@@ -211,4 +211,31 @@ describe('guided product editor', () => {
     const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')![1].body));
     expect(body.rows.find((r: { frameModelId: string }) => r.frameModelId === 'gold')).toMatchObject({ isActive: false, price: 0, mrp: 0 });
   });
+
+  it('glitter: switch it on, set the extra price; it is saved with the product and a sixth Matte vs Glitter photo is made', async () => {
+    render(<ProductEditor productId={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Ready-made frame/ }));
+    fireEvent.change(screen.getByPlaceholderText('Lord Murugan Photo Frame'), { target: { value: 'Lord Murugan' } });
+    fireEvent.change(within(document.getElementById('details')!).getByPlaceholderText('Lord Murugan'), { target: { value: 'Lord Murugan' } });
+    fireEvent.change(document.querySelector('#details select')!, { target: { value: 'devotional' } });
+    fireEvent.change(document.querySelector('input[type=file]:not([multiple])')!, { target: { files: [new File(['x'], 'murugan.jpg', { type: 'image/jpeg' })] } });
+    await screen.findByText('4000 × 6000 pixels');
+    fireEvent.click(screen.getByRole('button', { name: '12×8' }));
+    fireEvent.change(screen.getByLabelText('MRP 8x12 in Teak Classic'), { target: { value: '999' } });
+    fireEvent.change(screen.getByLabelText('Selling price 8x12 in Teak Classic'), { target: { value: '799' } });
+    fireEvent.click(screen.getByLabelText(/Offer glitter finish printing/));
+    expect((screen.getByLabelText('Extra price per frame') as HTMLInputElement).value).toBe('100');
+    fireEvent.change(screen.getByLabelText('Extra price per frame'), { target: { value: '150' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate details/ }));
+    await waitFor(() => expect(within(document.querySelector('aside')!).getByText('100')).toBeTruthy());
+    makeProductPhotos.mockResolvedValue(
+      (['framed', 'sizes', 'frame', 'wall', 'picture', 'glitter'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/' }))
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(makeProductPhotos).toHaveBeenCalledWith(expect.objectContaining({ glitter: { extraPrice: 15000 } }));
+    const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')![1].body));
+    expect(body.glitter).toEqual({ enabled: true, extraPrice: 15000 });
+    expect(body.gallery).toHaveLength(6);
+  });
 });

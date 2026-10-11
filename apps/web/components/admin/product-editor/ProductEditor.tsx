@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DEFAULT_FRAMING_COST_RATES,
+  DEFAULT_GLITTER_EXTRA,
+  MAX_GLITTER_EXTRA,
   templateDraftFromDetection,
   type PersonalizationTemplate,
   type SlotDetectionResult,
@@ -75,6 +77,8 @@ interface State {
   /** Make the five shop photos automatically (remade on save when the picture, frames or sizes change). */
   autoPhotos: boolean;
   autoPhotoKey: string | null;
+  /** Glitter-finish printing offered on this product, and its extra price per frame (paise). */
+  glitter: { enabled: boolean; extraPrice: number };
   /** Photo/collage frames: the example picture the shop photos show (the stock sample when none). */
   samplePhotoUrl: string | null;
 }
@@ -109,6 +113,7 @@ const EMPTY: State = {
   collageTemplateId: null,
   autoPhotos: true,
   autoPhotoKey: null,
+  glitter: { enabled: false, extraPrice: DEFAULT_GLITTER_EXTRA },
   samplePhotoUrl: null,
 };
 
@@ -161,7 +166,7 @@ const TYPES: Array<{ type: ProductType; title: string; text: string; example: st
 ];
 
 /** The automatic photos, in the order they are made. */
-const AUTO_LABELS = ['Framed', 'Sizes', 'Frame', 'On the wall', 'The picture'];
+const AUTO_LABELS = ['Framed', 'Sizes', 'Frame', 'On the wall', 'The picture', 'Matte vs Glitter'];
 
 const field = 'h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-ink';
 const area = 'w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-ink';
@@ -457,6 +462,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     p: pictureSource,
     f: s.frameModelIds.map((id) => byId.get(id)).filter(Boolean).map((m) => [m!.id, m!.name, m!.material, m!.colour, m!.colourHex, m!.mouldingWidthIn, m!.image?.url ?? '', m!.image?.borderPx ?? 0]),
     s: orderedSizes.map((z) => `${z.widthIn}x${z.heightIn}`),
+    // Switching glitter on or off (or changing its price, which the 6th photo shows) remakes the photos.
+    g: s.glitter.enabled ? s.glitter.extraPrice : 0,
   });
   const canMakePhotos = Boolean(s.productType && pictureSource && orderedSizes.length && s.frameModelIds.length);
   const photosStale = s.autoPhotos && canMakePhotos && s.autoPhotoKey !== photoKey;
@@ -478,7 +485,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         .map((id) => byId.get(id))
         .filter((m): m is FrameModel => Boolean(m))
         .map((m) => ({ name: m.name, material: m.material, colour: m.colour, colourHex: m.colourHex, mouldingWidthIn: m.mouldingWidthIn, look: lookOf(m) }));
-      const photos = await makeProductPhotos({ title: s.title, pictureUrl, isSample: s.productType !== 'ready_made', frames, sizes: orderedSizes });
+      const photos = await makeProductPhotos({ title: s.title, pictureUrl, isSample: s.productType !== 'ready_made', frames, sizes: orderedSizes, glitter: s.glitter.enabled ? { extraPrice: s.glitter.extraPrice } : null });
       setPhotoStatus('Uploading the shop photos…');
       const uploaded: GalleryItem[] = [];
       for (const ph of photos) {
@@ -586,6 +593,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         rows: s.rows.map(({ key: _k, legacyFinish: _l, ...r }) => ({ ...r, frameModelId: r.frameModelId! })),
         gallery: gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt, auto: Boolean(g.auto) })),
         autoPhotoKey,
+        glitter: s.glitter,
         artworkMediaId: s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : null,
         collageTemplateId: s.productType === 'collage' ? s.collageTemplateId : null,
       };
@@ -954,6 +962,33 @@ export function ProductEditor({ productId }: { productId: string | null }) {
           {/* 5. Prices */}
           <Section id="prices" step={5} title="Sizes and prices" hint="Tap the sizes you sell. Each size gets a line per frame model: MRP, your selling price and what it costs you to make." done={activeRows.length > 0 && activeRows.every((r) => r.frameModelId && r.price > 0 && r.mrp >= r.price)}>
             <PricingGrid rows={s.rows} onChange={(rows) => set({ rows })} models={models} selectedModelIds={s.frameModelIds} rates={rates} artwork={s.productType === 'ready_made' ? s.artwork : null} onPickModel={pickModel} />
+            <div className="mt-5 rounded-2xl border border-line p-4">
+              <label className="flex items-start gap-3">
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1a1a1a]" checked={s.glitter.enabled} onChange={(e) => set({ glitter: { ...s.glitter, enabled: e.target.checked } })} />
+                <span>
+                  <strong className="block text-sm text-ink">✨ Offer glitter finish printing</strong>
+                  <span className="text-xs text-ink/60">Customers can choose a sparkling glitter print for a small extra on every frame of this product. The workshop sees &ldquo;Glitter finish&rdquo; on the order, and a Matte vs Glitter photo is added to the shop photos.</span>
+                </span>
+              </label>
+              {s.glitter.enabled && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 pl-7">
+                  <label className="text-xs font-semibold text-ink/70" htmlFor="glitter-extra">
+                    Extra price per frame
+                  </label>
+                  <div className="relative w-32">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-ink/45">₹</span>
+                    <input
+                      id="glitter-extra"
+                      inputMode="decimal"
+                      className={`${field} pl-7 text-right ${s.glitter.extraPrice > MAX_GLITTER_EXTRA ? 'border-alert' : ''}`}
+                      value={String(s.glitter.extraPrice / 100)}
+                      onChange={(e) => set({ glitter: { ...s.glitter, extraPrice: Math.max(0, Math.round((Number(e.target.value.replace(/[^\d.]/g, '')) || 0) * 100)) } })}
+                    />
+                  </div>
+                  <span className="text-2xs text-ink/50">Added to the selling price of every size when the customer picks glitter. GST is included, as in your other prices.</span>
+                </div>
+              )}
+            </div>
           </Section>
 
           {/* 6. Photos */}
@@ -963,7 +998,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
                 <label className="flex items-start gap-3">
                   <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1a1a1a]" checked={s.autoPhotos} onChange={(e) => set({ autoPhotos: e.target.checked })} />
                   <span>
-                    <strong className="block text-sm text-ink">Make the 5 shop photos automatically</strong>
+                    <strong className="block text-sm text-ink">Make the shop photos automatically ({s.glitter.enabled ? '6, with the Matte vs Glitter picture' : '5'})</strong>
                     <span className="text-xs text-ink/60">
                       Framed picture · sizes with measurements · frame close-up and details · on a room wall · the picture itself. Made from {s.productType === 'ready_made' ? 'your artwork' : 'a sample photo'} and your default frame, and remade when you save after changing the picture, frames or sizes.
                     </span>

@@ -13,6 +13,7 @@ import { frameDesign, STOCK_FRAME, type FrameLook } from '../../customizer/frame
  *   3. Frame       — a close-up of the moulding with its name, material, width and colour
  *   4. On the wall — the frame hung in a room, at its real size
  *   5. The picture — the print itself, unframed, to show its detail
+ *   6. Glitter (only when the product offers it) — the same frame split down the middle: matte | glitter
  *
  * All are square (shop cards and Google Shopping are square).
  */
@@ -39,10 +40,12 @@ export interface ProductPhotoInput {
   /** Sizes sold, smallest first; the first is drawn in the framed photos. */
   sizes: Array<{ widthIn: number; heightIn: number }>;
   scene?: PreviewScene;
+  /** Set when the product offers the glitter finish: adds the "Matte vs Glitter" photo. */
+  glitter?: { extraPrice: number } | null;
 }
 
 export interface ProductPhoto {
-  key: 'framed' | 'sizes' | 'frame' | 'wall' | 'picture';
+  key: 'framed' | 'sizes' | 'frame' | 'wall' | 'picture' | 'glitter';
   label: string;
   alt: string;
   dataUrl: string;
@@ -155,10 +158,10 @@ function sampleTag(ctx: CanvasRenderingContext2D, label = 'Sample photo — your
   ctx.restore();
 }
 
-async function framedOf(pictureUrl: string, size: { widthIn: number; heightIn: number }, look: FrameLook | null): Promise<HTMLImageElement> {
+async function framedOf(pictureUrl: string, size: { widthIn: number; heightIn: number }, look: FrameLook | null, glitter = false): Promise<HTMLImageElement> {
   const cropped = await cropToShape(pictureUrl, size.widthIn, size.heightIn);
   if (!cropped) throw new Error('The picture could not be loaded.');
-  const framed = await frameDesign(cropped, size.widthIn, look ?? STOCK_FRAME);
+  const framed = await frameDesign(cropped, size.widthIn, look ?? STOCK_FRAME, { glitter });
   return loadImage(framed ?? cropped);
 }
 
@@ -418,7 +421,51 @@ async function photoPicture(input: ProductPhotoInput): Promise<string> {
   return toJpeg(canvas);
 }
 
-/** Draws all five photos. Throws a readable error if the picture or a frame photo cannot be loaded. */
+// 6 ─ matte vs glitter -----------------------------------------------------------------------------
+async function photoGlitter(input: ProductPhotoInput, matte: HTMLImageElement): Promise<string> {
+  const size = input.sizes[0]!;
+  const sparkle = await framedOf(input.pictureUrl, size, input.frames[0]?.look ?? null, true);
+  const { canvas, ctx } = square();
+  backdrop(ctx);
+  const f = fonts();
+  text(ctx, 'Choose your finish', PHOTO_SIZE / 2, 150, { size: 64, weight: 700, align: 'center', family: f.display });
+  const box = { x: 220, y: 215, w: PHOTO_SIZE - 440, h: PHOTO_SIZE - 480 };
+  const k = Math.min(box.w / matte.width, box.h / matte.height);
+  const w = matte.width * k;
+  const h = matte.height * k;
+  const x = box.x + (box.w - w) / 2;
+  const y = box.y + (box.h - h) / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,20,8,0.32)';
+  ctx.shadowBlur = Math.max(w, h) * 0.05;
+  ctx.shadowOffsetY = Math.max(w, h) * 0.025;
+  ctx.drawImage(matte, x, y, w, h);
+  ctx.restore();
+  // The right half is the glitter print.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + w / 2, y, w / 2, h);
+  ctx.clip();
+  ctx.drawImage(sparkle, x, y, w, h);
+  ctx.restore();
+  // Divider.
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(x + w / 2 - 3, y, 6, h);
+  ctx.restore();
+  // Labels under each half.
+  const price = input.glitter ? `+₹${(input.glitter.extraPrice / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '';
+  text(ctx, 'MATTE', x + w / 4, y + h + 64, { size: 34, weight: 700, align: 'center' });
+  text(ctx, 'Standard print', x + w / 4, y + h + 104, { size: 26, color: C.muted, align: 'center' });
+  text(ctx, 'GLITTER', x + (w * 3) / 4, y + h + 64, { size: 34, weight: 700, align: 'center', color: C.gold });
+  text(ctx, price ? `Sparkle finish · ${price}` : 'Sparkle finish', x + (w * 3) / 4, y + h + 104, { size: 26, color: C.muted, align: 'center' });
+  text(ctx, 'Illustration: a real glitter print sparkles as it catches the light.', PHOTO_SIZE / 2, PHOTO_SIZE - 56, { size: 24, color: C.muted, align: 'center' });
+  return toJpeg(canvas);
+}
+
+/** Draws all five photos (six when the product offers glitter). Throws a readable error if the picture or a frame photo cannot be loaded. */
 export async function makeProductPhotos(input: ProductPhotoInput): Promise<ProductPhoto[]> {
   if (!input.sizes.length) throw new Error('Add at least one size first.');
   await document.fonts?.ready;
@@ -431,5 +478,6 @@ export async function makeProductPhotos(input: ProductPhotoInput): Promise<Produ
     { key: 'frame', label: 'Frame', alt: `${frameName} frame close-up for ${name}`, dataUrl: await photoFrame(input, framed) },
     { key: 'wall', label: 'On the wall', alt: `${name} hung on a living room wall`, dataUrl: await photoWall(input, framed) },
     { key: 'picture', label: 'The picture', alt: `${name} print`, dataUrl: await photoPicture(input) },
+    ...(input.glitter ? [{ key: 'glitter' as const, label: 'Matte vs Glitter', alt: `${name} in a matte finish and in a glitter finish, side by side`, dataUrl: await photoGlitter(input, framed) }] : []),
   ];
 }

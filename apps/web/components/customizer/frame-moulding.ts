@@ -1,6 +1,7 @@
 'use client';
 
 import { mouldingWidthOf } from './frame-edge';
+import { glitterCanvas } from './glitter-effect';
 
 /**
  * Puts the printed design into a frame for the preview: the product's chosen
@@ -40,7 +41,7 @@ export interface FrameLook {
 
 export const STOCK_FRAME: FrameLook = { src: FRAME_SRC, borderPx: FRAME_MOULDING_SRC_PX, mouldingWidthIn: MOULDING_IN };
 
-export async function frameDesign(designUrl: string, printWidthIn?: number, look: FrameLook = STOCK_FRAME): Promise<string | null> {
+export async function frameDesign(designUrl: string, printWidthIn?: number, look: FrameLook = STOCK_FRAME, options: { glitter?: boolean } = {}): Promise<string | null> {
   try {
     const [design, frame] = await Promise.all([loadImage(designUrl), loadImage(look.src)]);
     const w = design.naturalWidth;
@@ -63,7 +64,8 @@ export async function frameDesign(designUrl: string, printWidthIn?: number, look
     const sh = frame.naturalHeight;
     const W = canvas.width;
     const H = canvas.height;
-    ctx.drawImage(design, m, m, w, h);
+    // The glitter finish is on the PRINT only, never on the frame around it.
+    ctx.drawImage(options.glitter ? glitterCanvas(design) : design, m, m, w, h);
     // Sides first, corners on top.
     ctx.drawImage(frame, c, 0, sw - 2 * c, c, m, 0, W - 2 * m, m);
     ctx.drawImage(frame, c, sh - c, sw - 2 * c, c, m, H - m, W - 2 * m, m);

@@ -52,7 +52,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
       { widthIn: 12, heightIn: 18, frameModelId: gold, mrp: 179900, price: 149900, cost: 60000, isActive: true },
       { widthIn: 8, heightIn: 10, frameModelId: gold, mrp: 89900, price: 69900, cost: 28000, isActive: true },
     ],
-    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null, autoPhotoKey: null,
+    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null, autoPhotoKey: null, glitter: { enabled: false, extraPrice: 10000 },
     ...over,
   });
 
@@ -140,6 +140,14 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
     expect(variants.every((v) => v.personalizationTemplateId === null)).toBe(true); // they use the product's design
     // 12x12 is square, the design is 3:2: the owner is warned the print would stretch.
     expect(result.warnings.some((w) => /12x12: this size is a different shape/.test(w))).toBe(true);
+  });
+
+  it('glitter: saved on the product, loaded back, and switched off again without losing the price', async () => {
+    const result = await saveProductSetup(db, store, null, body({ title: 'Glitter Frame', slug: `glitter-frame-${run}`, productCode: 'GLIT', glitter: { enabled: true, extraPrice: 15000 } }));
+    expect(((await db.collection('products').doc(result.productId).get()).data() as Product).glitter).toEqual({ enabled: true, extraPrice: 15000 });
+    expect((await loadProductSetup(db, result.productId)).product.glitter).toEqual({ enabled: true, extraPrice: 15000 });
+    await saveProductSetup(db, store, result.productId, body({ title: 'Glitter Frame', slug: `glitter-frame-${run}`, productCode: 'GLIT', glitter: { enabled: false, extraPrice: 15000 } }));
+    expect((await loadProductSetup(db, result.productId)).product.glitter).toEqual({ enabled: false, extraPrice: 15000 });
   });
 
   it('refuses a web address another product already uses', async () => {
