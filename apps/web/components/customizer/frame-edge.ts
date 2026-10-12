@@ -88,28 +88,100 @@ export function detectMouldingWidth(px: Pixels): number | null {
   return Math.min(...found);
 }
 
-const cache = new Map<string, Promise<number | null>>();
+export interface Margins {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
-/** detectMouldingWidth for a loaded image, in the image's own pixels (cached per picture). */
-export function mouldingWidthOf(img: HTMLImageElement, key = img.src): Promise<number | null> {
+/**
+ * Light or empty strips along the OUTER edge of a frame photo (a white or cream background left on one or
+ * more sides, a soft shadow, transparency) that are not part of the frame. Drawn as if they were frame they
+ * show as a gap beside the picture, so they are measured and cut off first.
+ *
+ * A strip counts only when a clearly darker line (the moulding) follows it within a few percent of the photo:
+ * a white-painted frame has no such step and is left untouched.
+ */
+export function detectOuterMargins(px: Pixels): Margins {
+  const short = Math.min(px.width, px.height);
+  const maxTrim = Math.max(2, Math.floor(short * 0.08));
+  const isMargin = (s: LineStats) => s.alpha < 60 || (s.light > 195 && s.spread < 20);
+  const one = (side: 'top' | 'bottom' | 'left' | 'right'): number => {
+    let n = 0;
+    while (n <= maxTrim && isMargin(lineStats(px, sideLine(px, side, n)))) n++;
+    if (n === 0 || n > maxTrim) return 0;
+    const next = lineStats(px, sideLine(px, side, n));
+    if (next.alpha < 128 || next.light > 170) return 0; // no moulding behind it: not a margin
+    return n;
+  };
+  return { top: one('top'), bottom: one('bottom'), left: one('left'), right: one('right') };
+}
+
+/** The pixels inside `m` (a copy). */
+export function cropPixels(px: Pixels, m: Margins): Pixels {
+  const width = px.width - m.left - m.right;
+  const height = px.height - m.top - m.bottom;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const from = ((y + m.top) * px.width + m.left) * 4;
+    data.set(px.data.subarray(from, from + width * 4), y * width * 4);
+  }
+  return { data, width, height };
+}
+
+/** Where the frame really is inside its photo (source rectangle, in the photo's own pixels) and its moulding width. */
+export interface FrameGeometry {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Moulding width measured inside that rectangle, or null when it cannot tell. */
+  mould: number | null;
+}
+
+export function measureFrame(px: Pixels): { margins: Margins; mould: number | null } {
+  const margins = detectOuterMargins(px);
+  const inner = margins.top || margins.bottom || margins.left || margins.right ? cropPixels(px, margins) : px;
+  return { margins, mould: detectMouldingWidth(inner) };
+}
+
+const cache = new Map<string, Promise<FrameGeometry>>();
+
+/** The frame's real rectangle and moulding width for a loaded image, in the image's own pixels (cached per picture). */
+export function frameGeometryOf(img: HTMLImageElement, key = img.src): Promise<FrameGeometry> {
   const hit = cache.get(key);
   if (hit) return hit;
+  const whole: FrameGeometry = { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight, mould: null };
   const work = (async () => {
     const scale = Math.min(1, 700 / Math.max(img.naturalWidth, img.naturalHeight));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
+    if (!ctx) return whole;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     try {
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = detectMouldingWidth({ data: data.data, width: data.width, height: data.height });
-      return d === null ? null : Math.round(d / scale);
+      const { margins, mould } = measureFrame({ data: data.data, width: data.width, height: data.height });
+      const x = Math.round(margins.left / scale);
+      const y = Math.round(margins.top / scale);
+      return {
+        x,
+        y,
+        w: Math.max(1, img.naturalWidth - x - Math.round(margins.right / scale)),
+        h: Math.max(1, img.naturalHeight - y - Math.round(margins.bottom / scale)),
+        mould: mould === null ? null : Math.round(mould / scale),
+      };
     } catch {
-      return null; // an image the canvas may not read
+      return whole; // an image the canvas may not read
     }
   })();
   cache.set(key, work);
   return work;
+}
+
+/** The moulding width in the image's own pixels, or null. */
+export async function mouldingWidthOf(img: HTMLImageElement, key = img.src): Promise<number | null> {
+  return (await frameGeometryOf(img, key)).mould;
 }

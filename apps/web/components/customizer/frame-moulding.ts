@@ -1,6 +1,6 @@
 'use client';
 
-import { mouldingWidthOf } from './frame-edge';
+import { frameGeometryOf } from './frame-edge';
 import { glitterCanvas } from './glitter-effect';
 
 /**
@@ -58,23 +58,23 @@ export async function frameDesign(designUrl: string, printWidthIn?: number, look
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     // Never wider than where the moulding really ends in the photo: a frame marked a little too wide
     // would otherwise wrap a strip of its own white inner edge around the picture.
-    const detected = await mouldingWidthOf(frame, look.src);
-    const c = Math.max(1, Math.min(look.borderPx, detected ?? Infinity, Math.floor(Math.min(frame.naturalWidth, frame.naturalHeight) / 2) - 1));
-    const sw = frame.naturalWidth;
-    const sh = frame.naturalHeight;
+    const geo = await frameGeometryOf(frame, look.src);
+    const c = Math.max(1, Math.min(look.borderPx, geo.mould ?? Infinity, Math.floor(Math.min(geo.w, geo.h) / 2) - 1));
+    // The frame's own rectangle: light strips around the photo (a left-over background) are not drawn.
+    const { x: fx, y: fy, w: sw, h: sh } = geo;
     const W = canvas.width;
     const H = canvas.height;
     // The glitter finish is on the PRINT only, never on the frame around it.
     ctx.drawImage(options.glitter ? glitterCanvas(design) : design, m, m, w, h);
     // Sides first, corners on top.
-    ctx.drawImage(frame, c, 0, sw - 2 * c, c, m, 0, W - 2 * m, m);
-    ctx.drawImage(frame, c, sh - c, sw - 2 * c, c, m, H - m, W - 2 * m, m);
-    ctx.drawImage(frame, 0, c, c, sh - 2 * c, 0, m, m, H - 2 * m);
-    ctx.drawImage(frame, sw - c, c, c, sh - 2 * c, W - m, m, m, H - 2 * m);
-    ctx.drawImage(frame, 0, 0, c, c, 0, 0, m, m);
-    ctx.drawImage(frame, sw - c, 0, c, c, W - m, 0, m, m);
-    ctx.drawImage(frame, 0, sh - c, c, c, 0, H - m, m, m);
-    ctx.drawImage(frame, sw - c, sh - c, c, c, W - m, H - m, m, m);
+    ctx.drawImage(frame, fx + c, fy, sw - 2 * c, c, m, 0, W - 2 * m, m);
+    ctx.drawImage(frame, fx + c, fy + sh - c, sw - 2 * c, c, m, H - m, W - 2 * m, m);
+    ctx.drawImage(frame, fx, fy + c, c, sh - 2 * c, 0, m, m, H - 2 * m);
+    ctx.drawImage(frame, fx + sw - c, fy + c, c, sh - 2 * c, W - m, m, m, H - 2 * m);
+    ctx.drawImage(frame, fx, fy, c, c, 0, 0, m, m);
+    ctx.drawImage(frame, fx + sw - c, fy, c, c, W - m, 0, m, m);
+    ctx.drawImage(frame, fx, fy + sh - c, c, c, 0, H - m, m, m);
+    ctx.drawImage(frame, fx + sw - c, fy + sh - c, c, c, W - m, H - m, m, m);
     // The frame casts a soft lip onto the print.
     const lip = Math.max(2, m * 0.12);
     const shade = (x0: number, y0: number, x1: number, y1: number) => {
