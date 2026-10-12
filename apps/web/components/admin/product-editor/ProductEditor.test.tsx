@@ -12,6 +12,7 @@ vi.mock('./use-catalogue-upload', async (orig) => ({ ...(await orig<typeof impor
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
 // The framed preview draws on a canvas, which jsdom has not got.
 vi.mock('./FramedPreview', () => ({ FramedPreview: ({ label }: { label?: string }) => <div data-testid="framed-preview">{label}</div>, lookOf: () => null, SAMPLE_PHOTO: '/sample.jpg' }));
+vi.mock('../../../lib/auth-context', () => ({ useAuth: () => ({ user: { getIdToken: async () => 'tok' } }) }));
 const makeProductPhotos = vi.hoisted(() => vi.fn());
 vi.mock('./product-photos', () => ({ makeProductPhotos }));
 
@@ -237,5 +238,25 @@ describe('guided product editor', () => {
     const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')![1].body));
     expect(body.glitter).toEqual({ enabled: true, extraPrice: 15000 });
     expect(body.gallery).toHaveLength(6);
+  });
+
+  it('collage: the shop photos ask for one sample photo per photo space of the chosen design', async () => {
+    const base = api.getMockImplementation()!;
+    api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/admin/products/setup/options') {
+        const o = (await base(path, init)) as Record<string, unknown>;
+        return { ...o, collageTemplates: [{ id: 'c1', name: 'Forever & Always', type: 'collage', publishedVersion: 1, latestStatus: 'published' }] };
+      }
+      if (path === '/api/admin/personalization-templates/c1') {
+        return { versions: [{ id: 'c1', version: 1, status: 'published', photoSlots: Array.from({ length: 6 }, (_, i) => ({ id: `s${i}` })) }] };
+      }
+      return base(path, init);
+    });
+    render(<ProductEditor productId={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Collage frame/ }));
+    const pick = (await screen.findByText('Choose a collage design…')).closest('select')!;
+    fireEvent.change(pick, { target: { value: 'c1' } });
+    expect(await screen.findByText(/Sample photos for the shop pictures \(0 of 6\)/)).toBeTruthy();
+    expect(screen.getByText(/This design has 6 photo spaces/)).toBeTruthy();
   });
 });

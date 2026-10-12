@@ -52,7 +52,9 @@ Go to **Admin → Products → + Add frame** and fill in the nine numbered secti
    4. the frame on a room wall, to scale
    5. the picture itself
 
-   Photo and collage frames use a sample photo, marked "Sample photo", which you can replace with your own. The photos are remade when the picture, frames or sizes change, and you can add your own photos after them. On the product page they appear as a "Product photos" strip under the preview.
+   Photo and collage frames use sample photos, marked "Sample photo". A collage asks for one sample photo for each photo space in its design (a 6-space design asks for 6); spaces left empty repeat the photos you add. Add them with **Upload my photos**, or type what the picture should show ("child", "couple", "family") and press **Find free photos**: you pick from free stock photos (Pexels) and they are saved to your media library. The stock photos are only examples in the shop photos, never printed for a customer.
+
+   *One-time set-up for the free photo search (owner):* create a free key at pexels.com/api, then store it for the website: `echo -n "YOUR_KEY" | gcloud secrets create pexels-api-key --data-file=- --project bropics-app`, give the website's service account access (`roles/secretmanager.secretAccessor` on that secret for karthys-web@bropics-app.iam.gserviceaccount.com), and run `gcloud run services update karthys-gallery --region asia-south1 --update-secrets=PEXELS_API_KEY=pexels-api-key:latest --project bropics-app`. Later deploys keep it. Until then the search says it is not switched on, and uploading your own photos still works. The photos are remade when the picture, frames or sizes change, and you can add your own photos after them. On the product page they appear as a "Product photos" strip under the preview.
 7. **Description and FAQ:** edit freely. A blank line starts a new paragraph, `## ` starts a heading, `- ` starts a bullet.
 8. **SEO:** the score and preview of what Google will show.
 9. **Delivery and publishing:** dispatch days, HSN code, badges and status.

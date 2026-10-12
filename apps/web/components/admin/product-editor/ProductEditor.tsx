@@ -26,6 +26,7 @@ import { PricingGrid, newRowKey, syncRowsWithModels, type EditorRow } from './Pr
 import { FramedPreview, SAMPLE_PHOTO, lookOf } from './FramedPreview';
 import { makeProductPhotos } from './product-photos';
 import { photoKeyOf } from './photo-key';
+import { SamplePhotosPanel } from './SamplePhotosPanel';
 import { latestDesign, renderCollagePicture } from './collage-picture';
 import { htmlToText, textToHtml } from './rich-text';
 import { inr, useCatalogueUpload } from './use-catalogue-upload';
@@ -81,7 +82,7 @@ interface State {
   /** Glitter-finish printing offered on this product, and its extra price per frame (paise). */
   glitter: { enabled: boolean; extraPrice: number };
   /** Photo/collage frames: the example picture the shop photos show (the stock sample when none). */
-  samplePhotoUrl: string | null;
+  samplePhotos: string[];
 }
 
 const EMPTY: State = {
@@ -115,7 +116,7 @@ const EMPTY: State = {
   autoPhotos: true,
   autoPhotoKey: null,
   glitter: { enabled: false, extraPrice: DEFAULT_GLITTER_EXTRA },
-  samplePhotoUrl: null,
+  samplePhotos: [],
 };
 
 const TYPES: Array<{ type: ProductType; title: string; text: string; example: string; art: ReactNode }> = [
@@ -214,8 +215,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const galleryInput = useRef<HTMLInputElement>(null);
   const collageInput = useRef<HTMLInputElement>(null);
   const loadedOnce = useRef(false);
-  const sampleInput = useRef<HTMLInputElement>(null);
   const [photoStatus, setPhotoStatus] = useState<string | null>(null);
+  const [collageSlots, setCollageSlots] = useState<number | null>(null);
   const [newCollage, setNewCollage] = useState<{ id: string; found: number } | null>(null);
 
   const set = useCallback((patch: Partial<State>) => {
@@ -248,7 +249,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         if (loadedOnce.current) return;
         loadedOnce.current = true;
         const r = await api<{
-          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery' | 'autoPhotos' | 'samplePhotoUrl'> & {
+          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery' | 'autoPhotos' | 'samplePhotos'> & {
             descriptionHtml: string;
             highlights: string[];
             howItWorks: string[];
@@ -288,6 +289,24 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       }
     })();
   }, [api, loadOptions, productId]);
+
+  // How many photo spaces the chosen collage design has: the shop photos ask for that many sample photos.
+  useEffect(() => {
+    if (s.productType !== 'collage' || !s.collageTemplateId) {
+      setCollageSlots(null);
+      return;
+    }
+    let alive = true;
+    api<{ versions: PersonalizationTemplate[] }>(`/api/admin/personalization-templates/${s.collageTemplateId}`)
+      .then((r) => {
+        const design = latestDesign(r.versions);
+        if (alive) setCollageSlots(design ? design.photoSlots.length : null);
+      })
+      .catch(() => alive && setCollageSlots(null));
+    return () => {
+      alive = false;
+    };
+  }, [api, s.productType, s.collageTemplateId]);
 
   // Leaving with unsaved changes asks first.
   useEffect(() => {
@@ -456,7 +475,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   // The default frame's sizes first, so the framed photos show a size it is really sold in.
   const defaultSizes = photoSizes.filter((z) => activeRows.some((r) => r.frameModelId === s.frameModelIds[0] && r.widthIn === z.widthIn && r.heightIn === z.heightIn));
   const orderedSizes = [...defaultSizes, ...photoSizes.filter((z) => !defaultSizes.includes(z))];
-  const pictureSource = s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : s.productType === 'collage' ? (s.collageTemplateId ? `${s.collageTemplateId}|${s.samplePhotoUrl ?? 'sample'}` : null) : (s.samplePhotoUrl ?? 'sample');
+  const pictureSource = s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : s.productType === 'collage' ? (s.collageTemplateId ? `${s.collageTemplateId}|${s.samplePhotos.join(',') || 'sample'}` : null) : (s.samplePhotos.join(',') || 'sample');
   const photoKey = photoKeyOf({
     productType: s.productType,
     title: s.title,
@@ -479,8 +498,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         const r = await api<{ versions: import('@bro-pics/shared').PersonalizationTemplate[] }>(`/api/admin/personalization-templates/${s.collageTemplateId}`);
         const design = latestDesign(r.versions);
         if (!design) throw new Error('The collage design could not be found.');
-        pictureUrl = await renderCollagePicture(design, s.samplePhotoUrl ?? SAMPLE_PHOTO);
-      } else pictureUrl = s.samplePhotoUrl ?? SAMPLE_PHOTO;
+        pictureUrl = await renderCollagePicture(design, s.samplePhotos.length ? s.samplePhotos : [SAMPLE_PHOTO]);
+      } else pictureUrl = s.samplePhotos[0] ?? SAMPLE_PHOTO;
       const frames = s.frameModelIds
         .map((id) => byId.get(id))
         .filter((m): m is FrameModel => Boolean(m))
@@ -500,18 +519,6 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     } catch (e) {
       setPhotoStatus(null);
       throw e;
-    }
-  };
-
-  const uploadSample = async (file: File) => {
-    setUploading('sample');
-    try {
-      const img = await upload(file, { alt: 'Sample photo', tag: 'sample-photo' });
-      set({ samplePhotoUrl: img.url.replace(/w=\d+/, 'w=2000') });
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Upload failed', 'error');
-    } finally {
-      setUploading(null);
     }
   };
 
@@ -1007,15 +1014,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
                 {s.autoPhotos && (
                   <div className="mt-3 space-y-3 pl-7">
                     {s.productType && s.productType !== 'ready_made' && (
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={(s.samplePhotoUrl ?? SAMPLE_PHOTO).replace(/w=\d+/, 'w=200')} alt="Sample photo" className="h-12 w-12 rounded-lg object-cover" />
-                        <span className="min-w-0 flex-1 text-ink/65">Sample photo shown in the frame (marked &ldquo;Sample photo&rdquo; on the shop photos).</span>
-                        <input ref={sampleInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadSample(e.target.files[0])} />
-                        <button type="button" disabled={uploading === 'sample'} onClick={() => sampleInput.current?.click()} className="h-8 rounded-lg border border-line px-3 font-semibold text-ink hover:bg-field">
-                          {uploading === 'sample' ? 'Uploading…' : 'Use my own sample photo'}
-                        </button>
-                      </div>
+                      <SamplePhotosPanel slots={s.productType === 'collage' ? (collageSlots ?? 1) : 1} photos={s.samplePhotos} onChange={(samplePhotos) => set({ samplePhotos })} />
                     )}
                     <div className="flex flex-wrap items-center gap-3">
                       <button

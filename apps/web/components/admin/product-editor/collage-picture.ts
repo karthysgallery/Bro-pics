@@ -11,13 +11,17 @@ import { loadImage } from './product-photos';
  * names/dates — the picture the automatic shop photos are made from. Uses the
  * shop's own template renderer, so it looks like the customer's preview.
  */
-export async function renderCollagePicture(template: PersonalizationTemplate, sampleUrl: string, maxSide = 1600): Promise<string> {
-  const sample = await loadImage(sampleUrl);
+export async function renderCollagePicture(template: PersonalizationTemplate, sampleUrls: string | string[], maxSide = 1600): Promise<string> {
+  const urls = (Array.isArray(sampleUrls) ? sampleUrls : [sampleUrls]).filter(Boolean);
+  if (urls.length === 0) throw new Error('Add a sample photo first.');
+  // One photo per space, in order; when there are fewer photos than spaces they repeat.
+  const loaded = await Promise.all(urls.map(async (url) => ({ url, img: await loadImage(url) })));
   let state = createEmptyState(template.id, template.version);
-  for (const slot of template.photoSlots) {
-    state = setSlotPhoto(state, slot.id, { assetId: 'sample', url: sampleUrl, width: sample.naturalWidth, height: sample.naturalHeight });
-  }
-  const photoSrc = () => sampleUrl;
+  template.photoSlots.forEach((slot, i) => {
+    const pick = loaded[i % loaded.length]!;
+    state = setSlotPhoto(state, slot.id, { assetId: `sample-${i}`, url: pick.url, width: pick.img.naturalWidth, height: pick.img.naturalHeight });
+  });
+  const photoSrc = (_slotId: string, photo: { url?: string }) => photo.url ?? urls[0]!;
   const { srcs } = requiredImageSources({ template, state, assetSrc: (ref) => templateAssetSrc(ref), photoSrc, includeUnprinted: false });
   const images = new Map<string, HTMLImageElement>();
   await Promise.all(srcs.map(async (src) => images.set(src, await loadImage(src))));

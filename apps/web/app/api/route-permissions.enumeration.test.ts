@@ -44,6 +44,8 @@ import { GET as staffReviewsGET } from './staff/reviews/route';
 import { POST as staffReviewModeratePOST } from './staff/reviews/[id]/moderate/route';
 import { GET as frameModelsGET, POST as frameModelsPOST } from './admin/frame-models/route';
 import { PATCH as frameModelPATCH } from './admin/frame-models/[id]/route';
+import { GET as stockPhotosGET } from './admin/stock-photos/route';
+import { GET as stockPhotoFileGET } from './admin/stock-photos/file/route';
 import { GET as priceListsGET, POST as priceListsPOST } from './admin/price-lists/route';
 import { PUT as priceListPUT, DELETE as priceListDELETE } from './admin/price-lists/[id]/route';
 import { PUT as framingRatesPUT } from './admin/frame-models/rates/route';
@@ -145,6 +147,8 @@ const cases: RouteCase[] = [
   { name: 'GET /api/admin/frame-models', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/frame-models', call: (r) => frameModelsGET(r) },
   { name: 'POST /api/admin/frame-models', key: 'catalogue:write', wrongRole: 'staff', method: 'POST', url: 'https://example.com/api/admin/frame-models', call: (r) => frameModelsPOST(r) },
   { name: 'PATCH /api/admin/frame-models/[id]', key: 'catalogue:write', wrongRole: 'staff', method: 'PATCH', url: 'https://example.com/api/admin/frame-models/teak', call: (r) => frameModelPATCH(r, { params: Promise.resolve({ id: 'teak' }) }) },
+  { name: 'GET /api/admin/stock-photos', key: 'catalogue:write', wrongRole: 'staff', url: 'https://example.com/api/admin/stock-photos?q=child', call: (r) => stockPhotosGET(r) },
+  { name: 'GET /api/admin/stock-photos/file', key: 'catalogue:write', wrongRole: 'staff', url: 'https://example.com/api/admin/stock-photos/file?u=x', call: (r) => stockPhotoFileGET(r) },
   { name: 'GET /api/admin/price-lists', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/price-lists', call: (r) => priceListsGET(r) },
   { name: 'POST /api/admin/price-lists', key: 'catalogue:write', wrongRole: 'staff', method: 'POST', url: 'https://example.com/api/admin/price-lists', call: (r) => priceListsPOST(r) },
   { name: 'PUT /api/admin/price-lists/[id]', key: 'catalogue:write', wrongRole: 'staff', method: 'PUT', url: 'https://example.com/api/admin/price-lists/devotional', call: (r) => priceListPUT(r, { params: Promise.resolve({ id: 'devotional' }) }) },
