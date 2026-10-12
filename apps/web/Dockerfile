@@ -35,6 +35,10 @@ ARG GOOGLE_CLOUD_PROJECT
 # GOOGLE_ADC=1: the build reads the live catalogue (to pre-render pages) with
 # the Cloud Build service account's own credentials — no key file. Build only.
 ENV NEXT_OUTPUT=standalone NEXT_TELEMETRY_DISABLED=1 SITE_PREVIEW=$SITE_PREVIEW GOOGLE_ADC=1 GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
+# The Google Fonts stylesheets next/font needs are saved in google-fonts-css.json (see scripts/font-css-capture.cjs):
+# on Cloud Build, Google sometimes answers the live request with a stylesheet Next.js cannot read, which failed whole
+# deploys. The font FILES are still fetched from Google; only the stylesheet lookup is answered from this file.
+ENV NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/repo/apps/web/google-fonts-css.json
 RUN pnpm --filter @bro-pics/web build
 
 FROM node:20-slim
