@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { shortTags, cleanQuery, isStockPhotoUrl as isPexelsPhotoUrl, searchStockPhotos, StockPhotosError } from './stock-photos';
+import { fetchStockPhoto, shortTags, cleanQuery, isStockPhotoUrl as isPexelsPhotoUrl, searchStockPhotos, StockPhotosError } from './stock-photos';
 
 describe('stock photos', () => {
   beforeEach(() => { process.env.PEXELS_API_KEY = 'k'; });
@@ -56,5 +56,32 @@ describe('stock photos', () => {
   it('shortens Pixabay’s long, repeating tag lists', () => {
     expect(shortTags('baby, newborn, baby, baby, father, people, monochrome')).toBe('baby, newborn, father, people');
     expect(shortTags(undefined)).toBe('');
+  });
+
+  describe('fetchStockPhoto', () => {
+    const img = (type = 'image/jpeg') => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': type } });
+    const redirect = (to: string) => new Response(null, { status: 302, headers: { location: to } });
+
+    it('follows the stock site’s own redirect to its image host', async () => {
+      const f = vi.fn().mockResolvedValueOnce(redirect('https://cdn.pixabay.com/photo/2020/a_1280.jpg')).mockResolvedValueOnce(img());
+      const out = await fetchStockPhoto('https://pixabay.com/get/abc_1280.jpg', { fetchImpl: f as unknown as typeof fetch });
+      expect(out.type).toBe('image/jpeg');
+      expect(out.bytes.length).toBe(3);
+      expect(f.mock.calls.map((c) => String(c[0]))).toEqual(['https://pixabay.com/get/abc_1280.jpg', 'https://cdn.pixabay.com/photo/2020/a_1280.jpg']);
+      expect(f.mock.calls[0]![1].redirect).toBe('manual');
+    });
+    it('refuses a redirect to any other server', async () => {
+      const f = vi.fn().mockResolvedValueOnce(redirect('http://169.254.169.254/latest/meta-data'));
+      await expect(fetchStockPhoto('https://pixabay.com/get/abc.jpg', { fetchImpl: f as unknown as typeof fetch })).rejects.toMatchObject({ status: 400 });
+      expect(f).toHaveBeenCalledTimes(1);
+    });
+    it('refuses a start address that is not a stock photo host, a non-image answer, a redirect loop and a huge file', async () => {
+      const none = vi.fn();
+      await expect(fetchStockPhoto('https://evil.com/a.jpg', { fetchImpl: none as unknown as typeof fetch })).rejects.toMatchObject({ status: 400 });
+      expect(none).not.toHaveBeenCalled();
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: vi.fn().mockResolvedValue(new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: vi.fn().mockImplementation(async () => redirect('https://pixabay.com/get/a')) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { maxBytes: 2, fetchImpl: vi.fn().mockResolvedValue(img()) as unknown as typeof fetch })).rejects.toMatchObject({ status: 413 });
+    });
   });
 });

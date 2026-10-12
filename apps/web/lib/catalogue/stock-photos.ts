@@ -134,3 +134,35 @@ async function searchPexels(q: string, options: SearchOptions, fetchImpl: typeof
     height: p.height,
   }));
 }
+
+const UA = 'Mozilla/5.0 (compatible; KarthysGallery/1.0; +https://karthysgallery.in)';
+
+/**
+ * Fetches a stock picture on the admin's behalf. Stock sites hand out an address that redirects to their image
+ * host, so redirects are followed by hand (at most 4), and EVERY address on the way must be an approved stock
+ * photo host: a redirect somewhere else is refused, so this cannot be used to reach other servers.
+ */
+export async function fetchStockPhoto(
+  url: string,
+  options: { maxBytes?: number; fetchImpl?: typeof fetch } = {}
+): Promise<{ bytes: Buffer; type: string }> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const maxBytes = options.maxBytes ?? 15 * 1024 * 1024;
+  let current = url;
+  for (let hop = 0; hop <= 4; hop++) {
+    if (!isStockPhotoUrl(current)) throw new StockPhotosError(400, 'Only pictures from the free photo service can be used here.');
+    const res = await fetchImpl(current, { redirect: 'manual', headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(15_000) });
+    if (res.status >= 300 && res.status < 400) {
+      const next = res.headers.get('location');
+      if (!next) break;
+      current = new URL(next, current).toString();
+      continue;
+    }
+    const type = res.headers.get('content-type') ?? '';
+    if (!res.ok || !type.startsWith('image/')) throw new StockPhotosError(502, 'That picture could not be fetched. Choose another.');
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length > maxBytes) throw new StockPhotosError(413, 'That picture is too large. Choose another.');
+    return { bytes, type };
+  }
+  throw new StockPhotosError(502, 'That picture could not be fetched. Choose another.');
+}
