@@ -47,27 +47,18 @@ describe('ProductDetailClient', () => {
     expect(screen.getByRole('img')).toHaveAttribute('src', '/generic.svg');
   });
 
-  it('never offers a size×colour combination with no matching variant, and every reachable click resolves to a real variant', () => {
+  it('lists every size, and a click on a size the chosen frame does not come in moves to a frame that has it', () => {
     render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
 
-    // Default: 8x12 / Black. Both sizes are selectable here (Black pairs with both).
+    // Default: 8x12 / Black.
     expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();
 
-    // Switch colour to White — White only pairs with 8x12, so 12x18 must no
-    // longer be offered as a size option (this is the impossible combination
-    // from the finding: 12x18 + White has no matching variant).
+    // White only comes in 8x12, but 12x18 stays on the list: a size sold in one frame must not vanish.
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
     expect(screen.getByText('₹849')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '12x18 in' })).not.toBeInTheDocument();
-
-    // Switch colour back to Black — 12x18 becomes selectable again.
-    fireEvent.click(screen.getByRole('button', { name: 'Black' }));
     expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();
 
-    // Selecting 12x18 (only ever valid alongside Black) resolves to the real
-    // 12x18/Black variant — price and media reflect that exact variant, not a
-    // silently mismatched fallback — and White must no longer be offered as a
-    // colour option, since 12x18 has no White variant.
+    // Choosing it moves to the frame that has it (Black); price reflects that exact variant and White is no longer offered.
     fireEvent.click(screen.getByRole('button', { name: '12x18 in' }));
     expect(screen.getByText('₹999')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'White' })).not.toBeInTheDocument();

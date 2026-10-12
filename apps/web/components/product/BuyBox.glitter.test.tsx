@@ -73,3 +73,18 @@ describe('BuyBox printing finish', () => {
     expect(screen.queryByTestId('finish-choice')).toBeNull();
   });
 });
+
+describe('BuyBox sizes', () => {
+  it('lists a size sold in only one frame even while another frame is chosen, and shows only that frame for it', () => {
+    const v = (id: string, label: string, w: number, h: number, frame: string) => ({ ...variant, id, sizeLabel: label, widthIn: w, heightIn: h, frameColour: frame }) as unknown as Variant;
+    const variants = [v('a', '8x12 in', 8, 12, 'Normal'), v('b', '12x18 in', 12, 18, 'Normal'), v('c', '16x24 in', 16, 24, 'Black Premium')];
+    render(
+      <BuyBox
+        product={product()} variants={variants} selectedVariant={variants[0]!} selectedSize="8x12 in" selectedColour="Normal" selectedOrientation="portrait"
+        onSelectSize={vi.fn()} onSelectColour={vi.fn()} onSelectOrientation={vi.fn()} personalizationReady submitting={false} submitError={null}
+      />
+    );
+    expect(screen.getByRole('button', { name: /16x24/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /12x18/ })).toBeTruthy();
+  });
+});

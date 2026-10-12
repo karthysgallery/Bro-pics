@@ -119,12 +119,16 @@ export function BuyBox({
   // current selection, so the user can never click into a combination that
   // has no matching variant (see ProductDetailClient's handlers for how a
   // now-invalid combination gets resolved to a real variant).
+  // Every size sold in this orientation, whichever frame it comes in: a size sold only in one frame (say a
+  // premium 16x24) must stay visible while another frame is chosen. Picking it moves to a frame that has it
+  // (the page's size handler does that), and the Frame choices then show only the frames sold at that size.
   const sizes = [
-    ...new Set(
+    ...new Map(
       variants
-        .filter((v) => v.frameColour === selectedColour && orientationFromDimensions(v.widthIn, v.heightIn) === selectedOrientation)
-        .map((v) => v.sizeLabel)
-    ),
+        .filter((v) => orientationFromDimensions(v.widthIn, v.heightIn) === selectedOrientation)
+        .sort((x, y) => x.widthIn * x.heightIn - y.widthIn * y.heightIn)
+        .map((v) => [v.sizeLabel, v.sizeLabel] as const)
+    ).values(),
   ];
   const colours = [
     ...new Set(

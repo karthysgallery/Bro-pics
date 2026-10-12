@@ -94,3 +94,4 @@ export * from './catalogue/frame-model';
 export * from './catalogue/product-pricing';
 export * from './seo/product-autofill';
 export * from './catalogue/glitter';
+export * from './catalogue/price-list';

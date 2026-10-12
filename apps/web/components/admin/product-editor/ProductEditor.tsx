@@ -25,6 +25,7 @@ import { ProductSeoPanel, type ProductSeoValue } from '../ProductSeoPanel';
 import { PricingGrid, newRowKey, syncRowsWithModels, type EditorRow } from './PricingGrid';
 import { FramedPreview, SAMPLE_PHOTO, lookOf } from './FramedPreview';
 import { makeProductPhotos } from './product-photos';
+import { photoKeyOf } from './photo-key';
 import { latestDesign, renderCollagePicture } from './collage-picture';
 import { htmlToText, textToHtml } from './rich-text';
 import { inr, useCatalogueUpload } from './use-catalogue-upload';
@@ -456,14 +457,13 @@ export function ProductEditor({ productId }: { productId: string | null }) {
   const defaultSizes = photoSizes.filter((z) => activeRows.some((r) => r.frameModelId === s.frameModelIds[0] && r.widthIn === z.widthIn && r.heightIn === z.heightIn));
   const orderedSizes = [...defaultSizes, ...photoSizes.filter((z) => !defaultSizes.includes(z))];
   const pictureSource = s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : s.productType === 'collage' ? (s.collageTemplateId ? `${s.collageTemplateId}|${s.samplePhotoUrl ?? 'sample'}` : null) : (s.samplePhotoUrl ?? 'sample');
-  const photoKey = JSON.stringify({
-    t: s.productType,
-    n: s.title,
-    p: pictureSource,
-    f: s.frameModelIds.map((id) => byId.get(id)).filter(Boolean).map((m) => [m!.id, m!.name, m!.material, m!.colour, m!.colourHex, m!.mouldingWidthIn, m!.image?.url ?? '', m!.image?.borderPx ?? 0]),
-    s: orderedSizes.map((z) => `${z.widthIn}x${z.heightIn}`),
-    // Switching glitter on or off (or changing its price, which the 6th photo shows) remakes the photos.
-    g: s.glitter.enabled ? s.glitter.extraPrice : 0,
+  const photoKey = photoKeyOf({
+    productType: s.productType,
+    title: s.title,
+    pictureSource,
+    models: s.frameModelIds.map((id) => byId.get(id)).filter((m): m is FrameModel => Boolean(m)),
+    sizes: orderedSizes,
+    glitterExtra: s.glitter.enabled ? s.glitter.extraPrice : 0,
   });
   const canMakePhotos = Boolean(s.productType && pictureSource && orderedSizes.length && s.frameModelIds.length);
   const photosStale = s.autoPhotos && canMakePhotos && s.autoPhotoKey !== photoKey;
