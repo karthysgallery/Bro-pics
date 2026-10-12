@@ -41,6 +41,56 @@ export interface FrameLook {
 
 export const STOCK_FRAME: FrameLook = { src: FRAME_SRC, borderPx: FRAME_MOULDING_SRC_PX, mouldingWidthIn: MOULDING_IN };
 
+type FrameGeo = { x: number; y: number; w: number; h: number };
+
+/** The frame's four sides, then its corners on top, drawn around an opening of (W - 2m) × (H - 2m). */
+function drawRing(ctx: CanvasRenderingContext2D, frame: HTMLImageElement, geo: FrameGeo, c: number, W: number, H: number, m: number): void {
+  const { x: fx, y: fy, w: sw, h: sh } = geo;
+  ctx.drawImage(frame, fx + c, fy, sw - 2 * c, c, m, 0, W - 2 * m, m);
+  ctx.drawImage(frame, fx + c, fy + sh - c, sw - 2 * c, c, m, H - m, W - 2 * m, m);
+  ctx.drawImage(frame, fx, fy + c, c, sh - 2 * c, 0, m, m, H - 2 * m);
+  ctx.drawImage(frame, fx + sw - c, fy + c, c, sh - 2 * c, W - m, m, m, H - 2 * m);
+  ctx.drawImage(frame, fx, fy, c, c, 0, 0, m, m);
+  ctx.drawImage(frame, fx + sw - c, fy, c, c, W - m, 0, m, m);
+  ctx.drawImage(frame, fx, fy + sh - c, c, c, 0, H - m, m, m);
+  ctx.drawImage(frame, fx + sw - c, fy + sh - c, c, c, W - m, H - m, m, m);
+}
+
+/**
+ * How wide (in the design's own units) a design can be drawn so that the design AND the frame around it fit in a box:
+ * the frame is `mouldingShare` (moulding width ÷ print width) of the design's width on each side. Pure, so it can be tested.
+ */
+export function frameFit(avail: { width: number; height: number }, aspect: number, mouldingShare: number): { designWidth: number; moulding: number } {
+  const k = Math.max(0, mouldingShare);
+  const designWidth = Math.max(1, Math.min(avail.width / (1 + 2 * k), avail.height / (1 / aspect + 2 * k)));
+  return { designWidth, moulding: designWidth * k };
+}
+
+/**
+ * The frame on its own (a see-through opening) at the size to put round the editable design, so the design keeps its
+ * outer frame while it is being edited. `inner` is the opening in CSS px, `m` the moulding in CSS px, `scale` the pixel density.
+ */
+export async function frameRing(look: FrameLook, inner: { width: number; height: number }, m: number, scale = 1): Promise<string | null> {
+  try {
+    const frame = await loadImage(look.src);
+    const geo = await frameGeometryOf(frame, look.src);
+    const c = Math.max(1, Math.min(look.borderPx, geo.mould ?? Infinity, Math.floor(Math.min(geo.w, geo.h) / 2) - 1));
+    const mm = Math.max(1, Math.round(m * scale));
+    const W = Math.round(inner.width * scale) + mm * 2;
+    const H = Math.round(inner.height * scale) + mm * 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingQuality = 'high';
+    drawRing(ctx, frame, geo, c, W, H, mm);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+}
+
 export async function frameDesign(designUrl: string, printWidthIn?: number, look: FrameLook = STOCK_FRAME, options: { glitter?: boolean } = {}): Promise<string | null> {
   try {
     const [design, frame] = await Promise.all([loadImage(designUrl), loadImage(look.src)]);
@@ -61,20 +111,11 @@ export async function frameDesign(designUrl: string, printWidthIn?: number, look
     const geo = await frameGeometryOf(frame, look.src);
     const c = Math.max(1, Math.min(look.borderPx, geo.mould ?? Infinity, Math.floor(Math.min(geo.w, geo.h) / 2) - 1));
     // The frame's own rectangle: light strips around the photo (a left-over background) are not drawn.
-    const { x: fx, y: fy, w: sw, h: sh } = geo;
     const W = canvas.width;
     const H = canvas.height;
     // The glitter finish is on the PRINT only, never on the frame around it.
     ctx.drawImage(options.glitter ? glitterCanvas(design) : design, m, m, w, h);
-    // Sides first, corners on top.
-    ctx.drawImage(frame, fx + c, fy, sw - 2 * c, c, m, 0, W - 2 * m, m);
-    ctx.drawImage(frame, fx + c, fy + sh - c, sw - 2 * c, c, m, H - m, W - 2 * m, m);
-    ctx.drawImage(frame, fx, fy + c, c, sh - 2 * c, 0, m, m, H - 2 * m);
-    ctx.drawImage(frame, fx + sw - c, fy + c, c, sh - 2 * c, W - m, m, m, H - 2 * m);
-    ctx.drawImage(frame, fx, fy, c, c, 0, 0, m, m);
-    ctx.drawImage(frame, fx + sw - c, fy, c, c, W - m, 0, m, m);
-    ctx.drawImage(frame, fx, fy + sh - c, c, c, 0, H - m, m, m);
-    ctx.drawImage(frame, fx + sw - c, fy + sh - c, c, c, W - m, H - m, m, m);
+    drawRing(ctx, frame, geo, c, W, H, m);
     // The frame casts a soft lip onto the print.
     const lip = Math.max(2, m * 0.12);
     const shade = (x0: number, y0: number, x1: number, y1: number) => {

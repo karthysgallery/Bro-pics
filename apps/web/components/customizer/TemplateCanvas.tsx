@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { hitTestPhotoSlot, pointInSlotFrame } from '@bro-pics/shared';
 import { renderTemplate } from './render-template';
+import { frameFit, frameRing, type FrameLook } from './frame-moulding';
 import type { TemplateCustomizer } from './use-template-customizer';
 
 interface TemplateCanvasProps {
@@ -16,6 +17,11 @@ interface TemplateCanvasProps {
    * is never cut off at the top and bottom. Off where the box grows with its content.
    */
   fitParentHeight?: boolean;
+  /**
+   * Draw the frame round the design while it is edited (so the first preview keeps its outer frame, as the room
+   * pictures do). `printWidthIn` is the design's real width, which sets how thick the moulding looks.
+   */
+  frame?: { look: FrameLook; printWidthIn: number };
   /** Example pictures for the empty photo spaces (one per space, repeating): shown until the customer adds their own. */
   samples?: string[];
 }
@@ -31,7 +37,7 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
  * space; pinch (or Ctrl/⌘ + scroll, or a trackpad pinch) to zoom; arrow keys
  * and +/− do the same from the keyboard.
  */
-export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fitParentHeight = false, samples }: TemplateCanvasProps) {
+export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fitParentHeight = false, frame, samples }: TemplateCanvasProps) {
   const { template, state, activeSlotId, setActiveSlotId, panPhoto, zoomPhoto, render } = customizer;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +73,9 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
     };
   }, [sampleKey]);
 
+  // The frame's thickness as a share of the design's width (0 without a frame).
+  const frameShare = frame && frame.printWidthIn > 0 ? Math.min(0.25, frame.look.mouldingWidthIn / frame.printWidthIn) : 0;
+
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -79,7 +88,8 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
         const room = host.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
         if (room > 50) tallest = Math.min(maxHeight, room);
       }
-      setCssWidth(Math.min(el.clientWidth, tallest * aspect));
+      // The design AND its frame have to fit.
+      setCssWidth(frameFit({ width: el.clientWidth, height: tallest }, aspect, frameShare).designWidth);
     };
     measure();
     if (typeof ResizeObserver === 'undefined') {
@@ -90,7 +100,26 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
     observer.observe(el);
     if (host) observer.observe(host);
     return () => observer.disconnect();
-  }, [aspect, maxHeight, fitParentHeight]);
+  }, [aspect, maxHeight, fitParentHeight, frameShare]);
+
+  const mouldingPx = Math.round(cssWidth * frameShare);
+  const [ring, setRing] = useState<string | null>(null);
+  const lookKey = frame ? `${frame.look.src}|${frame.look.borderPx}` : '';
+  useEffect(() => {
+    if (!frame || mouldingPx < 1 || cssWidth === 0) {
+      setRing(null);
+      return;
+    }
+    let alive = true;
+    const scale = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1);
+    void frameRing(frame.look, { width: cssWidth, height: cssWidth / aspect }, mouldingPx, scale).then((url) => {
+      if (alive) setRing(url);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookKey, cssWidth, aspect, mouldingPx]);
 
   const dpr = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1);
   const longSide = Math.min(MAX_BACKING_SIDE, Math.round(Math.max(cssWidth, cssWidth / aspect) * dpr));
@@ -242,6 +271,10 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
 
   return (
     <div ref={wrapRef} className="flex w-full justify-center">
+      <div
+        data-testid="canvas-frame"
+        style={ring ? { padding: mouldingPx, backgroundImage: `url(${ring})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', filter: 'drop-shadow(0 14px 22px rgba(43,36,32,0.35))' } : undefined}
+      >
       <canvas
         ref={canvasRef}
         width={W}
@@ -256,7 +289,7 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
         onKeyDown={onKeyDown}
-        className="block rounded-lg shadow-[0_18px_40px_-18px_rgba(43,36,32,0.45)] outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2"
+        className={`block outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 ${ring ? '' : 'rounded-lg shadow-[0_18px_40px_-18px_rgba(43,36,32,0.45)]'}`}
         style={{
           width: cssWidth || '100%',
           height: cssWidth ? cssWidth / aspect : undefined,
@@ -266,6 +299,7 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
           cursor: activeHasPhoto ? 'grab' : 'pointer',
         }}
       />
+      </div>
     </div>
   );
 }

@@ -107,7 +107,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         photos={photos}
       >
         <div className="flex h-full max-h-full w-full items-center justify-center rounded-xl bg-tint/60 p-1 md:p-2">
-          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} fitParentHeight />
+          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} fitParentHeight frame={{ look, printWidthIn }} />
         </div>
       </PreviewGallery>
 
