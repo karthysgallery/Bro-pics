@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   STANDARD_FRAME_SIZES,
   orientSize,
+  paperSizeName,
   artworkDpi,
   checkPriceRows,
   discountPercent,
@@ -174,11 +175,13 @@ export function PricingGrid({
                 key={sizeKey(standard)}
                 type="button"
                 aria-pressed={on}
-                title={`${s.widthIn} wide × ${s.heightIn} high`}
+                title={`${s.widthIn} wide × ${s.heightIn} high${paperSizeName(standard) ? ` · ${paperSizeName(standard)}` : ''}`}
+                aria-label={`${standard.widthIn}×${standard.heightIn}`}
                 onClick={() => (on ? removeSize(s) : addSize(s))}
                 className={`h-8 rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors ${on ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink/75 hover:border-ink/40'}`}
               >
                 {standard.widthIn}×{standard.heightIn}
+                {paperSizeName(standard) && <span className={`ml-1 text-2xs font-bold ${on ? 'text-gold' : 'text-ink/40'}`}>{paperSizeName(standard)}</span>}
               </button>
             );
           })}
@@ -227,6 +230,7 @@ export function PricingGrid({
                       <td colSpan={7} className="px-3 pb-1 pt-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-display text-sm font-bold tabular-nums text-ink">{sizeLabelOf(size.widthIn, size.heightIn)}</span>
+                          {paperSizeName(size) && <span className="rounded bg-tint px-1.5 py-0.5 text-2xs font-bold text-ink/70">{paperSizeName(size)}</span>}
                           <span className="text-2xs text-ink/50">{size.widthIn > size.heightIn ? 'landscape' : size.widthIn === size.heightIn ? 'square' : 'portrait'}</span>
                           {artwork && <DpiChip dpi={artworkDpi({ width: artwork.widthPx, height: artwork.heightPx }, size)} />}
                           <button type="button" onClick={() => removeSize(size)} className="ml-auto text-2xs font-semibold text-alert hover:underline">

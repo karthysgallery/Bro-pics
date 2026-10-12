@@ -86,5 +86,8 @@ describe('BuyBox sizes', () => {
     );
     expect(screen.getByRole('button', { name: /16x24/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /12x18/ })).toBeTruthy();
+    // The paper name sits beside the size, so a customer thinking "A3" finds it.
+    expect(screen.getByRole('button', { name: '12x18 in' }).textContent).toContain('A3');
+    expect(screen.getByRole('button', { name: '16x24 in' }).textContent).toContain('A2');
   });
 });

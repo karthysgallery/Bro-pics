@@ -40,3 +40,15 @@ describe('price list', () => {
     expect(pictureOrientation({ width: 0, height: 0 })).toBeNull();
   });
 });
+
+import { paperSizeName } from './product-pricing';
+describe('paper size names', () => {
+  it('names the usual frame sizes by their A-series paper, either orientation', () => {
+    expect(paperSizeName({ widthIn: 8, heightIn: 12 })).toBe('A4');
+    expect(paperSizeName({ widthIn: 12, heightIn: 8 })).toBe('A4');
+    expect(paperSizeName({ widthIn: 12, heightIn: 18 })).toBe('A3');
+    expect(paperSizeName({ widthIn: 16, heightIn: 24 })).toBe('A2');
+    expect(paperSizeName({ widthIn: 6, heightIn: 8 })).toBe('A5');
+    expect(paperSizeName({ widthIn: 10, heightIn: 10 })).toBeNull();
+  });
+});

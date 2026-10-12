@@ -11,9 +11,11 @@ interface VariantSelectorProps {
   display?: 'pill' | 'swatch';
   /** Per-option look for swatches: a frame model's photo, or a colour. */
   swatches?: Record<string, SwatchLook>;
+  /** A short note shown beside an option (the paper name of a size). */
+  hints?: Record<string, string>;
 }
 
-export function VariantSelector({ label, options, selected, onSelect, display = 'pill', swatches }: VariantSelectorProps) {
+export function VariantSelector({ label, options, selected, onSelect, display = 'pill', swatches, hints }: VariantSelectorProps) {
   if (options.length <= 1) return null;
 
   return (
@@ -33,7 +35,7 @@ export function VariantSelector({ label, options, selected, onSelect, display = 
           display === 'swatch' ? (
             <Swatch key={option} label={option} active={option === selected} onClick={() => onSelect(option)} look={swatches?.[option]} />
           ) : (
-            <Chip key={option} label={option} active={option === selected} onClick={() => onSelect(option)} />
+            <Chip key={option} label={option} hint={hints?.[option]} active={option === selected} onClick={() => onSelect(option)} />
           )
         )}
       </div>

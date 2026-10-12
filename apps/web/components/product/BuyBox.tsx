@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { glitterOffer, type Product, type PublicFrameModel, type Variant } from '@bro-pics/shared';
+import { glitterOffer, paperSizeName, type Product, type PublicFrameModel, type Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { useComboFrame } from '../../lib/combo-frame-context';
 import { useSiteText } from '../layout/SiteTextContext';
@@ -268,7 +268,13 @@ export function BuyBox({
             onSelectOrientation(orientation);
           }}
         />
-        <VariantSelector label="Size" options={sizes} selected={selectedSize} onSelect={onSelectSize} />
+        <VariantSelector
+          label="Size"
+          options={sizes}
+          selected={selectedSize}
+          onSelect={onSelectSize}
+          hints={Object.fromEntries(variants.flatMap((v) => { const a = paperSizeName(v); return a ? [[v.sizeLabel, a] as const] : []; }))}
+        />
         <VariantSelector
           label={frameModels.length ? 'Frame' : 'Finish'}
           options={colours}

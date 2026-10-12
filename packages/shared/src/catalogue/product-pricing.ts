@@ -31,6 +31,17 @@ export function orientSize(size: { widthIn: number; heightIn: number }, orientat
   return orientation === 'landscape' ? { widthIn: long, heightIn: short } : { widthIn: short, heightIn: long };
 }
 
+/**
+ * The paper name shops use for a frame size ("A4" for 12×8). Frame sizes are the usual inch sizes that
+ * stand in for the A-series paper sizes, so a customer who thinks "A4" finds the right frame.
+ */
+const PAPER_SIZES: Record<string, string> = { '6x4': 'A6', '8x6': 'A5', '12x8': 'A4', '18x12': 'A3', '24x16': 'A2', '36x24': 'A1' };
+export function paperSizeName(size: { widthIn: number; heightIn: number }): string | null {
+  const long = Math.max(size.widthIn, size.heightIn);
+  const short = Math.min(size.widthIn, size.heightIn);
+  return PAPER_SIZES[`${long}x${short}`] ?? null;
+}
+
 const num = (n: number) => String(Math.round(n * 100) / 100);
 export function sizeLabelOf(widthIn: number, heightIn: number): string {
   return `${num(widthIn)}x${num(heightIn)} in`;
