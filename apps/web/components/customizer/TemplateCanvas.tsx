@@ -11,6 +11,11 @@ interface TemplateCanvasProps {
   onRequestPhoto: (slotId: string) => void;
   /** Tallest the canvas may be, in CSS px (keeps a tall design on screen). */
   maxHeight?: number;
+  /**
+   * Fit the whole design inside the height of the box it sits in (the preview gallery's square), so a tall design
+   * is never cut off at the top and bottom. Off where the box grows with its content.
+   */
+  fitParentHeight?: boolean;
   /** Example pictures for the empty photo spaces (one per space, repeating): shown until the customer adds their own. */
   samples?: string[];
 }
@@ -26,7 +31,7 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
  * space; pinch (or Ctrl/⌘ + scroll, or a trackpad pinch) to zoom; arrow keys
  * and +/− do the same from the keyboard.
  */
-export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, samples }: TemplateCanvasProps) {
+export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fitParentHeight = false, samples }: TemplateCanvasProps) {
   const { template, state, activeSlotId, setActiveSlotId, panPhoto, zoomPhoto, render } = customizer;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,7 +70,17 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, sa
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const measure = () => setCssWidth(Math.min(el.clientWidth, maxHeight * aspect));
+    const host = fitParentHeight ? el.parentElement : null;
+    const measure = () => {
+      let tallest = maxHeight;
+      if (host) {
+        // The room inside the box (its height without its padding), when it has one.
+        const style = getComputedStyle(host);
+        const room = host.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+        if (room > 50) tallest = Math.min(maxHeight, room);
+      }
+      setCssWidth(Math.min(el.clientWidth, tallest * aspect));
+    };
     measure();
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', measure);
@@ -73,8 +88,9 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, sa
     }
     const observer = new ResizeObserver(measure);
     observer.observe(el);
+    if (host) observer.observe(host);
     return () => observer.disconnect();
-  }, [aspect, maxHeight]);
+  }, [aspect, maxHeight, fitParentHeight]);
 
   const dpr = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1);
   const longSide = Math.min(MAX_BACKING_SIDE, Math.round(Math.max(cssWidth, cssWidth / aspect) * dpr));

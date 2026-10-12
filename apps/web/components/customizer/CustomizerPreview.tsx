@@ -106,8 +106,8 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         showEditor={!fixedDesign}
         photos={photos}
       >
-        <div className="w-full rounded-xl bg-tint/60 p-1 md:p-2">
-          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} />
+        <div className="flex h-full max-h-full w-full items-center justify-center rounded-xl bg-tint/60 p-1 md:p-2">
+          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} fitParentHeight />
         </div>
       </PreviewGallery>
 
