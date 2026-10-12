@@ -14,6 +14,7 @@ interface StockPhoto {
   photographer: string;
   photographerUrl: string;
   pageUrl: string;
+  provider?: 'pixabay' | 'pexels';
 }
 
 const thumb = (url: string) => url.replace(/w=\d+/, 'w=200');
@@ -168,8 +169,8 @@ export function SamplePhotosPanel({ slots, photos, onChange }: { slots: number; 
           </div>
           <p className="text-2xs text-ink/50">
             Free photos from{' '}
-            <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">
-              Pexels
+            <a href={results[0]?.provider === 'pexels' ? 'https://www.pexels.com' : 'https://pixabay.com'} target="_blank" rel="noreferrer" className="underline">
+              {results[0]?.provider === 'pexels' ? 'Pexels' : 'Pixabay'}
             </a>
             . Used only as examples in the shop photos.
           </p>

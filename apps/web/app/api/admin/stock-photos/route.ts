@@ -3,7 +3,7 @@ import { catalogueGuard } from '../../../../lib/catalogue/guard';
 import { searchStockPhotos, StockPhotosError } from '../../../../lib/catalogue/stock-photos';
 import { adminApiError } from '../../../../lib/admin-api-error';
 
-/** Admin → product photos: search free stock pictures (Pexels) to use as sample photos. */
+/** Admin → product photos: search free stock pictures (Pixabay or Pexels) to use as sample photos. */
 export async function GET(request: Request): Promise<NextResponse> {
   const g = await catalogueGuard(request, 'catalogue:write');
   if (!g.ok) return g.response;
