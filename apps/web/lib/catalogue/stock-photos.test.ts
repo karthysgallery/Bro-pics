@@ -79,9 +79,23 @@ describe('stock photos', () => {
       const none = vi.fn();
       await expect(fetchStockPhoto('https://evil.com/a.jpg', { fetchImpl: none as unknown as typeof fetch })).rejects.toMatchObject({ status: 400 });
       expect(none).not.toHaveBeenCalled();
-      await expect(fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: vi.fn().mockResolvedValue(new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
-      await expect(fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: vi.fn().mockImplementation(async () => redirect('https://pixabay.com/get/a')) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
-      await expect(fetchStockPhoto('https://pixabay.com/get/a', { maxBytes: 2, fetchImpl: vi.fn().mockResolvedValue(img()) as unknown as typeof fetch })).rejects.toMatchObject({ status: 413 });
+      const wait = vi.fn(async () => {});
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { wait, fetchImpl: vi.fn().mockImplementation(async () => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { wait, fetchImpl: vi.fn().mockImplementation(async () => redirect('https://pixabay.com/get/a')) as unknown as typeof fetch })).rejects.toMatchObject({ status: 502 });
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { maxBytes: 2, wait, fetchImpl: vi.fn().mockImplementation(async () => img()) as unknown as typeof fetch })).rejects.toMatchObject({ status: 413 });
+    });
+    it('tries again when the stock site answers a busy or blocked reply, and succeeds on a later try', async () => {
+      const wait = vi.fn(async () => {});
+      const f = vi.fn().mockResolvedValueOnce(new Response('busy', { status: 429 })).mockResolvedValueOnce(new Response('no', { status: 403, headers: { 'content-type': 'text/html' } })).mockResolvedValueOnce(img());
+      const out = await fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: f as unknown as typeof fetch, wait });
+      expect(out.bytes.length).toBe(3);
+      expect(f).toHaveBeenCalledTimes(3);
+      expect(wait).toHaveBeenCalledTimes(2);
+    });
+    it('gives up after three tries', async () => {
+      const f = vi.fn().mockImplementation(async () => new Response('busy', { status: 429 }));
+      await expect(fetchStockPhoto('https://pixabay.com/get/a', { fetchImpl: f as unknown as typeof fetch, wait: async () => {} })).rejects.toMatchObject({ status: 502 });
+      expect(f).toHaveBeenCalledTimes(3);
     });
   });
 });

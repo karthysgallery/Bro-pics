@@ -1,4 +1,5 @@
 import 'server-only';
+import { logger } from '@bro-pics/shared';
 
 /**
  * Free stock photos for SAMPLE pictures in the shop photos of photo and collage frames. Pixabay
@@ -136,33 +137,57 @@ async function searchPexels(q: string, options: SearchOptions, fetchImpl: typeof
 }
 
 const UA = 'Mozilla/5.0 (compatible; KarthysGallery/1.0; +https://karthysgallery.in)';
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
  * Fetches a stock picture on the admin's behalf. Stock sites hand out an address that redirects to their image
  * host, so redirects are followed by hand (at most 4), and EVERY address on the way must be an approved stock
  * photo host: a redirect somewhere else is refused, so this cannot be used to reach other servers.
+ *
+ * Stock sites now and then answer a server with a busy or blocked reply, so a failed try is repeated (up to 3
+ * times, a little later each time) before giving up; what the site said is logged for the shop's developer.
  */
 export async function fetchStockPhoto(
   url: string,
-  options: { maxBytes?: number; fetchImpl?: typeof fetch } = {}
+  options: { maxBytes?: number; fetchImpl?: typeof fetch; wait?: (ms: number) => Promise<void> } = {}
 ): Promise<{ bytes: Buffer; type: string }> {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const wait = options.wait ?? sleep;
   const maxBytes = options.maxBytes ?? 15 * 1024 * 1024;
-  let current = url;
-  for (let hop = 0; hop <= 4; hop++) {
-    if (!isStockPhotoUrl(current)) throw new StockPhotosError(400, 'Only pictures from the free photo service can be used here.');
-    const res = await fetchImpl(current, { redirect: 'manual', headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(15_000) });
-    if (res.status >= 300 && res.status < 400) {
-      const next = res.headers.get('location');
-      if (!next) break;
-      current = new URL(next, current).toString();
-      continue;
+  let lastWhy = 'no answer';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await wait(700 * attempt);
+    let current = url;
+    let done: { bytes: Buffer; type: string } | null = null;
+    try {
+      for (let hop = 0; hop <= 4; hop++) {
+        if (!isStockPhotoUrl(current)) throw new StockPhotosError(400, 'Only pictures from the free photo service can be used here.');
+        const res = await fetchImpl(current, { redirect: 'manual', headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(15_000) });
+        if (res.status >= 300 && res.status < 400) {
+          const next = res.headers.get('location');
+          if (!next) {
+            lastWhy = `redirect ${res.status} without a location`;
+            break;
+          }
+          current = new URL(next, current).toString();
+          continue;
+        }
+        const type = res.headers.get('content-type') ?? '';
+        if (!res.ok || !type.startsWith('image/')) {
+          lastWhy = `status ${res.status}, ${type || 'no content type'}`;
+          break;
+        }
+        const bytes = Buffer.from(await res.arrayBuffer());
+        if (bytes.length > maxBytes) throw new StockPhotosError(413, 'That picture is too large. Choose another.');
+        done = { bytes, type };
+        break;
+      }
+    } catch (e) {
+      if (e instanceof StockPhotosError) throw e;
+      lastWhy = e instanceof Error ? e.message : 'request failed';
     }
-    const type = res.headers.get('content-type') ?? '';
-    if (!res.ok || !type.startsWith('image/')) throw new StockPhotosError(502, 'That picture could not be fetched. Choose another.');
-    const bytes = Buffer.from(await res.arrayBuffer());
-    if (bytes.length > maxBytes) throw new StockPhotosError(413, 'That picture is too large. Choose another.');
-    return { bytes, type };
+    if (done) return done;
   }
+  logger.warn('Stock photo could not be fetched', { host: (() => { try { return new URL(url).hostname; } catch { return 'invalid'; } })(), why: lastWhy });
   throw new StockPhotosError(502, 'That picture could not be fetched. Choose another.');
 }

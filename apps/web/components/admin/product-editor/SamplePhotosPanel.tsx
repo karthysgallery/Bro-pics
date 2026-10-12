@@ -74,23 +74,36 @@ export function SamplePhotosPanel({ slots, photos, onChange }: { slots: number; 
     }
   };
 
-  /** Copies the chosen stock photos into the media library and puts them in the empty spaces. */
-  const useStock = async (picks: StockPhoto[]) => {
-    const take = picks.slice(0, room() || 1);
-    setBusy(`Adding ${take.length} photo${take.length === 1 ? '' : 's'}…`);
+  /**
+   * Copies stock photos into the media library and puts them in the empty spaces. A photo that cannot be fetched is
+   * skipped, and (when filling) the next one from the results takes its place, so one bad photo never stops the rest.
+   */
+  const useStock = async (candidates: StockPhoto[], want: number) => {
+    const target = Math.max(1, want);
+    setBusy(`Adding ${target} photo${target === 1 ? '' : 's'}…`);
+    const urls: string[] = [];
+    let skipped = 0;
     try {
-      const urls: string[] = [];
-      for (const p of take) {
-        const res = await fetch(`/api/admin/stock-photos/file?u=${encodeURIComponent(p.full)}`, { headers: await authHeader() });
-        if (!res.ok) throw new Error('A photo could not be fetched. Choose another.');
-        const blob = await res.blob();
-        const img = await upload(new File([blob], `stock-${p.id}.jpg`, { type: blob.type || 'image/jpeg' }), { alt: p.alt, tag: 'sample-photo' });
-        urls.push(img.url.replace(/w=\d+/, 'w=2000'));
+      for (const p of candidates) {
+        if (urls.length >= target) break;
+        try {
+          const res = await fetch(`/api/admin/stock-photos/file?u=${encodeURIComponent(p.full)}`, { headers: await authHeader() });
+          if (!res.ok) throw new Error('not fetched');
+          const blob = await res.blob();
+          const img = await upload(new File([blob], `stock-${p.id}.jpg`, { type: blob.type || 'image/jpeg' }), { alt: p.alt, tag: 'sample-photo' });
+          urls.push(img.url.replace(/w=\d+/, 'w=2000'));
+          setBusy(`Added ${urls.length} of ${target}…`);
+        } catch {
+          skipped++;
+        }
       }
-      if (room() === 0) onChange([urls[0]!, ...photos.slice(1)]);
-      else addUrls(urls);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'The photos could not be added.', 'error');
+      if (urls.length > 0) {
+        if (room() === 0) onChange([urls[0]!, ...photos.slice(1)]);
+        else addUrls(urls);
+      }
+      if (urls.length === 0) showToast('The photos could not be fetched. Try again in a moment, or choose different ones.', 'error');
+      else if (urls.length < target) showToast(`${urls.length} added. ${skipped} could not be fetched and ${skipped === 1 ? 'was' : 'were'} skipped; press again to fill the rest.`, 'error');
+      else if (skipped > 0) showToast(`Added ${urls.length}. ${skipped} could not be fetched, so others took their place.`, 'success');
     } finally {
       setBusy(null);
     }
@@ -155,13 +168,13 @@ export function SamplePhotosPanel({ slots, photos, onChange }: { slots: number; 
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-ink/60">Tap a photo to add it, or fill every empty space at once.</span>
-            <button type="button" disabled={busy !== null} onClick={() => void useStock(results.slice(0, Math.max(1, room() || 1)))} className="h-8 rounded-lg border border-line bg-paper px-3 font-semibold text-ink hover:bg-field disabled:opacity-50">
+            <button type="button" disabled={busy !== null} onClick={() => void useStock(results, room() || 1)} className="h-8 rounded-lg border border-line bg-paper px-3 font-semibold text-ink hover:bg-field disabled:opacity-50">
               Fill {room() || 1} {room() === 1 || room() === 0 ? 'space' : 'spaces'} with these
             </button>
           </div>
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
             {results.map((p) => (
-              <button key={p.id} type="button" disabled={busy !== null} title={`${p.alt} — photo by ${p.photographer}`} onClick={() => void useStock([p])} className="overflow-hidden rounded-lg border border-line bg-paper disabled:opacity-50">
+              <button key={p.id} type="button" disabled={busy !== null} title={`${p.alt} — photo by ${p.photographer}`} onClick={() => void useStock([p], 1)} className="overflow-hidden rounded-lg border border-line bg-paper disabled:opacity-50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.thumb} alt={p.alt} loading="lazy" className="aspect-square w-full object-cover" />
               </button>

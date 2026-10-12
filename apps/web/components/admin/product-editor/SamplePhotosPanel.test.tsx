@@ -64,4 +64,27 @@ describe('SamplePhotosPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove sample photo 1' }));
     expect(onChange).toHaveBeenCalledWith(['/b?w=1']);
   });
+
+  it('skips a photo that cannot be fetched and fills the space from the next result instead', async () => {
+    api.mockResolvedValue({ photos: [1, 2, 3, 4].map(stock) });
+    global.fetch = vi.fn().mockImplementation(async (url: string) =>
+      String(url).includes('f2.jpg') ? new Response('bad', { status: 502 }) : new Response(new Blob(['x'], { type: 'image/jpeg' }), { status: 200 })
+    ) as unknown as typeof fetch;
+    const onChange = vi.fn();
+    render(<SamplePhotosPanel slots={3} photos={[]} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('What should the photo show?'), { target: { value: 'child' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find free photos' }));
+    await screen.findByText(/Free photos from/);
+    fireEvent.click(screen.getByRole('button', { name: /Fill 3 spaces with these/ }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    // photo 2 failed: 1, 3 and 4 were used, so all three spaces are filled.
+    expect(onChange.mock.calls[0]![0]).toHaveLength(3);
+    expect(upload).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(global.fetch).mock.calls.map((c) => decodeURIComponent(String(c[0])))).toEqual([
+      '/api/admin/stock-photos/file?u=https://images.pexels.com/f1.jpg',
+      '/api/admin/stock-photos/file?u=https://images.pexels.com/f2.jpg',
+      '/api/admin/stock-photos/file?u=https://images.pexels.com/f3.jpg',
+      '/api/admin/stock-photos/file?u=https://images.pexels.com/f4.jpg',
+    ]);
+  });
 });
