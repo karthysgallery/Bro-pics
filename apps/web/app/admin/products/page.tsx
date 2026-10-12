@@ -180,12 +180,20 @@ export default function AdminProductsPage() {
           </p>
         </div>
 
-        <Link
-          href="/admin/products/new"
-          className="self-start sm:self-auto px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink font-semibold text-xs transition-colors shadow-xs"
-        >
-          + Add frame
-        </Link>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          <Link
+            href="/admin/products/bulk"
+            className="px-4 py-2 rounded-xl border border-line bg-paper hover:bg-tint text-ink font-semibold text-xs transition-colors"
+          >
+            Add many frames
+          </Link>
+          <Link
+            href="/admin/products/new"
+            className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink font-semibold text-xs transition-colors shadow-xs"
+          >
+            + Add frame
+          </Link>
+        </div>
       </div>
 
       {/* Status Filter Tabs */}
