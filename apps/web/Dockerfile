@@ -35,11 +35,11 @@ ARG GOOGLE_CLOUD_PROJECT
 # GOOGLE_ADC=1: the build reads the live catalogue (to pre-render pages) with
 # the Cloud Build service account's own credentials — no key file. Build only.
 ENV NEXT_OUTPUT=standalone NEXT_TELEMETRY_DISABLED=1 SITE_PREVIEW=$SITE_PREVIEW GOOGLE_ADC=1 GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
-# The Google Fonts stylesheets next/font needs are saved in google-fonts-css.json (see scripts/font-css-capture.cjs):
-# on Cloud Build, Google sometimes answers the live request with a stylesheet Next.js cannot read, which failed whole
-# deploys. The font FILES are still fetched from Google; only the stylesheet lookup is answered from this file.
-ENV NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/repo/apps/web/google-fonts-css.json
-RUN pnpm --filter @bro-pics/web build
+# next/font downloads the Google Fonts at build time. On Cloud Build Google now and then answers with a stylesheet
+# Next.js cannot read and the build stops ("next/font ... Cannot read properties of null"), so the build is tried up to 3
+# times. (Do NOT set NEXT_FONT_GOOGLE_MOCKED_RESPONSES here: it makes Next write the font's web address into the font
+# file, which breaks every Google font on the live site.)
+RUN for attempt in 1 2 3; do pnpm --filter @bro-pics/web build && exit 0; echo "next build attempt $attempt failed"; sleep 5; done; exit 1
 
 FROM node:20-slim
 WORKDIR /app
