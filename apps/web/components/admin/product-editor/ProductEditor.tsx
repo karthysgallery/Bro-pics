@@ -249,7 +249,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         if (loadedOnce.current) return;
         loadedOnce.current = true;
         const r = await api<{
-          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery' | 'autoPhotos' | 'samplePhotos'> & {
+          product: Omit<State, 'description' | 'highlights' | 'howItWorks' | 'badges' | 'seo' | 'rows' | 'gallery' | 'autoPhotos'> & {
             descriptionHtml: string;
             highlights: string[];
             howItWorks: string[];
@@ -601,6 +601,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         gallery: gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt, auto: Boolean(g.auto) })),
         autoPhotoKey,
         glitter: s.glitter,
+        samplePhotos: s.productType === 'ready_made' ? [] : s.samplePhotos,
         artworkMediaId: s.productType === 'ready_made' ? (s.artwork?.mediaId ?? null) : null,
         collageTemplateId: s.productType === 'collage' ? s.collageTemplateId : null,
       };

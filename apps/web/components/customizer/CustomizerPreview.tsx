@@ -21,6 +21,8 @@ interface CustomizerPreviewProps {
   photos?: GalleryPhoto[];
   /** Show the print with the glitter finish (an illustration: a real glitter print sparkles with the light). */
   glitter?: boolean;
+  /** Example pictures for the empty photo spaces (the product's sample photos). */
+  samples?: string[];
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -43,7 +45,7 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false, samples = [] }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<GalleryViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
@@ -105,9 +107,13 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         photos={photos}
       >
         <div className="w-full rounded-xl bg-tint/60 p-1 md:p-2">
-          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} />
+          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} />
         </div>
       </PreviewGallery>
+
+      {samples.length > 0 && !fixedDesign && photoCount < template.photoSlots.length && (
+        <p className="px-1 text-center text-2xs text-ink/55">Example photos. Tap a space to add your own.</p>
+      )}
 
       {glitter && roomImage && (
         <p className="px-1 text-center text-2xs text-ink/55">Glitter finish preview. It is an illustration: a real glitter print sparkles as it catches the light.</p>

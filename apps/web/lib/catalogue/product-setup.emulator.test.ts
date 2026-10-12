@@ -52,7 +52,7 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
       { widthIn: 12, heightIn: 18, frameModelId: gold, mrp: 179900, price: 149900, cost: 60000, isActive: true },
       { widthIn: 8, heightIn: 10, frameModelId: gold, mrp: 89900, price: 69900, cost: 28000, isActive: true },
     ],
-    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null, autoPhotoKey: null, glitter: { enabled: false, extraPrice: 10000 },
+    gallery: [], artworkMediaId: `art_${run}`, collageTemplateId: null, autoPhotoKey: null, glitter: { enabled: false, extraPrice: 10000 }, samplePhotos: [],
     ...over,
   });
 
@@ -169,5 +169,16 @@ describe.skipIf(!enabled)('guided product save (Firestore emulator)', { timeout:
     const v = (await ref.collection('variants').doc(`legacy_v_${run}`).get()).data() as Variant;
     expect(v).toMatchObject({ isActive: true, frameModelId: teak, frameColour: `Teak Classic ${run}`, compareAtPrice: 99900 });
     expect((await ref.collection('variants').get()).size).toBe(1);
+  });
+
+  it('sample photos: saved for a photo frame, loaded back, cleared again, and never kept on a ready-made frame', async () => {
+    const urls = ['/api/media/a/image?w=2000', '/api/media/b/image?w=2000'];
+    const saved = await saveProductSetup(db, store, null, body({ productType: 'single_photo', title: 'Sample Frame', slug: `sample-frame-${run}`, productCode: 'SAMP', artworkMediaId: null, samplePhotos: urls }));
+    expect(((await db.collection('products').doc(saved.productId).get()).data() as Product).samplePhotos).toEqual(urls);
+    expect((await loadProductSetup(db, saved.productId)).product.samplePhotos).toEqual(urls);
+    await saveProductSetup(db, store, saved.productId, body({ productType: 'single_photo', title: 'Sample Frame', slug: `sample-frame-${run}`, productCode: 'SAMP', artworkMediaId: null, samplePhotos: [] }));
+    expect((await loadProductSetup(db, saved.productId)).product.samplePhotos).toEqual([]);
+    const ready = await saveProductSetup(db, store, null, body({ title: 'Ready Sample', slug: `ready-sample-${run}`, productCode: 'RSAM', samplePhotos: urls }));
+    expect(((await db.collection('products').doc(ready.productId).get()).data() as Product).samplePhotos).toEqual([]);
   });
 });

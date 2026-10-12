@@ -46,6 +46,11 @@ export interface RenderInput {
   /** Show preview-only layers (a physical frame that is not printed). */
   includeUnprinted: boolean;
   activeSlotId?: string | null;
+  /**
+   * An example picture for an empty photo space (editor mode only): shown until the customer adds their own, with a
+   * small "+" mark. It is never part of the customer's design: an export (print, cart preview) leaves the space empty.
+   */
+  sampleFor?: (slotId: string) => { image: CanvasImageSource & { width?: number; height?: number; naturalWidth?: number; naturalHeight?: number }; key: string } | undefined;
   /** Reused offscreen slot images between frames, so a drag only redraws the slot being moved. */
   slotCache?: Map<string, { key: string; canvas: HTMLCanvasElement }>;
   createCanvas?: (width: number, height: number) => HTMLCanvasElement;
@@ -196,6 +201,44 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: numb
   ctx.restore();
 }
 
+/** An example picture filling the space (cover), in the space's shape, with a small "+" so it reads as replaceable. */
+function drawSample(
+  ctx: CanvasRenderingContext2D,
+  slot: PhotoSlot,
+  w: number,
+  h: number,
+  image: CanvasImageSource & { width?: number; height?: number; naturalWidth?: number; naturalHeight?: number },
+  maskImg: CanvasImageSource | undefined
+): void {
+  const iw = image.naturalWidth || image.width || w;
+  const ih = image.naturalHeight || image.height || h;
+  const k = Math.max(w / iw, h / ih);
+  ctx.save();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, (w - iw * k) / 2, (h - ih * k) / 2, iw * k, ih * k);
+  applyShapeMask(ctx, slot, w, h, maskImg);
+  ctx.restore();
+  // The "+" mark, in the lower right of the space.
+  const r = Math.max(7, Math.min(w, h) * 0.085);
+  const cx = Math.max(r + 2, w - r * 1.5);
+  const cy = Math.max(r + 2, h - r * 1.5);
+  ctx.save();
+  ctx.fillStyle = 'rgba(43,36,32,0.62)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.2, r * 0.18);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.45, cy);
+  ctx.lineTo(cx + r * 0.45, cy);
+  ctx.moveTo(cx, cy - r * 0.45);
+  ctx.lineTo(cx, cy + r * 0.45);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, missing: string[]): HTMLCanvasElement | null {
   const photo = input.state.slots[slot.id];
   const create = input.createCanvas ?? defaultCreateCanvas;
@@ -211,13 +254,15 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
   if (!photo || !img) {
     if (input.mode !== 'editor') return null;
     const photoState = !photo ? 'empty' : input.photoUnavailable?.(photo) ? 'unavailable' : 'loading';
-    const key = ['empty', cw, ch, slot.label, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), photoState].join('|');
+    const sample = photoState === 'empty' ? input.sampleFor?.(slot.id) : undefined;
+    const key = ['empty', cw, ch, slot.label, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), photoState, sample?.key ?? '', maskImg ? maskSrc : ''].join('|');
     const cached = input.slotCache?.get(slot.id);
     if (cached && cached.key === key) return cached.canvas;
     const canvas = create(cw, ch);
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    drawPlaceholder(ctx, slot, cw, ch, photoState);
+    if (sample) drawSample(ctx, slot, cw, ch, sample.image, maskImg);
+    else drawPlaceholder(ctx, slot, cw, ch, photoState);
     input.slotCache?.set(slot.id, { key, canvas });
     return canvas;
   }

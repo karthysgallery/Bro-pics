@@ -82,6 +82,7 @@ export const ProductSetupBodySchema = z
     /** What the automatic photos were made from (so the editor knows when to remake them); null = not made. */
     autoPhotoKey: z.string().max(4000).nullable().default(null),
     /** Glitter-finish printing: offered on this product or not, and the extra per frame (paise). */
+    samplePhotos: z.array(z.string().trim().min(1).max(500)).max(40, 'Up to 40 sample photos.').default([]),
     glitter: z
       .object({ enabled: z.boolean(), extraPrice: z.number().int().min(0, 'The glitter extra cannot be negative.').max(MAX_GLITTER_EXTRA, 'That glitter extra is too large — enter the amount in rupees, e.g. 100.') })
       .strict()
@@ -315,6 +316,8 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     artwork,
     autoPhotoKey: body.autoPhotoKey,
     glitter: body.glitter,
+    // Examples for the customer's empty photo spaces: only photo and collage frames use them.
+    samplePhotos: body.productType === 'ready_made' ? [] : body.samplePhotos,
     photoSlots,
     personalizationTemplateId: productTemplateId,
     basePrice: Math.min(...(activeRows.length ? activeRows : body.rows).map((r) => r.price)),
@@ -429,6 +432,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
       artwork: p.artwork ?? null,
       autoPhotoKey: (p as Product & { autoPhotoKey?: string | null }).autoPhotoKey ?? null,
       glitter: p.glitter ?? { enabled: false, extraPrice: DEFAULT_GLITTER_EXTRA },
+      samplePhotos: p.samplePhotos ?? [],
       collageTemplateId: productType === 'collage' ? (p.personalizationTemplateId ?? null) : null,
       primaryImageUrl: p.primaryImageUrl ?? '',
     },

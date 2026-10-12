@@ -11,6 +11,8 @@ interface TemplateCanvasProps {
   onRequestPhoto: (slotId: string) => void;
   /** Tallest the canvas may be, in CSS px (keeps a tall design on screen). */
   maxHeight?: number;
+  /** Example pictures for the empty photo spaces (one per space, repeating): shown until the customer adds their own. */
+  samples?: string[];
 }
 
 const MAX_BACKING_SIDE = 2000;
@@ -24,13 +26,41 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
  * space; pinch (or Ctrl/⌘ + scroll, or a trackpad pinch) to zoom; arrow keys
  * and +/− do the same from the keyboard.
  */
-export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640 }: TemplateCanvasProps) {
+export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, samples }: TemplateCanvasProps) {
   const { template, state, activeSlotId, setActiveSlotId, panPhoto, zoomPhoto, render } = customizer;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const slotCache = useRef(new Map<string, { key: string; canvas: HTMLCanvasElement }>());
   const [cssWidth, setCssWidth] = useState(0);
   const aspect = template.canvas.width / template.canvas.height;
+
+  // The example pictures, loaded once; the canvas is redrawn when they arrive.
+  const [sampleImages, setSampleImages] = useState<Array<{ url: string; image: HTMLImageElement }>>([]);
+  const sampleKey = (samples ?? []).join('|');
+  useEffect(() => {
+    const urls = sampleKey ? sampleKey.split('|') : [];
+    if (urls.length === 0) {
+      setSampleImages([]);
+      return;
+    }
+    let alive = true;
+    Promise.all(
+      urls.map(
+        (url) =>
+          new Promise<{ url: string; image: HTMLImageElement } | null>((resolve) => {
+            const image = new Image();
+            image.onload = () => resolve({ url, image });
+            image.onerror = () => resolve(null);
+            image.src = url;
+          })
+      )
+    ).then((loaded) => {
+      if (alive) setSampleImages(loaded.filter((x): x is { url: string; image: HTMLImageElement } => x !== null));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [sampleKey]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -72,10 +102,17 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640 }: 
         includeUnprinted: true,
         activeSlotId,
         slotCache: slotCache.current,
+        sampleFor: sampleImages.length
+          ? (slotId) => {
+              const index = Math.max(0, template.photoSlots.findIndex((s) => s.id === slotId));
+              const pick = sampleImages[index % sampleImages.length]!;
+              return { image: pick.image, key: pick.url };
+            }
+          : undefined,
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [template, state, activeSlotId, W, H, cssWidth, render]);
+  }, [template, state, activeSlotId, W, H, cssWidth, render, sampleImages]);
 
   // --- Pointer gestures ---------------------------------------------------
 

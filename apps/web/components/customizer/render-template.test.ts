@@ -189,4 +189,57 @@ describe('renderTemplate', () => {
     expect(srcs.sort()).toEqual(['/art.png', 'blob:up_a']);
     expect(unresolvedPhotos).toEqual(['b']);
   });
+
+  it('shows an example picture in an empty photo space while editing, but never in an export', () => {
+    const sampleImg = { label: 'sample', naturalWidth: 800, naturalHeight: 600 } as unknown as HTMLImageElement;
+    const emptyState: PersonalizationState = { ...state, slots: { b: photo('up_b') } }; // space "a" is empty
+    const run = (mode: 'editor' | 'export') => {
+      const slotLogs: Call[][] = [];
+      renderTemplate(fakeCanvas(600, 400, [], 'main').getContext('2d')!, {
+        ...base,
+        state: emptyState,
+        width: 600,
+        height: 400,
+        mode,
+        getImage: images(['/art.png', 'blob:up_b']),
+        sampleFor: (slotId) => (slotId === 'a' ? { image: sampleImg, key: 'sample-1' } : undefined),
+        createCanvas: (w, h) => {
+          const log: Call[] = [];
+          slotLogs.push(log);
+          return fakeCanvas(w, h, log, 'slot');
+        },
+      });
+      return slotLogs.flat();
+    };
+    const editor = run('editor');
+    expect(editor.some((c) => c.op === 'drawImage' && c.args[0] === 'sample')).toBe(true);
+    // the "+" mark is drawn on it
+    expect(editor.some((c) => c.op === 'arc')).toBe(true);
+    // The placeholder's own label ("Left") is not drawn when an example picture is there.
+    expect(editor.some((c) => c.op === 'fillText' && c.args[0] === 'Left')).toBe(false);
+    const exported = run('export');
+    expect(exported.some((c) => c.op === 'drawImage' && c.args[0] === 'sample')).toBe(false);
+  });
+
+  it('keeps the plain placeholder when there is no example picture, and never puts one over a customer photo', () => {
+    const slotLogs: Call[][] = [];
+    const sampleImg = { label: 'sample', naturalWidth: 800, naturalHeight: 600 } as unknown as HTMLImageElement;
+    renderTemplate(fakeCanvas(600, 400, [], 'main').getContext('2d')!, {
+      ...base,
+      state: { ...state, slots: { a: photo('up_a') } }, // a: customer photo, b: empty
+      width: 600,
+      height: 400,
+      mode: 'editor',
+      getImage: images(['/art.png', 'blob:up_a']),
+      sampleFor: (slotId) => (slotId === 'a' ? { image: sampleImg, key: 'k' } : undefined),
+      createCanvas: (w, h) => {
+        const log: Call[] = [];
+        slotLogs.push(log);
+        return fakeCanvas(w, h, log, 'slot');
+      },
+    });
+    const all = slotLogs.flat();
+    expect(all.some((c) => c.op === 'drawImage' && c.args[0] === 'sample')).toBe(false);
+    expect(all.some((c) => c.op === 'fillText' && c.args[0] === 'Right')).toBe(true);
+  });
 });

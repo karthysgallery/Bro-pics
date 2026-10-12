@@ -120,6 +120,8 @@ export const ProductSchema = z.object({
   // Glitter-finish printing: an optional extra the customer can choose on the product page.
   // `extraPrice` (paise) is added to the size's price per frame; set by the owner, never by the browser.
   glitter: z.object({ enabled: z.boolean(), extraPrice: z.number().int().nonnegative() }).optional(),
+  /** Photo and collage frames: example pictures shown in the empty photo spaces of the customer's preview until they add their own (one per space; they repeat when fewer). Never printed. */
+  samplePhotos: z.array(z.string().min(1).max(500)).max(40).optional(),
 });
 
 export type Product = z.infer<typeof ProductSchema>;
