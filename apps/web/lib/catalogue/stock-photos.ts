@@ -64,6 +64,11 @@ export function stockProvider(): StockProvider | null {
   return null;
 }
 
+/** Pixabay's tag lists repeat words and run long: the first few different ones make a fair description. */
+export function shortTags(tags: string | undefined): string {
+  return [...new Set((tags ?? '').split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 4).join(', ');
+}
+
 interface PixabayHit {
   id: number;
   pageURL: string;
@@ -98,7 +103,7 @@ async function searchPixabay(q: string, options: SearchOptions, fetchImpl: typeo
   return (body.hits ?? []).map((h) => ({
     id: h.id,
     provider: 'pixabay',
-    alt: h.tags || q,
+    alt: shortTags(h.tags) || q,
     thumb: h.webformatURL || h.previewURL,
     full: h.largeImageURL || h.webformatURL,
     photographer: h.user,

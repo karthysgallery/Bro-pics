@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { cleanQuery, isStockPhotoUrl as isPexelsPhotoUrl, searchStockPhotos, StockPhotosError } from './stock-photos';
+import { shortTags, cleanQuery, isStockPhotoUrl as isPexelsPhotoUrl, searchStockPhotos, StockPhotosError } from './stock-photos';
 
 describe('stock photos', () => {
   beforeEach(() => { process.env.PEXELS_API_KEY = 'k'; });
@@ -51,5 +51,10 @@ describe('stock photos', () => {
     expect(url).toContain('orientation=vertical');
     expect(url).toContain('safesearch=true');
     expect(out).toEqual([{ id: 9, provider: 'pixabay', alt: 'child, girl', thumb: 'W', full: 'L', photographer: 'Asha K', photographerUrl: 'https://pixabay.com/users/Asha%20K-55/', pageUrl: 'https://pixabay.com/photos/9/', width: 3000, height: 4000 }]);
+  });
+
+  it('shortens Pixabay’s long, repeating tag lists', () => {
+    expect(shortTags('baby, newborn, baby, baby, father, people, monochrome')).toBe('baby, newborn, father, people');
+    expect(shortTags(undefined)).toBe('');
   });
 });
