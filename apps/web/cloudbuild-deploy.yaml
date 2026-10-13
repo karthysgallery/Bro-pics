@@ -74,6 +74,9 @@ substitutions:
   _WHATSAPP_NUMBER: "910000000000"
 
 options:
-  machineType: E2_HIGHCPU_8
+  # COST: E2_HIGHCPU_8 is a paid machine (about $0.0156 per build-minute: roughly ₹14 per push with GST). E2_STANDARD_2
+  # is covered by the billing account's free 2,500 build-minutes a month (see cloud.google.com/build/pricing), so a push
+  # costs nothing. It is slower; the timeout below allows for that. Do not switch back without checking the bill.
+  machineType: E2_STANDARD_2
   logging: CLOUD_LOGGING_ONLY
 timeout: 2400s
