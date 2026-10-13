@@ -373,6 +373,8 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Notifications', href: '/admin/settings/notifications', permission: 'settings:read', icon: 'notifications' },
       { label: 'Team & Roles', href: '/admin/settings/team', permission: 'team:manage', icon: 'team' },
       { label: 'Audit Trail', href: '/admin/audit', permission: 'audit:read', icon: 'audit' },
+      // Everyone who can sign in to the admin: their own fingerprint / Face ID devices.
+      { label: 'My sign-in & security', href: '/admin/security', icon: 'settings' },
     ],
   },
 ];

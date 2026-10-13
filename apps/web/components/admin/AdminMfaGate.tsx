@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../../lib/auth-context';
+import { addThisDevice, passkeyErrorMessage, passkeySupport, signInWithDevice } from '../../lib/passkeys-client';
 
 interface Status {
   enrolled: boolean;
   verified: boolean;
   lockedUntil: string | null;
   recoveryLeft: number;
+  /** Fingerprint / Face ID entries on this account. */
+  passkeys?: number;
   account: string;
 }
 
@@ -59,6 +62,11 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [support, setSupport] = useState<{ any: boolean; builtIn: boolean }>({ any: false, builtIn: false });
+  const [offerDone, setOfferDone] = useState(false);
+  useEffect(() => {
+    void passkeySupport().then(setSupport);
+  }, []);
 
   // The signed-in user, read when needed: the check must run on load (and on the timer or a refused call),
   // not every time the sign-in object is handed over again.
@@ -141,6 +149,45 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
     }
   };
 
+  const dismissKey = status ? `kg:passkey-offer:${status.account}` : '';
+  const offerDismissed = () => {
+    try {
+      const at = Number(localStorage.getItem(dismissKey));
+      return Boolean(at) && Date.now() - at < 30 * 24 * 3600_000;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Signs in with this device's fingerprint / Face ID instead of typing a code. */
+  const signInWithThisDevice = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithDevice(call);
+      await refresh();
+    } catch (e) {
+      setError(passkeyErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Adds this device (offered once after a sign-in with the code). */
+  const addDevice = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await addThisDevice(call);
+      setOfferDone(true);
+      await refresh();
+    } catch (e) {
+      setError(passkeyErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const downloadCodes = () => {
     if (!recoveryCodes) return;
     const text = `KarthysGallery admin — recovery codes for ${status?.account ?? 'your account'}\nEach code works once, if you lose your phone.\n\n${recoveryCodes.join('\n')}\n`;
@@ -152,7 +199,9 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
     URL.revokeObjectURL(url);
   };
 
-  if (status?.verified && !recoveryCodes) return <>{children}</>;
+  // Signed in with the code and this device could use fingerprint / Face ID: offer it once (and on the Security page).
+  const offerPasskey = Boolean(status?.verified && !recoveryCodes && (status.passkeys ?? 0) === 0 && support.builtIn && !offerDone && !offerDismissed());
+  if (status?.verified && !recoveryCodes && !offerPasskey) return <>{children}</>;
 
   if (!status) {
     return (
@@ -168,6 +217,39 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" aria-label="Checking sign-in" />
         )}
       </div>
+    );
+  }
+
+  if (status && offerPasskey) {
+    return (
+      <Shell title="Skip the code next time?" onSignOut={onSignOut}>
+        <p className="mb-4 text-center text-sm text-slate-300">
+          Use this device&rsquo;s <strong className="text-slate-100">fingerprint or Face ID</strong> to sign in to the admin, instead of typing the code from the app each time.
+        </p>
+        <ul className="mb-5 space-y-1.5 text-xs text-slate-400">
+          <li>• Your fingerprint or face never leaves this device.</li>
+          <li>• The authenticator app and your recovery codes still work as a backup.</li>
+          <li>• You can remove this device any time under &ldquo;My sign-in &amp; security&rdquo;.</li>
+        </ul>
+        {error && <p className="mb-3 rounded-lg bg-rose-950/40 px-3 py-2 text-center text-xs text-rose-300">{error}</p>}
+        <button type="button" disabled={busy} className={primary} onClick={() => void addDevice()}>
+          {busy ? 'Waiting for your device…' : 'Add fingerprint / Face ID'}
+        </button>
+        <button
+          type="button"
+          className="mt-3 w-full text-center text-xs text-slate-400 hover:text-slate-200"
+          onClick={() => {
+            try {
+              localStorage.setItem(dismissKey, String(Date.now()));
+            } catch {
+              /* private mode: it is simply asked again next time */
+            }
+            setOfferDone(true);
+          }}
+        >
+          Not now
+        </button>
+      </Shell>
     );
   }
 
@@ -298,6 +380,14 @@ export function AdminMfaGate({ children, onSignOut }: { children: ReactNode; onS
         <p className="mb-4 text-center text-sm text-slate-300">
           {useRecovery ? 'Type one of your saved recovery codes.' : 'Open your authenticator app and type the 6-digit code for KarthysGallery Admin.'}
         </p>
+        {(status.passkeys ?? 0) > 0 && support.any && !useRecovery && (
+          <div className="mb-4">
+            <button type="button" disabled={busy} className={primary} onClick={() => void signInWithThisDevice()}>
+              {busy ? 'Waiting for your device…' : 'Use fingerprint / Face ID'}
+            </button>
+            <p className="my-3 text-center text-xs text-slate-500">or type the code from your app</p>
+          </div>
+        )}
         {status.lockedUntil && <p className="mb-3 rounded-lg bg-rose-950/40 px-3 py-2 text-center text-xs text-rose-300">Too many wrong codes. Try again after {new Date(status.lockedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>}
         <input
           ref={inputRef}

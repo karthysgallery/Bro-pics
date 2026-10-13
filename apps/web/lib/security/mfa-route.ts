@@ -8,7 +8,7 @@ import { checkRateLimit } from '../rate-limit';
 import { adminApiError } from '../admin-api-error';
 import { writeAuditLog } from '../audit-log';
 import { attachSessionCookie } from '../services/session';
-import { MfaError } from './admin-mfa';
+import { MfaError, hasMfaProof } from './admin-mfa';
 
 /** A signed-in staff/admin account (any role) — the authenticator routes run before the second step is done. */
 export async function staffIdentity(request: Request): Promise<
@@ -27,6 +27,14 @@ export async function staffIdentity(request: Request): Promise<
   } catch {
     return { ok: false, response: adminApiError(401, 'unauthenticated', 'Sign in again to continue.') };
   }
+}
+
+/** A signed-in staff account that has ALSO passed the second step in this browser (needed to change its sign-in methods). */
+export async function verifiedStaff(request: Request): ReturnType<typeof staffIdentity> {
+  const who = await staffIdentity(request);
+  if (!who.ok) return who;
+  if (!(await hasMfaProof(who.db, request, who.uid))) return { ok: false, response: adminApiError(401, 'unauthenticated', 'Enter your authenticator code first.') };
+  return who;
 }
 
 export function mfaErrorResponse(err: unknown): NextResponse {

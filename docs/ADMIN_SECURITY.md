@@ -20,6 +20,18 @@ Every staff and admin account needs two things:
 
 **Owner first.** When this goes live, the owner sets up their app first. Every staff member is asked to set up theirs the next time they open the admin.
 
+## Fingerprint / Face ID (skip the code)
+
+After signing in with the authenticator code once, the admin offers **"Skip the code next time?"**. Say yes and this device's fingerprint, Face ID or screen lock signs you in from then on: on the sign-in screen press **Use fingerprint / Face ID**.
+
+- **Add or remove devices:** the sidebar's **My sign-in & security** page (Configuration group) lists your devices, with when each was added and last used. Add this device, or remove one you no longer use.
+- **It is still two steps:** password (or WhatsApp code) first, then the fingerprint / Face ID. A passkey cannot be added or used by someone who only has the password.
+- **Your fingerprint or face never leaves the device.** The server keeps only a public key; every sign-in is a fresh signed challenge (5 minutes, single use), tied to this website's address, and the device must confirm the person (fingerprint, face or screen lock).
+- **Backup:** the authenticator app and the 10 recovery codes keep working, so a lost phone never locks you out.
+- **Lost or stolen phone:** *Admin → Settings → Team → Reset authenticator* (or the owner's `reset-admin-mfa` script) removes the account's authenticator **and all its fingerprint / Face ID devices** at once.
+- **One web address:** a passkey works only on the address where it was added (the browser enforces this). When the shop moves to karthysgallery.in, add the device again there (the code works everywhere). The addresses allowed are the shop's own (`NEXT_PUBLIC_SITE_URL`, karthysgallery.in, bropics-app.web.app) and, only while developing, localhost.
+- **Where it is stored:** `staffPasskeys` and `staffPasskeyChallenges` (no browser can read or write them; the rules tests check this).
+
 ## Lost or changed phone
 
 | Situation | What to do |

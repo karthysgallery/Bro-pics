@@ -316,3 +316,24 @@ describe('personalizationTemplates', () => {
   });
 });
 
+
+// Sign-in secrets and server-only lists have no rule at all: every browser, even a signed-in super admin, is refused.
+describe.each(['staffMfa', 'staffPasskeys', 'staffPasskeyChallenges', 'priceLists', 'frameModels', 'variantCosts'])('%s is server-only', (collection) => {
+  const contexts = (): Array<[string, ReturnType<RulesTestEnvironment['authenticatedContext']>]> => [
+    ['a customer', testEnv.authenticatedContext('user_a')],
+    ['staff', testEnv.authenticatedContext('staff_a', { role: 'staff' })],
+    ['a super admin', testEnv.authenticatedContext('admin_a', { role: 'super_admin' })],
+  ];
+  it('refuses reads and writes from a customer, staff and a super admin, and from a signed-out browser', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`${collection}/x`).set({ secret: 'value', uid: 'staff_a' });
+    });
+    const all = [...contexts().map(([, c]) => c), testEnv.unauthenticatedContext()];
+    for (const c of all) {
+      const db = c.firestore(); // once per context: a second call would try to change its settings
+      await assertFails(db.doc(`${collection}/x`).get());
+      await assertFails(db.doc(`${collection}/x`).set({ secret: 'changed' }));
+      await assertFails(db.collection(collection).where('uid', '==', 'staff_a').get());
+    }
+  });
+});

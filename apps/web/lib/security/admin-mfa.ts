@@ -2,6 +2,7 @@ import 'server-only';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import { clockOffsetSteps, generateSecret, otpauthUri, stepAt, verifyTotp } from './totp';
+import { deleteAllPasskeys } from './passkey-store';
 import { createSessionToken, getSessionFromRequest, getSessionSecret, type SessionData } from '../services/session';
 
 /**
@@ -226,6 +227,8 @@ export async function resetMfa(db: Firestore, uid: string, now = new Date()): Pr
   const ref = db.collection(MFA_COLLECTION).doc(uid);
   const rec = (await ref.get()).data() as MfaRecord | undefined;
   await ref.set({ ...empty(uid, now), version: (rec?.version ?? 0) + 1 });
+  // A lost or stolen phone must not stay trusted: its fingerprint / Face ID entries go with the authenticator.
+  await deleteAllPasskeys(db, uid);
   forgetMfaCache(uid);
 }
 

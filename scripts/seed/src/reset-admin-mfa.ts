@@ -27,6 +27,9 @@ async function main(): Promise<void> {
   const current = (await ref.get()).data() as { version?: number } | undefined;
   const now = new Date().toISOString();
   await ref.set({ uid, secret: null, pendingSecret: null, pendingAt: null, enabledAt: null, lastStep: null, recovery: [], failures: 0, lockedUntil: null, version: (current?.version ?? 0) + 1, updatedAt: now });
+  // Its fingerprint / Face ID entries go too: a lost or stolen phone must not stay trusted.
+  const passkeys = await getFirestore(app).collection('staffPasskeys').where('uid', '==', uid).get();
+  await Promise.all([...passkeys.docs.map((d) => d.ref.delete()), getFirestore(app).collection('staffPasskeyChallenges').doc(uid).delete()]);
   await getFirestore(app).collection('auditLogs').add({ actorUid: 'owner-script', action: 'mfa.reset', resource: 'staffMfa', resourceId: uid, details: { via: 'reset-admin-mfa script' }, createdAt: now });
   console.log(`Authenticator removed for ${rawPhone.slice(0, 5)}…${rawPhone.slice(-3)}. They set up a new app at the next admin sign-in.`);
 }
