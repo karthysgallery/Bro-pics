@@ -3,6 +3,7 @@ import { getAdminApp } from './firebase-admin';
 import { serializeDoc } from './serialize-doc';
 import type { Product, Variant, ProductMedia, Review, Category, FrameTemplate, PersonalizationTemplate } from '@bro-pics/shared';
 import { getLatestPublished } from './personalization-templates';
+import { getDefaultSamplePhotos } from './catalogue/default-sample-photos';
 
 export interface ProductDetail {
   product: Product;
@@ -26,6 +27,8 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
   const productDoc = productSnapshot.docs[0];
   const product = serializeDoc(productDoc.data() as Product);
   const productId = productDoc.id;
+  // A photo or collage frame with no sample photos of its own shows the shop's sample photos in its empty photo spaces.
+  if (product.photoSlots > 0 && !product.samplePhotos?.length) product.samplePhotos = await getDefaultSamplePhotos(db);
 
   const [variantsSnapshot, mediaSnapshot, reviewsSnapshot] = await Promise.all([
     db.collection('products').doc(productId).collection('variants').where('isActive', '==', true).get(),
