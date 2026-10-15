@@ -85,7 +85,7 @@ export class CloudWhatsAppOtpProvider implements WhatsAppOtpProvider {
         },
       };
 
-      const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
