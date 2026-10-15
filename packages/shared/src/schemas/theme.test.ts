@@ -77,7 +77,7 @@ describe('upgrading saved themes', () => {
     const parsed = ThemeSettingsSchema.parse(upgradeThemeSettings(saved));
     const diwali = parsed.themes.find((t) => t.id === 'diwali')!;
     expect(diwali.decor).toMatchObject({ garland: 'marigold', hanging: 'lanterns', effect: 'sparkles', bannerText: 'My own Diwali text' });
-    expect(diwali.decor.greeting?.title).toBe('Happy Diwali');
+    expect(diwali.decor.greeting?.title).toBe('Diwali Dhamaka');
     // Already-new settings are left alone.
     const fresh = defaultThemeSettings();
     fresh.themes[1].decor = { ...fresh.themes[1].decor, garland: 'none' };
@@ -94,5 +94,37 @@ describe('new festivals', () => {
     expect(parsed.themes.find((t) => t.id === 'christmas')?.name).toBe('Christmas!');
     expect(parsed.themes.find((t) => t.id === 'holi')?.decor.effect).toBe('colors');
     expect(THEME_PRESETS).toHaveLength(20);
+  });
+});
+
+describe('festival offers', () => {
+  it('shows the offer up to and including its last day in India, then hides it', async () => {
+    const { activeThemeOffer, offerDaysLeft, THEME_PRESETS } = await import('./theme');
+    const decor = THEME_PRESETS.find((t) => t.id === 'diwali')!.decor;
+    expect(decor.offer).toEqual({ code: 'DIWALIDHAMAKA', percentOff: 10, endsOn: '2026-11-10' });
+    // 15 Oct 2026, 11 pm IST is already the 15th in India.
+    const offer = activeThemeOffer(decor, new Date('2026-10-15T17:30:00Z'))!;
+    expect(offerDaysLeft(offer, new Date('2026-10-15T17:30:00Z'))).toBe(26);
+    // 10 Nov, 11:59 pm IST: last day, still on.
+    expect(activeThemeOffer(decor, new Date('2026-11-10T18:29:00Z'))).not.toBeNull();
+    expect(offerDaysLeft(offer, new Date('2026-11-10T18:29:00Z'))).toBe(0);
+    // 11 Nov, 12:00 am IST: over.
+    expect(activeThemeOffer(decor, new Date('2026-11-10T18:30:00Z'))).toBeNull();
+    expect(activeThemeOffer(undefined)).toBeNull();
+  });
+
+  it('accepts a lower-case code as upper case and rejects unusable offers and banner links', async () => {
+    const { ThemeOfferSchema, ThemePromoSchema } = await import('./theme');
+    expect(ThemeOfferSchema.parse({ code: ' diwaliDhamaka ', percentOff: 10, endsOn: '2026-11-10' }).code).toBe('DIWALIDHAMAKA');
+    expect(ThemeOfferSchema.safeParse({ code: 'DIWALI 10', percentOff: 10, endsOn: '2026-11-10' }).success).toBe(false);
+    expect(ThemeOfferSchema.safeParse({ code: 'DIWALI10', percentOff: 0, endsOn: '2026-11-10' }).success).toBe(false);
+    expect(ThemePromoSchema.safeParse({ title: 'Gifts', href: 'javascript:alert(1)' }).success).toBe(false);
+    expect(ThemePromoSchema.parse({ title: 'Gifts', href: '/category' }).tone).toBe('kumkum');
+  });
+
+  it('every built-in festival still passes the settings schema with its offer and banners', async () => {
+    const { ThemeSettingsSchema, defaultThemeSettings } = await import('./theme');
+    const parsed = ThemeSettingsSchema.parse(defaultThemeSettings());
+    expect(parsed.themes.find((t) => t.id === 'diwali')?.decor.promos).toHaveLength(3);
   });
 });

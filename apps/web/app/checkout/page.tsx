@@ -24,6 +24,7 @@ import { getOrCreateCheckoutIdempotencyKey, clearCheckoutIdempotencyKey } from '
 import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/DeliveryTimeline';
 import type { DeliveryMethod } from '@bro-pics/shared';
 import { useSiteText } from '../../components/layout/SiteTextContext';
+import { useFestiveOffer } from '../../components/theme/FestiveOfferContext';
 
 const DELIVERY_METHOD_LABEL: Record<DeliveryMethod, string> = { standard: 'Standard', express: 'Express' };
 // Only the courier-transit portion changes by method — production/dispatch
@@ -60,6 +61,7 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
+  const festiveOffer = useFestiveOffer();
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPaise: number; freeShipping: boolean } | null>(null);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('standard');
@@ -175,13 +177,15 @@ export default function CheckoutPage() {
     );
   }
 
-  const handleApplyCoupon = async () => {
+  const handleApplyCoupon = async (offerCode?: string) => {
+    const code = offerCode ?? couponCodeInput;
+    if (offerCode) setCouponCodeInput(offerCode);
     setCouponMessage(null);
     const idToken = await user.getIdToken();
     const response = await fetch('/api/checkout/coupon/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ code: couponCodeInput }),
+      body: JSON.stringify({ code }),
     });
     if (response.status === 404) {
       setCouponMessage('Invalid coupon code.');
@@ -196,7 +200,7 @@ export default function CheckoutPage() {
       setCouponMessage(COUPON_REASON_MESSAGES[body.reason] ?? 'This coupon cannot be applied.');
       return;
     }
-    setAppliedCoupon({ code: couponCodeInput, discountPaise: body.discountPaise, freeShipping: body.freeShipping });
+    setAppliedCoupon({ code, discountPaise: body.discountPaise, freeShipping: body.freeShipping });
   };
 
   const handleRemoveCoupon = () => {
@@ -437,7 +441,7 @@ export default function CheckoutPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-[1fr_380px] gap-8 items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_380px] gap-8 items-start">
           {/* Left: Step Cards */}
           <div className="space-y-6">
             {/* Step 01: Contact — read-only; order updates go to the account's own
@@ -564,6 +568,21 @@ export default function CheckoutPage() {
                   <button onClick={handleRemoveCoupon} className="text-2xs font-semibold text-accent hover:text-accent-dark underline">Remove</button>
                 </div>
               ) : (
+                <>
+                {festiveOffer && (
+                  <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-dashed border-accent/40 bg-accent/[0.05] px-3 py-2 text-xs text-ink" data-testid="festive-offer-apply">
+                    <span>
+                      {festiveOffer.percentOff}% off with <strong className="tracking-wide">{festiveOffer.code}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCoupon(festiveOffer.code)}
+                      className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-2xs font-semibold text-paper hover:bg-accent-dark"
+                    >
+                      Apply offer
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     id="coupon-code"
@@ -573,13 +592,14 @@ export default function CheckoutPage() {
                     className="flex-1 px-4 py-2 rounded-xl border border-line bg-field text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent"
                   />
                   <button
-                    onClick={handleApplyCoupon}
+                    onClick={() => handleApplyCoupon()}
                     disabled={!couponCodeInput}
                     className="px-4 py-2 rounded-xl bg-ink text-paper text-xs font-medium hover:bg-ink/80 disabled:opacity-40 transition-colors"
                   >
                     Apply
                   </button>
                 </div>
+                </>
               )}
               {couponMessage && <p className="text-2xs text-alert mt-1.5">{couponMessage}</p>}
             </div>

@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { formatPaise } from '../../lib/format-price';
 import { HelpCallout } from './HelpCallout';
+import { priceWithOffer, useFestiveOffer } from '../theme/FestiveOfferContext';
 import { PincodeChecker } from '../checkout/PincodeChecker';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
 
@@ -148,6 +149,7 @@ export function BuyBox({
     if (controlled) onFinishChange?.(next);
     else setOwnFinish(next);
   };
+  const offer = useFestiveOffer();
   const price = (selectedVariant?.price ?? product.minPrice) + finishExtra;
   const compareAtPrice = selectedVariant?.compareAtPrice;
   // [FE-32] `inStock` gates purchasability (Add to cart, the delivery
@@ -248,6 +250,17 @@ export function BuyBox({
               )}
             </div>
             <p className="text-xs text-ink/50 mt-0.5">{text.priceNote}</p>
+            {offer && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent/[0.07] px-3 py-1.5 text-xs text-accent" data-testid="festive-offer-price">
+                <svg viewBox="0 0 24 20" className="h-4 w-4 shrink-0" aria-hidden="true">
+                  <path d="M12 1 C15 5 15 8 12 10 C9 8 9 5 12 1 Z" fill="#F5A30B" />
+                  <path d="M2 11 Q12 21 22 11 Q12 14 2 11 Z" fill="currentColor" />
+                </svg>
+                <span>
+                  <strong className="font-bold">{formatPaise(priceWithOffer(price, offer))}</strong> with code <strong className="font-semibold tracking-wide">{offer.code}</strong> at checkout
+                </span>
+              </p>
+            )}
           </>
         )}
       </div>

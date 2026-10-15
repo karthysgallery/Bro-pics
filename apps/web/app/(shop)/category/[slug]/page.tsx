@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getCategoryBySlug, searchProductsPage } from '../../../../lib/firestore-products';
 import { ProductCard } from '../../../../components/product/ProductCard';
 import { ProductFilters } from '../../../../components/filters/ProductFilters';
@@ -50,6 +50,7 @@ function shouldNoindexFacetedUrl(urlParams: URLSearchParams): boolean {
 
 export async function generateMetadata({ params, searchParams }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  if (slug === 'all') permanentRedirect('/category');
   const category = await getCategoryBySlug(slug);
 
   // Thrown while metadata resolves so an unknown category is a real 404, not a 200 page that says "not found".
@@ -92,6 +93,8 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const { slug } = await params;
   const rawSearchParams = await searchParams;
+  // Older links (the seeded "Shop all frames" button) point at /category/all; every product lives on /category.
+  if (slug === 'all') permanentRedirect('/category');
 
   const category = await getCategoryBySlug(slug);
   if (!category) notFound();

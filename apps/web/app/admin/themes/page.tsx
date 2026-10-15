@@ -8,6 +8,7 @@ import {
   THEME_HANGINGS,
   THEME_MOTIFS,
   THEME_PRESETS,
+  THEME_PROMO_TONES,
   ThemeSettingsSchema,
   defaultThemeSettings,
   indiaDate,
@@ -17,6 +18,7 @@ import {
   upgradeThemeSettings,
   type StoreTheme,
   type ThemeColors,
+  type ThemePromo,
   type ThemeSettings,
 } from '@bro-pics/shared';
 import { useAdminApi } from '../../../components/admin/template-builder/use-admin-api';
@@ -91,6 +93,7 @@ const ART_LABEL: Record<(typeof THEME_GREETING_ART)[number], string> = {
   frame: 'Family photo frame',
   kolam: 'Kolam',
   peacock: 'Peacock feather',
+  'diwali-night': 'Diwali night with offer frame and diyas',
 };
 
 const NATIONAL = new Set(['independence-day', 'republic-day']);
@@ -518,6 +521,110 @@ export default function FestivalThemesPage() {
                     </select>
                   </label>
                 </div>
+              )}
+            </fieldset>
+
+            <fieldset className="space-y-2 rounded-xl border border-line p-3">
+              <legend className="px-1 text-2xs font-semibold uppercase tracking-wide text-ink/55">Festival offer</legend>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editing.decor.offer)}
+                  onChange={(e) =>
+                    updateTheme(editing.id, {
+                      decor: { ...editing.decor, offer: e.target.checked ? preset?.decor.offer ?? { code: '', percentOff: 10, endsOn: indiaDate(new Date()) } : undefined },
+                    })
+                  }
+                  className="h-4 w-4 accent-[#14213D]"
+                />
+                Advertise a discount code across the shop
+              </label>
+              {editing.decor.offer && (
+                <div className="grid grid-cols-[1fr_5rem_9.5rem] gap-2">
+                  <label className="block space-y-1">
+                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Coupon code</span>
+                    <input
+                      value={editing.decor.offer.code}
+                      maxLength={30}
+                      placeholder="DIWALIDHAMAKA"
+                      onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, offer: { ...editing.decor.offer!, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') } } })}
+                      className="h-9 w-full rounded-lg border border-line bg-white px-2.5 text-sm uppercase tracking-wide text-ink"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">% off</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={editing.decor.offer.percentOff}
+                      onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, offer: { ...editing.decor.offer!, percentOff: Math.round(Number(e.target.value) || 0) } } })}
+                      className="h-9 w-full rounded-lg border border-line bg-white px-2.5 text-sm text-ink"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Last day</span>
+                    <input
+                      type="date"
+                      value={editing.decor.offer.endsOn}
+                      onChange={(e) => updateTheme(editing.id, { decor: { ...editing.decor, offer: { ...editing.decor.offer!, endsOn: e.target.value } } })}
+                      className="h-9 w-full rounded-lg border border-line bg-white px-2 text-sm text-ink"
+                    />
+                  </label>
+                  <p className="col-span-3 text-2xs text-ink/55">
+                    Shown on the homepage banner, product prices and checkout. The discount itself comes from the coupon with this code in Coupons, so create it there with the same % and dates.
+                  </p>
+                </div>
+              )}
+            </fieldset>
+
+            <fieldset className="space-y-2 rounded-xl border border-line p-3">
+              <legend className="px-1 text-2xs font-semibold uppercase tracking-wide text-ink/55">Gift banners on the homepage</legend>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editing.decor.promos?.length)}
+                  onChange={(e) =>
+                    updateTheme(editing.id, {
+                      decor: {
+                        ...editing.decor,
+                        promos: e.target.checked ? preset?.decor.promos ?? [{ title: `${editing.name} gifts`, href: '/category', tone: 'kumkum' }] : undefined,
+                      },
+                    })
+                  }
+                  className="h-4 w-4 accent-[#14213D]"
+                />
+                Show up to three banners under the homepage pictures
+              </label>
+              {editing.decor.promos?.map((promo, i) => {
+                const setPromo = (patch: Partial<ThemePromo>) =>
+                  updateTheme(editing.id, { decor: { ...editing.decor, promos: editing.decor.promos!.map((p, j) => (j === i ? { ...p, ...patch } : p)) } });
+                return (
+                  <div key={i} className="grid grid-cols-2 gap-2 rounded-lg bg-tint/40 p-2">
+                    <input value={promo.title} maxLength={40} placeholder="Banner title" aria-label={`Banner ${i + 1} title`} onChange={(e) => setPromo({ title: e.target.value })} className="h-9 rounded-lg border border-line bg-white px-2.5 text-sm text-ink" />
+                    <input value={promo.href} maxLength={300} placeholder="/category" aria-label={`Banner ${i + 1} link`} onChange={(e) => setPromo({ href: e.target.value })} className="h-9 rounded-lg border border-line bg-white px-2.5 text-sm text-ink" />
+                    <input value={promo.subtitle ?? ''} maxLength={90} placeholder="One line about it (optional)" aria-label={`Banner ${i + 1} message`} onChange={(e) => setPromo({ subtitle: e.target.value || undefined })} className="col-span-2 h-9 rounded-lg border border-line bg-white px-2.5 text-sm text-ink" />
+                    <select value={promo.tone} aria-label={`Banner ${i + 1} colour`} onChange={(e) => setPromo({ tone: e.target.value as ThemePromo['tone'] })} className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink">
+                      {THEME_PROMO_TONES.map((t) => (
+                        <option key={t} value={t}>
+                          {{ kumkum: 'Kumkum red', marigold: 'Marigold', night: 'Night purple' }[t]}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => updateTheme(editing.id, { decor: { ...editing.decor, promos: editing.decor.promos!.filter((_, j) => j !== i) } })} className="h-9 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-50">
+                      Remove banner
+                    </button>
+                  </div>
+                );
+              })}
+              {editing.decor.promos && editing.decor.promos.length > 0 && editing.decor.promos.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => updateTheme(editing.id, { decor: { ...editing.decor, promos: [...editing.decor.promos!, { title: '', href: '/category', tone: 'marigold' }] } })}
+                  className="text-xs font-semibold text-accent hover:underline"
+                >
+                  Add a banner
+                </button>
               )}
             </fieldset>
 

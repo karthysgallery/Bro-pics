@@ -10,7 +10,8 @@ import { WhatsAppButton } from './WhatsAppButton';
 import { AnnouncementBar } from './AnnouncementBar';
 import { ConsentBanner } from './ConsentBanner';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
-import type { ThemeDecor } from '@bro-pics/shared';
+import { activeThemeOffer, type ThemeDecor } from '@bro-pics/shared';
+import { FestiveOfferProvider } from '../theme/FestiveOfferContext';
 import { FestiveBand } from '../theme/FestiveBand';
 import { FestiveEffect } from '../theme/FestiveEffect';
 import { FestiveGarland } from '../theme/FestiveGarland';
@@ -65,7 +66,7 @@ export function LayoutChrome({
   }
 
   return (
-    <>
+    <FestiveOfferProvider offer={activeThemeOffer(themeDecor)}>
       <div className="sticky top-0 z-40 w-full shadow-xs">
         {themeDecor && <FestiveGarland garland={themeDecor.garland} />}
         <AnnouncementBar
@@ -96,7 +97,7 @@ export function LayoutChrome({
         message="Hi, I have a question about a KarthysGallery order."
       />
       <ConsentBanner />
-    </>
+    </FestiveOfferProvider>
   );
 }
 

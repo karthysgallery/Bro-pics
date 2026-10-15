@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { resolveActiveTheme } from '@bro-pics/shared';
+import { activeThemeOffer, resolveActiveTheme } from '@bro-pics/shared';
 import { getThemeSettings } from '../../lib/firestore-settings';
 import { FestiveGreeting } from '../../components/theme/FestiveGreeting';
+import { DiwaliNight } from '../../components/theme/DiwaliNight';
+import { FestivePromos } from '../../components/theme/FestivePromos';
 import dynamic from 'next/dynamic';
 import type { HomepageSection } from '@bro-pics/shared';
 import {
@@ -81,7 +83,10 @@ export default async function HomePage() {
   ]);
   // The festival on show (if any) greets visitors at the top of the homepage.
   const theme = themeSettings ? resolveActiveTheme(themeSettings) : null;
-  const greeting = theme && theme.id !== 'default' ? theme.decor.greeting : undefined;
+  const festival = theme && theme.id !== 'default' ? theme : null;
+  const greeting = festival?.decor.greeting;
+  const offer = activeThemeOffer(festival?.decor);
+  const promos = festival?.decor.promos ?? [];
 
   // Every hero_slider doc becomes one poster in the single carousel at the
   // top. The band is drawn at the position of the first hero section and
@@ -165,7 +170,8 @@ export default async function HomePage() {
   return (
     <div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
-      {greeting && <FestiveGreeting greeting={greeting} />}
+      {greeting &&
+        (greeting.art === 'diwali-night' ? <DiwaliNight greeting={greeting} offer={offer} /> : <FestiveGreeting greeting={greeting} />)}
       {/* Keyed by position as well as id: the `id` field comes from seeded
           data and duplicates across documents have been seen in practice,
           which React would otherwise treat as the same node. */}
@@ -175,6 +181,8 @@ export default async function HomePage() {
           id={section.type === 'best_sellers' ? 'best-sellers' : undefined}
         >
           {renderSection(section, index)}
+          {/* The festival's gift banners follow the hero. */}
+          {index === firstHeroIndex && promos.length > 0 && <FestivePromos promos={promos} festival={festival!.name} />}
           {/* Combo offers sit right after the best sellers, where people are already comparing what to buy. */}
           {section.type === 'best_sellers' && <ComboOffersStrip combos={combos} />}
         </div>

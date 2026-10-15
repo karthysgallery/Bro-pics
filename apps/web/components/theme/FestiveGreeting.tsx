@@ -137,6 +137,7 @@ function Fireworks() {
 
 const ART: Record<Exclude<ThemeGreeting['art'], 'none'>, () => JSX.Element> = {
   rangoli: Rangoli,
+  'diwali-night': Rangoli,
   'pongal-pot': PongalPot,
   tree: Tree,
   fireworks: Fireworks,

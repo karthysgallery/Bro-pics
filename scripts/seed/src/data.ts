@@ -633,7 +633,7 @@ export const seedHomepageSections: HomepageSection[] = [
     subtitle: 'Loved by our customers',
     image: '',
     mobileImage: '',
-    link: '/category/all',
+    link: '/category',
     sortOrder: 5,
     startsAt: null,
     endsAt: null,

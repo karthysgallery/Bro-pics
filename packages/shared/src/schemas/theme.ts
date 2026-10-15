@@ -63,6 +63,7 @@ export const THEME_GREETING_ART = [
   'frame',
   'kolam',
   'peacock',
+  'diwali-night',
 ] as const;
 
 export const ThemeGreetingSchema = z.object({
@@ -73,6 +74,35 @@ export const ThemeGreetingSchema = z.object({
   art: z.enum(THEME_GREETING_ART).default('none'),
 });
 export type ThemeGreeting = z.infer<typeof ThemeGreetingSchema>;
+
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-25');
+
+/**
+ * The festival's discount, advertised across the shop (homepage banner, top
+ * bar, product prices, checkout). Display only: the discount itself is the
+ * coupon with this code (Admin → Coupons), which the server checks at checkout.
+ */
+export const ThemeOfferSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]{3,30}$/, 'Use 3–30 letters or numbers for the coupon code')),
+  percentOff: z.number().int().min(1).max(90),
+  /** Last day of the offer (India time, inclusive); the offer hides itself after it. */
+  endsOn: date,
+});
+export type ThemeOffer = z.infer<typeof ThemeOfferSchema>;
+
+export const THEME_PROMO_TONES = ['kumkum', 'marigold', 'night'] as const;
+/** A festive banner on the homepage pointing at a part of the shop. */
+export const ThemePromoSchema = z.object({
+  title: z.string().trim().min(1).max(40),
+  subtitle: z.string().trim().max(90).optional(),
+  href: SafeHrefSchema,
+  tone: z.enum(THEME_PROMO_TONES).default('kumkum'),
+});
+export type ThemePromo = z.infer<typeof ThemePromoSchema>;
 
 export const ThemeDecorSchema = z.object({
   /** A thin ornament band under the header (simpler alternative to a garland). */
@@ -86,10 +116,12 @@ export const ThemeDecorSchema = z.object({
   bannerLink: SafeHrefSchema.optional(),
   /** A decorated greeting at the top of the homepage. */
   greeting: ThemeGreetingSchema.optional(),
+  /** The festival offer (a coupon code everyone can use). */
+  offer: ThemeOfferSchema.optional(),
+  /** Up to three festive banners under the homepage hero. */
+  promos: z.array(ThemePromoSchema).max(3).optional(),
 });
 export type ThemeDecor = z.infer<typeof ThemeDecorSchema>;
-
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-25');
 
 export const ThemeScheduleSchema = z
   .object({ start: date, end: date })
@@ -137,21 +169,29 @@ export const THEME_PRESETS: readonly StoreTheme[] = [
   {
     id: 'diwali',
     name: 'Diwali',
-    // Marigold and deep maroon on a warm diya-lit cream.
-    colors: { field: '#FFF7EC', paper: '#FFFFFF', tint: '#FBE8CF', line: '#EED3AE', ink: '#2A0F0A', gold: '#F5A30B', goldDeep: '#D98706', accent: '#7A1E1E', accentDark: '#4C0F0F' },
+    // Marigold and kumkum on a warm diya-lit cream; the top bar is the Deepavali night sky.
+    colors: { field: '#FFF6EA', paper: '#FFFFFF', tint: '#FBE6CF', line: '#EED0AA', ink: '#2A0F0A', gold: '#F5A30B', goldDeep: '#D98706', accent: '#8E1630', accentDark: '#2A0D2E' },
     decor: {
       motif: 'none',
       garland: 'marigold',
       hanging: 'lanterns',
-      effect: 'lanterns',
-      bannerText: 'Happy Diwali! Light up their walls with memories',
+      // The homepage banner has its own stars and diyas; a page-wide effect would drift over the offer.
+      effect: 'none',
+      bannerText: 'Diwali Dhamaka • 10% off every frame and gift • Use code DIWALIDHAMAKA',
+      bannerLink: '/category',
       greeting: {
-        title: 'Happy Diwali',
-        subtitle: 'Gift the glow of a moment they love. Festive frames, made by hand and delivered in time for the festival.',
+        title: 'Diwali Dhamaka',
+        subtitle: '10% off every frame, collage and gift. Order early so it reaches home before the festival.',
         ctaLabel: 'Shop Diwali gifts',
         ctaHref: '/category',
-        art: 'rangoli',
+        art: 'diwali-night',
       },
+      offer: { code: 'DIWALIDHAMAKA', percentOff: 10, endsOn: '2026-11-10' },
+      promos: [
+        { title: 'For Amma and Appa', subtitle: 'Their favourite photo, framed for the pooja room wall.', href: '/category/frames-wall-decor', tone: 'kumkum' },
+        { title: 'For the whole family', subtitle: 'One collage for the rangoli, the sweets and every cousin.', href: '/category/collage-combo-sets', tone: 'marigold' },
+        { title: 'For someone far away', subtitle: 'Personalised gifts, packed with care and sent across India.', href: '/category/personalized-gifts', tone: 'night' },
+      ],
     },
     schedule: null,
   },
@@ -482,6 +522,19 @@ export function resolveActiveTheme(settings: ThemeSettings, now: Date = new Date
     .filter((t) => t.schedule && t.schedule.start <= today && today <= t.schedule.end)
     .sort((a, b) => (b.schedule!.start > a.schedule!.start ? 1 : -1));
   return running[0] ?? fallback;
+}
+
+/** The theme's offer while it is still running (today in India is on or before its last day). */
+export function activeThemeOffer(decor: ThemeDecor | null | undefined, now: Date = new Date()): ThemeOffer | null {
+  const offer = decor?.offer;
+  if (!offer) return null;
+  return indiaDate(now) <= offer.endsOn ? offer : null;
+}
+
+/** Whole days from today (India) to the offer's last day: 0 on the last day. */
+export function offerDaysLeft(offer: ThemeOffer, now: Date = new Date()): number {
+  const ms = Date.parse(`${offer.endsOn}T00:00:00Z`) - Date.parse(`${indiaDate(now)}T00:00:00Z`);
+  return Math.max(0, Math.round(ms / 86_400_000));
 }
 
 // --- Readability ------------------------------------------------------------
