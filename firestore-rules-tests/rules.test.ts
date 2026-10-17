@@ -44,6 +44,40 @@ describe('products collection', () => {
   });
 });
 
+describe('pages collection', () => {
+  it('lets anyone read a published page', async () => {
+    const unauth = testEnv.unauthenticatedContext();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('pages/live').set({ slug: 'faq', isPublished: true });
+    });
+    await assertSucceeds(unauth.firestore().doc('pages/live').get());
+  });
+
+  it('does not let a signed-out visitor read a draft', async () => {
+    const unauth = testEnv.unauthenticatedContext();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('pages/draft').set({ slug: 'terms', isPublished: false, bodyHtml: 'draft text' });
+    });
+    await assertFails(unauth.firestore().doc('pages/draft').get());
+  });
+
+  it('does not let a signed-in customer read a draft either', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('pages/draft').set({ slug: 'terms', isPublished: false, bodyHtml: 'draft text' });
+    });
+    await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('pages/draft').get());
+  });
+
+  it('denies every client write, including to the approval fields', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('pages/live').set({ slug: 'terms', isPublished: false });
+    });
+    const db = testEnv.authenticatedContext('user_a').firestore();
+    await assertFails(db.doc('pages/live').update({ isPublished: true, approvedHash: 'x' }));
+    await assertFails(db.doc('pages/new').set({ slug: 'terms', isPublished: true }));
+  });
+});
+
 describe('orders collection', () => {
   it('allows the owning user to read their own order', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

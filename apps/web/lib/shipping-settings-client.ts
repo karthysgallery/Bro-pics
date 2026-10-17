@@ -1,29 +1,17 @@
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { DEFAULT_STATE_SHIPPING, parseStateShipping, type StateShippingSettings } from '@bro-pics/shared';
 import { getFirebaseApp } from './firebase-client';
-import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from './checkout-calc';
 
-// settings/{key} is world-readable per firestore.rules, so the checkout
-// page can read the real configured shipping rates directly via the client
-// SDK — no admin-backed route needed. This is DISPLAY data only (the
-// server independently recomputes the real charge in /api/checkout/create-
-// order and never trusts anything the client sends), so a stale or
-// momentarily-wrong read here is cosmetic, never a pricing bug.
-export async function getShippingSettingsClient(): Promise<Required<ShippingSettings>> {
+// settings/{key} is world-readable per firestore.rules, so pages can read the configured shipping
+// settings directly via the client SDK. This is DISPLAY data only: the server prices every order
+// itself, from the address it holds, and never trusts anything the browser sends. A stale or
+// failed read here is cosmetic, never a pricing bug.
+export async function getShippingSettingsClient(): Promise<StateShippingSettings> {
   try {
     const db = getFirestore(getFirebaseApp());
     const snapshot = await getDoc(doc(db, 'settings', 'shipping'));
-    if (!snapshot.exists()) return DEFAULT_SHIPPING_SETTINGS;
-
-    const data = snapshot.data();
-    return {
-      freeShippingThreshold:
-        typeof data?.freeShippingThreshold === 'number' ? data.freeShippingThreshold : DEFAULT_SHIPPING_SETTINGS.freeShippingThreshold,
-      flatShippingCharge:
-        typeof data?.flatShippingCharge === 'number' ? data.flatShippingCharge : DEFAULT_SHIPPING_SETTINGS.flatShippingCharge,
-      expressShippingCharge:
-        typeof data?.expressShippingCharge === 'number' ? data.expressShippingCharge : DEFAULT_SHIPPING_SETTINGS.expressShippingCharge,
-    };
+    return parseStateShipping(snapshot.exists() ? snapshot.data() : null);
   } catch {
-    return DEFAULT_SHIPPING_SETTINGS;
+    return DEFAULT_STATE_SHIPPING;
   }
 }

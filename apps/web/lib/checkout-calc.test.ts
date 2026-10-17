@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { priceCartLines, calculateSubtotal, calculateShipping } from './checkout-calc';
+import { priceCartLines, calculateSubtotal } from './checkout-calc';
 import type { Variant } from '@bro-pics/shared';
 
 function makeVariant(overrides: Partial<Variant> = {}): Variant {
@@ -104,29 +104,6 @@ describe('calculateSubtotal', () => {
 
   it('returns 0 for an empty list', () => {
     expect(calculateSubtotal([])).toBe(0);
-  });
-});
-
-describe('calculateShipping', () => {
-  const settings = { freeShippingThreshold: 150000, flatShippingCharge: 5000 };
-
-  it('charges the flat rate below the free-shipping threshold', () => {
-    expect(calculateShipping(100000, settings)).toBe(5000);
-  });
-
-  it('is free at or above the threshold', () => {
-    expect(calculateShipping(150000, settings)).toBe(0);
-    expect(calculateShipping(200000, settings)).toBe(0);
-  });
-
-  it('charges a flat express surcharge regardless of subtotal, ignoring the free-shipping threshold', () => {
-    expect(calculateShipping(100000, settings, 'express')).toBe(15000);
-    expect(calculateShipping(200000, settings, 'express')).toBe(15000);
-  });
-
-  it('uses a settings-provided express charge over the default when present', () => {
-    const customSettings = { ...settings, expressShippingCharge: 25000 };
-    expect(calculateShipping(100000, customSettings, 'express')).toBe(25000);
   });
 });
 

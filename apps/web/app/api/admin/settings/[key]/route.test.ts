@@ -40,7 +40,7 @@ function makeParams(key = 'shipping') {
   return { params: Promise.resolve({ key }) };
 }
 
-const validShippingBody = { freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 };
+const validShippingBody = { homeState: 'Tamil Nadu', stateCharges: { Kerala: 8000 }, otherStatesDefaultCharge: null, expressEnabled: false, expressCharge: 0 };
 
 describe('GET /api/admin/settings/[key]', () => {
   beforeEach(() => {
@@ -88,6 +88,7 @@ describe('PUT /api/admin/settings/[key]', () => {
   beforeEach(() => {
     resetRateLimitState();
     vi.clearAllMocks();
+    mockRequirePermission.mockReset();
   });
 
   it('returns the permission-denied status when requirePermission fails', async () => {
@@ -97,21 +98,21 @@ describe('PUT /api/admin/settings/[key]', () => {
   });
 
   it('returns 404 for an unknown settings key', async () => {
-    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
     const response = await PUT(makePutRequest({}), makeParams('bogus'));
     expect(response.status).toBe(404);
     expect(mockSet).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid body for the given key', async () => {
-    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
     const response = await PUT(makePutRequest({ notAField: 1 }), makeParams());
     expect(response.status).toBe(400);
     expect(mockSet).not.toHaveBeenCalled();
   });
 
   it('sets the settings/{key} doc on a valid body', async () => {
-    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
     const response = await PUT(makePutRequest(validShippingBody), makeParams());
     expect(response.status).toBe(200);
     expect(mockSet).toHaveBeenCalledWith(validShippingBody);
@@ -119,8 +120,33 @@ describe('PUT /api/admin/settings/[key]', () => {
     expect(body).toEqual({ key: 'shipping', value: validShippingBody });
   });
 
+  it('rejects a charge on the home state (it is always free) and a misspelt state', async () => {
+    for (const bad of [{ ...validShippingBody, stateCharges: { 'Tamil Nadu': 5000 } }, { ...validShippingBody, stateCharges: { Keralaa: 5000 } }, { ...validShippingBody, stateCharges: { Kerala: -1 } }]) {
+      mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
+      expect((await PUT(makePutRequest(bad), makeParams())).status).toBe(400);
+    }
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('a settings:write role without policies:approve cannot change shipping, store, returns, policy wording or GST', async () => {
+    for (const key of ['shipping', 'store', 'returns', 'policyFacts', 'gst']) {
+      mockRequirePermission.mockReset();
+      mockRequirePermission.mockImplementation(async (_req: unknown, perm: string) => (perm === 'settings:write' ? { ok: true, uid: 'marketing_1' } : { ok: false, status: 403 }));
+      const response = await PUT(makePutRequest(validShippingBody), makeParams(key));
+      expect(response.status).toBe(403);
+    }
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('a settings:write role can still change settings that make no customer promise (for example SEO)', async () => {
+    mockRequirePermission.mockImplementation(async (_req: unknown, perm: string) => (perm === 'settings:write' ? { ok: true, uid: 'marketing_1' } : { ok: false, status: 403 }));
+    const response = await PUT(makePutRequest({ defaultTitle: 'T', defaultDescription: 'D' }), makeParams('seo'));
+    expect([200, 400]).toContain(response.status); // 400 only if the SEO body shape differs; never 403
+    expect(response.status).not.toBe(403);
+  });
+
   it('writes an audit log entry on success', async () => {
-    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
     await PUT(makePutRequest(validShippingBody), makeParams());
     expect(mockWriteAuditLog).toHaveBeenCalledWith(
       expect.anything(),
@@ -129,7 +155,7 @@ describe('PUT /api/admin/settings/[key]', () => {
   });
 
   it('validates a different key against its own schema (notifications)', async () => {
-    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
     const response = await PUT(
       makePutRequest({ emailEnabled: true, smsEnabled: false, whatsappEnabled: false }),
       makeParams('notifications')

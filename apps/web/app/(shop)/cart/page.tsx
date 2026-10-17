@@ -9,19 +9,15 @@ import { QuantityStepper } from '../../../components/ui/QuantityStepper';
 import { formatPaise } from '../../../lib/format-price';
 import { resolveMediaUrl, getIdTokenSafe } from '../../../lib/resolve-media-url';
 import { AuthContext } from '../../../lib/auth-context';
-import { getShippingSettingsClient } from '../../../lib/shipping-settings-client';
+import { useShippingSettings } from '../../../lib/use-shipping-settings';
 
 export default function CartPage() {
   const siteText = useSiteText();
   const { items, updateQuantity, removeItem, totalPaise } = useCart();
   const auth = useContext(AuthContext);
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(new Map());
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
+  const shippingSettings = useShippingSettings();
   const [promoCode, setPromoCode] = useState('');
-
-  useEffect(() => {
-    getShippingSettingsClient().then((settings) => setFreeShippingThreshold(settings.freeShippingThreshold));
-  }, []);
 
   const previewPathsKey = [...new Set(items.map((i) => i.previewPath).filter((p): p is string => !!p))].join(',');
   useEffect(() => {
@@ -40,7 +36,6 @@ export default function CartPage() {
   }, [previewPathsKey, auth?.user]);
 
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
-  const qualifiesForFreeShipping = freeShippingThreshold !== null && totalPaise >= freeShippingThreshold;
   const gstPaise = Math.round((totalPaise * 18) / 118);
 
   return (
@@ -154,14 +149,12 @@ export default function CartPage() {
               ))}
             </div>
 
-            {qualifiesForFreeShipping && (
-              <div className="flex items-center gap-2 text-xs font-semibold text-accent py-3">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>Your order qualifies for free shipping.</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 text-xs font-semibold text-accent py-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>Free shipping across {shippingSettings.homeState}. Delivery to other states is priced at checkout.</span>
+            </div>
 
             <div className="pt-2">
               <Link
@@ -216,7 +209,7 @@ export default function CartPage() {
               </div>
               <div className="flex justify-between text-ink/70">
                 <span>Shipping</span>
-                <span className="font-medium text-ink">{qualifiesForFreeShipping ? 'Free' : 'Calculated at checkout'}</span>
+                <span className="font-medium text-ink">Calculated at checkout</span>
               </div>
               <div className="flex justify-between text-ink/50 text-2xs">
                 <span>Includes GST (18%)</span>

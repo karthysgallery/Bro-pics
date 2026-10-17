@@ -9,7 +9,8 @@ import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
 import { getActiveCategories } from '../lib/firestore-categories';
-import { getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings, getSiteText } from '../lib/firestore-settings';
+import { getLiveLegalSlugs } from '../lib/firestore-content';
+import { getBusinessDetails, getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings, getSiteText } from '../lib/firestore-settings';
 import { SiteTextProvider } from '../components/layout/SiteTextContext';
 import { DEFAULT_SITE_TEXT, type SiteText } from '@bro-pics/shared';
 import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
@@ -18,6 +19,8 @@ import { getAppearanceSettings } from '../lib/firestore-settings';
 import { appearanceCss, DEFAULT_APPEARANCE, type Appearance } from '@bro-pics/shared';
 import { NavigationLoader, SplashScreen } from '../components/brand/Preloader';
 import { withComboNavLink } from '../lib/combo-nav';
+import { BusinessContactProvider, type BusinessContact } from '../lib/business-contact';
+import { whatsappDigits } from '@bro-pics/shared';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
 import { Inter, DM_Sans, Poppins, Nunito_Sans, Montserrat, Playfair_Display, Lora, Fraunces, Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
 
@@ -155,6 +158,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     console.error('Failed to load footer settings:', error);
   }
 
+  let liveLegalSlugs: string[] = [];
+  try {
+    liveLegalSlugs = await getLiveLegalSlugs();
+  } catch (error) {
+    console.error('Failed to load legal page status:', error);
+  }
+
   let storeSettings: { name: string; supportPhone: string } | null = null;
   try {
     storeSettings = await getStoreSettings();
@@ -193,7 +203,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   // [FE-41] One Organization entity for the whole site, rendered once
   // here rather than duplicated per page.
-  const organizationJsonLd = buildOrganizationJsonLd();
+  const businessDetails = await getBusinessDetails().catch(() => null);
+  const businessContact: BusinessContact = {
+    name: businessDetails?.name ?? 'KarthysGallery',
+    ...(businessDetails?.supportEmail && { supportEmail: businessDetails.supportEmail }),
+    ...(whatsappDigits(businessDetails?.supportWhatsapp) && { whatsappDigits: whatsappDigits(businessDetails?.supportWhatsapp)! }),
+    ...((businessDetails?.supportPhone) && { supportPhone: businessDetails.supportPhone }),
+  };
+  const organizationJsonLd = buildOrganizationJsonLd({ email: businessContact.supportEmail, whatsappDigits: businessContact.whatsappDigits });
 
   return (
     <html lang="en" className={`${sansFont.variable} ${displayFont.variable} ${optionalFonts} ${textFieldFontVariables}`}>
@@ -211,16 +228,19 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <NotificationsSync />
             <CartProvider>
               <SiteTextProvider value={siteText}>
+              <BusinessContactProvider value={businessContact}>
               <LayoutChrome
                 categories={categories}
                 announcementBar={announcementBar}
                 headerSettings={headerSettings}
                 footerSettings={footerSettings}
+                liveLegalSlugs={liveLegalSlugs}
                 storeSettings={storeSettings}
                 themeDecor={festive?.decor ?? null}
               >
                 {children}
               </LayoutChrome>
+              </BusinessContactProvider>
               </SiteTextProvider>
             </CartProvider>
           </AuthProvider>

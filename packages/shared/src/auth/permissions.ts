@@ -58,6 +58,8 @@ export const PERMISSION_KEYS = [
   // Backwards-compatible content keys for legacy routes
   'content:read',
   'content:write',
+  // Business facts, shipping charges, return rules and approval of legal pages: what customers are promised.
+  'policies:approve',
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
@@ -97,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'audit:read',
     'content:read',
     'content:write',
+    'policies:approve',
   ],
   admin: [
     'billing:view',
@@ -132,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'audit:read',
     'content:read',
     'content:write',
+    'policies:approve',
   ],
   staff: [
     'billing:view',

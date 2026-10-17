@@ -1,7 +1,7 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
-import { DeliveryMethodSchema } from '@bro-pics/shared';
+import { AddressSchema, DeliveryMethodSchema, shippingFailureMessage } from '@bro-pics/shared';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../lib/verify-id-token';
 import { computeOrderPricing } from '../../../../lib/order-pricing';
@@ -40,13 +40,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
+  // The address is read from the signed-in customer's own saved addresses: the browser sends only its id,
+  // so it cannot name a state or PIN code of its own to change the price.
+  let address: { state: string; pincode: string } | null = null;
+  if (typeof body?.addressId === 'string' && body.addressId.length > 0 && body.addressId.length <= 128) {
+    const snap = await db.collection('users').doc(userId).collection('addresses').doc(body.addressId).get();
+    const parsed = snap.exists ? AddressSchema.safeParse(snap.data()) : null;
+    if (parsed?.success) address = { state: parsed.data.state, pincode: parsed.data.pincode };
+  }
   const cartDoc = await db.collection('carts').doc(userId).get();
   const cartItems = (cartDoc.exists ? (cartDoc.data() as { items: CartLineInput[] }).items : []) ?? [];
   if (cartItems.length === 0) {
     return NextResponse.json({ empty: true }, { status: 200 });
   }
 
-  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode, deliveryMethod });
+  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode, deliveryMethod, address });
   return NextResponse.json(
     {
       empty: false,
@@ -63,6 +71,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       subtotal: pricing.subtotal,
       discount: pricing.discount,
       shipping: pricing.shipping,
+      // Non-null means shipping cannot be priced yet; the page must not offer "Place order".
+      shippingFailure: pricing.shippingFailure,
+      shippingMessage: pricing.shippingFailure ? shippingFailureMessage(pricing.shippingFailure, pricing.shippingState ?? undefined) : null,
+      shippingBasis: pricing.shippingBasis,
       total: pricing.total,
       taxLines: pricing.taxLines.map((t) => ({ rate: t.rate, amount: t.amount })),
       coupon: pricing.coupon,

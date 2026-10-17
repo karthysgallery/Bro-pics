@@ -87,3 +87,21 @@ Build: Cloud Build trigger `deploy-karthys-gallery` on branch `master` (`apps/we
 - Website: Cloud Run keeps previous revisions; traffic can be moved back (`gcloud run services update-traffic`).
 - Functions: redeploying previous code; schedulers can be paused. Deleting data is not reversible without a backup (take one first).
 - Meta/Razorpay changes are in their dashboards.
+
+## Added 2026-10-17: what deploying the business-settings work changes (nothing has been deployed)
+
+* No new infrastructure, secrets or environment variables are required.
+* No Firestore index or rules change is required (the readiness API uses a single-field query and `select`; no new composite index).
+* Behaviour that changes for customers the moment this build is live: policy pages show a neutral holding notice until each is approved and published; checkout refuses delivery to states that have no charge (set the charges, or a fallback, before opening the shop); WhatsApp contact buttons are hidden until a number is saved; `/policies` redirects to the shipping policy; the Shipping Rates admin page is replaced by a pointer to Settings.
+* An existing `settings/shipping` document with the old threshold/flat fields is not deleted or rewritten; those fields are simply ignored. Saving the new Shipping form replaces the document with the state-based one.
+* Rollback: redeploy the previous Cloud Run revision (no data migration to undo).
+* Owner steps before opening: fill the business profile and policy wording, set shipping charges, set returns decisions, approve and publish the eight pages (see `docs/LEGAL_OWNER_REVIEW_CHECKLIST.md`).
+
+
+## Added 2026-10-17 (verification pass)
+
+* **Firestore rules change in the repo (not deployed):** `pages` is readable only when `isPublished == true`. Deploy together with the web release (the site does not read `pages` from the browser, so there is no ordering risk). Verified by rules tests (58 pass, local emulator). Do **not** deploy `storage.rules` (it would open reads); the live deny-all stays.
+* **New permission `policies:approve`** (super_admin, admin). Existing custom claims need no change. Roles that had `settings:write` (marketing_manager) can still edit SEO/header/footer/theme but no longer shipping, returns, store profile, policy wording, GST or page approval.
+* **Optional data step (owner approval, writes data):** import the India Post PIN directory into `shippingServiceability` (see the verification report §4) to verify Tamil Nadu/Puducherry PINs.
+* **Rollback:** previous Cloud Run revision (`karthys-gallery-00022-kn8` is current); previous rules file from git; no data migration to undo.
+* The build step downloads Google Fonts; one build attempt failed on that fetch and the retry passed. If Cloud Build shows `next/font` errors, re-run it.

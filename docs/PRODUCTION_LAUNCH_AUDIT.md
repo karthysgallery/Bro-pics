@@ -227,3 +227,62 @@ Run on the live site after the go-live steps, with a real test customer. Record 
 6. Owner: Razorpay webhook registration; me: verify the webhook with a test event.
 7. Owner approves the go-live push: `_SITE_PREVIEW=0`, real site URL; Cloud Run env update.
 8. Together: run section 7 with a real small order, refund it, and fix anything that fails before announcing.
+
+---
+
+## Update 2026-10-17 (later): business configuration, state shipping, returns, policy pages
+
+All changes below are **local and uncommitted** (no push, no deploy, no live data touched). Architecture and admin guide: `docs/BUSINESS_SETTINGS_AND_POLICIES.md`. Owner checklist: `docs/LEGAL_OWNER_REVIEW_CHECKLIST.md`.
+
+### Reconciliation of earlier findings against the code now in the working tree
+
+| Earlier finding | Now |
+|---|---|
+| §1 `shipping`: free ≥ ₹1,500, flat ₹50, express ₹150 (code defaults) | **Replaced.** Tamil Nadu free; per-state charge for other states; an unconfigured state blocks checkout instead of being free; express off unless enabled. Legacy threshold/flat fields are ignored. A live `settings/shipping` document, if it exists, is read defensively (nothing is deleted). |
+| §1 `store` is only name/phone/legalName/address | **Extended** to a full business profile (structured address, support email/WhatsApp, owner, grievance contact, GST status, invoice note). Old fields still parse. |
+| §1 "supportPhone" required | Now optional (empty allowed) so no number is invented. |
+| §2 Legal pages served from built-in text that makes unverified claims (48-hour window, 5–7 days, 30 days, hours, `support@karthysgallery.in`) | **Removed.** Built-in text is no longer shown. Legal pages show only owner-approved text; otherwise a neutral holding notice. The unverified claims are deleted from the code (FAQ wording, `/policies`, structured data, order pages, product help box). |
+| §2 WhatsApp placeholder `910000000000` | Removed as a fallback: WhatsApp buttons are hidden until a number is saved. |
+| §2 No grievance officer | Grievance contact is an admin field (name, designation, email/phone) and a Grievance page template exists; the owner must supply the details. |
+| §D4 "auto-enabling transactional WhatsApp transport" | Unchanged by this work; still requires `WHATSAPP_MODE=disabled` in the Cloud Run command. |
+| Returns API: hard-coded 7-day window, change-of-mind allowed for everything | **Replaced** by the owner-approved model (personalized vs ready-made, window only when approved). |
+
+### New security review notes (server-side)
+* Shipping is computed only from the address read from the database and the settings read from Firestore; `create-order`, `checkout/quote` and `coupon/validate` ignore any client-sent amount, state or PIN. A tampered request cannot lower shipping (tests: TN free, other state charged, unconfigured blocked, PIN/state mismatch blocked, express off).
+* Approving a policy page needs `settings:write` (staff with only `content:write` cannot); approval is bound to a SHA-256 of the exact text and is voided by any edit. An automated review flagged the first (non-cryptographic) fingerprint; it was replaced by SHA-256 (verified against standard test vectors and `node:crypto`).
+* The old Shipping Rates API (`PUT /api/admin/delivery/rates`) could write stale pricing fields into `settings/shipping`; it now returns 410 and writes nothing.
+* Idempotency, Razorpay signature verification and webhook handling were not modified by this work; they were not re-audited here.
+* Firestore and Storage rules were not changed and not deployed. Rules tests were **not run** in this pass (the emulator test suite was not part of it).
+
+### Test results for this work (what ran, what did not)
+See the final report in chat and the table below; "not run" means exactly that.
+
+| Suite | Result |
+|---|---|
+| `packages/shared` vitest | pass: 702 passed, 10 skipped (83 files) |
+| `apps/web` vitest | pass: 2174 passed, 31 skipped (327 files) |
+| `functions` vitest | pass: 81 passed (14 files) |
+| `tsc --noEmit`: shared, web, functions, seed | pass (no output) |
+| Production `next build` | not run in this pass |
+| Firestore/Storage rules emulator tests | not run |
+| Browser/emulator visual QA of the new admin screens | not run |
+
+### Still blocking launch (owner input or approval needed)
+1. Business profile facts (legal name, address, support email, support WhatsApp, grievance contact) and policy wording (dispatch, delivery, cancellation, refund, retention, response time, hours, courts) — see the checklist.
+2. A shipping charge for every state outside Tamil Nadu, or a fallback charge.
+3. Decisions: claim window days, ready-made change-of-mind period, per-product personalized/ready-made type.
+4. Tax: confirmation from a tax professional on GST registration obligations for an online seller; nothing here assumes it is resolved.
+5. Approval of the eight policy pages (after a professional read).
+6. All earlier owner/approval items (seed-data cleanup, placeholder super-admins, functions/print-render deploy, Razorpay webhook, Cloud Run WhatsApp env, go-live push).
+
+
+---
+
+## Verification pass 2026-10-17 (evening): see `docs/VERIFICATION_REPORT_2026-10-17.md`
+
+Evidence-based status, nothing marked complete without a test or a read-only check:
+* Build PASS, typecheck PASS, tests PASS (shared 713, web 2198, functions 81, seed 46, print-render 105), rules tests PASS (58, repo rules, local emulator). Node 22 runtime, e2e, mobile browser: not run.
+* Browser pass on the emulators found and fixed: policy pages never showing after approval (Timestamp vs Date), page cache delaying withdrawal, readiness panel stale after save, addresses without `label`/`line2` blocking checkout, hard-coded emails on the 404/error pages, footer phone using the WhatsApp number.
+* Security: new `policies:approve` permission guards what customers are promised; the `pages` Firestore read rule is tightened in the repo (not deployed); the Razorpay webhook does not compare amount/currency (not changed).
+* Live read-only facts: 3 of 16 functions deployed, no print-render service, only `settings/theme` saved, 0 pages, shipping PIN directory empty, `SITE_PREVIEW=1` (noindex), domain resolves to Firebase Hosting, Cloud Run has no `WHATSAPP_*` variables.
+* Still blocking: owner facts/decisions, professional legal and tax review, hard-coded delivery promises, deploys (rules, functions, print-render, webhook), real-order proof, data cleanup, go-live rebuild.

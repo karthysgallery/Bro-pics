@@ -19,6 +19,8 @@ export const CreateCategoryBodySchema = z
     seo: z.object({ title: z.string().optional(), description: z.string().optional() }).default({}),
     heroImage: z.string().optional(),
     description: z.string().optional(),
+    // Default return rule for products in this category that have none of their own.
+    returnPolicy: z.enum(['personalized', 'ready_made']).nullable().optional(),
   })
   .strict();
 

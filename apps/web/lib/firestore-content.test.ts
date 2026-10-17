@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+
 const mockPagesGet = vi.fn();
 const mockFaqsGet = vi.fn();
 
@@ -21,7 +23,12 @@ vi.mock('firebase-admin/firestore', () => ({
   }),
 }));
 
+vi.mock('./legal-values', () => ({ loadLegalValues: async () => ({}) }));
+
 import { getPageBySlug, getActiveFaqs } from './firestore-content';
+import { textFingerprint } from '@bro-pics/shared';
+
+const LEGAL_BODY = '<p>A reasonably long policy page body so that it is not treated as empty text by the safety checks.</p>';
 
 const pageDoc = {
   id: 'page_about',
@@ -40,11 +47,38 @@ describe('getPageBySlug', () => {
     expect(page).toBeNull();
   });
 
-  it('[FE-28] returns the parsed page when published', async () => {
-    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => pageDoc }] });
-    const page = await getPageBySlug('about');
-    expect(page?.title).toBe('About KarthysGallery');
+  it('[FE-28] returns the parsed page when published (a non-legal page needs no approval)', async () => {
+    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({ ...pageDoc, slug: 'faq', title: 'FAQ' }) }] });
+    const page = await getPageBySlug('faq');
+    expect(page?.title).toBe('FAQ');
     expect(page?.bodyHtml).toBe('<p>Hello</p>');
+  });
+
+  it('reads a page whose dates come back from Firestore as Timestamps (not Dates)', async () => {
+    const ts = (iso: string) => ({ toDate: () => new Date(iso) });
+    const approved = { ...pageDoc, slug: 'terms', bodyHtml: LEGAL_BODY, approvedHash: textFingerprint(LEGAL_BODY), updatedAt: ts('2026-01-01T00:00:00Z'), approvedAt: ts('2026-01-02T00:00:00Z'), approvedBy: 'admin_1' };
+    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => approved }] });
+    expect((await getPageBySlug('terms'))?.bodyHtml).toBe(LEGAL_BODY);
+  });
+
+  it('never shows a legal page that is published but not approved', async () => {
+    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({ ...pageDoc, slug: 'terms', bodyHtml: LEGAL_BODY }) }] });
+    expect(await getPageBySlug('terms')).toBeNull();
+  });
+
+  it('shows a legal page only while the approval matches the exact text', async () => {
+    const approved = { ...pageDoc, slug: 'terms', bodyHtml: LEGAL_BODY, approvedHash: textFingerprint(LEGAL_BODY) };
+    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => approved }] });
+    expect((await getPageBySlug('terms'))?.bodyHtml).toBe(LEGAL_BODY);
+    mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({ ...approved, bodyHtml: `${LEGAL_BODY} edited after approval` }) }] });
+    expect(await getPageBySlug('terms')).toBeNull();
+  });
+
+  it('never shows an approved legal page that still has an unfilled {{token}} or an internal note', async () => {
+    for (const body of [`${LEGAL_BODY}<p>Email {{supportEmail}}</p>`, `${LEGAL_BODY}<p>NEEDS OWNER CONFIRMATION</p>`]) {
+      mockPagesGet.mockResolvedValueOnce({ empty: false, docs: [{ data: () => ({ ...pageDoc, slug: 'terms', bodyHtml: body, approvedHash: textFingerprint(body) }) }] });
+      expect(await getPageBySlug('terms')).toBeNull();
+    }
   });
 
   it('[FE-28] returns null for an unpublished (draft) page, never showing it to a visitor', async () => {

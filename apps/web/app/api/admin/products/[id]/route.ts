@@ -47,6 +47,14 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
   const body = parsed.data;
 
+  // The return type decides what a customer may claim, so changing it needs the same authority as the return rules.
+  if (body.returnPolicy !== undefined && body.returnPolicy !== ((current as { returnPolicy?: string | null }).returnPolicy ?? null)) {
+    const approver = await requirePermission(request, 'policies:approve');
+    if (!approver.ok) {
+      return adminApiError(approver.status, approver.status === 401 ? 'unauthenticated' : 'forbidden', 'Only an administrator can change a return type');
+    }
+  }
+
   if (body.slug && body.slug !== current.slug) {
     const slugConflict = await db.collection('products').where('slug', '==', body.slug).limit(1).get();
     if (!slugConflict.empty && slugConflict.docs[0].id !== id) {
@@ -90,7 +98,7 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     action: body.status === 'archived' ? 'product.archive' : 'product.update',
     resource: 'product',
     resourceId: id,
-    details: { changedFields: Object.keys(body) },
+    details: { changedFields: Object.keys(body), ...(body.returnPolicy !== undefined && { returnPolicy: body.returnPolicy, previousReturnPolicy: (current as { returnPolicy?: string | null }).returnPolicy ?? null }) },
   }).catch((error) => logger.error('Failed to write audit log', { productId: id, error: String(error) }));
 
   // Revalidate both the old and new slug's page when the slug itself

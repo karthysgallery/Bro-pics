@@ -21,6 +21,13 @@ export const PageSchema = z.object({
   }),
   isPublished: z.boolean(),
   updatedAt: z.date(),
+  // Sign-off for legal/policy pages (privacy, terms, shipping, returns, cancellation, contact, grievance).
+  // `approvedHash` is a fingerprint of the exact text that was approved: editing the text voids the approval.
+  approvedHash: z.string().optional(),
+  approvedBy: z.string().optional(),
+  approvedAt: z.date().optional(),
+  // The last admin who changed the text or its publication (an account id, never shown publicly).
+  updatedBy: z.string().optional(),
 });
 
 export type Page = z.infer<typeof PageSchema>;

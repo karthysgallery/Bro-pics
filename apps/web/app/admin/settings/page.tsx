@@ -4,28 +4,18 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth-context';
 import { FormField, SaveBar } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
-import { DEFAULT_SHIPPING_SETTINGS } from '../../../lib/checkout-calc';
+import { BusinessProfileForm, EMPTY_BUSINESS_FORM, type BusinessFormState } from '../../../components/admin/settings/BusinessProfileForm';
+import { StateShippingForm, DEFAULT_SHIPPING_FORM, unconfiguredFormStates, type ShippingFormState } from '../../../components/admin/settings/StateShippingForm';
+import { ReadinessPanel } from '../../../components/admin/settings/ReadinessPanel';
+import { PolicyFactsForm, EMPTY_POLICY_FACTS_FORM, type PolicyFactsFormState } from '../../../components/admin/settings/PolicyFactsForm';
+import { ReturnsPolicyForm, DEFAULT_RETURNS_FORM, type ReturnsFormState } from '../../../components/admin/settings/ReturnsPolicyForm';
+import { INDIAN_STATES_AND_UTS } from '@bro-pics/shared';
 import { paiseToRupees, rupeesToPaise } from '../../../lib/admin-money';
 
 // A GSTIN is 15 characters: 2-digit state code, 10-char PAN, entity digit, 'Z', checksum.
 const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
-type SettingsTab = 'store' | 'shipping' | 'gst' | 'payments' | 'seo' | 'announcement';
-
-interface StoreSettings {
-  name: string;
-  supportPhone: string;
-  processingDays: number;
-  description?: string;
-  legalName?: string;
-  address?: string;
-}
-
-interface ShippingSettings {
-  freeShippingThreshold: number;
-  flatShippingCharge: number;
-  expressShippingCharge: number;
-}
+type SettingsTab = 'store' | 'shipping' | 'returns' | 'gst' | 'payments' | 'seo' | 'announcement';
 
 interface CourierConfig {
   code: string;
@@ -74,44 +64,20 @@ export default function AdminSettingsPage() {
   // saved yet — never invented placeholders. A form that pre-fills made-up data
   // (a sample GSTIN, phone number or UPI id) turns one careless Save into
   // published, customer-visible "settings".
-  const [store, setStore] = useState<StoreSettings>({
-    name: 'KarthysGallery',
-    supportPhone: '',
-    processingDays: 3,
-    description: '',
-    legalName: '',
-    address: '',
-  });
+  const [store, setStore] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
 
-  // The form edits RUPEES; the API stores integer PAISE. Converted at the
-  // load/save boundary below, so the numbers in these inputs are always rupees.
-  const [shipping, setShipping] = useState<ShippingSettings>({
-    freeShippingThreshold: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.freeShippingThreshold),
-    flatShippingCharge: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.flatShippingCharge),
-    expressShippingCharge: paiseToRupees(DEFAULT_SHIPPING_SETTINGS.expressShippingCharge),
-  });
+  // The shipping form edits RUPEES as text (blank = "not set", never 0); the API stores integer PAISE.
+  // Converted at the load/save boundary below.
+  const [shipping, setShipping] = useState<ShippingFormState>(DEFAULT_SHIPPING_FORM);
+  const [returnsForm, setReturnsForm] = useState<ReturnsFormState>(DEFAULT_RETURNS_FORM);
+  const [policyFactsForm, setPolicyFactsForm] = useState<PolicyFactsFormState>(EMPTY_POLICY_FACTS_FORM);
 
   // Tabs whose settings could not be read. Saving over a failed read would
   // overwrite real configuration with this page's defaults, so Save is blocked.
   const [loadFailed, setLoadFailed] = useState<Partial<Record<SettingsTab, boolean>>>({});
 
-  const [couriers, setCouriers] = useState<CourierConfig[]>([
-    {
-      code: 'DELHIVERY',
-      name: 'Delhivery Surface',
-      trackingUrlTemplate: 'https://www.delhivery.com/track/package/{awb}',
-    },
-    {
-      code: 'BLUEDART',
-      name: 'Blue Dart Air Express',
-      trackingUrlTemplate: 'https://www.bluedart.com/tracking/{awb}',
-    },
-    {
-      code: 'DTDC',
-      name: 'DTDC Courier',
-      trackingUrlTemplate: 'https://www.dtdc.in/tracking/{awb}',
-    },
-  ]);
+  // No courier is pre-filled: add only the couriers you actually use.
+  const [couriers, setCouriers] = useState<CourierConfig[]>([]);
 
   const [gst, setGst] = useState<GstSettings>({
     gstEnabled: false,
@@ -154,6 +120,8 @@ export default function AdminSettingsPage() {
         gstRes,
         payRes,
         seoRes,
+        returnsRes,
+        policyFactsRes,
       ] = await Promise.all([
         fetch('/api/admin/settings/store', { headers }),
         fetch('/api/admin/settings/shipping', { headers }),
@@ -161,11 +129,14 @@ export default function AdminSettingsPage() {
         fetch('/api/admin/settings/gst', { headers }),
         fetch('/api/admin/settings/payments', { headers }),
         fetch('/api/admin/settings/seo', { headers }),
+        fetch('/api/admin/settings/returns', { headers }),
+        fetch('/api/admin/settings/policyFacts', { headers }),
       ]);
 
       const failed: Partial<Record<SettingsTab, boolean>> = {
         store: !storeRes.ok,
         shipping: !shipRes.ok || !courierRes.ok,
+        returns: !returnsRes.ok || !policyFactsRes.ok,
         gst: !gstRes.ok,
         payments: !payRes.ok,
         seo: !seoRes.ok,
@@ -174,16 +145,74 @@ export default function AdminSettingsPage() {
 
       if (storeRes.ok) {
         const d = await storeRes.json();
-        if (d.value) setStore((prev) => ({ ...prev, ...d.value }));
+        if (d.value) {
+          const v = d.value as Record<string, unknown>;
+          const t = (k: string) => (typeof v[k] === 'string' ? (v[k] as string) : '');
+          setStore({
+            ...EMPTY_BUSINESS_FORM,
+            name: t('name') || EMPTY_BUSINESS_FORM.name,
+            supportPhone: t('supportPhone'),
+            processingDays: typeof v.processingDays === 'number' ? v.processingDays : EMPTY_BUSINESS_FORM.processingDays,
+            description: t('description'),
+            legalName: t('legalName'),
+            address: t('address'),
+            addressLine1: t('addressLine1'),
+            addressLine2: t('addressLine2'),
+            city: t('city'),
+            district: t('district'),
+            state: t('state'),
+            pincode: t('pincode'),
+            country: t('country'),
+            supportEmail: t('supportEmail'),
+            supportWhatsapp: t('supportWhatsapp'),
+            ownerName: t('ownerName'),
+            grievanceName: t('grievanceName'),
+            grievanceDesignation: t('grievanceDesignation'),
+            grievanceEmail: t('grievanceEmail'),
+            grievancePhone: t('grievancePhone'),
+            gstRegistration: (['not_registered', 'registered', 'unconfirmed'] as const).includes(v.gstRegistration as 'registered') ? (v.gstRegistration as BusinessFormState['gstRegistration']) : 'unconfirmed',
+            invoiceNote: t('invoiceNote'),
+          });
+        }
       }
       if (shipRes.ok) {
         const d = await shipRes.json();
         if (d.value) {
+          const charges: Record<string, string> = {};
+          for (const [state, paise] of Object.entries((d.value.stateCharges ?? {}) as Record<string, number>)) {
+            if (typeof paise === 'number') charges[state] = String(paiseToRupees(paise));
+          }
           setShipping({
-            freeShippingThreshold: paiseToRupees(d.value.freeShippingThreshold),
-            flatShippingCharge: paiseToRupees(d.value.flatShippingCharge),
-            expressShippingCharge: paiseToRupees(d.value.expressShippingCharge),
+            homeState: typeof d.value.homeState === 'string' ? d.value.homeState : 'Tamil Nadu',
+            stateCharges: charges,
+            otherStatesDefaultCharge: typeof d.value.otherStatesDefaultCharge === 'number' ? String(paiseToRupees(d.value.otherStatesDefaultCharge)) : '',
+            expressEnabled: d.value.expressEnabled === true,
+            expressCharge: typeof d.value.expressCharge === 'number' ? String(paiseToRupees(d.value.expressCharge)) : '',
           });
+        }
+      }
+      if (returnsRes.ok) {
+        const d = await returnsRes.json();
+        if (d.value) {
+          const v = d.value as Record<string, unknown>;
+          setReturnsForm({
+            claimWindowDays: typeof v.claimWindowDays === 'number' ? String(v.claimWindowDays) : '',
+            claimWindowApproved: v.claimWindowApproved === true,
+            readyMadeChangeOfMindDays: typeof v.readyMadeChangeOfMindDays === 'number' ? String(v.readyMadeChangeOfMindDays) : '',
+            readyMadeChangeOfMindApproved: v.readyMadeChangeOfMindApproved === true,
+            unboxingVideoRecommended: v.unboxingVideoRecommended !== false,
+            claimInstructions: typeof v.claimInstructions === 'string' ? v.claimInstructions : '',
+            replacementPreferred: v.replacementPreferred !== false,
+          });
+        }
+      }
+      if (policyFactsRes.ok) {
+        const d = await policyFactsRes.json();
+        if (d.value) {
+          const v = d.value as Record<string, unknown>;
+          const next = { ...EMPTY_POLICY_FACTS_FORM };
+          for (const key of Object.keys(next) as Array<keyof PolicyFactsFormState>) if (typeof v[key] === 'string') next[key] = v[key] as string;
+          setPolicyFactsForm(next);
         }
       }
       if (courierRes.ok) {
@@ -230,36 +259,68 @@ export default function AdminSettingsPage() {
       }
 
       if (activeTab === 'store') {
-        if (!store.name.trim() || !store.supportPhone.trim()) {
-          throw new Error('Store name and customer support phone are required.');
+        if (!store.name.trim()) {
+          throw new Error('The store name is required.');
         }
+        // Only what was entered is sent: a blank field means "not set", never an empty or invented value.
+        const clean = (v: string) => (v.trim() ? v.trim() : undefined);
         const res = await fetch('/api/admin/settings/store', {
           method: 'PUT',
           headers,
           body: JSON.stringify({
-            ...store,
             name: store.name.trim(),
             supportPhone: store.supportPhone.trim(),
-            legalName: store.legalName?.trim() || undefined,
-            address: store.address?.trim() || undefined,
+            processingDays: store.processingDays,
+            description: clean(store.description),
+            legalName: clean(store.legalName),
+            address: clean(store.address),
+            addressLine1: clean(store.addressLine1),
+            addressLine2: clean(store.addressLine2),
+            city: clean(store.city),
+            district: clean(store.district),
+            state: clean(store.state),
+            pincode: clean(store.pincode),
+            country: clean(store.country),
+            supportEmail: clean(store.supportEmail),
+            supportWhatsapp: clean(store.supportWhatsapp),
+            ownerName: clean(store.ownerName),
+            grievanceName: clean(store.grievanceName),
+            grievanceDesignation: clean(store.grievanceDesignation),
+            grievanceEmail: clean(store.grievanceEmail),
+            grievancePhone: clean(store.grievancePhone),
+            gstRegistration: store.gstRegistration,
+            invoiceNote: clean(store.invoiceNote),
           }),
         });
-        if (!res.ok) throw new Error('Failed to save store settings');
-      } else if (activeTab === 'shipping') {
-        const threshold = rupeesToPaise(shipping.freeShippingThreshold);
-        const flat = rupeesToPaise(shipping.flatShippingCharge);
-        const express = rupeesToPaise(shipping.expressShippingCharge);
-        if (threshold === null || flat === null || express === null) {
-          throw new Error('Enter valid shipping amounts in rupees (0 or more).');
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          const issue = body?.issues?.[0]?.message ?? body?.details?.issues?.[0]?.message;
+          throw new Error(issue ? `Not saved: ${issue}` : 'Failed to save store settings');
         }
+      } else if (activeTab === 'shipping') {
+        const stateCharges: Record<string, number> = {};
+        for (const state of INDIAN_STATES_AND_UTS) {
+          const raw = (shipping.stateCharges[state] ?? '').trim();
+          if (state === shipping.homeState || raw === '') continue;
+          const paise = rupeesToPaise(Number(raw));
+          if (paise === null || !Number.isFinite(Number(raw))) throw new Error(`Enter a valid shipping charge in rupees for ${state}, or leave it empty.`);
+          stateCharges[state] = paise;
+        }
+        const fallbackRaw = shipping.otherStatesDefaultCharge.trim();
+        const fallback = fallbackRaw === '' ? null : rupeesToPaise(Number(fallbackRaw));
+        if (fallbackRaw !== '' && fallback === null) throw new Error('Enter a valid fallback charge in rupees, or leave it empty.');
+        const expressPaise = shipping.expressEnabled ? rupeesToPaise(Number(shipping.expressCharge)) : 0;
+        if (shipping.expressEnabled && (shipping.expressCharge.trim() === '' || expressPaise === null)) throw new Error('Enter the express delivery charge in rupees.');
         const [sRes, cRes] = await Promise.all([
           fetch('/api/admin/settings/shipping', {
             method: 'PUT',
             headers,
             body: JSON.stringify({
-              freeShippingThreshold: threshold,
-              flatShippingCharge: flat,
-              expressShippingCharge: express,
+              homeState: shipping.homeState,
+              stateCharges,
+              otherStatesDefaultCharge: fallback,
+              expressEnabled: shipping.expressEnabled,
+              expressCharge: expressPaise ?? 0,
             }),
           }),
           fetch('/api/admin/settings/courier', {
@@ -269,6 +330,33 @@ export default function AdminSettingsPage() {
           }),
         ]);
         if (!sRes.ok || !cRes.ok) throw new Error('Failed to save shipping settings');
+      } else if (activeTab === 'returns') {
+        const days = (raw: string): number | null => (raw.trim() === '' ? null : Number(raw));
+        const claimDays = days(returnsForm.claimWindowDays);
+        const readyDays = days(returnsForm.readyMadeChangeOfMindDays);
+        for (const [label, v] of [['Claim window', claimDays], ['Ready-made return period', readyDays]] as const) {
+          if (v !== null && (!Number.isInteger(v) || v < 0)) throw new Error(`${label}: enter a whole number of days, or leave it empty.`);
+        }
+        if (returnsForm.claimWindowApproved && claimDays === null) throw new Error('Enter the claim window in days before ticking Approved.');
+        if (returnsForm.readyMadeChangeOfMindApproved && readyDays === null) throw new Error('Enter the return period in days before ticking Approved.');
+        const res = await fetch('/api/admin/settings/returns', {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            claimWindowDays: claimDays,
+            claimWindowApproved: returnsForm.claimWindowApproved,
+            readyMadeChangeOfMindDays: readyDays,
+            readyMadeChangeOfMindApproved: returnsForm.readyMadeChangeOfMindApproved,
+            unboxingVideoRecommended: returnsForm.unboxingVideoRecommended,
+            claimInstructions: returnsForm.claimInstructions.trim() || undefined,
+            replacementPreferred: returnsForm.replacementPreferred,
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to save returns settings');
+        const facts: Record<string, string> = {};
+        for (const [k, v] of Object.entries(policyFactsForm)) if (v.trim()) facts[k] = v.trim();
+        const factsRes = await fetch('/api/admin/settings/policyFacts', { method: 'PUT', headers, body: JSON.stringify(facts) });
+        if (!factsRes.ok) throw new Error('Returns settings were saved, but the policy wording could not be saved');
       } else if (activeTab === 'gst') {
         const gstin = (gst.gstin ?? '').trim().toUpperCase();
         if (gst.gstEnabled) {
@@ -310,6 +398,7 @@ export default function AdminSettingsPage() {
 
       showToast('Settings saved successfully', 'success');
       setIsDirty(false);
+      window.dispatchEvent(new Event('karthys:settings-saved'));
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error saving settings', 'error');
     } finally {
@@ -329,11 +418,14 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
+      <ReadinessPanel />
+
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2">
         {[
           { id: 'store', label: 'Store Profile' },
           { id: 'shipping', label: 'Shipping & Couriers' },
+          { id: 'returns', label: 'Returns & Claims' },
           { id: 'gst', label: 'GST & Invoicing' },
           { id: 'payments', label: 'Payment Methods' },
           { id: 'seo', label: 'Global SEO' },
@@ -374,174 +466,25 @@ export default function AdminSettingsPage() {
 
           {/* Store Profile Tab */}
           {activeTab === 'store' && (
-            <div className="p-6 rounded-2xl border border-line bg-paper shadow-xs space-y-5">
-              <h2 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-line pb-2">
-                Business Information
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Brand / Store Name" required>
-                  <input
-                    type="text"
-                    value={store.name}
-                    onChange={(e) => {
-                      setStore((p) => ({ ...p, name: e.target.value }));
-                      setIsDirty(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                    required
-                  />
-                </FormField>
-
-                <FormField label="Customer Support Phone" hint="e.g. +91 98765 43210" required>
-                  <input
-                    type="text"
-                    value={store.supportPhone}
-                    onChange={(e) => {
-                      setStore((p) => ({ ...p, supportPhone: e.target.value }));
-                      setIsDirty(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink font-mono focus:border-gold focus:outline-none"
-                    required
-                  />
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  label="Standard Processing Time (Days)"
-                  hint="Number of business days needed for custom framing before dispatch."
-                  required
-                >
-                  <input
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={store.processingDays}
-                    onChange={(e) => {
-                      setStore((p) => ({ ...p, processingDays: Number(e.target.value) }));
-                      setIsDirty(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                    required
-                  />
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Legal Business Name" hint="Printed as the seller on tax invoices. Leave blank until confirmed.">
-                  <input
-                    type="text"
-                    value={store.legalName || ''}
-                    onChange={(e) => {
-                      setStore((p) => ({ ...p, legalName: e.target.value }));
-                      setIsDirty(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                  />
-                </FormField>
-
-                <FormField label="Registered Business Address" hint="Printed on tax invoices.">
-                  <input
-                    type="text"
-                    value={store.address || ''}
-                    onChange={(e) => {
-                      setStore((p) => ({ ...p, address: e.target.value }));
-                      setIsDirty(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                  />
-                </FormField>
-              </div>
-
-              <FormField label="Store Description" hint="Displayed on invoices and brand summaries">
-                <textarea
-                  rows={3}
-                  value={store.description || ''}
-                  onChange={(e) => {
-                    setStore((p) => ({ ...p, description: e.target.value }));
-                    setIsDirty(true);
-                  }}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                />
-              </FormField>
-            </div>
+            <BusinessProfileForm
+              value={store}
+              onChange={(patch) => {
+                setStore((p) => ({ ...p, ...patch }));
+                setIsDirty(true);
+              }}
+            />
           )}
 
           {/* Shipping & Couriers Tab */}
           {activeTab === 'shipping' && (
             <div className="space-y-6">
-              {/* Shipping Rates */}
-              <div className="p-6 rounded-2xl border border-line bg-paper shadow-xs space-y-5">
-                <h2 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-line pb-2">
-                  Shipping Rates & Thresholds
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    label="Free Shipping Minimum (₹)"
-                    hint="Orders above this amount qualify for free standard shipping."
-                    required
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      value={shipping.freeShippingThreshold}
-                      onChange={(e) => {
-                        setShipping((p) => ({
-                          ...p,
-                          freeShippingThreshold: Number(e.target.value),
-                        }));
-                        setIsDirty(true);
-                      }}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                      required
-                    />
-                  </FormField>
-
-                  <FormField
-                    label="Standard Shipping Charge (₹)"
-                    hint="Charge for orders below free shipping threshold."
-                    required
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      value={shipping.flatShippingCharge}
-                      onChange={(e) => {
-                        setShipping((p) => ({
-                          ...p,
-                          flatShippingCharge: Number(e.target.value),
-                        }));
-                        setIsDirty(true);
-                      }}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                      required
-                    />
-                  </FormField>
-
-                  <FormField
-                    label="Express Air Shipping Charge (₹)"
-                    hint="Optional expedited priority shipping fee."
-                    required
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      value={shipping.expressShippingCharge}
-                      onChange={(e) => {
-                        setShipping((p) => ({
-                          ...p,
-                          expressShippingCharge: Number(e.target.value),
-                        }));
-                        setIsDirty(true);
-                      }}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
-                      required
-                    />
-                  </FormField>
-                </div>
-              </div>
+              <StateShippingForm
+                value={shipping}
+                onChange={(next) => {
+                  setShipping(next);
+                  setIsDirty(true);
+                }}
+              />
 
               {/* Couriers Configuration */}
               <div className="p-6 rounded-2xl border border-line bg-paper shadow-xs space-y-5">
@@ -645,6 +588,26 @@ export default function AdminSettingsPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Returns & Claims Tab */}
+          {activeTab === 'returns' && (
+            <div className="space-y-6">
+              <ReturnsPolicyForm
+                value={returnsForm}
+                onChange={(next) => {
+                  setReturnsForm(next);
+                  setIsDirty(true);
+                }}
+              />
+              <PolicyFactsForm
+                value={policyFactsForm}
+                onChange={(next) => {
+                  setPolicyFactsForm(next);
+                  setIsDirty(true);
+                }}
+              />
             </div>
           )}
 

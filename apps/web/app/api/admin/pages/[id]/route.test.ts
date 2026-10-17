@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.mock('server-only', () => ({}));
+vi.mock('../../../../../lib/legal-values', () => ({ loadLegalValues: async () => ({}) }));
 import { PATCH } from './route';
 
 const mockRequirePermission = vi.fn();

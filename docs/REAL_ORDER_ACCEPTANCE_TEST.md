@@ -57,3 +57,26 @@ Desktop Chrome and Safari; iPhone Safari; Android Chrome; tablet width 768; 375/
 
 ## 12. Sign-off
 List each failed step with owner and fix; repeat the failed section. Only when sections 1–9 are all PASS may the owner announce the shop.
+
+## Added 2026-10-17: shipping, returns and policy-page checks (run on the real site only after the owner approves go-live)
+
+Before: Admin > Settings has the business profile saved, a charge for every state (or a fallback), and the eight policy pages approved and published.
+
+1. Footer shows each approved policy link; each page opens with approved text (no holding notice, no `{{...}}`, no "NEEDS OWNER" text).
+2. Product page, cart, checkout and the confirmation show the real WhatsApp number/email from Settings and nothing else.
+3. Order to a **Tamil Nadu** address: shipping is ₹0 on the cart/checkout summary, the Razorpay amount, the order, the invoice and the admin order page (which also shows "Free: delivered within the home state").
+4. Order to **one other state** (small test): shipping equals the charge set for that state in every one of those places.
+5. Try an address whose state/PIN do not match (for example "Tamil Nadu" with a Kerala PIN): checkout refuses with the address message and creates no order.
+6. Try a state with no charge (only if no fallback exists): checkout refuses with the WhatsApp message.
+7. After delivery, on a personalized item: "changed my mind" is refused with the explanation; "damaged" (with a photo) is accepted for review and appears in Admin > Returns with its policy flags.
+8. Invoice reads "Invoice" (not "Tax invoice") while GST is off, shows the seller's legal name and address from the profile, and no GSTIN.
+9. WhatsApp transactional messages remain disabled (`WHATSAPP_MODE=disabled`): no customer message is sent by this test.
+
+
+## Added 2026-10-17 (verification pass)
+
+10. Address with a PIN beginning 605, 607 or 609 and state "Tamil Nadu": shipping is free; the admin order page shows the "range shared with Puducherry" warning unless the PIN directory has been imported. Check the address by hand before dispatch.
+11. Address "Puducherry" with a Chennai PIN: checkout refuses (state/PIN mismatch).
+12. Save a policy page, open Preview (facts filled, nothing blocking), Approve, Publish: the public page shows the text and the footer shows the link. Edit one word: the page returns to Draft and the public page shows the holding notice. Approve and Publish again, then Withdraw: holding notice again within seconds.
+13. Sign in as a marketing_manager (if such an account exists): shipping, returns, store profile and page approval return 403; SEO still saves.
+14. Product with no return type set: "changed my mind" is refused; set it to Ready-made with an approved period: it is accepted within the period.

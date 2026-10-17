@@ -1,6 +1,8 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
-import { PageSchema, FaqItemSchema, type Page, type FaqItem } from '@bro-pics/shared';
+import { PageSchema, FaqItemSchema, fillLegalTokens, isApproved, isLegalSlug, isVisibleToPublic, publicationBlockers, type Page, type FaqItem } from '@bro-pics/shared';
+import { loadLegalValues } from './legal-values';
+import { withDates } from './firestore-dates';
 
 /**
  * [FE-28] ABE-18 built the write API (POST/PATCH /api/admin/pages,
@@ -24,8 +26,36 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
   const db = getFirestore(getAdminApp());
   const snapshot = await db.collection('pages').where('slug', '==', slug).limit(1).get();
   if (snapshot.empty) return null;
-  const page = PageSchema.parse(snapshot.docs[0].data());
-  return page.isPublished ? page : null;
+  const page = PageSchema.parse(withDates(snapshot.docs[0].data()));
+  // Drafts are never shown. A legal page is shown only while an administrator's approval of THIS exact text stands.
+  if (!isVisibleToPublic(page)) return null;
+  // Business facts are filled in from the saved settings at the moment of viewing, so they can never be stale or
+  // hard-coded. If anything is still unfilled, or an internal note is left in the text, the page is not shown at all.
+  const filled = fillLegalTokens(page.bodyHtml, await loadLegalValues());
+  const blockers = publicationBlockers(filled);
+  if (isLegalSlug(slug) && (blockers.length > 0 || !isApproved(page))) return null;
+  if (!isLegalSlug(slug) && blockers.some((b) => b.startsWith('Contains an internal note'))) return null;
+  return { ...page, bodyHtml: filled };
+}
+
+/**
+ * Slugs of the legal pages a visitor can actually read right now (published, approved for this exact text, nothing
+ * unfilled). The footer shows a link only for these, so it never points at a holding notice.
+ */
+export async function getLiveLegalSlugs(): Promise<string[]> {
+  const db = getFirestore(getAdminApp());
+  const snapshot = await db.collection('pages').get();
+  const values = await loadLegalValues();
+  const live: string[] = [];
+  for (const doc of snapshot.docs) {
+    const parsed = PageSchema.safeParse(withDates(doc.data()));
+    if (!parsed.success) continue;
+    const page = parsed.data;
+    if (!isLegalSlug(page.slug) || !isVisibleToPublic(page) || !isApproved(page)) continue;
+    if (publicationBlockers(fillLegalTokens(page.bodyHtml, values)).length > 0) continue;
+    live.push(page.slug);
+  }
+  return live;
 }
 
 /**

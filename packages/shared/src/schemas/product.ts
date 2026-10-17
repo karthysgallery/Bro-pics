@@ -106,6 +106,9 @@ export const ProductSchema = z.object({
   // What kind of frame this is (catalogue/product-designs.ts). Absent on products made before
   // the guided editor: treated as single_photo (1 slot) or collage (more).
   productType: z.enum(['ready_made', 'single_photo', 'collage']).optional(),
+  // Which return rule this product follows when the owner overrides what the product's own data implies
+  // (see returns/eligibility.ts). Unset = derived from the product; changes are audited with the product.
+  returnPolicy: z.enum(['personalized', 'ready_made']).nullable().optional(),
   // Short product code used in SKUs, e.g. "MURUGAN".
   productCode: z.string().optional(),
   // What the picture shows ("Lord Murugan", "Rajinikanth") — the main search phrase for ready-made frames.

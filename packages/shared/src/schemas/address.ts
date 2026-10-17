@@ -9,9 +9,9 @@ export const AddressSchema = z.object({
   // addresses saved before it existed still parse; the address form makes
   // it required for anything new.
   recipientName: z.string().trim().max(80).nullable().optional(),
-  label: z.string().nullable(),
+  label: z.string().nullable().optional(),
   line1: z.string().min(1),
-  line2: z.string().nullable(),
+  line2: z.string().nullable().optional(),
   city: z.string().min(1),
   state: z.string().min(1),
   // [FE-35] A real 6-digit Indian pincode, not just "any 6 digits" — the

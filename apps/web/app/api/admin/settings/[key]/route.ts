@@ -46,6 +46,9 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
   return NextResponse.json({ key, value: snap.exists ? snap.data() : null }, { status: 200 });
 }
 
+/** Settings that define what the shop promises customers. */
+const PROMISE_SETTINGS_KEYS: ReadonlySet<string> = new Set(['store', 'shipping', 'returns', 'policyFacts', 'gst']);
+
 export async function PUT(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
   if (!rateLimit.allowed) {
@@ -65,6 +68,15 @@ export async function PUT(request: Request, { params }: RouteParams): Promise<Ne
     return adminApiError(404, 'not_found', `Unknown settings key: ${key}`);
   }
 
+  // What customers are promised (business identity, shipping charges, return rules, policy wording, tax status) needs
+  // the stronger permission held by super_admin and admin; a settings:write role such as marketing_manager cannot change it.
+  if (PROMISE_SETTINGS_KEYS.has(key)) {
+    const approver = await requirePermission(request, 'policies:approve');
+    if (!approver.ok) {
+      return adminApiError(approver.status, approver.status === 401 ? 'unauthenticated' : 'forbidden', 'Only an administrator can change business, shipping, returns, policy or tax settings');
+    }
+  }
+
   const rawBody = await request.json().catch(() => null);
   const schema = SETTINGS_REGISTRY[key];
   const parsed = schema.safeParse(rawBody);
@@ -78,7 +90,7 @@ export async function PUT(request: Request, { params }: RouteParams): Promise<Ne
   // resource with independently PATCHable fields.
   await db.collection('settings').doc(key).set(parsed.data);
   // Shop pages are cached; a new theme (or header/footer/SEO) should show right away.
-  if (key === 'theme' || key === 'appearance' || key === 'siteText' || key === 'header' || key === 'footer' || key === 'seo' || key === 'store') {
+  if (key === 'theme' || key === 'appearance' || key === 'siteText' || key === 'header' || key === 'footer' || key === 'seo' || key === 'store' || key === 'returns' || key === 'policyFacts' || key === 'shipping') {
     try {
       revalidatePath('/', 'layout');
     } catch {

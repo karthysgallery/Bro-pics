@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AppearanceSchema, SafeHrefSchema, SiteTextSettingsSchema, ThemeSettingsSchema } from '@bro-pics/shared';
+import { AppearanceSchema, BusinessProfileSchema, INDIAN_STATES_AND_UTS, PolicyFactsSchema, ReturnsSettingsSchema, SafeHrefSchema, SiteTextSettingsSchema, ThemeSettingsSchema } from '@bro-pics/shared';
 
 /**
  * [ABE-24] One schema per `settings/{key}` doc this generic route knows
@@ -23,13 +23,26 @@ import { AppearanceSchema, SafeHrefSchema, SiteTextSettingsSchema, ThemeSettings
  * this session (ABE-17/18/19/20): this is the write API the task asked
  * for, not a rewrite of the public site's read paths.
  */
+// State-wise shipping (the owner's policy: free in Tamil Nadu, a charge per other state/UT).
+// The three legacy fields (free-above threshold, flat and express amounts) are still accepted so an
+// older saved document stays valid, but they no longer decide any price: see lib/order-pricing.ts.
+const paise = z.number().int().nonnegative().max(10_000_000);
 export const SettingsShippingSchema = z
   .object({
-    freeShippingThreshold: z.number().int().nonnegative(),
-    flatShippingCharge: z.number().int().nonnegative(),
-    expressShippingCharge: z.number().int().nonnegative(),
+    homeState: z.enum(INDIAN_STATES_AND_UTS as unknown as [string, ...string[]]).default('Tamil Nadu'),
+    stateCharges: z
+      .record(z.enum(INDIAN_STATES_AND_UTS as unknown as [string, ...string[]]), paise)
+      .default({}),
+    otherStatesDefaultCharge: paise.nullable().default(null),
+    expressEnabled: z.boolean().default(false),
+    expressCharge: paise.default(0),
+    // Legacy (ignored by pricing):
+    freeShippingThreshold: z.number().int().nonnegative().optional(),
+    flatShippingCharge: z.number().int().nonnegative().optional(),
+    expressShippingCharge: z.number().int().nonnegative().optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => v.stateCharges[v.homeState] === undefined, { message: 'The home state is always free: do not set a charge for it' });
 
 export const SettingsGstSchema = z
   .object({
@@ -39,18 +52,16 @@ export const SettingsGstSchema = z
   })
   .strict();
 
-export const SettingsStoreSchema = z
-  .object({
-    name: z.string().min(1),
-    supportPhone: z.string().min(1),
-    processingDays: z.number().int().nonnegative(),
-    description: z.string().optional(),
-    // Seller identity printed on tax invoices. Optional — and never invented:
-    // an invoice shows only what the owner has actually entered here.
-    legalName: z.string().optional(),
-    address: z.string().optional(),
-  })
-  .strict();
+// The shop's business profile (name, legal name, address, support contacts, grievance contact, GST status).
+// Every field except the name and processing time is optional and never invented; see packages/shared/src/business.
+// settings/* is world-readable, so ONLY details meant to be public belong here.
+export const SettingsStoreSchema = BusinessProfileSchema;
+
+// Return/replacement rules the owner has (or has not yet) approved; see packages/shared/src/returns.
+export const SettingsReturnsSchema = ReturnsSettingsSchema;
+
+// Owner-written wording the policies quote (dispatch/delivery times, cancellation rule, refund timing…).
+export const SettingsPolicyFactsSchema = PolicyFactsSchema;
 
 export const SettingsCourierSchema = z
   .object({
@@ -138,6 +149,8 @@ export const SETTINGS_REGISTRY = {
   shipping: SettingsShippingSchema,
   gst: SettingsGstSchema,
   store: SettingsStoreSchema,
+  returns: SettingsReturnsSchema,
+  policyFacts: SettingsPolicyFactsSchema,
   courier: SettingsCourierSchema,
   deliveryEstimates: SettingsDeliveryEstimatesSchema,
   payments: SettingsPaymentsSchema,

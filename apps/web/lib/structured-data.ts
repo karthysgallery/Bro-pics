@@ -1,9 +1,7 @@
 import type { Product, ProductMedia, Review, Variant } from '@bro-pics/shared';
-import { SUPPORT_EMAIL } from './support-contact';
 import { buildPublicMediaUrl } from './media-public-url';
 
 import { CANONICAL_ORIGIN as SITE_URL } from './seo/site';
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000';
 
 /**
  * [FE-41] `BreadcrumbList` for whatever trail a page's own visible
@@ -30,14 +28,15 @@ export function buildBreadcrumbList(items: { name: string; path: string }[]) {
  * sitewide (the root layout), not per page, since the organization
  * itself doesn't change page to page.
  */
-export function buildOrganizationJsonLd() {
+export function buildOrganizationJsonLd(contact: { email?: string; whatsappDigits?: string } = {}) {
+  // Only details the owner has saved are published; there is no built-in email or number.
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'KarthysGallery',
     url: SITE_URL,
-    email: SUPPORT_EMAIL,
-    sameAs: [`https://wa.me/${WHATSAPP_NUMBER}`],
+    ...(contact.email && { email: contact.email }),
+    ...(contact.whatsappDigits && { sameAs: [`https://wa.me/${contact.whatsappDigits}`] }),
   };
 }
 
@@ -81,10 +80,8 @@ function absoluteUrl(url: string): string {
 
 /** Facts about delivery that are true of every offer on the page; each is shown to the customer on the product page. */
 export interface ShippingFacts {
-  /** Paise: orders at or above this ship free. */
-  freeShippingThreshold: number;
-  /** Paise: standard shipping below the threshold. */
-  flatShippingCharge: number;
+  /** ISO 3166-2:IN code of the state that ships free (the owner's policy: Tamil Nadu = "TN"). Other states are not stated here: their charge is set per state and shown at checkout. */
+  freeStateCode: string;
   dispatchDaysMin: number;
   dispatchDaysMax: number;
 }
@@ -105,13 +102,12 @@ function availabilityOf(stockStatus: string): string {
   return 'https://schema.org/OutOfStock';
 }
 
-function shippingDetailsFor(pricePaise: number, facts: ShippingFacts | undefined) {
+function shippingDetailsFor(_pricePaise: number, facts: ShippingFacts | undefined) {
   if (!facts) return undefined;
-  const freeShipping = facts.freeShippingThreshold > 0 && pricePaise >= facts.freeShippingThreshold;
   return {
     '@type': 'OfferShippingDetails',
-    shippingRate: { '@type': 'MonetaryAmount', value: (freeShipping ? 0 : facts.flatShippingCharge / 100).toFixed(2), currency: 'INR' },
-    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
+    shippingRate: { '@type': 'MonetaryAmount', value: '0.00', currency: 'INR' },
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN', addressRegion: facts.freeStateCode },
     deliveryTime: {
       '@type': 'ShippingDeliveryTime',
       handlingTime: { '@type': 'QuantitativeValue', minValue: facts.dispatchDaysMin, maxValue: facts.dispatchDaysMax, unitCode: 'DAY' },

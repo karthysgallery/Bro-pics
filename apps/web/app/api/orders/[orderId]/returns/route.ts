@@ -4,19 +4,16 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
 import { getUserIdFromAuthHeader } from '../../../../../lib/verify-id-token';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
-import { ReturnSchema, ReturnReasonCategorySchema, type Order, type OrderEvent } from '@bro-pics/shared';
+import { ReturnSchema, ReturnReasonCategorySchema, decideReturnRequest, parseReturnsSettings, resolveProductKind, type KindResolution, type Order, type OrderEvent } from '@bro-pics/shared';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
 }
 
-// A return can only be requested within this many days of delivery —
-// matches the order lifecycle's own "before production starts" cancellation
-// window in spirit (a real business rule, not enforced by anything else
-// today). Sourced from the delivered order_event's createdAt, not
-// order.placedAt, since what matters is how long the customer has actually
-// had the item.
-const RETURN_WINDOW_DAYS = 7;
+// There is no fixed return window in code. Whether a claim window exists, and how long it is, is an
+// owner-approved setting (settings/returns): until the owner approves one, claims for a damaged,
+// defective or wrong item are accepted for review rather than refused on an invented deadline, and the
+// claim is flagged for staff. "Changed my mind" is decided per product kind (see returns/eligibility.ts).
 
 export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'read');
@@ -115,10 +112,40 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   }
   const deliveredEvent = deliveredEventSnap.docs[0].data() as OrderEvent;
   const deliveredAt = new Date(deliveredEvent.createdAt);
-  const windowEnd = new Date(deliveredAt.getTime() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  if (new Date() > windowEnd) {
-    return NextResponse.json({ error: `The ${RETURN_WINDOW_DAYS}-day return window has passed` }, { status: 400 });
+
+  // Which return rule each product on the order follows (its own override, then what it is, then its category),
+  // and the owner's current settings. Read here on the server: the browser cannot choose its own eligibility.
+  const itemSnaps = await orderRef.collection('items').get();
+  const productIds = [...new Set(itemSnaps.docs.map((d) => (d.data() as { productId?: string }).productId).filter((id): id is string => typeof id === 'string'))];
+  const kinds: KindResolution[] = [];
+  const categoryCache = new Map<string, { returnPolicy?: 'personalized' | 'ready_made' | null }>();
+  for (const productId of productIds) {
+    const productSnap = await db.collection('products').doc(productId).get();
+    const product = (productSnap.exists ? productSnap.data() : {}) as Record<string, unknown>;
+    const categoryId = typeof product.categoryId === 'string' ? product.categoryId : null;
+    if (categoryId && !categoryCache.has(categoryId)) {
+      const categorySnap = await db.collection('categories').doc(categoryId).get();
+      categoryCache.set(categoryId, (categorySnap.exists ? categorySnap.data() : {}) as { returnPolicy?: 'personalized' | 'ready_made' | null });
+    }
+    kinds.push(
+      resolveProductKind(
+        {
+          returnPolicy: (product.returnPolicy as 'personalized' | 'ready_made' | null | undefined) ?? null,
+          productType: (product.productType as 'ready_made' | 'single_photo' | 'collage' | undefined) ?? null,
+          photoSlots: typeof product.photoSlots === 'number' ? product.photoSlots : null,
+          allowsTextPersonalization: product.allowsTextPersonalization === true,
+        },
+        categoryId ? categoryCache.get(categoryId) : null
+      )
+    );
   }
+  if (kinds.length === 0) kinds.push({ kind: 'personalized', source: 'assumed' });
+  const settings = parseReturnsSettings((await db.collection('settings').doc('returns').get()).data());
+  const decision = decideReturnRequest({ reason: reasonCategory, kinds, deliveredAt, now: new Date(), settings });
+  if (!decision.allowed) {
+    return NextResponse.json({ error: decision.message ?? 'This request cannot be accepted.', code: 'return_not_eligible' }, { status: 422 });
+  }
+  const unboxingNote = typeof body?.unboxingNote === 'string' && body.unboxingNote.trim() ? body.unboxingNote.trim().slice(0, 300) : undefined;
 
   const returnRef = db.collection('returns').doc();
   const returnDoc = ReturnSchema.parse({
@@ -133,6 +160,9 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     refundAmount: order.total,
     ...(evidencePaths.length > 0 && { evidencePaths }),
     ...(preferredResolution && { preferredResolution }),
+    policyKinds: decision.kinds,
+    ...(decision.flags.length > 0 && { policyFlags: decision.flags }),
+    ...(unboxingNote && { unboxingNote }),
   });
   await returnRef.set(returnDoc);
 

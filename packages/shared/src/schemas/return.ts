@@ -65,6 +65,12 @@ export const ReturnSchema = z.object({
   // before this field existed, or one where the customer left it
   // unset, simply carries no stated preference.
   preferredResolution: z.enum(['refund', 'replacement']).nullable().optional(),
+  // Facts recorded when the claim was filed, so staff see how the policy applied at that moment even if the
+  // settings change later. `policyFlags` are for staff only and are never shown to the customer.
+  policyKinds: z.array(z.enum(['personalized', 'ready_made'])).optional(),
+  policyFlags: z.array(z.string()).optional(),
+  // Where the customer says the unboxing video is (for example "sent on WhatsApp"). The video itself is optional.
+  unboxingNote: z.string().trim().max(300).optional(),
 });
 
 export type ReturnStatus = z.infer<typeof ReturnStatusSchema>;

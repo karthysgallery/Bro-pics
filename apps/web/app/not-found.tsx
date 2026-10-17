@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { NeedAHand } from '../components/layout/NeedAHand';
 
 export default function NotFound() {
   return (
@@ -39,10 +40,7 @@ export default function NotFound() {
           </div>
 
           <p className="text-xs text-ink/50 pt-4">
-            Need a hand?{' '}
-            <a href="mailto:hello@karthysgallery.in" className="text-ink underline hover:text-accent">
-              hello@karthysgallery.in
-            </a>
+            Need a hand? <NeedAHand />
           </p>
         </div>
 

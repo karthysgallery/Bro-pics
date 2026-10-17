@@ -10,6 +10,9 @@ const mockOrderGet = vi.fn();
 const mockReturnsWhereGet = vi.fn();
 const mockEventsWhereGet = vi.fn();
 const mockReturnSet = vi.fn().mockResolvedValue(undefined);
+const mockItemsGet = vi.fn();
+const mockProductGet = vi.fn();
+const mockSettingsGet = vi.fn();
 
 const mockDb = {
   collection: vi.fn((name: string) => {
@@ -19,11 +22,15 @@ const mockDb = {
           get: mockOrderGet,
           collection: vi.fn((sub: string) => {
             if (sub === 'events') return { where: vi.fn(() => ({ limit: vi.fn(() => ({ get: mockEventsWhereGet })) })) };
+            if (sub === 'items') return { get: mockItemsGet };
             return {};
           }),
         })),
       };
     }
+    if (name === 'products') return { doc: vi.fn(() => ({ get: mockProductGet })) };
+    if (name === 'categories') return { doc: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: false }) })) };
+    if (name === 'settings') return { doc: vi.fn(() => ({ get: mockSettingsGet })) };
     if (name === 'returns') {
       return {
         where: vi.fn(() => ({ get: mockReturnsWhereGet })),
@@ -58,6 +65,10 @@ describe('POST /api/orders/[orderId]/returns', () => {
     resetRateLimitState();
     vi.clearAllMocks();
     mockReturnsWhereGet.mockResolvedValue({ empty: true, docs: [] });
+    // Default: one made-to-order (personalized) product, no owner-approved windows yet.
+    mockItemsGet.mockResolvedValue({ docs: [{ data: () => ({ productId: 'prod_1' }) }] });
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ productType: 'single_photo', photoSlots: 1 }) });
+    mockSettingsGet.mockResolvedValue({ data: () => ({}) });
   });
 
   it('returns 401 when signed out', async () => {
@@ -118,7 +129,54 @@ describe('POST /api/orders/[orderId]/returns', () => {
     expect(mockReturnSet).not.toHaveBeenCalled();
   });
 
-  it('[FE-23] does not require evidence for a non-damage category', async () => {
+  it('[FE-23] does not require evidence for a non-damage category (a fault claim of type "other")', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+    const response = await POST(
+      makeRequest({ reasonCategory: 'other', reason: 'Something is not right' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses change-of-mind on a personalized product (422) and writes nothing', async () => {
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+    const response = await POST(
+      makeRequest({ reasonCategory: 'changed_mind', reason: 'Changed my mind' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(422);
+    expect((await response.json()).code).toBe('return_not_eligible');
+    expect(mockReturnSet).not.toHaveBeenCalled();
+  });
+
+  it('refuses change-of-mind on a ready-made product until the owner has approved a period', async () => {
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ productType: 'ready_made' }) });
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: new Date().toISOString() }) }],
+    });
+    const response = await POST(
+      makeRequest({ reasonCategory: 'changed_mind', reason: 'Changed my mind' }),
+      { params: Promise.resolve({ orderId: 'order_1' }) }
+    );
+    expect(response.status).toBe(422);
+  });
+
+  it('accepts change-of-mind on a ready-made product inside an owner-approved period', async () => {
+    mockProductGet.mockResolvedValue({ exists: true, data: () => ({ productType: 'ready_made' }) });
+    mockSettingsGet.mockResolvedValue({ data: () => ({ readyMadeChangeOfMindDays: 7, readyMadeChangeOfMindApproved: true }) });
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
     mockEventsWhereGet.mockResolvedValueOnce({
@@ -130,6 +188,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
       { params: Promise.resolve({ orderId: 'order_1' }) }
     );
     expect(response.status).toBe(200);
+    expect(mockReturnSet).toHaveBeenCalledWith(expect.objectContaining({ policyKinds: ['ready_made'] }));
   });
 
   it('[FE-23] stores the customer\'s preferredResolution on the return doc', async () => {
@@ -187,7 +246,7 @@ describe('POST /api/orders/[orderId]/returns', () => {
     expect(response.status).toBe(409);
   });
 
-  it('returns 400 when outside the return window', async () => {
+  it('does not enforce a claim deadline the owner has not approved (late fault claim is still reviewed, and flagged)', async () => {
     mockGetUserId.mockResolvedValueOnce('user_1');
     mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
     mockEventsWhereGet.mockResolvedValueOnce({
@@ -195,7 +254,20 @@ describe('POST /api/orders/[orderId]/returns', () => {
       docs: [{ data: () => ({ status: 'delivered', createdAt: '2020-01-01T00:00:00.000Z' }) }],
     });
     const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
+    expect(mockReturnSet).toHaveBeenCalledWith(expect.objectContaining({ policyFlags: expect.arrayContaining([expect.stringMatching(/not approved/i)]) }));
+  });
+
+  it('enforces the claim window once the owner has approved it (422)', async () => {
+    mockSettingsGet.mockResolvedValue({ data: () => ({ claimWindowDays: 7, claimWindowApproved: true }) });
+    mockGetUserId.mockResolvedValueOnce('user_1');
+    mockOrderGet.mockResolvedValueOnce({ exists: true, data: () => DELIVERED_ORDER });
+    mockEventsWhereGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ status: 'delivered', createdAt: '2020-01-01T00:00:00.000Z' }) }],
+    });
+    const response = await POST(makeRequest({ reasonCategory: 'quality', reason: 'damaged' }), { params: Promise.resolve({ orderId: 'order_1' }) });
+    expect(response.status).toBe(422);
     expect(mockReturnSet).not.toHaveBeenCalled();
   });
 

@@ -62,6 +62,19 @@ export const OrderSchema = z
     subtotal: z.number().int().nonnegative(),
     discount: z.number().int().nonnegative(),
     shipping: z.number().int().nonnegative(),
+    // How the shipping fee above was decided at the moment of ordering (which state, and why that amount).
+    // A snapshot: changing the shipping charges later never rewrites an existing order. Absent on older orders.
+    shippingDetail: z
+      .object({
+        state: z.string(),
+        pincode: z.string(),
+        basis: z.enum(['home_state_free', 'state_charge', 'other_states_default', 'express_charge', 'coupon_waived']),
+        // Whether the shop's PIN directory confirmed the PIN belongs to this state. Absent on older orders.
+        pinVerified: z.boolean().optional(),
+        // The PIN's prefix is shared with a neighbouring territory (Tamil Nadu / Puducherry) and was not confirmed.
+        pinAmbiguous: z.boolean().optional(),
+      })
+      .optional(),
     total: z.number().int().nonnegative(),
     couponId: z.string().optional(),
     // Who placed the order, frozen at creation (the delivery address carries

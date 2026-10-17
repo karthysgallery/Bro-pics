@@ -79,3 +79,10 @@ describe('AddressSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('older saved addresses', () => {
+  it('still parse when they have no label or line2 field at all', () => {
+    const r = AddressSchema.safeParse({ id: 'a1', line1: '1 Test Street', city: 'Srivilliputhur', state: 'Tamil Nadu', pincode: '626125', phone: '+919000000002', isDefault: true });
+    expect(r.success).toBe(true);
+  });
+});

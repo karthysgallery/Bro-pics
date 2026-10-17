@@ -92,8 +92,8 @@ const FAQS: { section: string; items: { q: string; a: React.ReactNode }[] }[] = 
         q: 'Can I return a personalized frame?',
         a: (
           <>
-            Not on change of mind — it cannot be resold. Damaged, misprinted or wrong items are
-            replaced or refunded; see the{' '}
+            Not on change of mind — it is made from your photo and cannot be resold. If it arrives
+            damaged, misprinted or wrong, we will review it; see the{' '}
             <Link href="/return-refund-policy">return &amp; refund policy</Link>.
           </>
         ),
@@ -102,9 +102,9 @@ const FAQS: { section: string; items: { q: string; a: React.ReactNode }[] }[] = 
         q: 'It arrived damaged. What now?',
         a: (
           <>
-            Photograph the parcel and the frame and{' '}
-            <Link href="/contact">message us</Link> within 48 hours of delivery. We arrange a
-            replacement.
+            Photograph the parcel and the frame, ideally with an unboxing video, and{' '}
+            <Link href="/contact">message us</Link> as soon as you can. We will review it and
+            arrange a replacement where the fault is ours.
           </>
         ),
       },

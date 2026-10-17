@@ -58,6 +58,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const body = parsed.data;
 
+  // The return type decides what a customer may claim, so changing it needs the same authority as the return rules.
+  if (body.returnPolicy !== undefined && body.returnPolicy !== null) {
+    const approver = await requirePermission(request, 'policies:approve');
+    if (!approver.ok) {
+      return adminApiError(approver.status, approver.status === 401 ? 'unauthenticated' : 'forbidden', 'Only an administrator can change a return type');
+    }
+  }
+
   const db = getFirestore(getAdminApp());
 
   // Check-then-write, same documented non-transactional caveat as

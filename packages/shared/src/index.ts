@@ -53,6 +53,11 @@ export * from './orders/return-status-transitions';
 export * from './editor-geometry';
 export * from './shipping/shipping-provider';
 export * from './shipping/pincode-zones';
+export * from './shipping/state-shipping';
+export * from './business/business-profile';
+export * from './business/legal-text';
+export * from './returns/eligibility';
+export * from './legal/starter-drafts';
 export * from './print-jobs/backoff';
 // print-jobs/print-jobs.ts is deliberately NOT re-exported from this
 // barrel — see its own top-of-file comment. A real (non-type) import of

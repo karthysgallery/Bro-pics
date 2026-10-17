@@ -325,7 +325,7 @@ const NAV_GROUPS: NavGroup[] = [
     group: 'Logistics',
     items: [
       { label: 'Pincode Coverage', href: '/admin/delivery/serviceability', permission: 'settings:read', icon: 'pincode' },
-      { label: 'Shipping Rates', href: '/admin/delivery/rates', permission: 'shipping:write', icon: 'rates' },
+      { label: 'Shipping Rates', href: '/admin/settings', permission: 'shipping:write', icon: 'rates' },
       { label: 'Courier Partners', href: '/admin/delivery/couriers', permission: 'shipping:write', icon: 'couriers' },
       { label: 'Shipments Center', href: '/admin/delivery/shipments', permission: 'shipping:write', icon: 'shipments' },
     ],

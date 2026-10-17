@@ -1,24 +1,21 @@
-# Legal page drafts (NOT published)
+# Legal page drafts
 
-Status: drafts for owner review. Nothing here is live; the live site shows built-in default text until a page is saved in Admin → Pages.
-How to use: each `.html` file is the **body** of one page (the page title is added by the site). After you resolve every
-`[NEEDS OWNER INPUT: …]` marker, paste the body into Admin → Pages for that slug and publish. Have the final text checked by a
-lawyer or CA; this is not legal advice.
+The old HTML drafts in this folder (with `[NEEDS OWNER INPUT]` markers) are **superseded and removed**. The starter texts now live in code, with `{{tokens}}` instead of markers, in `packages/shared/src/legal/starter-drafts.ts`, and are loaded from Admin > Pages > Create > "Start from a template". A page whose facts are not all filled cannot be approved or shown, so no marker can reach a customer.
 
-## Verified facts used (source)
+How to use: see `docs/BUSINESS_SETTINGS_AND_POLICIES.md` (workflow) and `docs/LEGAL_OWNER_REVIEW_CHECKLIST.md` (what to confirm). The texts are drafts, not legal advice; have a professional read them before approving.
+
+## Facts that exist in the owner's documents (for the admin to type into Settings; not published by themselves)
 | Fact | Value | Source |
 |---|---|---|
-| Legal / trading name | KARTHYS GALLERY | Udyam certificate (UDYAM-TN-32-0114288) |
-| Type | Micro enterprise, activity: manufacturing (printing) | Udyam certificate |
-| Registered address | 586, KARTHYS GALLERY, Watrap main road, Krishnankovil, Virudhunagar, Tamil Nadu 626126 | Udyam certificate |
-| Registered mobile | +91 63793 13961 | Udyam certificate |
-| Registered email | karthisgallery@gmail.com | Udyam certificate |
-| Customer WhatsApp chat number | +91 63692 84351 | confirmed by the owner in chat |
-| Website | https://karthysgallery.in | live domain |
-| Payment provider | Razorpay | integrated in the code |
-| Delivery area / login | India only; sign-in by phone number + WhatsApp one-time code | site behaviour |
+| Name on the Udyam certificate | KARTHYS GALLERY | Udyam certificate (UDYAM-TN-32-0114288) |
+| Address on the certificate | 586, KARTHYS GALLERY, Watrap main road, Krishnankovil, Virudhunagar, Tamil Nadu 626126 | Udyam certificate |
+| Registered mobile / email | +91 63793 13961 / karthisgallery@gmail.com | Udyam certificate |
+| Customer WhatsApp chat number | +91 63692 84351 | owner, in chat |
+| Store name / location | KarthysGallery / Srivilliputhur, Tamil Nadu | owner, in chat |
+| GST | Not registered (owner's statement; tax consequences need a tax professional) | owner, in chat |
+| Grievance / owner contact | "Manikandan" (surname, designation, phone, email not given) | owner, in chat |
 
-## NOT verified (marked in the drafts)
-GSTIN / whether GST-registered · support email that will be used · working hours · dispatch and delivery times · courier partners ·
-shipping charges · fault-report window · refund timing · cancellation cut-off · data-retention periods · grievance officer ·
-jurisdiction/city · social links · any marketing claim about materials, process or workshop.
+The address on the certificate (Krishnankovil) differs from the stated location (Srivilliputhur): the owner decides which address customers see.
+
+## Never confirmed (left empty; each blocks the page that needs it)
+Support email · working hours · dispatch and delivery times · courier partners · shipping charges per state · claim window · refund timing · cancellation cut-off · photo-retention period · grievance officer's full details · courts/jurisdiction.

@@ -66,30 +66,16 @@ describe('Delivery Rates API', () => {
     expect(json.rates.defaultFlatRate).toBe(9900);
   });
 
-  it('PUT /api/admin/delivery/rates updates shipping rates and audit logs', async () => {
-    const payload = {
-      freeShippingThreshold: 149900,
-      defaultFlatRate: 9900,
-      expressSurcharge: 19900,
-      codConvenienceFee: 5000,
-      metroDiscountPaise: 0,
-      remoteSurchargePaise: 10000,
-    };
-
+  it('PUT /api/admin/delivery/rates is retired: it saves nothing and points to the per-state settings', async () => {
     const req = new Request('http://localhost:3000/api/admin/delivery/rates', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ freeShippingThreshold: 149900, defaultFlatRate: 9900, expressSurcharge: 19900, codConvenienceFee: 5000 }),
     });
-
-    const res = await PUT(req);
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ freeShippingThreshold: 149900 }),
-      { merge: true }
-    );
-    expect(mockWriteAuditLog).toHaveBeenCalled();
+    const res = await PUT();
+    expect(res.status).toBe(410);
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(mockWriteAuditLog).not.toHaveBeenCalled();
+    void req;
   });
 });

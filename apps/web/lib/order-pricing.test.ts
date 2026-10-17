@@ -17,6 +17,10 @@ const mockProduct = vi.fn();
 const db = { collection: (name: string) => (name === 'orders' ? ordersQuery : { doc: (id: string) => ({ get: () => mockProduct(name, id) ?? { exists: false } }) }) } as never;
 
 import { computeOrderPricing } from './order-pricing';
+import { DEFAULT_STATE_SHIPPING } from '@bro-pics/shared';
+
+const TN = { state: 'Tamil Nadu', pincode: '626125' };
+const KL = { state: 'Kerala', pincode: '682001' };
 
 const variant = (over: Record<string, unknown> = {}) => ({
   id: 'v1', productId: 'p1', sku: 'S', sizeLabel: '8x12', frameColour: 'Black', material: 'Wood',
@@ -24,14 +28,14 @@ const variant = (over: Record<string, unknown> = {}) => ({
 });
 const cart = [{ variantId: 'v1', personalizationId: 'pz1', title: 'Frame', qty: 2 }];
 const run = (over: Record<string, unknown> = {}) =>
-  computeOrderPricing(db, { userId: 'u1', cartItems: cart, couponCode: null, deliveryMethod: 'standard', ...over } as never);
+  computeOrderPricing(db, { userId: 'u1', cartItems: cart, couponCode: null, deliveryMethod: 'standard', address: TN, ...over } as never);
 
 describe('computeOrderPricing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ordersQuery.where.mockReturnValue(ordersQuery);
     mockFindVariantById.mockResolvedValue(variant());
-    mockShipping.mockResolvedValue({ freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+    mockShipping.mockResolvedValue({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
     mockGst.mockResolvedValue({ gstEnabled: false, taxRate: 0 });
     mockPaidUses.mockReturnValue({ size: 0 });
   });
@@ -40,13 +44,47 @@ describe('computeOrderPricing', () => {
     const result = await run();
     expect(result.subtotal).toBe(200000);
     expect(result.total).toBe(result.subtotal - result.discount + result.shipping);
-    expect(result.shipping).toBe(0); // 2,000 is above the 1,500 free-shipping threshold
+    expect(result.shipping).toBe(0); // Tamil Nadu is free
   });
 
-  it('charges the flat rate below the threshold and the express rate for express', async () => {
+  it('prices shipping from the address the server holds: Tamil Nadu free, other states by their own charge, any order size', async () => {
     mockFindVariantById.mockResolvedValue(variant({ price: 50000 }));
-    expect((await run({ cartItems: [{ ...cart[0], qty: 1 }] })).shipping).toBe(5000);
-    expect((await run({ cartItems: [{ ...cart[0], qty: 1 }], deliveryMethod: 'express' })).shipping).toBe(15000);
+    const one = [{ ...cart[0], qty: 1 }];
+    const tn = await run({ cartItems: one });
+    expect(tn.shipping).toBe(0);
+    expect(tn.shippingBasis).toBe('home_state_free');
+    expect((await run({ cartItems: one, address: KL })).shipping).toBe(8000);
+    mockFindVariantById.mockResolvedValue(variant({ price: 5000000 }));
+    expect((await run({ cartItems: one, address: KL })).shipping).toBe(8000); // a big order is not free outside Tamil Nadu
+  });
+
+  it('never prices shipping as free when it cannot be determined', async () => {
+    for (const address of [null, { state: 'Tamil Nadu', pincode: '682001' }, { state: 'Maharashtra', pincode: '400001' }, { state: 'Kerala', pincode: 'abc' }]) {
+      const r = await run({ address });
+      expect(r.shippingFailure).toBeTruthy();
+      expect(r.total).toBeGreaterThanOrEqual(r.subtotal - r.discount);
+    }
+  });
+
+  it('uses the shop PIN directory when it has the PIN: a PIN recorded as Puducherry cannot be claimed as Tamil Nadu', async () => {
+    mockProduct.mockImplementation((name: string) =>
+      name === 'shippingServiceability' ? { exists: true, data: () => ({ state: 'Puducherry' }) } : { exists: false }
+    );
+    const r = await run({ address: { state: 'Tamil Nadu', pincode: '605001' } });
+    expect(r.shippingFailure).toBe('state_pincode_mismatch');
+    mockProduct.mockReset();
+  });
+
+  it('flags a shared-prefix Tamil Nadu PIN that the directory has not confirmed', async () => {
+    const r = await run({ address: { state: 'Tamil Nadu', pincode: '605001' } });
+    expect(r.shipping).toBe(0);
+    expect(r.shippingPin).toEqual({ verified: false, ambiguous: true });
+  });
+
+  it('express is refused unless the owner enabled it', async () => {
+    expect((await run({ deliveryMethod: 'express' })).shippingFailure).toBeTruthy();
+    mockShipping.mockResolvedValue({ ...DEFAULT_STATE_SHIPPING, expressEnabled: true, expressCharge: 15000 });
+    expect((await run({ deliveryMethod: 'express' })).shipping).toBe(15000);
   });
 
   it('applies a percent coupon and reports it applied', async () => {

@@ -11,6 +11,7 @@ import { AnnouncementBar } from './AnnouncementBar';
 import { ConsentBanner } from './ConsentBanner';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
 import { activeThemeOffer, type ThemeDecor } from '@bro-pics/shared';
+import { useBusinessContact } from '../../lib/business-contact';
 import { FestiveOfferProvider } from '../theme/FestiveOfferContext';
 import { FestiveBand } from '../theme/FestiveBand';
 import { FestiveEffect } from '../theme/FestiveEffect';
@@ -27,6 +28,8 @@ interface LayoutChromeProps {
     tagline?: string;
   } | null;
   storeSettings?: { name: string; supportPhone: string } | null;
+  /** Legal pages that are approved and readable; the footer links only to these. */
+  liveLegalSlugs?: string[];
   /** Decorations of the theme the shop is showing (festivals); none for the Everyday theme. */
   themeDecor?: ThemeDecor | null;
   children: ReactNode;
@@ -38,12 +41,14 @@ export function LayoutChrome({
   headerSettings = null,
   footerSettings = null,
   storeSettings = null,
+  liveLegalSlugs = [],
   themeDecor = null,
   children,
 }: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const pathname = usePathname();
   const shippingSettings = useShippingSettings();
+  const contact = useBusinessContact();
   // Fallback announcement only states things that are always true: the shipping
   // promise comes from the real shipping settings, and no coupon code is
   // advertised unless an admin writes one into the announcement setting.
@@ -90,12 +95,11 @@ export function LayoutChrome({
       )}
       {themeDecor && <FestiveEffect effect={themeDecor.effect} />}
       <main>{children}</main>
-      <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} />
+      <Footer settings={footerSettings} supportPhone={storeSettings?.supportPhone} liveLegalSlugs={liveLegalSlugs} />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
-      <WhatsAppButton
-        phoneNumber={process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}
-        message="Hi, I have a question about a KarthysGallery order."
-      />
+      {contact.whatsappDigits && (
+        <WhatsAppButton phoneNumber={contact.whatsappDigits} message="Hi, I have a question about a KarthysGallery order." />
+      )}
       <ConsentBanner />
     </FestiveOfferProvider>
   );

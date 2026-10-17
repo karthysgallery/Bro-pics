@@ -46,6 +46,14 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
   const body = parsed.data;
 
+  // The return type decides what a customer may claim, so changing it needs the same authority as the return rules.
+  if (body.returnPolicy !== undefined && body.returnPolicy !== ((current as { returnPolicy?: string | null }).returnPolicy ?? null)) {
+    const approver = await requirePermission(request, 'policies:approve');
+    if (!approver.ok) {
+      return adminApiError(approver.status, approver.status === 401 ? 'unauthenticated' : 'forbidden', 'Only an administrator can change a return type');
+    }
+  }
+
   if (body.slug && body.slug !== current.slug) {
     const slugConflict = await db.collection('categories').where('slug', '==', body.slug).limit(1).get();
     if (!slugConflict.empty && slugConflict.docs[0].id !== id) {

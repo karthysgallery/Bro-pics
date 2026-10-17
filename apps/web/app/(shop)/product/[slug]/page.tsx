@@ -30,6 +30,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../lib/firebase-admin';
 import { frameModelsForProductPage } from '../../../../lib/catalogue/frame-models';
 
+const STATE_CODES: Record<string, string> = { 'Tamil Nadu': 'TN' };
+
 export const revalidate = 60;
 
 interface ProductPageProps {
@@ -136,10 +138,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
     reviews,
     categoryName: category?.name,
     description: productSeoDescription(product),
-    ...(shippingSettings && {
+    ...(shippingSettings && STATE_CODES[shippingSettings.homeState] && {
       shipping: {
-        freeShippingThreshold: shippingSettings.freeShippingThreshold,
-        flatShippingCharge: shippingSettings.flatShippingCharge,
+        freeStateCode: STATE_CODES[shippingSettings.homeState] ?? '',
         dispatchDaysMin: product.dispatchDaysMin,
         dispatchDaysMax: product.dispatchDaysMax,
       },

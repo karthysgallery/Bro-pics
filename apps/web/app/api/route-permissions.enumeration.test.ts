@@ -53,6 +53,9 @@ import { POST as productSetupPOST } from './admin/products/setup/route';
 import { POST as catalogueImagesPOST } from './admin/catalogue/images/route';
 import { GET as productSetupOptionsGET } from './admin/products/setup/options/route';
 import { GET as productSetupGET, PUT as productSetupPUT } from './admin/products/[id]/setup/route';
+import { POST as pageApprovePOST, DELETE as pageApproveDELETE } from './admin/pages/[id]/approve/route';
+import { GET as pagePreviewGET } from './admin/pages/[id]/preview/route';
+import { GET as readinessGET } from './admin/readiness/route';
 
 function anonymousRequest(url: string, method = 'GET'): Request {
   return new Request(url, { method, headers: method === 'POST' ? { 'Content-Type': 'application/json' } : {}, body: method === 'POST' ? '{}' : undefined });
@@ -158,6 +161,11 @@ const cases: RouteCase[] = [
   { name: 'POST /api/admin/products/setup', key: 'catalogue:write', wrongRole: 'staff', method: 'POST', url: 'https://example.com/api/admin/products/setup', call: (r) => productSetupPOST(r) },
   { name: 'GET /api/admin/products/setup/options', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/products/setup/options', call: (r) => productSetupOptionsGET(r) },
   { name: 'GET /api/admin/products/[id]/setup', key: 'catalogue:read', wrongRole: 'staff', url: 'https://example.com/api/admin/products/p1/setup', call: (r) => productSetupGET(r, { params: Promise.resolve({ id: 'p1' }) }) },
+  // What customers are promised: approving a legal page needs policies:approve, which a settings:write role (marketing_manager) lacks.
+  { name: 'POST /api/admin/pages/[id]/approve', key: 'policies:approve', wrongRole: 'marketing_manager', method: 'POST', url: 'https://example.com/api/admin/pages/p1/approve', call: (r) => pageApprovePOST(r, { params: Promise.resolve({ id: 'p1' }) }) },
+  { name: 'DELETE /api/admin/pages/[id]/approve', key: 'policies:approve', wrongRole: 'marketing_manager', method: 'DELETE', url: 'https://example.com/api/admin/pages/p1/approve', call: (r) => pageApproveDELETE(r, { params: Promise.resolve({ id: 'p1' }) }) },
+  { name: 'GET /api/admin/pages/[id]/preview', key: 'content:write', wrongRole: 'catalogue_manager', url: 'https://example.com/api/admin/pages/p1/preview', call: (r) => pagePreviewGET(r, { params: Promise.resolve({ id: 'p1' }) }) },
+  { name: 'GET /api/admin/readiness', key: 'settings:write', wrongRole: 'staff', url: 'https://example.com/api/admin/readiness', call: (r) => readinessGET(r) },
   { name: 'PUT /api/admin/products/[id]/setup', key: 'catalogue:write', wrongRole: 'staff', method: 'PUT', url: 'https://example.com/api/admin/products/p1/setup', call: (r) => productSetupPUT(r, { params: Promise.resolve({ id: 'p1' }) }) },
 ];
 

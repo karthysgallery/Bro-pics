@@ -3,12 +3,28 @@ import { render, screen } from '@testing-library/react';
 import { Footer } from './Footer';
 
 describe('Footer', () => {
-  it('renders the policy links', () => {
-    render(<Footer />);
-    expect(screen.getByText('About us')).toBeInTheDocument();
+  it('links only the legal pages that are approved and readable', () => {
+    render(<Footer liveLegalSlugs={['return-refund-policy', 'shipping-policy', 'about']} />);
     expect(screen.getByText('FAQ')).toBeInTheDocument();
+    expect(screen.getByText('About us')).toBeInTheDocument();
     expect(screen.getByText('Return & refund policy')).toBeInTheDocument();
     expect(screen.getByText('Shipping policy')).toBeInTheDocument();
+    expect(screen.queryByText('Privacy policy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Terms & conditions')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cancellation policy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Grievance redressal')).not.toBeInTheDocument();
+  });
+
+  it('shows every policy link once all of them are approved', () => {
+    render(<Footer liveLegalSlugs={['privacy', 'terms', 'shipping-policy', 'return-refund-policy', 'cancellation-policy', 'contact', 'grievance', 'about']} />);
+    for (const label of ['Privacy policy', 'Terms & conditions', 'Cancellation policy', 'Grievance redressal', 'Contact']) expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it('shows no legal link at all before anything is approved', () => {
+    render(<Footer />);
+    expect(screen.getByText('FAQ')).toBeInTheDocument();
+    expect(screen.queryByText('Privacy policy')).not.toBeInTheDocument();
+    expect(screen.queryByText('About us')).not.toBeInTheDocument();
   });
 
   it('does not render a signup form or placeholder social links it cannot honour', () => {
@@ -39,7 +55,7 @@ describe('Footer', () => {
 
   it('[FE-27] falls back to the default links when settings is absent', () => {
     render(<Footer />);
-    expect(screen.getByText('About us')).toBeInTheDocument();
+    expect(screen.getByText('FAQ')).toBeInTheDocument();
   });
 
   it('flattens settings columns into one list and skips "#" social placeholders', () => {

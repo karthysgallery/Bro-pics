@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Firestore } from 'firebase-admin/firestore';
-import { calculateCouponDiscount, glitterOffer, splitGstFromInclusiveTotal, type DeliveryMethod } from '@bro-pics/shared';
+import { calculateCouponDiscount, glitterOffer, resolveShipping, splitGstFromInclusiveTotal, type DeliveryMethod, type ShippingBasis, type ShippingFailure, type ShippingAddress } from '@bro-pics/shared';
 import { getShippingSettings, getGstSettings } from './firestore-settings';
 import { findVariantById } from './variant-lookup';
 import { isComboLine, priceComboLines, type PricedCombo } from './combo-pricing';
@@ -10,7 +10,6 @@ import { computeEligibleSubtotal } from './coupon-eligibility';
 import {
   priceCartLines,
   calculateSubtotal,
-  calculateShipping,
   type CartLineInput,
   type PricedCartLine,
   type UnavailableLine,
@@ -42,6 +41,16 @@ export interface OrderPricing {
   total: number;
   coupon: CouponOutcome;
   taxLines: TaxLine[];
+  /**
+   * Set when shipping cannot be priced (no address yet, a state with no charge, a state/PIN mismatch…).
+   * An order must NOT be placed while this is set: `shipping` is 0 only because it is unknown, never because it is free.
+   */
+  shippingFailure: ShippingFailure | null;
+  /** How the shipping amount was decided, and for which state (kept on the order so a later price change never rewrites it). */
+  shippingBasis: ShippingBasis | null;
+  shippingState: string | null;
+  /** PIN directory check for the delivery PIN; see ShippingResult. Null when shipping could not be priced. */
+  shippingPin: { verified: boolean; ambiguous: boolean } | null;
 }
 
 /**
@@ -59,9 +68,16 @@ export interface OrderPricing {
  */
 export async function computeOrderPricing(
   db: Firestore,
-  input: { userId: string; cartItems: CartLineInput[]; couponCode: string | null; deliveryMethod: DeliveryMethod }
+  input: {
+    userId: string;
+    cartItems: CartLineInput[];
+    couponCode: string | null;
+    deliveryMethod: DeliveryMethod;
+    /** The delivery address as the SERVER read it (never a value sent by the browser). Null until one is chosen. */
+    address?: ShippingAddress | null;
+  }
 ): Promise<OrderPricing> {
-  const { userId, cartItems, couponCode, deliveryMethod } = input;
+  const { userId, cartItems, couponCode, deliveryMethod, address = null } = input;
 
   const comboCartLines = cartItems.filter(isComboLine);
   const regularCartLines = cartItems.filter((item) => !isComboLine(item));
@@ -109,12 +125,34 @@ export async function computeOrderPricing(
       total: 0,
       coupon: couponCode ? { requested: true, applied: false, reason: 'items_unavailable' } : { requested: false },
       taxLines: [],
+      shippingFailure: null,
+      shippingBasis: null,
+      shippingState: null,
+      shippingPin: null,
     };
   }
 
   const subtotal = calculateSubtotal(priced);
   const shippingSettings = await getShippingSettings();
-  let shipping = calculateShipping(subtotal, shippingSettings, deliveryMethod);
+  // The shop's own PIN directory (shippingServiceability, imported by an admin) is authoritative when it has the PIN.
+  // It is read here, on the server, from the PIN in the stored address; a missing document just means "not in the directory".
+  const pin = address && typeof address.pincode === 'string' ? address.pincode.trim() : '';
+  let directoryState: string | null = null;
+  if (/^[1-8][0-9]{5}$/.test(pin)) {
+    try {
+      const dirSnap = await db.collection('shippingServiceability').doc(pin).get();
+      const dirData = dirSnap?.exists ? (dirSnap.data() as { state?: unknown } | undefined) : undefined;
+      directoryState = typeof dirData?.state === 'string' ? dirData.state : null;
+    } catch {
+      directoryState = null;
+    }
+  }
+  const shippingResult = resolveShipping({ address, deliveryMethod, settings: shippingSettings, directoryState });
+  let shipping = shippingResult.ok ? shippingResult.amount : 0;
+  const shippingFailure: ShippingFailure | null = shippingResult.ok ? null : shippingResult.reason;
+  let shippingBasis: ShippingBasis | null = shippingResult.ok ? shippingResult.basis : null;
+  const shippingState = shippingResult.ok ? shippingResult.state : (shippingResult.state ?? null);
+  const shippingPin = shippingResult.ok ? { verified: shippingResult.pinVerified, ambiguous: shippingResult.pinAmbiguous } : null;
   const gstSettings = await getGstSettings();
 
   let discount = 0;
@@ -146,7 +184,11 @@ export async function computeOrderPricing(
         if (result.valid) {
           discount = result.discountPaise;
           const freeShipping = found.type === 'free_ship';
-          if (freeShipping) shipping = 0;
+          // A free-shipping coupon only waives a charge that was actually worked out; it never hides a missing one.
+          if (freeShipping && shippingResult.ok && shipping > 0) {
+            shipping = 0;
+            shippingBasis = 'coupon_waived';
+          }
           coupon = { requested: true, applied: true, code: found.code, freeShipping };
         } else {
           coupon = { requested: true, applied: false, reason: result.reason ?? 'invalid' };
@@ -166,5 +208,5 @@ export async function computeOrderPricing(
       ]
     : [];
 
-  return { priced, combos, unavailable: [], subtotal, discount, shipping, total, coupon, taxLines };
+  return { priced, combos, unavailable: [], subtotal, discount, shipping, total, coupon, taxLines, shippingFailure, shippingBasis, shippingState, shippingPin };
 }

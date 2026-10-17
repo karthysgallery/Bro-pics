@@ -48,6 +48,8 @@ export const CreateProductBodySchema = z
     frequentlyBoughtTogetherIds: z.array(z.string()).max(8).default([]),
     // null unlinks; see ProductSchema.personalizationTemplateId.
     personalizationTemplateId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).nullable().optional(),
+    // Return-rule override for this product (null clears it). Changing it is recorded in the audit log.
+    returnPolicy: z.enum(['personalized', 'ready_made']).nullable().optional(),
   })
   .strict();
 

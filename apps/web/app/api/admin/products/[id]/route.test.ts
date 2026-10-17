@@ -98,6 +98,22 @@ describe('PATCH /api/admin/products/[id]', () => {
     expect(response.status).toBe(400);
   });
 
+  it('changing the return type needs policies:approve: a catalogue editor is refused (403) and nothing is written', async () => {
+    mockRequirePermission.mockImplementation(async (_r: unknown, perm: string) => (perm === 'catalogue:write' ? { ok: true, uid: 'cat_1' } : { ok: false, status: 403 }));
+    const response = await PATCH(makeRequest({ returnPolicy: 'ready_made' }), makeParams());
+    expect(response.status).toBe(403);
+    expect(mockProductUpdate).not.toHaveBeenCalled();
+    mockRequirePermission.mockReset();
+  });
+
+  it('an administrator can change the return type, and the change is audited with the previous value', async () => {
+    mockRequirePermission.mockResolvedValue({ ok: true, uid: 'admin_1' });
+    const response = await PATCH(makeRequest({ returnPolicy: 'ready_made' }), makeParams());
+    expect(response.status).toBe(200);
+    expect(mockProductUpdate).toHaveBeenCalledWith(expect.objectContaining({ returnPolicy: 'ready_made' }));
+    mockRequirePermission.mockReset();
+  });
+
   it('archives via status: archived and derives isActive: false', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     const response = await PATCH(makeRequest({ status: 'archived' }), makeParams());

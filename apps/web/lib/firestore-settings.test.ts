@@ -14,33 +14,22 @@ vi.mock('./firebase-admin', () => ({
 }));
 
 describe('getShippingSettings', () => {
-  it('returns the stored values when settings/shipping exists, defaulting express if absent', async () => {
+  it('reads per-state charges and ignores the legacy threshold/flat fields', async () => {
     mockGet.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ freeShippingThreshold: 200000, flatShippingCharge: 3000 }),
+      data: () => ({ freeShippingThreshold: 200000, flatShippingCharge: 3000, stateCharges: { Kerala: 8000 } }),
     });
-
     const result = await getShippingSettings();
-    expect(result).toEqual({ freeShippingThreshold: 200000, flatShippingCharge: 3000, expressShippingCharge: 15000 });
+    expect(result.homeState).toBe('Tamil Nadu');
+    expect(result.stateCharges).toEqual({ Kerala: 8000 });
+    expect(result.otherStatesDefaultCharge).toBeNull();
+    expect(result).not.toHaveProperty('freeShippingThreshold');
   });
 
-  it('uses a stored express charge when present', async () => {
-    mockGet.mockResolvedValueOnce({
-      exists: true,
-      data: () => ({ freeShippingThreshold: 200000, flatShippingCharge: 3000, expressShippingCharge: 20000 }),
-    });
-
+  it('is safe by default when settings/shipping does not exist: Tamil Nadu free, nothing else configured, express off', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
     const result = await getShippingSettings();
-    expect(result.expressShippingCharge).toBe(20000);
-  });
-
-  it('falls back to placeholder defaults when settings/shipping does not exist', async () => {
-    mockGet.mockResolvedValueOnce({
-      exists: false,
-    });
-
-    const result = await getShippingSettings();
-    expect(result).toEqual({ freeShippingThreshold: 150000, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+    expect(result).toEqual({ homeState: 'Tamil Nadu', stateCharges: {}, otherStatesDefaultCharge: null, expressEnabled: false, expressCharge: 0 });
   });
 });
 

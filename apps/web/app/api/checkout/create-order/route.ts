@@ -11,7 +11,7 @@ import { PaymentNotConfiguredError } from '../../../../lib/payments/types';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { createHash } from 'node:crypto';
 import { reserveOrderStock, restoreReservation, type StockReservation } from '@bro-pics/shared/src/inventory/stock';
-import { BillingError } from '@bro-pics/shared';
+import { BillingError, shippingFailureMessage } from '@bro-pics/shared';
 import { stateFingerprint, CartComboSchema, COMBO_VARIANT_PREFIX, type OrderCombo } from '@bro-pics/shared';
 import {
   generateOrderNo,
@@ -206,9 +206,17 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Every number below comes from computeOrderPricing — the same function the
   // checkout page's quote and coupon check use — so what was shown is what is charged.
-  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode, deliveryMethod });
+  const pricing = await computeOrderPricing(db, { userId, cartItems, couponCode, deliveryMethod, address });
   if (pricing.unavailable.length > 0) {
     return NextResponse.json({ unavailable: pricing.unavailable }, { status: 409 });
+  }
+  // Shipping is priced from the address THIS SERVER holds. If it cannot be priced (a state with no charge
+  // set, a state/PIN mismatch, express switched off…) the order is refused: it is never created "free".
+  if (pricing.shippingFailure) {
+    return NextResponse.json(
+      { error: shippingFailureMessage(pricing.shippingFailure, pricing.shippingState ?? undefined), code: 'shipping_unavailable', reason: pricing.shippingFailure },
+      { status: 422 }
+    );
   }
   // A coupon the customer asked for that no longer applies must be SAID, not
   // silently dropped: they would otherwise pay more than the page told them.
@@ -454,6 +462,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     subtotal,
     discount,
     shipping: effectiveShipping,
+    ...(pricing.shippingBasis && pricing.shippingState && { shippingDetail: { state: pricing.shippingState, pincode: address.pincode, basis: pricing.shippingBasis, ...(pricing.shippingPin && { pinVerified: pricing.shippingPin.verified, pinAmbiguous: pricing.shippingPin.ambiguous }) } }),
     total,
     addressJson: address,
     productIds: [...new Set(priced.map((line) => line.productId))],

@@ -6,7 +6,7 @@ import { SignedOutNotice } from '../../../../components/account/SignedOutNotice'
 import { OrderStatusTimeline, STATUS_CHIP_STYLES, statusLabel } from '../../../../components/orders/OrderStatusTimeline';
 import { formatPaise } from '../../../../lib/format-price';
 import { groupOrderItems } from '../../../../lib/order-combo-groups';
-import { SUPPORT_EMAIL } from '../../../../lib/support-contact';
+import { useBusinessContact, whatsappLink } from '../../../../lib/business-contact';
 import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
 import { useToast } from '../../../../components/ui/Toast';
 import { PageSkeleton } from '../../../../components/ui/Skeleton';
@@ -127,6 +127,7 @@ interface StoredAddress {
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { user } = useAuth();
+  const contact = useBusinessContact();
   const { showToast } = useToast();
   const { addItem } = useCart();
   const uid = user?.uid;
@@ -777,12 +778,14 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             <p className="text-xs text-ink/60 mb-3">
               Questions about your frame? We&apos;re here to help.
             </p>
-            <a
-              href={`mailto:${SUPPORT_EMAIL}`}
-              className="block w-full py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-center text-xs font-semibold transition-colors"
-            >
-              Contact support
-            </a>
+            {(contact.supportEmail || contact.whatsappDigits) && (
+              <a
+                href={contact.supportEmail ? `mailto:${contact.supportEmail}` : whatsappLink(contact, 'Hi, I need help with an order.')!}
+                className="block w-full py-2.5 rounded-full border border-line bg-paper hover:bg-tint text-ink text-center text-xs font-semibold transition-colors"
+              >
+                Contact support
+              </a>
+            )}
           </div>
         </div>
       </div>

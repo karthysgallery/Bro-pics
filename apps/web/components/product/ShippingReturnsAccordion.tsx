@@ -41,7 +41,7 @@ export function ShippingReturnsAccordion({ dispatchDaysMin, dispatchDaysMax }: S
     },
     {
       title: 'Returns',
-      summary: 'Personalized items aren’t returnable on change of mind. A damaged, misprinted or wrong item is always replaced or refunded.',
+      summary: 'Personalized items aren’t returnable on change of mind. If an item arrives damaged, misprinted or wrong, we will review it.',
       href: '/return-refund-policy',
       linkLabel: 'Read the full return & refund policy',
     },

@@ -1,10 +1,14 @@
-import { SUPPORT_EMAIL } from '../../lib/support-contact';
 
 interface HelpCalloutProps {
-  whatsappHref: string;
+  /** Null when the shop has no WhatsApp number saved: that button is then not shown. */
+  whatsappHref: string | null;
+  /** Undefined when no support email is saved. */
+  email?: string;
 }
 
-export function HelpCallout({ whatsappHref }: HelpCalloutProps) {
+export function HelpCallout({ whatsappHref, email }: HelpCalloutProps) {
+  // Nothing saved to contact the shop with: show nothing rather than a dead or invented link.
+  if (!whatsappHref && !email) return null;
   return (
     <div className="mt-4 rounded-2xl bg-[#F5EFEA]/80 border border-line/60 p-3.5 sm:p-4 text-ink">
       <div className="flex items-center gap-2 mb-2.5">
@@ -16,6 +20,7 @@ export function HelpCallout({ whatsappHref }: HelpCalloutProps) {
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
+        {whatsappHref && (
         <a
           href={whatsappHref}
           target="_blank"
@@ -28,17 +33,20 @@ export function HelpCallout({ whatsappHref }: HelpCalloutProps) {
           </svg>
           <span>WhatsApp us</span>
         </a>
+        )}
+        {email && (
         <a
-          href={`mailto:${SUPPORT_EMAIL}`}
+          href={`mailto:${email}`}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-paper/90 border border-line/80 text-ink/90 text-xs font-medium hover:border-accent hover:text-accent hover:bg-paper transition-all shadow-2xs"
-          aria-label={SUPPORT_EMAIL}
+          aria-label={email}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect width="20" height="16" x="2" y="4" rx="2" />
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
           </svg>
-          <span>{SUPPORT_EMAIL}</span>
+          <span>{email}</span>
         </a>
+        )}
       </div>
     </div>
   );

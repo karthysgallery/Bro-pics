@@ -12,7 +12,7 @@ import { EmptyState } from '../../../components/ui/EmptyState';
 import { Card } from '../../../components/ui/Card';
 import { resolveMediaUrl, getIdTokenSafe } from '../../../lib/resolve-media-url';
 import { isOrderInProgress, type Order, type OrderItem } from '@bro-pics/shared';
-import { SUPPORT_EMAIL } from '../../../lib/support-contact';
+import { useBusinessContact, whatsappLink } from '../../../lib/business-contact';
 import { formatPaise } from '../../../lib/format-price';
 
 // What the customer should understand about where this order is, in plain
@@ -38,6 +38,7 @@ function orderBlurb(status: Order['status']): string {
 
 export default function OrdersPage() {
   const { user } = useAuth();
+  const contact = useBusinessContact();
   const [orders, setOrders] = useState<Array<{ id: string; data: Order }> | null>(null);
   const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
   // First line item's title/qty + how many lines in total, read from the
@@ -248,9 +249,15 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <p className="mt-8 text-center text-2xs text-ink/50">
-        Need help with an order? Contact {SUPPORT_EMAIL} with your order number.
-      </p>
+      {(contact.supportEmail || contact.whatsappDigits) && (
+        <p className="mt-8 text-center text-2xs text-ink/50">
+          Need help with an order? Contact us{' '}
+          {contact.supportEmail && <a className="underline" href={`mailto:${contact.supportEmail}`}>{contact.supportEmail}</a>}
+          {contact.supportEmail && contact.whatsappDigits && ' or on '}
+          {contact.whatsappDigits && <a className="underline" href={whatsappLink(contact, 'Hi, I need help with an order.')!}>WhatsApp</a>}
+          {' '}with your order number.
+        </p>
+      )}
     </main>
   );
 }

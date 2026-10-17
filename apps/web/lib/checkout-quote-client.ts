@@ -11,6 +11,9 @@ export interface CheckoutQuote {
   subtotal: number;
   discount: number;
   shipping: number;
+  /** Non-null: shipping cannot be priced yet (no address, a state with no charge set, a state/PIN mismatch…). */
+  shippingFailure?: string | null;
+  shippingMessage?: string | null;
   total: number;
   taxLines: Array<{ rate: number; amount: number }>;
   coupon:
@@ -27,7 +30,7 @@ export interface CheckoutQuote {
  */
 export async function fetchCheckoutQuote(
   user: Pick<User, 'getIdToken'>,
-  params: { couponCode?: string | null; deliveryMethod: DeliveryMethod },
+  params: { couponCode?: string | null; deliveryMethod: DeliveryMethod; addressId?: string | null },
   signal?: AbortSignal
 ): Promise<CheckoutQuote | null> {
   try {
@@ -35,7 +38,7 @@ export async function fetchCheckoutQuote(
     const response = await fetch('/api/checkout/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ couponCode: params.couponCode ?? undefined, deliveryMethod: params.deliveryMethod }),
+      body: JSON.stringify({ couponCode: params.couponCode ?? undefined, deliveryMethod: params.deliveryMethod, addressId: params.addressId ?? undefined }),
       signal,
     });
     if (!response.ok) return null;

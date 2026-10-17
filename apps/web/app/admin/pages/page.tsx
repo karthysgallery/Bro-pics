@@ -6,7 +6,7 @@ import { AdminModal } from '../../../components/admin/AdminModal';
 import { FormField } from '../../../components/admin/AdminForm';
 import { useToast } from '../../../components/ui/Toast';
 import { RatingStars } from '../../../components/ui/RatingStars';
-import type { Page, FaqItem, Testimonial } from '@bro-pics/shared';
+import { STARTER_DRAFTS, isLegalSlug, pageStatus, type Page, type FaqItem, type Testimonial } from '@bro-pics/shared';
 
 function formatISTDate(dateVal: unknown): string {
   if (!dateVal) return '—';
@@ -41,6 +41,8 @@ export default function AdminContentCMSPage() {
   const [pages, setPages] = useState<Page[]>([]);
   const [editingPage, setEditingPage] = useState<Partial<Page> | null>(null);
   const [isPageModalOpen, setIsPageModalOpen] = useState(false);
+  const [preview, setPreview] = useState<{ title: string; html: string; blockers: string[]; status: string } | null>(null);
+  const [workingPageId, setWorkingPageId] = useState<string | null>(null);
 
   // FAQs state
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
@@ -124,7 +126,7 @@ export default function AdminContentCMSPage() {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || 'Failed to save page');
+        throw new Error(errJson?.error?.message || errJson.message || 'Failed to save page');
       }
 
       showToast(`Page ${isNew ? 'created' : 'updated'} successfully`, 'success');
@@ -135,6 +137,45 @@ export default function AdminContentCMSPage() {
       showToast(err instanceof Error ? err.message : 'Error saving page', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const authedFetch = async (url: string, init: RequestInit = {}) => {
+    const token = await user!.getIdToken();
+    return fetch(url, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+  };
+
+  const handlePreviewPage = async (page: Page) => {
+    setWorkingPageId(page.id);
+    try {
+      const res = await authedFetch(`/api/admin/pages/${page.id}/preview`);
+      if (!res.ok) throw new Error('Could not load the preview');
+      const data = await res.json();
+      setPreview({ title: page.title, html: data.html, blockers: data.blockers ?? [], status: data.status });
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Could not load the preview', 'error');
+    } finally {
+      setWorkingPageId(null);
+    }
+  };
+
+  const handleApprovePage = async (page: Page, approve: boolean) => {
+    if (approve && !window.confirm(`Approve the current text of "${page.title}"? Once approved it can be published. Editing the text afterwards withdraws the approval.`)) return;
+    setWorkingPageId(page.id);
+    try {
+      const res = await authedFetch(`/api/admin/pages/${page.id}/approve`, { method: approve ? 'POST' : 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // Admin errors arrive as { error: { code, message, details } }.
+        const blockers = err?.error?.details?.blockers as string[] | undefined;
+        throw new Error(blockers?.length ? blockers.join(' ') : err?.error?.message || 'Could not change the approval');
+      }
+      showToast(approve ? 'Text approved. You can now publish the page.' : 'Approval withdrawn and the page is no longer public.', 'success');
+      fetchAllData();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Could not change the approval', 'error');
+    } finally {
+      setWorkingPageId(null);
     }
   };
 
@@ -168,7 +209,7 @@ export default function AdminContentCMSPage() {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || 'Failed to save FAQ');
+        throw new Error(errJson?.error?.message || errJson.message || 'Failed to save FAQ');
       }
 
       showToast(`FAQ item ${isNew ? 'created' : 'updated'} successfully`, 'success');
@@ -214,7 +255,7 @@ export default function AdminContentCMSPage() {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || 'Failed to save testimonial');
+        throw new Error(errJson?.error?.message || errJson.message || 'Failed to save testimonial');
       }
 
       showToast(`Testimonial ${isNew ? 'created' : 'updated'} successfully`, 'success');
@@ -248,7 +289,7 @@ export default function AdminContentCMSPage() {
                   slug: '',
                   bodyHtml: '<p>Write your page content here...</p>',
                   seo: { title: '', description: '' },
-                  isPublished: true,
+                  isPublished: false,
                 });
                 setIsPageModalOpen(true);
               }}
@@ -366,29 +407,69 @@ export default function AdminContentCMSPage() {
                         <td className="p-3 font-semibold text-ink">{p.title}</td>
                         <td className="p-3 font-mono text-gold-deep">/{p.slug}</td>
                         <td className="p-3">
-                          {p.isPublished ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-                              Published
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-field text-ink/50 border border-line">
-                              Draft
-                            </span>
-                          )}
+                          {(() => {
+                            const status = pageStatus(p);
+                            const legal = isLegalSlug(p.slug);
+                            const tone =
+                              status === 'published'
+                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                                : status === 'approved'
+                                  ? 'bg-gold/10 text-gold-deep border-gold/30'
+                                  : 'bg-field text-ink/50 border-line';
+                            return (
+                              <div className="space-y-1">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${tone}`}>{status}</span>
+                                {legal && status === 'draft' && p.isPublished && (
+                                  <p className="text-2xs text-alert">Marked live but not approved, so customers do not see it.</p>
+                                )}
+                                {legal && status === 'draft' && !p.isPublished && p.approvedHash && (
+                                  <p className="text-2xs text-ink/50">Text changed since approval.</p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-3 text-ink/60 font-mono text-2xs">
                           {formatISTDate(p.updatedAt)}
+                          {p.updatedBy && <span className="block text-ink/40">edited by {p.updatedBy.slice(0, 8)}</span>}
+                          {p.approvedBy && p.approvedAt && <span className="block text-ink/40">approved {formatISTDate(p.approvedAt)} by {p.approvedBy.slice(0, 8)}</span>}
                         </td>
                         <td className="p-3 text-right">
-                          <button
-                            onClick={() => {
-                              setEditingPage(p);
-                              setIsPageModalOpen(true);
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
-                          >
-                            Edit Page
-                          </button>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                              onClick={() => handlePreviewPage(p)}
+                              disabled={workingPageId === p.id}
+                              className="px-3 py-1.5 rounded-lg bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors disabled:opacity-50"
+                            >
+                              Preview
+                            </button>
+                            {isLegalSlug(p.slug) && (pageStatus(p) === 'draft' ? (
+                              <button
+                                onClick={() => handleApprovePage(p, true)}
+                                disabled={workingPageId === p.id}
+                                className="px-3 py-1.5 rounded-lg bg-gold/20 hover:bg-gold/30 text-2xs font-bold transition-colors disabled:opacity-50"
+                              >
+                                Approve text
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleApprovePage(p, false)}
+                                disabled={workingPageId === p.id}
+                                className="px-3 py-1.5 rounded-lg bg-field hover:bg-alert/10 text-2xs font-bold transition-colors disabled:opacity-50"
+                              >
+                                Withdraw approval
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => {
+                                setEditingPage(p);
+                                setIsPageModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-field hover:bg-gold/10 hover:text-gold-deep text-2xs font-bold transition-colors"
+                            >
+                              Edit Page
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -495,6 +576,26 @@ export default function AdminContentCMSPage() {
         </>
       )}
 
+      <AdminModal
+        isOpen={preview !== null}
+        onClose={() => setPreview(null)}
+        title={preview ? `Preview: ${preview.title}` : 'Preview'}
+        description="This is the saved text with your business details filled in. Customers see it only once the page is approved and published."
+      >
+        {preview && (
+          <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+            {preview.blockers.length > 0 && (
+              <div className="rounded-xl border border-alert/40 bg-alert/5 p-3 text-xs text-alert space-y-1">
+                <p className="font-bold">This page cannot be approved or shown yet:</p>
+                <ul className="list-disc pl-4">{preview.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
+                <p className="text-ink/60">Fill the missing details under Settings, or change the text, then check again.</p>
+              </div>
+            )}
+            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: preview.html }} />
+          </div>
+        )}
+      </AdminModal>
+
       {/* Page Modal */}
       <AdminModal
         isOpen={isPageModalOpen}
@@ -503,6 +604,24 @@ export default function AdminContentCMSPage() {
         description="Configure page slug, title, rich HTML content, and SEO metadata."
       >
         <form onSubmit={handleSavePage} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          {!editingPage?.id && (
+            <FormField label="Start from a template" hint="Fills the title, URL and text from a reviewed starting draft. Business facts are inserted from Settings when the page is shown. The text is a draft: it must be checked and approved by you before customers can see it.">
+              <select
+                value=""
+                onChange={(e) => {
+                  const draft = STARTER_DRAFTS[e.target.value as keyof typeof STARTER_DRAFTS];
+                  if (!draft) return;
+                  setEditingPage((prev) => ({ ...prev, title: draft.title, slug: draft.slug, bodyHtml: draft.bodyHtml.trim(), isPublished: false }));
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:border-gold focus:outline-none"
+              >
+                <option value="">Choose a template…</option>
+                {Object.values(STARTER_DRAFTS).map((d) => (
+                  <option key={d.slug} value={d.slug}>{d.title}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
           <FormField label="Page Title" required>
             <input
               type="text"

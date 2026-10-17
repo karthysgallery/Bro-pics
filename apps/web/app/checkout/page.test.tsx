@@ -11,12 +11,24 @@ vi.mock('../../lib/cart-context', () => ({
     totalPaise: 1000,
   })),
 }));
-vi.mock('../../components/checkout/AddressPicker', () => ({
-  AddressPicker: ({ onSelect }: { onSelect: (id: string) => void }) => {
-    onSelect('addr_1');
-    return <div data-testid="address-picker" />;
-  },
-}));
+const TN_ADDRESS = { id: 'addr_1', line1: '12 MG Road', city: 'Srivilliputhur', state: 'Tamil Nadu', pincode: '626125', phone: '+919999900000' };
+vi.mock('../../components/checkout/AddressPicker', async () => {
+  const { useEffect } = await import('react');
+  return {
+    AddressPicker: ({ onSelect, onSelectAddress }: { onSelect: (id: string) => void; onSelectAddress?: (a: unknown) => void }) => {
+      useEffect(() => {
+        onSelect('addr_1');
+        onSelectAddress?.(TN_ADDRESS);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      return <div data-testid="address-picker" />;
+    },
+  };
+});
+vi.mock('../../lib/shipping-settings-client', async () => {
+  const { DEFAULT_STATE_SHIPPING } = await import('@bro-pics/shared');
+  return { getShippingSettingsClient: () => Promise.resolve({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 }, expressEnabled: true, expressCharge: 15000 }) };
+});
 const mockFetchQuote = vi.fn().mockResolvedValue(null);
 vi.mock('../../lib/checkout-quote-client', () => ({ fetchCheckoutQuote: (...a: unknown[]) => mockFetchQuote(...a) }));
 const mockGetPaymentMode = vi.fn().mockResolvedValue('razorpay');
@@ -36,7 +48,11 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('../../lib/firebase-client', () => ({ getFirebaseApp: vi.fn(() => ({})) }));
 
 const mockFetch = vi.fn();
-global.fetch = mockFetch as unknown as typeof fetch;
+// The page looks up a delivery estimate for the selected address's PIN; it is not what these tests are about.
+global.fetch = ((url: unknown, ...rest: unknown[]) =>
+  typeof url === 'string' && url.startsWith('/api/delivery-estimate')
+    ? Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) })
+    : mockFetch(url, ...rest)) as unknown as typeof fetch;
 
 describe('CheckoutPage', () => {
   beforeEach(() => {
@@ -55,8 +71,8 @@ describe('CheckoutPage', () => {
 
     expect(await screen.findByText('Standard')).toBeInTheDocument();
     expect(screen.getByText('Express')).toBeInTheDocument();
-    // Below the ₹1500 free-shipping threshold: standard costs the flat ₹50.
-    expect(screen.getAllByText('₹50')).toHaveLength(2); // the radio row + the Shipping summary line
+    // Tamil Nadu: standard delivery is free whatever the order size.
+    expect(screen.getAllByText('Free').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.click(screen.getByRole('radio', { name: /express/i }));
 

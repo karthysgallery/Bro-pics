@@ -84,8 +84,10 @@ service cloud.firestore {
     // [ABE-18] Static content pages (About, Contact, policies, How It
     // Works, Picture Quality Guide) and FAQ items — same public-read,
     // server-write-only pattern as every other CMS-ish collection here.
+    // Only a page that has been published can be read straight from Firestore. Drafts (and the text of a legal page that
+    // has not been approved) stay private; the admin and the website read them with the server SDK, which ignores rules.
     match /pages/{id} {
-      allow read: if true;
+      allow read: if resource.data.isPublished == true;
       allow write: if false;
     }
 

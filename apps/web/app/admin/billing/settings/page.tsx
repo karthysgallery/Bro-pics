@@ -99,7 +99,7 @@ export default function BillingSettingsPage() {
       </section>
       <section className={card}>
         <h2 className={sectionTitle}>Invoice footer</h2>
-        {field('footer', 'Printed at the bottom of every invoice', { multiline: true, placeholder: 'Exchange within 7 days with this bill. Thank you!' })}
+        {field('footer', 'Printed at the bottom of every invoice', { multiline: true, placeholder: 'Thank you for your order!' })}
       </section>
       {canEdit && (
         <button type="button" className={primaryButton} disabled={saving || s.paymentMethods.length === 0} onClick={() => void save()}>

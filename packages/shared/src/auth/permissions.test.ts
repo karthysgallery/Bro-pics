@@ -49,6 +49,11 @@ describe('roleHasPermission', () => {
     expect(roleHasPermission('staff', 'team:manage')).toBe(false);
   });
 
+  it('only super_admin and admin can approve policies and change what customers are promised', () => {
+    for (const role of ['super_admin', 'admin'] as const) expect(roleHasPermission(role, 'policies:approve')).toBe(true);
+    for (const role of ['staff', 'catalogue_manager', 'marketing_manager', 'content_manager'] as const) expect(roleHasPermission(role, 'policies:approve')).toBe(false);
+  });
+
   it('scopes catalogue_manager to catalogue and inventory writes', () => {
     expect(roleHasPermission('catalogue_manager', 'catalogue:read')).toBe(true);
     expect(roleHasPermission('catalogue_manager', 'catalogue:write')).toBe(true);

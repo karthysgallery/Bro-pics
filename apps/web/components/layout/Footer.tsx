@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { isLegalSlug } from '@bro-pics/shared';
 
 interface FooterProps {
   settings?: {
@@ -7,6 +8,8 @@ interface FooterProps {
     tagline?: string;
   } | null;
   supportPhone?: string;
+  /** Legal pages that are approved and readable. A footer link to any other legal page is left out. */
+  liveLegalSlugs?: string[];
 }
 
 export const DEFAULT_FOOTER_LINKS = [
@@ -16,8 +19,10 @@ export const DEFAULT_FOOTER_LINKS = [
   { label: 'Contact', href: '/contact' },
   { label: 'Shipping policy', href: '/shipping-policy' },
   { label: 'Return & refund policy', href: '/return-refund-policy' },
+  { label: 'Cancellation policy', href: '/cancellation-policy' },
   { label: 'Privacy policy', href: '/privacy' },
   { label: 'Terms & conditions', href: '/terms' },
+  { label: 'Grievance redressal', href: '/grievance' },
 ];
 
 /**
@@ -26,13 +31,18 @@ export const DEFAULT_FOOTER_LINKS = [
  * into the same row (duplicates dropped) so the footer stays short however
  * many groups the CMS defines.
  */
-export function Footer({ settings = null, supportPhone }: FooterProps = {}) {
-  const links =
+export function Footer({ settings = null, supportPhone, liveLegalSlugs = [] }: FooterProps = {}) {
+  const allLinks =
     settings && settings.columns.length > 0
       ? settings.columns
           .flatMap((column) => column.links)
           .filter((link, i, all) => all.findIndex((other) => other.href === link.href) === i)
       : DEFAULT_FOOTER_LINKS;
+  // Legal pages are listed only once approved; /about and /contact are legal-gated too.
+  const links = allLinks.filter((link) => {
+    const slug = link.href.replace(/^\//, '');
+    return !isLegalSlug(slug) || liveLegalSlugs.includes(slug);
+  });
 
   // A placeholder "#" is not a profile; showing it would be a dead link.
   const socialLinks = (settings?.socialLinks ?? []).filter((s) => s.url && s.url !== '#');

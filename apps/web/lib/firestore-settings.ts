@@ -1,7 +1,6 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from './firebase-admin';
-import { DEFAULT_SHIPPING_SETTINGS } from './checkout-calc';
-import { ThemeSettingsSchema, defaultThemeSettings, resolveAppearance, resolveSiteText, type Appearance, upgradeThemeSettings, type SiteText, type ThemeSettings } from '@bro-pics/shared';
+import { parseBusinessProfile, parseReturnsSettings, parseStateShipping, type PublicBusinessDetails, type ReturnsSettings, ThemeSettingsSchema, defaultThemeSettings, resolveAppearance, resolveSiteText, type Appearance, upgradeThemeSettings, type SiteText, type StateShippingSettings, type ThemeSettings } from '@bro-pics/shared';
 
 export async function getAnnouncementBarSettings(): Promise<{
   text: string;
@@ -34,30 +33,11 @@ export async function getAnnouncementBarSettings(): Promise<{
 // NOT as one combined document, despite SettingsSchema's shape suggesting
 // that; nothing in this codebase actually writes a single combined document.
 
-export async function getShippingSettings(): Promise<{
-  freeShippingThreshold: number;
-  flatShippingCharge: number;
-  expressShippingCharge: number;
-}> {
+export async function getShippingSettings(): Promise<StateShippingSettings> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('shipping').get();
-  if (!doc.exists) return DEFAULT_SHIPPING_SETTINGS;
-
-  const data = doc.data();
-  const freeShippingThreshold =
-    typeof data?.freeShippingThreshold === 'number'
-      ? data.freeShippingThreshold
-      : DEFAULT_SHIPPING_SETTINGS.freeShippingThreshold;
-  const flatShippingCharge =
-    typeof data?.flatShippingCharge === 'number'
-      ? data.flatShippingCharge
-      : DEFAULT_SHIPPING_SETTINGS.flatShippingCharge;
-  const expressShippingCharge =
-    typeof data?.expressShippingCharge === 'number'
-      ? data.expressShippingCharge
-      : DEFAULT_SHIPPING_SETTINGS.expressShippingCharge;
-
-  return { freeShippingThreshold, flatShippingCharge, expressShippingCharge };
+  // A missing or malformed document means "free in the home state, every other state not configured".
+  return parseStateShipping(doc.exists ? doc.data() : null);
 }
 
 // [BE-22] Same per-key settings/{key} document convention as
@@ -149,13 +129,27 @@ export async function getFooterSettings(): Promise<{
 // phone number. Defaults to null — no admin UI wrote settings/store
 // before ABE-24.
 export async function getStoreSettings(): Promise<{ name: string; supportPhone: string } | null> {
+  const details = await getBusinessDetails();
+  if (!details) return null;
+  return { name: details.name, supportPhone: details.supportPhone ?? '' };
+}
+
+/**
+ * The shop's public business details (settings/store), read defensively: a malformed value is dropped,
+ * and anything the owner has not entered is simply absent. Pages, invoices and messages use this one
+ * source instead of repeating a phone number, address or email in code.
+ */
+export async function getBusinessDetails(): Promise<PublicBusinessDetails | null> {
   const db = getFirestore(getAdminApp());
   const doc = await db.collection('settings').doc('store').get();
-  if (!doc.exists) return null;
+  return doc.exists ? parseBusinessProfile(doc.data()) : null;
+}
 
-  const data = doc.data();
-  if (typeof data?.name !== 'string' || typeof data?.supportPhone !== 'string') return null;
-  return { name: data.name, supportPhone: data.supportPhone };
+/** Return/replacement settings (settings/returns). Missing or malformed = nothing approved. */
+export async function getReturnsSettings(): Promise<ReturnsSettings> {
+  const db = getFirestore(getAdminApp());
+  const doc = await db.collection('settings').doc('returns').get();
+  return parseReturnsSettings(doc.exists ? doc.data() : null);
 }
 
 // [BE-23] Same per-key settings/{key} convention as the others above.

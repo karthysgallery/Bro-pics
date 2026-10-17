@@ -6,8 +6,9 @@ import { checkRateLimit } from '../../../../lib/rate-limit';
 import { adminApiError } from '../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../lib/audit-log';
 import { sanitizeRichText } from '../../../../lib/sanitize-rich-text';
+import { revalidatePolicyPages } from '../../../../lib/revalidate-pages';
 import { CreatePageBodySchema } from './page-request-schema';
-import { PageSchema, logger } from '@bro-pics/shared';
+import { PageSchema, isLegalSlug, logger, pageStatus } from '@bro-pics/shared';
 
 export async function POST(request: Request): Promise<NextResponse> {
   const rateLimit = checkRateLimit(request, 'staff');
@@ -29,6 +30,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return adminApiError(400, 'invalid_request', 'Invalid page body', { issues: parsed.error.issues });
   }
   const body = parsed.data;
+  // A new page always starts as a draft; legal pages are published only after an administrator approves the text.
+  if (body.isPublished && isLegalSlug(body.slug)) {
+    return adminApiError(409, 'not_publishable', 'A legal page starts as a draft and is published after it is approved');
+  }
 
   const db = getFirestore(getAdminApp());
 
@@ -45,6 +50,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     ...body,
     bodyHtml: sanitizeRichText(body.bodyHtml),
     updatedAt: new Date(),
+    updatedBy: permission.uid,
   });
   await ref.set(page);
 
@@ -56,6 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     details: { slug: body.slug },
   }).catch((error) => logger.error('Failed to write audit log', { pageId: ref.id, error: String(error) }));
 
+  revalidatePolicyPages(page.slug);
   return NextResponse.json({ page }, { status: 201 });
 }
 
@@ -75,7 +82,11 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const db = getFirestore(getAdminApp());
   const snapshot = await db.collection('pages').get();
-  const pages = snapshot.docs.map((doc) => doc.data());
+  // `status` is derived for the admin: draft, approved (signed off, not live) or published (live).
+  const pages = snapshot.docs.map((doc) => {
+    const d = doc.data() as { slug: string; bodyHtml: string; isPublished: boolean; approvedHash?: string };
+    return { ...d, status: pageStatus({ slug: d.slug, bodyHtml: d.bodyHtml ?? '', isPublished: d.isPublished === true, approvedHash: d.approvedHash }) };
+  });
 
   return NextResponse.json({ pages }, { status: 200 });
 }

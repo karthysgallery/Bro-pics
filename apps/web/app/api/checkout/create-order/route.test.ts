@@ -121,7 +121,7 @@ vi.mock('firebase-admin/firestore', () => ({
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 import { POST } from './route';
-import { buildOrderSnapshot, createEmptyState } from '@bro-pics/shared';
+import { buildOrderSnapshot, createEmptyState, DEFAULT_STATE_SHIPPING } from '@bro-pics/shared';
 import { singlePhotoTemplate } from '@bro-pics/shared/src/personalization/test-fixtures';
 import { checkRateLimit, resetRateLimitState } from '../../../../lib/rate-limit';
 
@@ -181,7 +181,7 @@ describe('POST /api/checkout/create-order', () => {
     });
     mockAddressDoc.get.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
     });
     mockFindVariantById.mockResolvedValueOnce({
       id: 'v1',
@@ -298,10 +298,10 @@ describe('POST /api/checkout/create-order', () => {
     });
     mockAddressDoc.get.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
     });
     mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
-    mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+    mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
     mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
       fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
     );
@@ -311,9 +311,9 @@ describe('POST /api/checkout/create-order', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.razorpayOrderId).toBe('order_rzp_1');
-    expect(body.amount).toBe(2 * 1000 + 5000); // subtotal + flat shipping (below free threshold)
+    expect(body.amount).toBe(2 * 1000); // Tamil Nadu: shipping is free
     expect(mockCreateRazorpayOrder).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 2 * 1000 + 5000, currency: 'INR' })
+      expect.objectContaining({ amount: 2 * 1000, currency: 'INR' })
     );
     expect(mockBatchCommit).toHaveBeenCalled();
 
@@ -323,8 +323,8 @@ describe('POST /api/checkout/create-order', () => {
       status: 'pending_payment',
       paymentStatus: 'pending',
       subtotal: 2000,
-      shipping: 5000,
-      total: 7000,
+      shipping: 0,
+      total: 2000,
       razorpayOrderId: 'order_rzp_1',
       orderNo: `BP-${new Date().getFullYear()}-00001`,
     });
@@ -357,7 +357,7 @@ describe('POST /api/checkout/create-order', () => {
     it('returns 409 finish_unavailable when the product does not offer glitter', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
       cartWith({ finish: 'glitter' });
-      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
+      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
       mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
       // (no shipping value is queued: pricing stops at the unavailable line before it is read)
       mockProductDocGet.mockResolvedValue({ exists: true, data: () => ({ title: 'Lord Murugan', isActive: true }) });
@@ -371,9 +371,9 @@ describe('POST /api/checkout/create-order', () => {
     it('charges the product\'s glitter extra per frame and freezes the finish on the order and its item', async () => {
       mockGetUserId.mockResolvedValueOnce('user_1');
       cartWith({ finish: 'glitter', finishExtra: 1 }); // the cart\'s own number is ignored
-      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
+      mockAddressDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }) });
       mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
-      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
       mockProductDocGet.mockResolvedValue(glitterProduct);
       mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
       mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
@@ -381,9 +381,9 @@ describe('POST /api/checkout/create-order', () => {
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       mockProductDocGet.mockResolvedValue({ exists: false });
       expect(response.status).toBe(200);
-      expect((await response.json()).amount).toBe(2 * (1000 + 10000) + 5000);
+      expect((await response.json()).amount).toBe(2 * (1000 + 10000));
       const [, order] = mockBatchCreate.mock.calls[0];
-      expect(order).toMatchObject({ subtotal: 22000, total: 27000, hasGlitter: true });
+      expect(order).toMatchObject({ subtotal: 22000, total: 22000, hasGlitter: true });
       const item = mockBatchSet.mock.calls.map(([, data]) => data).find((d) => d.variantId === 'v1');
       expect(item).toMatchObject({ unitPrice: 11000, finish: 'glitter', finishExtra: 10000, qty: 2 });
     });
@@ -396,10 +396,10 @@ describe('POST /api/checkout/create-order', () => {
     });
     mockAddressDoc.get.mockResolvedValueOnce({
       exists: true,
-      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+      data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
     });
     mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
-    mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+    mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
     mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
       fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
     );
@@ -431,7 +431,7 @@ describe('POST /api/checkout/create-order', () => {
       expect(taxLine.rate).toBe(18);
       expect(taxLine.amount).toBeGreaterThan(0);
       // Never an addition on top of what the customer pays.
-      expect(orderArg?.total).toBe(2000 + 5000);
+      expect(orderArg?.total).toBe(2000);
     });
   });
 
@@ -455,7 +455,7 @@ describe('POST /api/checkout/create-order', () => {
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
       expect(response.status).toBe(200);
       const [, writtenOrder] = mockBatchCreate.mock.calls[0];
-      expect(writtenOrder).toMatchObject({ shipping: 5000, deliveryMethod: 'standard' });
+      expect(writtenOrder).toMatchObject({ shipping: 0, deliveryMethod: 'standard', shippingDetail: expect.objectContaining({ basis: 'home_state_free', state: 'Tamil Nadu' }) });
     });
 
     it('charges the express flat rate and records deliveryMethod on the order', async () => {
@@ -466,12 +466,12 @@ describe('POST /api/checkout/create-order', () => {
       });
       mockAddressDoc.get.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
       });
       mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
       // A subtotal well above the free-shipping threshold — express must
       // still charge its flat rate, proving it ignores that threshold.
-      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 1500, flatShippingCharge: 5000, expressShippingCharge: 15000 });
+      mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, expressEnabled: true, expressCharge: 15000 });
       mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
         fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
       );
@@ -481,6 +481,15 @@ describe('POST /api/checkout/create-order', () => {
       expect(response.status).toBe(200);
       const [, writtenOrder] = mockBatchCreate.mock.calls[0];
       expect(writtenOrder).toMatchObject({ shipping: 15000, deliveryMethod: 'express' });
+    });
+
+    it('refuses express (422) when the owner has not enabled it, and creates nothing', async () => {
+      mockGetUserId.mockResolvedValueOnce('user_1');
+      setUpValidCartAndAddress();
+      const response = await POST(makeRequest({ addressId: 'addr_1', deliveryMethod: 'express' }));
+      expect(response.status).toBe(422);
+      expect(mockCreateRazorpayOrder).not.toHaveBeenCalled();
+      expect(mockBatchCreate).not.toHaveBeenCalled();
     });
 
     it('returns 400 for an unsupported deliveryMethod (e.g. same_day)', async () => {
@@ -508,12 +517,12 @@ describe('POST /api/checkout/create-order', () => {
       const [, writtenOrder] = mockBatchCreate.mock.calls[0];
       // subtotal 2000, 10% off => discount 200
       expect(writtenOrder.discount).toBe(200);
-      expect(writtenOrder.total).toBe(2000 - 200 + 5000);
-      expect(writtenOrder.amountPaidOnline).toBe(6800);
+      expect(writtenOrder.total).toBe(2000 - 200);
+      expect(writtenOrder.amountPaidOnline).toBe(1800);
       // Pin the Razorpay-charged amount to the discounted total — the
       // actual money failure mode is the order doc saying one number while
       // the gateway charges another.
-      expect(mockCreateRazorpayOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 6800 }));
+      expect(mockCreateRazorpayOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 1800 }));
     });
 
     it('zeroes shipping (not discount) for a valid free_ship coupon', async () => {
@@ -873,10 +882,10 @@ describe('POST /api/checkout/create-order', () => {
       });
       mockAddressDoc.get.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
       });
       mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
-      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
       mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) =>
         fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() })
       );
@@ -953,10 +962,10 @@ describe('POST /api/checkout/create-order', () => {
       });
       mockAddressDoc.get.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
       });
       mockFindVariantById.mockResolvedValueOnce({ id: 'v1', productId: 'p1', price: 1000, stockStatus: 'in_stock', isActive: true });
-      mockGetShippingSettings.mockResolvedValueOnce({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockGetShippingSettings.mockResolvedValueOnce({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
       mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
       mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_1' });
     }
@@ -1173,13 +1182,13 @@ describe('POST /api/checkout/create-order', () => {
       mockCartDoc.get.mockResolvedValueOnce({ exists: true, data: () => ({ items }) });
       mockAddressDoc.get.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'TN', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
+        data: () => ({ id: 'addr_1', line1: '12 MG Road', city: 'Chennai', state: 'Tamil Nadu', pincode: '600001', phone: '+91123', label: null, line2: null, isDefault: true }),
       });
       mockComboDeps.loadCombo.mockResolvedValue(combo);
       mockComboDeps.loadVariant.mockImplementation(async (id: string) => variants[id] ?? null);
       mockComboDeps.isProductAvailable.mockResolvedValue(true);
       mockProductDocGet.mockImplementation(async (id: string) => ({ exists: true, id, data: () => ({ title: `Product ${id}`, photoSlots: 1 }) }));
-      mockGetShippingSettings.mockResolvedValue({ freeShippingThreshold: 150000, flatShippingCharge: 5000 });
+      mockGetShippingSettings.mockResolvedValue({ ...DEFAULT_STATE_SHIPPING, stateCharges: { Kerala: 8000 } });
       mockRunTransaction.mockImplementationOnce(async (fn: (tx: unknown) => Promise<string>) => fn({ get: vi.fn().mockResolvedValue({ exists: false }), set: vi.fn() }));
       mockCreateRazorpayOrder.mockResolvedValueOnce({ id: 'order_rzp_combo' });
     }
@@ -1191,7 +1200,7 @@ describe('POST /api/checkout/create-order', () => {
       const response = await POST(makeRequest({ addressId: 'addr_1' }));
 
       expect(response.status).toBe(200);
-      expect((await response.json()).amount).toBe(99900 + 5000); // the combo price, not the sum of its frames' own prices
+      expect((await response.json()).amount).toBe(99900); // the combo price, not the sum of its frames' own prices
       const items = mockBatchSet.mock.calls.map(([, d]) => d).filter((d) => d?.combo);
       expect(items).toHaveLength(2);
       expect(items.reduce((n, i) => n + i.unitPrice * i.qty, 0)).toBe(99900);
@@ -1200,7 +1209,7 @@ describe('POST /api/checkout/create-order', () => {
         combo: { instanceId: 'inst_1', comboId: 'triple-9', comboName: 'Triple 9 Combo', frameKey: 'small-1', frameLabel: 'Frame 1' },
       });
       const [, order] = mockBatchCreate.mock.calls[0];
-      expect(order).toMatchObject({ subtotal: 99900, total: 104900, productIds: expect.arrayContaining(['p_small', 'p_large']) });
+      expect(order).toMatchObject({ subtotal: 99900, total: 99900, productIds: expect.arrayContaining(['p_small', 'p_large']) });
       expect(order.combos).toEqual([
         expect.objectContaining({
           instanceId: 'inst_1', comboId: 'triple-9', version: 2, name: 'Triple 9 Combo', price: 99900, mrp: 199900,

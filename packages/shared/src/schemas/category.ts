@@ -18,6 +18,8 @@ export const CategorySchema = z.object({
   // field existed) still parses.
   heroImage: z.string().optional(),
   description: z.string().optional(),
+  // Default return rule for products in this category that have no rule of their own.
+  returnPolicy: z.enum(['personalized', 'ready_made']).nullable().optional(),
 });
 
 export type Category = z.infer<typeof CategorySchema>;

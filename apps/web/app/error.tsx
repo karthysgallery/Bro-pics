@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { NeedAHand } from '../components/layout/NeedAHand';
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -55,14 +56,10 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
               No need to upload your photos again.
             </p>
             <p className="text-xs text-ink/70 leading-relaxed">
-              Already paid? Check your email before retrying payment.
+              Already paid? Check your order in My orders before paying again.
             </p>
             <p className="text-2xs text-ink/50 pt-2 border-t border-line">
-              If this keeps happening, email{' '}
-              <a href="mailto:support@karthysgallery.in" className="text-ink underline">
-                support@karthysgallery.in
-              </a>{' '}
-              with reference {error.digest ? `BP-ERR-${error.digest}` : 'BP-ERR-021026'}.
+              If this keeps happening, contact us (<NeedAHand reference={error.digest ? `BP-ERR-${error.digest}` : 'BP-ERR-021026'} />) with reference {error.digest ? `BP-ERR-${error.digest}` : 'BP-ERR-021026'}.
             </p>
           </div>
         </div>

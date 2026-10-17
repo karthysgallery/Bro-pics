@@ -558,6 +558,23 @@ export default function AdminOrderDetailPage({ params }: OrderDetailPageProps) {
                 <span>Shipping:</span>
                 <span className="font-semibold text-ink">{formatPaise(order.shipping)}</span>
               </div>
+              {order.shippingDetail && (
+                <p className="text-2xs text-ink/50 text-right">
+                  {{
+                    home_state_free: 'Free: delivered within the home state',
+                    state_charge: 'Charge set for this state',
+                    other_states_default: 'Fallback charge for states without their own',
+                    express_charge: 'Express delivery charge',
+                    coupon_waived: 'Waived by a free-shipping coupon',
+                  }[order.shippingDetail.basis]}{' '}
+                  ({order.shippingDetail.state} {order.shippingDetail.pincode})
+                </p>
+              )}
+              {order.shippingDetail?.pinAmbiguous && (
+                <p className="text-2xs text-alert text-right">
+                  This PIN is in a range shared with Puducherry and is not in your PIN directory: check the address really is in {order.shippingDetail.state} before dispatch.
+                </p>
+              )}
               <div className="flex justify-between text-sm font-bold text-ink pt-1 border-t border-line">
                 <span>Total Amount:</span>
                 <span className="text-gold-deep">{formatPaise(order.total)}</span>

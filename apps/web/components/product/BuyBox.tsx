@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { orientationFromDimensions, type Orientation } from '../../lib/orientation';
 import { formatPaise } from '../../lib/format-price';
 import { HelpCallout } from './HelpCallout';
+import { useBusinessContact, whatsappLink } from '../../lib/business-contact';
 import { priceWithOffer, useFestiveOffer } from '../theme/FestiveOfferContext';
 import { PincodeChecker } from '../checkout/PincodeChecker';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
@@ -150,6 +151,7 @@ export function BuyBox({
     else setOwnFinish(next);
   };
   const offer = useFestiveOffer();
+  const businessContact = useBusinessContact();
   const price = (selectedVariant?.price ?? product.minPrice) + finishExtra;
   const compareAtPrice = selectedVariant?.compareAtPrice;
   // [FE-32] `inStock` gates purchasability (Add to cart, the delivery
@@ -400,9 +402,7 @@ export function BuyBox({
         </details>
       </div>
 
-      <HelpCallout
-        whatsappHref={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '910000000000'}?text=${encodeURIComponent(whatsappMessage)}`}
-      />
+      <HelpCallout whatsappHref={whatsappLink(businessContact, whatsappMessage)} email={businessContact.supportEmail} />
 
       {/* Sticky Mobile Bottom CTA Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-paper/95 backdrop-blur-md border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">

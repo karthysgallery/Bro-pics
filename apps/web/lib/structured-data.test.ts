@@ -24,10 +24,17 @@ describe('buildBreadcrumbList', () => {
 
 describe('buildOrganizationJsonLd', () => {
   it('[FE-41] builds an Organization entity with a name and contact info', () => {
-    const result = buildOrganizationJsonLd();
+    const result = buildOrganizationJsonLd({ email: 'help@example.test', whatsappDigits: '910000000001' });
     expect(result['@type']).toBe('Organization');
     expect(result.name).toBe('KarthysGallery');
-    expect(result.email).toBe('support@karthysgallery.in');
+    expect(result.email).toBe('help@example.test');
+    expect(result.sameAs).toEqual(['https://wa.me/910000000001']);
+  });
+
+  it('publishes no email or number when none is saved (nothing built in)', () => {
+    const result = buildOrganizationJsonLd();
+    expect(result).not.toHaveProperty('email');
+    expect(result).not.toHaveProperty('sameAs');
   });
 });
 
@@ -144,19 +151,19 @@ describe('buildProductJsonLd', () => {
     expect(ld.variesBy).toEqual(['https://schema.org/color']);
   });
 
-  it('adds shipping details from real settings: free at or above the threshold, the flat charge below, handling time from the product', () => {
+  it('states only what is true: free shipping to the home state (Tamil Nadu), plus the product handling time', () => {
     const ld = buildProductJsonLd({
       product, variants: sizes, media: [], reviews: [],
-      shipping: { freeShippingThreshold: 100000, flatShippingCharge: 5000, dispatchDaysMin: 3, dispatchDaysMax: 5 },
+      shipping: { freeStateCode: 'TN', dispatchDaysMin: 3, dispatchDaysMax: 5 },
     }) as { hasVariant: Array<Record<string, any>> };
-    const rate = (i: number) => hasShipping(ld.hasVariant[i]!.offers.shippingDetails);
-    function hasShipping(d: any) { return d.shippingRate.value; }
-    expect(rate(0)).toBe('50.00');
-    expect(rate(2)).toBe('0.00');
-    expect(ld.hasVariant[0]!.offers.shippingDetails).toMatchObject({
-      shippingDestination: { addressCountry: 'IN' },
+    const details = ld.hasVariant[0]!.offers.shippingDetails;
+    expect(details.shippingRate.value).toBe('0.00');
+    expect(details).toMatchObject({
+      shippingDestination: { addressCountry: 'IN', addressRegion: 'TN' },
       deliveryTime: { handlingTime: { minValue: 3, maxValue: 5, unitCode: 'DAY' } },
     });
+    // No rate is published for any other state: those charges are per-state and shown at checkout.
+    expect(JSON.stringify(ld)).not.toMatch(/"value":"[1-9]/);
   });
 
   it('never outputs a return policy, rating or review it has no data for', () => {

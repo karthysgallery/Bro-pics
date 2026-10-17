@@ -18,7 +18,8 @@ import { timeoutSignal } from '../../lib/timeout-signal';
 import { fetchCheckoutQuote, type CheckoutQuote } from '../../lib/checkout-quote-client';
 import { getGstSettingsClient, type GstDisplaySettings } from '../../lib/gst-settings-client';
 import { loadRazorpayCheckoutScript } from '../../lib/razorpay-checkout-script';
-import { calculateShipping, DELIVERY_METHODS, DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '../../lib/checkout-calc';
+import { DELIVERY_METHODS } from '../../lib/checkout-calc';
+import { DEFAULT_STATE_SHIPPING, resolveShipping, shippingFailureMessage, type StateShippingSettings } from '@bro-pics/shared';
 import { getShippingSettingsClient } from '../../lib/shipping-settings-client';
 import { getOrCreateCheckoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../lib/checkout-idempotency-key';
 import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/DeliveryTimeline';
@@ -54,7 +55,8 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const { items, totalPaise, clearCart } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
-  const [selectedAddressPincode, setSelectedAddressPincode] = useState<string | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const selectedAddressPincode = selectedAddress?.pincode ?? null;
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [paymentConfirming, setPaymentConfirming] = useState(false);
@@ -68,7 +70,7 @@ export default function CheckoutPage() {
   // Starts at the same default constant used server-side, so there's
   // nothing to mismatch between server and client render — only upgraded
   // (in an effect, below) if settings/shipping actually overrides it.
-  const [shippingSettings, setShippingSettings] = useState<Required<ShippingSettings>>(DEFAULT_SHIPPING_SETTINGS);
+  const [shippingSettings, setShippingSettings] = useState<StateShippingSettings>(DEFAULT_STATE_SHIPPING);
   // Display-only; the server recomputes tax. Absent/failed read => no GST line
   // rather than a made-up rate.
   const [gst, setGst] = useState<GstDisplaySettings>({ gstEnabled: false, taxRate: 0 });
@@ -89,12 +91,12 @@ export default function CheckoutPage() {
 
   // Re-quote whenever anything that affects the price changes. Debounced a little
   // so flipping options quickly doesn't fire a request per click.
-  const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}:${i.finish ?? ''}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}`;
+  const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}:${i.finish ?? ''}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}|${addressId ?? ''}`;
   useEffect(() => {
     if (!user || items.length === 0 || orderId) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      fetchCheckoutQuote(user, { couponCode: appliedCoupon?.code ?? null, deliveryMethod }, controller.signal).then((result) => {
+      fetchCheckoutQuote(user, { couponCode: appliedCoupon?.code ?? null, deliveryMethod, addressId }, controller.signal).then((result) => {
         if (controller.signal.aborted) return;
         setQuote(result);
         // A coupon that has stopped applying must be dropped and explained, not kept on screen.
@@ -295,6 +297,13 @@ export default function CheckoutPage() {
         if (body?.code === 'already_paid') clearCheckoutIdempotencyKey();
         return;
       }
+      if (response.status === 422) {
+        const body = await response.json().catch(() => null);
+        if (body?.code === 'shipping_unavailable') {
+          setError(typeof body.error === 'string' ? body.error : 'We could not work out the shipping charge for this address.');
+          return;
+        }
+      }
       if (response.status === 503) {
         setError('Payments are temporarily unavailable. Please try again in a little while.');
         return;
@@ -386,7 +395,15 @@ export default function CheckoutPage() {
   // rules). The local figures are only an estimate shown until it arrives, or if
   // it can't be fetched — create-order recomputes everything either way.
   const hasQuote = quote !== null && quote.unavailable.length === 0;
-  const localShipping = appliedCoupon?.freeShipping ? 0 : calculateShipping(totalPaise, shippingSettings, deliveryMethod);
+  // The estimate shown until the server's quote arrives uses the SAME rule the server applies; the quote
+  // (and create-order) are what is actually charged. An address that cannot be priced is shown as such, never as free.
+  const localShippingResult = resolveShipping({ address: selectedAddress, deliveryMethod, settings: shippingSettings });
+  const localShipping = localShippingResult.ok ? (appliedCoupon?.freeShipping ? 0 : localShippingResult.amount) : 0;
+  const shippingBlock: string | null = hasQuote
+    ? (quote.shippingMessage ?? null)
+    : localShippingResult.ok
+      ? null
+      : shippingFailureMessage(localShippingResult.reason, localShippingResult.state);
   const displaySubtotal = hasQuote ? quote.subtotal : totalPaise;
   const displayShipping = hasQuote ? quote.shipping : localShipping;
   const displayDiscount = hasQuote ? quote.discount : (appliedCoupon?.discountPaise ?? 0);
@@ -474,7 +491,7 @@ export default function CheckoutPage() {
               <AddressPicker
                 userId={user.uid}
                 onSelect={setAddressId}
-                onSelectAddress={(address: Address) => setSelectedAddressPincode(address.pincode)}
+                onSelectAddress={(address: Address) => setSelectedAddress(address)}
               />
 
               {selectedAddressPincode && (
@@ -487,8 +504,9 @@ export default function CheckoutPage() {
               <div className="mt-6 pt-4 border-t border-line">
                 <span className="block text-xs font-semibold text-ink mb-3">Delivery method</span>
                 <div className="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Delivery method">
-                  {DELIVERY_METHODS.map((method) => {
-                    const cost = method === 'express' ? shippingSettings.expressShippingCharge : calculateShipping(totalPaise, shippingSettings, 'standard');
+                  {DELIVERY_METHODS.filter((method) => method === 'standard' || shippingSettings.expressEnabled).map((method) => {
+                    const methodResult = resolveShipping({ address: selectedAddress, deliveryMethod: method, settings: shippingSettings });
+                    const cost: number | null = methodResult.ok ? methodResult.amount : null;
                     const transitLabel =
                       method === 'express'
                         ? `${EXPRESS_TRANSIT_DAYS_MIN}-${EXPRESS_TRANSIT_DAYS_MAX} days after dispatch`
@@ -513,7 +531,7 @@ export default function CheckoutPage() {
                             <span className="text-2xs text-ink/60 mt-0.5 block">{transitLabel}</span>
                           </span>
                         </span>
-                        <span className="font-bold text-ink">{cost === 0 ? 'Free' : formatPaise(cost)}</span>
+                        <span className="font-bold text-ink">{cost === null ? 'Choose an address' : cost === 0 ? 'Free' : formatPaise(cost)}</span>
                       </label>
                     );
                   })}
@@ -611,8 +629,13 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-ink/70">
                 <span>Shipping</span>
-                <span className="font-medium text-ink">{displayShipping === 0 ? 'Free' : formatPaise(displayShipping)}</span>
+                <span className="font-medium text-ink">{shippingBlock ? '—' : displayShipping === 0 ? 'Free' : formatPaise(displayShipping)}</span>
               </div>
+              {shippingBlock && (
+                <p role="alert" data-testid="shipping-block" className="rounded-xl bg-alert/10 px-3 py-2 text-2xs text-alert">
+                  {shippingBlock}
+                </p>
+              )}
               {appliedCoupon && (displayDiscount > 0 || displayFreeShipping) && (
                 <div className="flex justify-between text-accent font-medium">
                   <span>Discount ({appliedCoupon.code})</span>
@@ -666,7 +689,7 @@ export default function CheckoutPage() {
             {!isFailed && (
               <button
                 onClick={handlePlaceOrder}
-                disabled={placing || paymentConfirming || !addressId || hasUnavailableItems}
+                disabled={placing || paymentConfirming || !addressId || hasUnavailableItems || shippingBlock !== null}
                 className="mt-2 w-full min-h-[48px] py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
               >
                 {placing ? 'Please wait…' : orderId ? 'Resume payment' : siteText.placeOrderButton}

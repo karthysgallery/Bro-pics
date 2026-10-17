@@ -76,3 +76,13 @@ Each order item shows Preview, each original photo and the print-ready file (wit
 
 ## Open owner decisions
 Push/merge to `master` (auto-deploys), DNS for karthysgallery.in (transfer pending), rules deployment, production flag, WhatsApp OTP + Razorpay live credentials, FOREVER AND ALWAYS design asset / PSD mockups / renderer choice.
+
+## Update 2026-10-17: business settings, state shipping, returns and policy pages (local, uncommitted)
+
+The personalization / combo architecture was **not modified**. This work sits beside it:
+
+- Shipping is now state-based and server-priced from the stored delivery address (`packages/shared/src/shipping/state-shipping.ts`, used by `apps/web/lib/order-pricing.ts`). Combo pricing and glitter-finish pricing are unchanged; their tests still pass with the new shipping rule (combo order test now expects no shipping for a Tamil Nadu address).
+- Returns: a product is "personalized" when `productType` is `single_photo`/`collage`, it has photo slots, or it allows text personalization; this reuses the existing product fields (`packages/shared/src/returns/eligibility.ts`). Admin can set an explicit `returnPolicy` on a product or category.
+- New admin pieces: business profile form, state shipping form, returns + policy-wording forms, readiness panel (Settings), policy-page status/preview/approve (Pages). See `docs/BUSINESS_SETTINGS_AND_POLICIES.md`.
+- Owner inputs still missing are in `docs/LEGAL_OWNER_REVIEW_CHECKLIST.md`.
+- Print/production behaviour is untouched.
