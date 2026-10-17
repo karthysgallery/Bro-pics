@@ -186,7 +186,7 @@ export function createFirestoreDailyRollupDeps(db: Firestore): DailyRollupDeps {
  * Scheduled Cloud Function running daily at 00:30 IST (19:00 UTC).
  * Rolls up the completed previous day's metrics.
  */
-export const rollupDailyAnalytics = onSchedule('every day 19:00', async () => {
+export const rollupDailyAnalytics = onSchedule({ schedule: 'every day 19:00', region: 'asia-south1' }, async () => {
   const db = getFirestore();
   const deps = createFirestoreDailyRollupDeps(db);
 

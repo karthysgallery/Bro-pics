@@ -31,7 +31,7 @@ export async function runOrderReconciliation(
   return { stuckOrderIds };
 }
 
-export const reconcileStuckOrders = onSchedule('every 15 minutes', async () => {
+export const reconcileStuckOrders = onSchedule({ schedule: 'every 15 minutes', region: 'asia-south1' }, async () => {
   const db = getFirestore();
   await runOrderReconciliation({
     async fetchPendingOrders() {

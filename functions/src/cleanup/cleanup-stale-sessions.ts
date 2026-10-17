@@ -53,7 +53,7 @@ export async function runStaleSessionCleanup(deps: CleanupDeps, now: Date = new 
 
 const THRESHOLD_DAYS = 30;
 
-export const cleanupStaleSessions = onSchedule('every 24 hours', async () => {
+export const cleanupStaleSessions = onSchedule({ schedule: 'every 24 hours', region: 'asia-south1' }, async () => {
   const db = getFirestore();
   const bucket = getStorage().bucket();
   const cutoff = new Date(Date.now() - THRESHOLD_DAYS * 24 * 60 * 60 * 1000);

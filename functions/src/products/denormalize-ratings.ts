@@ -26,7 +26,7 @@ export function calculateRatingFields(ratings: number[]): RatingFields {
  * onVariantWritten's docblock — a few lines of Admin SDK read/write
  * around the pure, fully-tested calculateRatingFields above.
  */
-export const onReviewWritten = onDocumentWritten('reviews/{reviewId}', async (event) => {
+export const onReviewWritten = onDocumentWritten({ document: 'reviews/{reviewId}', region: 'asia-south1' }, async (event) => {
   const after = event.data?.after?.data();
   const before = event.data?.before?.data();
   const productId = (after?.productId ?? before?.productId) as string | undefined;

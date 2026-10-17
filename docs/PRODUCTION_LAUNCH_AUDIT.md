@@ -99,6 +99,16 @@ Inconsistencies / risks
 - **Role names differ**: Firestore rules treat `admin`, `staff` and `super_admin` as staff; the repo **Storage** rules recognise only `admin` and `staff`, so a `super_admin` would lose direct reads if those rules were deployed. Currently harmless because the app reads Storage through the Admin SDK and live Storage is deny-all.
 - **Recommendation: keep Storage deny-all** unless a feature needs direct client reads. The repo version makes `/public/**` world-readable and lets staff read uploads/print files directly; deploying it widens access for no current benefit.
 - **NOT VERIFIED**: that every media URL the site uses goes through `/api/media/*` rather than direct Storage URLs (the live site loads images fine today with deny-all Storage, which is evidence it does).
+### Storage access-control review (required before any Storage rule change)
+| Path | Live (deny-all) | Repo `storage.rules` | Who must read it today | Verdict |
+|---|---|---|---|---|
+| `public/**` (catalogue/CMS images) | nobody directly | **anyone** | browsers load images via `/api/media/*` (server) | keep deny-all; opening it adds exposure and cost (egress bypasses the cache and resize route) |
+| `uploads/**` (customer photos) | nobody directly | staff/admin read | admin/server through the Admin SDK; customers through the ownership-checked `/api/media/url` | keep deny-all; the repo rule grants staff direct read but `super_admin` is missing from it |
+| `print-files/**` | nobody directly | staff/admin read | print-render writes (SA), admin Files Box reads through the server | keep deny-all |
+| `returns/**` | nobody directly | staff/admin read | server | keep deny-all |
+| everything else | denied | denied | — | same |
+Decision: **do not deploy `storage.rules`**. If a feature ever needs direct client reads, first fix the role list (`super_admin`), narrow the rule to the exact path, add Storage rules tests, and re-review. The Admin SDK bypasses these rules, so deny-all does not stop the server or the print service.
+
 - Rules tests: 54 passing in `firestore-rules-tests` (last run in this project).
 
 ## 5. Backend: code vs deployed
@@ -106,7 +116,7 @@ Inconsistencies / risks
 Deployed on `bropics-app` (verified by `gcloud functions list` / `gcloud run services list`):
 `onMediaWritten`, `onVariantWritten` (asia-south1), `reconcileSessionOnLogin` (us-central1), and Cloud Run `karthys-gallery` (revision `00022`, image `55ca8f0`).
 
-In the repo but **NOT deployed**:
+In the repo but **NOT deployed** (the code exports **16** triggers, 3 are live, **13 are not**; an earlier note said 17):
 
 | Function | Purpose | Impact if missing |
 |---|---|---|
@@ -121,8 +131,9 @@ In the repo but **NOT deployed**:
 Print-render service (Cloud Run, private): **NOT deployed** (no `print-render` service exists). Runbook: `services/print-render/DEPLOY.md`. Needs `PRINT_RENDER_URL` / `PRINT_DISPATCH_AFTER` in `functions/.env.bropics-app` (currently empty = dispatcher off).
 
 Runtime
-- `firebase.json` pins functions to `nodejs20`, whose Google Cloud runtime is **decommissioned on 2026-10-30**. **[BLOCKER][CODE]** move functions (and print-render/web Docker images if desired) to a supported Node runtime and re-run their tests before deploying. Web image is `node:20-slim` (container, unaffected by the Cloud Functions decommission, but should be upgraded on its own schedule).
-- **NOT VERIFIED**: that the full function set builds and deploys cleanly on the newer runtime (tests pass locally on the current one).
+- `firebase.json` pinned functions to `nodejs20`, whose Google Cloud runtime is **decommissioned on 2026-10-30**. **Prepared locally (2026-10-17, uncommitted until approved): `nodejs22`** and esbuild `node22`; typecheck, 81 tests and the bundle pass on Node 20.20 and 25.8. Web and print-render are Docker images (`node:20-slim`) and are not affected by the Cloud Functions shutdown; left unchanged on purpose (the print renderer is proven; upgrading needs a render re-test).
+- Five not-yet-deployed functions now declare `region: 'asia-south1'` (Razorpay webhook, order reconciler, session cleanup, analytics roll-up, rating trigger) so they run beside the database; the three deployed ones are untouched.
+- **NOT VERIFIED**: that the full function set deploys cleanly on the Node 22 runtime (needs the deploy itself).
 
 No claim is made that payments, invoices, or print processing work in production: **none has been exercised against live Razorpay, live functions, or the print service**. They were verified only on emulators.
 
@@ -142,6 +153,7 @@ WHATSAPP_MODE=disabled  <- IMPORTANT, see below
 ```
 **Important finding:** `transportFromEnv()` (shared WhatsApp service used for invoices, order/payment/shipping messages and campaigns) turns itself **on automatically** whenever `WHATSAPP_OTP_MODE=production` and the token/phone-id exist. It would send invoice and order messages from the OTP number using templates (`karthys_invoice`, `karthys_order_confirmed`, `karthys_payment_received`, `karthys_order_shipped`) that **do not exist on Meta yet**. To keep OTP separate, set `WHATSAPP_MODE=disabled` until those utility templates are created, approved and a transactional sender decision is made. The OTP provider (`CloudWhatsAppOtpProvider`) is independent of `WHATSAPP_MODE`.
 - Marketing campaigns (`sendWhatsAppCampaigns`) need Meta marketing templates, user consent, and ideally a separate number: **not enabled**.
+- `WHATSAPP_MODE=disabled` is now covered by a unit test (production + credentials + disabled → disabled transport; Cloud Functions are disabled by default); a failed attempt is recorded in `whatsappMessages`, it never blocks an invoice.
 - Webhook (delivery reports) is not configured: **NOT VERIFIED** delivery to every customer. One of two test numbers did not receive its code.
 - Prepaid balance reaching ₹0 stops OTP: **[OWNER]** keep it topped up; consider a low-balance alert.
 - The client's debit card was declined by the bank; the payment method is a UPI top-up (manual). Decide the long-term funding method.

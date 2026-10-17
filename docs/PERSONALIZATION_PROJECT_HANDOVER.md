@@ -7,8 +7,8 @@ Earlier detail: `docs/PERSONALIZATION_ENGINE_PROGRESS.md` (engine phases, file m
 Full detail, checklists and blockers: `docs/PRODUCTION_LAUNCH_AUDIT.md`. Nothing was pushed or deployed for the audit.
 - **Live now (preview mode, sign-in closed):** website on Cloud Run (image `55ca8f0`), karthysgallery.in serving through Firebase Hosting, Diwali theme with offer code `DIWALIDHAMAKA`, Firestore rules (== repo), Razorpay live keys attached to Cloud Run (no live payment made), `reconcileSessionOnLogin`, `onMediaWritten`, `onVariantWritten`.
 - **WhatsApp OTP:** Meta setup finished and tested (business verified, OTP number `+91 78453 13961`, template `karthys_auth_otp` approved, prepaid ₹50). Website switch is a pending owner-run Cloud Run command; it must include `WHATSAPP_MODE=disabled` so invoice/order messages do not auto-enable.
-- **Not deployed:** 14 of the 17 Cloud Functions (invoices, print dispatch, stock release, Razorpay webhook, reconcile, ratings…), the print-render service, repo Storage rules (live Storage is deny-all, recommended to keep). Functions runtime Node 20 ends 2026-10-30.
-- **Local, unpushed:** commit `f2db7b5` (real ratings only, real WhatsApp chat number in the build).
+- **Not deployed:** 13 of the 16 Cloud Functions (invoices, print dispatch, stock release, Razorpay webhook, reconcile, ratings…), the print-render service, repo Storage rules (live Storage is deny-all, recommended to keep). Functions runtime Node 20 ends 2026-10-30.
+- **Local, unpushed:** `f2db7b5` (real ratings only, real WhatsApp chat number in the build), `08b46b1` (audit docs), and the phase-1 preparation commit (Functions on Node 22, regions, tests, legal drafts in `docs/legal-drafts/`, `docs/SEED_DATA_CLEANUP_DRYRUN.md`, `docs/DEPLOYMENT_REQUIREMENTS.md`, `docs/REAL_ORDER_ACCEPTANCE_TEST.md`).
 - **Open blockers:** empty store/GST/shipping settings, seed reviews and `NEW10` strip on the homepage, legal-page facts to confirm, real-person product subjects, no verified live payment/invoice/print flow.
 
 ## Freeze (owner instruction, 2026-10-08)

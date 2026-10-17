@@ -149,7 +149,7 @@ interface RazorpayWebhookBody {
   };
 }
 
-export const razorpayWebhook = onRequest(async (req, res) => {
+export const razorpayWebhook = onRequest({ region: 'asia-south1' }, async (req, res) => {
   const signature = req.headers['x-razorpay-signature'];
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (typeof signature !== 'string' || !secret) {

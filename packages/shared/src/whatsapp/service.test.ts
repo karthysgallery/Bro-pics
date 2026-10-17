@@ -10,6 +10,15 @@ describe('WhatsApp transport', () => {
     expect(transportFromEnv({ NODE_ENV: 'production', WHATSAPP_MODE: 'mock' })).toBeInstanceOf(MockTransport);
   });
 
+  it('WHATSAPP_MODE=disabled keeps invoice/order messages off even when OTP is in production with credentials', () => {
+    const live = { NODE_ENV: 'production', WHATSAPP_OTP_MODE: 'production', WHATSAPP_ACCESS_TOKEN: 't', WHATSAPP_PHONE_NUMBER_ID: '123' };
+    expect(transportFromEnv(live)).toBeInstanceOf(CloudTransport);
+    expect(transportFromEnv({ ...live, WHATSAPP_MODE: 'disabled' })).toBeInstanceOf(DisabledTransport);
+    expect(transportFromEnv({ ...live, WHATSAPP_MODE: 'off' })).toBeInstanceOf(DisabledTransport);
+    // Cloud Functions never receive the OTP number's credentials, so they stay disabled by default.
+    expect(transportFromEnv({ NODE_ENV: 'production' })).toBeInstanceOf(DisabledTransport);
+  });
+
   it('sends approved templates to the Cloud API with the server-side token, and uploads the PDF as media', async () => {
     const fetchMock = vi.fn(async (url: string) =>
       String(url).endsWith('/media') ? new Response(JSON.stringify({ id: 'media_1' })) : new Response(JSON.stringify({ messages: [{ id: 'wamid.X' }] }))
