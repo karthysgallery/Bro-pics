@@ -3,6 +3,14 @@
 Updated 2026-10-08 (code at commit `0ddab07`, local only: nothing is pushed to `master`, production mode is OFF, DNS is unchanged).
 Earlier detail: `docs/PERSONALIZATION_ENGINE_PROGRESS.md` (engine phases, file map, verify commands).
 
+## Status 2026-10-17 (production-readiness audit; supersedes older "not deployed" notes where they differ)
+Full detail, checklists and blockers: `docs/PRODUCTION_LAUNCH_AUDIT.md`. Nothing was pushed or deployed for the audit.
+- **Live now (preview mode, sign-in closed):** website on Cloud Run (image `55ca8f0`), karthysgallery.in serving through Firebase Hosting, Diwali theme with offer code `DIWALIDHAMAKA`, Firestore rules (== repo), Razorpay live keys attached to Cloud Run (no live payment made), `reconcileSessionOnLogin`, `onMediaWritten`, `onVariantWritten`.
+- **WhatsApp OTP:** Meta setup finished and tested (business verified, OTP number `+91 78453 13961`, template `karthys_auth_otp` approved, prepaid ₹50). Website switch is a pending owner-run Cloud Run command; it must include `WHATSAPP_MODE=disabled` so invoice/order messages do not auto-enable.
+- **Not deployed:** 14 of the 17 Cloud Functions (invoices, print dispatch, stock release, Razorpay webhook, reconcile, ratings…), the print-render service, repo Storage rules (live Storage is deny-all, recommended to keep). Functions runtime Node 20 ends 2026-10-30.
+- **Local, unpushed:** commit `f2db7b5` (real ratings only, real WhatsApp chat number in the build).
+- **Open blockers:** empty store/GST/shipping settings, seed reviews and `NEW10` strip on the homepage, legal-page facts to confirm, real-person product subjects, no verified live payment/invoice/print flow.
+
 ## Freeze (owner instruction, 2026-10-08)
 Implementation was FROZEN at commit `0ddab07`; the owner then approved two scoped changes (admin Files box, SEO) — everything else stays frozen. Do not push to `master`, do not deploy anything (Cloud Run, functions, print service, rules), do not change DNS, do not enable production mode. Only this documentation is maintained until the owner supplies the missing inputs below and starts the final go-live sequence.
 
