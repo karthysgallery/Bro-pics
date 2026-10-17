@@ -23,8 +23,9 @@ export function ProductCard({ product }: ProductCardProps) {
     ? `${formattedSize} · ${rawColour}`
     : formattedSize || rawColour || null;
 
-  const displayRating = product.ratingAverage > 0 ? product.ratingAverage : 4.9;
-  const displayRatingCount = product.ratingCount > 0 ? product.ratingCount : 128;
+  // Only real reviews are shown: a product with none has no rating line at all.
+  const displayRating = product.ratingAverage;
+  const displayRatingCount = product.ratingCount;
 
   return (
     <div className="group relative flex flex-col h-full">
