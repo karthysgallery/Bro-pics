@@ -1,5 +1,5 @@
 """READ-ONLY report of seed/demo data in the live Firestore. Deletes nothing."""
-import json, subprocess, urllib.request, urllib.parse
+import json, os, subprocess, tempfile, urllib.request, urllib.parse
 TOKEN = subprocess.run(['gcloud','auth','print-access-token'],capture_output=True,text=True).stdout.strip()
 B = "https://firestore.googleapis.com/v1/projects/bropics-app/databases/(default)/documents"
 def dec(v):
@@ -25,7 +25,13 @@ def docs(path, size=300):
         tok=d.get('nextPageToken')
         if not tok: return out
 R={}
-for c in ['products','reviews','users','orders','coupons','homepageSections','staff','carts','uploads','customizations','printJobs','media','categories','combos','banners','faqs','videos','invoices','refunds','notificationOutbox','auditLogs','counters','personalizationTemplates','collections','otpSessions']:
+for c in ['products','reviews','users','orders','coupons','homepageSections','staff','carts','uploads','customizations','printJobs','media','categories','combos','banners','faqs','videos','invoices','refunds','notificationOutbox','counters','personalizationTemplates','collections']:  # otpSessions and auditLogs are deliberately never read
     R[c]=docs(c)
-json.dump(R, open('/tmp/karthys_live_snapshot.json','w'))
+# The snapshot holds customer phone numbers: write it to a private directory, owner-only (0600).
+snap_dir = tempfile.mkdtemp(prefix='karthys-snapshot-')  # mkdtemp creates the directory with mode 0700
+snap = os.path.join(snap_dir, 'snapshot.json')
+fd = os.open(snap, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, 'w') as f:
+    json.dump(R, f)
+print('snapshot (owner-only):', snap, '— delete it when you are done')
 print({k:len(v) for k,v in R.items()})
