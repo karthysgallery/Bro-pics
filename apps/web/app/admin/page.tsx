@@ -45,10 +45,24 @@ interface DashboardData {
     severity: 'critical' | 'warning' | 'info';
     title: string;
     count: number;
-    link: string;
-    code: string;
+    link?: string;
+    code?: string;
+    type?: string;
   }>;
 }
+
+// Where each kind of operational alert leads. The dashboard API sends no link of its own, so an alert without one
+// used to crash the whole admin page (Link with an undefined href).
+const ALERT_LINKS: Record<string, string> = {
+  render_failure: '/admin/production',
+  refund_failure: '/admin/returns',
+  pending_refunds: '/admin/returns',
+  rework: '/admin/production?status=rework',
+  photo_validation: '/admin/orders?status=photo_validation',
+  stuck_payment: '/admin/orders?status=pending_payment',
+  returns: '/admin/returns',
+  pending_reviews: '/admin/reviews',
+};
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -207,7 +221,7 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
               <Link
-                href={alert.link}
+                href={alert.link ?? ALERT_LINKS[alert.type ?? ''] ?? '/admin/orders'}
                 className="font-semibold underline hover:opacity-80 transition-opacity ml-4 shrink-0"
               >
                 Inspect Queue →

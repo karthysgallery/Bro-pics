@@ -63,9 +63,10 @@ substitutions:
   _SERVICE: karthys-gallery
   _REGION: asia-south1
   _IMAGE: asia-south1-docker.pkg.dev/bropics-app/web/karthys-gallery
-  # Preview mode: hidden from search engines, sign-in off. Flip to 0 only at go-live.
-  _SITE_PREVIEW: "1"
-  _SITE_URL: https://karthys-gallery-991383044884.asia-south1.run.app
+  # LIVE since 2026-10-18: the site is public at karthysgallery.in. Set _SITE_PREVIEW to "1" (and the run.app URL) only to
+  # close it again (hidden from search engines, sign-in off).
+  _SITE_PREVIEW: "0"
+  _SITE_URL: https://karthysgallery.in
   _FIREBASE_API_KEY: ""
   _FIREBASE_AUTH_DOMAIN: bropics-app.firebaseapp.com
   _FIREBASE_STORAGE_BUCKET: bropics-app.firebasestorage.app
