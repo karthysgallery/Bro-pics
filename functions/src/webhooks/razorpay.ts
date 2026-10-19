@@ -149,7 +149,9 @@ interface RazorpayWebhookBody {
   };
 }
 
-export const razorpayWebhook = onRequest({ region: 'asia-south1' }, async (req, res) => {
+// The signing secret is the one chosen in the Razorpay dashboard (Webhooks). It lives in Secret Manager under this exact
+// name, which Cloud Functions also exposes to the function as the environment variable of the same name.
+export const razorpayWebhook = onRequest({ region: 'asia-south1', secrets: ['RAZORPAY_WEBHOOK_SECRET'] }, async (req, res) => {
   const signature = req.headers['x-razorpay-signature'];
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (typeof signature !== 'string' || !secret) {
