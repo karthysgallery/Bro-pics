@@ -1,13 +1,12 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions';
-import { defineSecret, defineString } from 'firebase-functions/params';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { customerIdForPhone, type Customer } from '@bro-pics/shared';
 import { normalizePhoneE164 } from '@bro-pics/shared/src/whatsapp/contact-import';
 import { orderEventsFromChange, type OrderEvent, type OrderFields } from '@bro-pics/shared/src/whatsapp/order-notifications';
 import { createOrderNotifier, type OrderNotifier } from '@bro-pics/shared/src/whatsapp/order-sender';
-import { transportFromEnv } from '@bro-pics/shared/src/whatsapp/service';
+import { testRecipients, waAccessToken, waTransport } from './transport-config';
 
 /**
  * Customer WhatsApp messages for the order lifecycle. They are DERIVED from real changes of the order document (payment
@@ -46,19 +45,8 @@ export async function handleOrderChange(db: Firestore, notifier: OrderNotifier, 
   return results;
 }
 
-// Deploy-time settings. Fail-closed: the mode is `disabled` until the owner sets WHATSAPP_MODE=cloud in functions/.env.<project>
-// (never a default), and the access token is read from Secret Manager only at run time, never logged.
-const waMode = defineString('WHATSAPP_MODE', { default: 'disabled' });
-const waPhoneNumberId = defineString('WHATSAPP_PHONE_NUMBER_ID', { default: '' });
-// Comma-separated numbers. While set, ONLY these receive order messages (first live test); empty = every customer.
-const waTestRecipients = defineString('WHATSAPP_TEST_RECIPIENTS', { default: '' });
-const waAccessToken = defineSecret('whatsapp-access-token');
-
 function notifier(db: Firestore): OrderNotifier {
-  const mode = waMode.value();
-  const env: Record<string, string | undefined> = { WHATSAPP_MODE: mode, WHATSAPP_PHONE_NUMBER_ID: waPhoneNumberId.value() };
-  if (mode === 'cloud') env.WHATSAPP_ACCESS_TOKEN = waAccessToken.value();
-  return createOrderNotifier({ db, transport: transportFromEnv(env), allowedPhones: waTestRecipients.value().split(',').map((p) => p.trim()).filter(Boolean) });
+  return createOrderNotifier({ db, transport: waTransport(), allowedPhones: testRecipients() });
 }
 
 export const whatsappOnOrderChange = onDocumentWritten({ document: 'orders/{orderId}', region: 'asia-south1', retry: false, secrets: [waAccessToken] }, async (event) => {

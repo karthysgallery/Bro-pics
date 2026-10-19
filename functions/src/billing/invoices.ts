@@ -4,7 +4,8 @@ import { logger } from 'firebase-functions';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { createOnlineInvoice, finishInvoice, recordOnlineRefund, type FinishDeps } from '@bro-pics/shared/src/billing/invoice-service';
-import { createWhatsAppService, transportFromEnv } from '@bro-pics/shared/src/whatsapp/service';
+import { createWhatsAppService } from '@bro-pics/shared/src/whatsapp/service';
+import { waAccessToken, waTransport } from '../whatsapp/transport-config';
 import { dueCampaigns, sendCampaignBatch, startCampaign } from '@bro-pics/shared/src/whatsapp/campaigns';
 
 /**
@@ -18,7 +19,7 @@ import { dueCampaigns, sendCampaignBatch, startCampaign } from '@bro-pics/shared
 
 function deps(): FinishDeps {
   const db = getFirestore();
-  return { db, bucket: getStorage().bucket(), whatsapp: createWhatsAppService({ db, transport: transportFromEnv() }) };
+  return { db, bucket: getStorage().bucket(), whatsapp: createWhatsAppService({ db, transport: waTransport() }) };
 }
 
 type OrderFields = { invoiceNo?: string; paymentStatus?: string } | undefined;
@@ -27,7 +28,7 @@ export function needsInvoice(before: OrderFields, after: OrderFields): boolean {
   return Boolean(after?.invoiceNo) && after?.paymentStatus === 'paid' && !(before?.invoiceNo && before?.paymentStatus === 'paid');
 }
 
-export const invoiceOnPayment = onDocumentWritten({ document: 'orders/{orderId}', region: 'asia-south1', retry: true }, async (event) => {
+export const invoiceOnPayment = onDocumentWritten({ document: 'orders/{orderId}', region: 'asia-south1', retry: true, secrets: [waAccessToken] }, async (event) => {
   const before = event.data?.before.data() as OrderFields;
   const after = event.data?.after.data() as OrderFields;
   if (!needsInvoice(before, after)) return;
@@ -45,7 +46,7 @@ export const invoiceOnPayment = onDocumentWritten({ document: 'orders/{orderId}'
 type RefundFields = { status?: string; amount?: number; reason?: string | null; razorpayRefundId?: string | null } | undefined;
 
 /** A processed online refund → credit note against the order's invoice (once per refund). */
-export const creditNoteOnRefund = onDocumentWritten({ document: 'orders/{orderId}/refunds/{refundId}', region: 'asia-south1', retry: true }, async (event) => {
+export const creditNoteOnRefund = onDocumentWritten({ document: 'orders/{orderId}/refunds/{refundId}', region: 'asia-south1', retry: true, secrets: [waAccessToken] }, async (event) => {
   const after = event.data?.after.data() as RefundFields;
   const before = event.data?.before.data() as RefundFields;
   if (after?.status !== 'processed' || before?.status === 'processed' || !after.amount) return;
@@ -60,7 +61,7 @@ export const creditNoteOnRefund = onDocumentWritten({ document: 'orders/{orderId
 });
 
 /** Starts scheduled campaigns when due and keeps sending large ones in batches. */
-export const sendWhatsAppCampaigns = onSchedule({ schedule: 'every 5 minutes', region: 'asia-south1', timeZone: 'Asia/Kolkata', timeoutSeconds: 540 }, async () => {
+export const sendWhatsAppCampaigns = onSchedule({ schedule: 'every 5 minutes', region: 'asia-south1', timeZone: 'Asia/Kolkata', timeoutSeconds: 540, secrets: [waAccessToken] }, async () => {
   const db = getFirestore();
   const { whatsapp } = deps();
   const { toStart, sending } = await dueCampaigns(db);
