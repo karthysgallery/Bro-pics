@@ -29,10 +29,13 @@ export interface OrderNotifierDeps {
   language?: string;
   env?: Record<string, string | undefined>;
   now?: () => Date;
+  /** Test guard: when non-empty, only these numbers (last 10 digits) are ever messaged; everyone else is skipped, not failed. */
+  allowedPhones?: string[];
 }
 
 export function createOrderNotifier(deps: OrderNotifierDeps) {
   const { db, transport } = deps;
+  const allowed = deps.allowedPhones?.length ? new Set(deps.allowedPhones.map((p) => p.replace(/\D/g, '').slice(-10))) : null;
   const now = () => (deps.now ?? (() => new Date()))();
   const language = deps.language ?? deps.env?.WHATSAPP_TEMPLATE_LANGUAGE ?? process.env.WHATSAPP_TEMPLATE_LANGUAGE ?? 'en';
 
@@ -40,6 +43,7 @@ export function createOrderNotifier(deps: OrderNotifierDeps) {
     if (transport.mode === 'disabled') return { status: 'skipped', reason: 'WhatsApp is switched off on the server.' };
     const plan = planOrderMessage(input.event, input.order);
     if (!plan.ok) return { status: 'skipped', reason: plan.reason };
+    if (allowed && !allowed.has(plan.to.replace(/\D/g, '').slice(-10))) return { status: 'skipped', reason: 'Not on the test recipient list.' };
     if (input.customer && !transactionalEligibility({ phone: plan.to, consent: input.customer.consent })) return { status: 'skipped', reason: 'The customer opted out of WhatsApp messages.' };
 
     const id = messageIdFor(input.orderId, input.event);

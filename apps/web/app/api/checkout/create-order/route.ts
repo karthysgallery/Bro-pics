@@ -10,6 +10,7 @@ import { getPaymentProvider } from '../../../../lib/payments/provider-factory';
 import { PaymentNotConfiguredError } from '../../../../lib/payments/types';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { createHash } from 'node:crypto';
+import { retryOnContention, serialized } from '@bro-pics/shared/src/payments/contention-retry';
 import { reserveOrderStock, restoreReservation, type StockReservation } from '@bro-pics/shared/src/inventory/stock';
 import { BillingError, shippingFailureMessage } from '@bro-pics/shared';
 import { stateFingerprint, CartComboSchema, COMBO_VARIANT_PREFIX, type OrderCombo } from '@bro-pics/shared';
@@ -376,7 +377,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // telling the customer to retry.
   let orderNo: string;
   try {
-    orderNo = await db.runTransaction(async (transaction) => {
+    orderNo = await serialized('order-number', () => retryOnContention(() => db.runTransaction(async (transaction) => {
       const adapter: CounterTransaction = {
         async get(ref) {
           const snap = await transaction.get(db.doc(ref.path));
@@ -387,7 +388,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         },
       };
       return generateOrderNo(adapter, new Date().getFullYear());
-    });
+    })));
   } catch (err) {
     console.error('Order number generation failed:', err);
     return NextResponse.json({ error: 'Could not place your order. Please try again.' }, { status: 503 });

@@ -1,6 +1,7 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { customerIdForPhone, type Customer } from '@bro-pics/shared';
 import { normalizePhoneE164 } from '@bro-pics/shared/src/whatsapp/contact-import';
@@ -45,11 +46,22 @@ export async function handleOrderChange(db: Firestore, notifier: OrderNotifier, 
   return results;
 }
 
+// Deploy-time settings. Fail-closed: the mode is `disabled` until the owner sets WHATSAPP_MODE=cloud in functions/.env.<project>
+// (never a default), and the access token is read from Secret Manager only at run time, never logged.
+const waMode = defineString('WHATSAPP_MODE', { default: 'disabled' });
+const waPhoneNumberId = defineString('WHATSAPP_PHONE_NUMBER_ID', { default: '' });
+// Comma-separated numbers. While set, ONLY these receive order messages (first live test); empty = every customer.
+const waTestRecipients = defineString('WHATSAPP_TEST_RECIPIENTS', { default: '' });
+const waAccessToken = defineSecret('whatsapp-access-token');
+
 function notifier(db: Firestore): OrderNotifier {
-  return createOrderNotifier({ db, transport: transportFromEnv() });
+  const mode = waMode.value();
+  const env: Record<string, string | undefined> = { WHATSAPP_MODE: mode, WHATSAPP_PHONE_NUMBER_ID: waPhoneNumberId.value() };
+  if (mode === 'cloud') env.WHATSAPP_ACCESS_TOKEN = waAccessToken.value();
+  return createOrderNotifier({ db, transport: transportFromEnv(env), allowedPhones: waTestRecipients.value().split(',').map((p) => p.trim()).filter(Boolean) });
 }
 
-export const whatsappOnOrderChange = onDocumentWritten({ document: 'orders/{orderId}', region: 'asia-south1', retry: false }, async (event) => {
+export const whatsappOnOrderChange = onDocumentWritten({ document: 'orders/{orderId}', region: 'asia-south1', retry: false, secrets: [waAccessToken] }, async (event) => {
   const db = getFirestore();
   const before = event.data?.before.data() as OrderFields | undefined;
   const after = event.data?.after.data() as OrderFields | undefined;
@@ -57,7 +69,7 @@ export const whatsappOnOrderChange = onDocumentWritten({ document: 'orders/{orde
 });
 
 /** Retries failed order messages whose backoff time has come. */
-export const whatsappRetryFailed = onSchedule({ schedule: 'every 10 minutes', region: 'asia-south1', timeZone: 'Asia/Kolkata', timeoutSeconds: 300 }, async () => {
+export const whatsappRetryFailed = onSchedule({ schedule: 'every 10 minutes', region: 'asia-south1', timeZone: 'Asia/Kolkata', timeoutSeconds: 300, secrets: [waAccessToken] }, async () => {
   const db = getFirestore();
   const wa = notifier(db);
   const due = await wa.dueRetries(50);

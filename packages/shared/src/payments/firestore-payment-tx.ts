@@ -1,3 +1,4 @@
+import { retryOnContention, serialized } from './contention-retry';
 // Server-only: real (value) import of firebase-admin/firestore — NOT
 // re-exported from the main barrel (see print-jobs/print-jobs.ts for why).
 // Import directly: '@bro-pics/shared/src/payments/firestore-payment-tx'.
@@ -157,15 +158,20 @@ export interface PaymentSettlement {
  * is a no-op. Used by the Razorpay webhook AND the mock payment provider.
  */
 export async function settlePaymentCaptured(db: Firestore, params: PaymentSettlement): Promise<void> {
-  await db.runTransaction(async (transaction) => {
-    await handlePaymentCaptured(buildWebhookTx(db, transaction), buildPaymentTx(db, transaction), params);
-  });
+  // A burst of paying customers collides on the invoice counter; the pipeline is idempotent, so a lost round is repeated.
+  await serialized('settle-payment', () => retryOnContention(() =>
+    db.runTransaction(async (transaction) => {
+      await handlePaymentCaptured(buildWebhookTx(db, transaction), buildPaymentTx(db, transaction), params);
+    })
+  ));
 }
 
 export async function settlePaymentFailed(db: Firestore, params: { razorpayOrderId: string }): Promise<void> {
-  await db.runTransaction(async (transaction) => {
-    await handlePaymentFailed(buildPaymentTx(db, transaction), params);
-  });
+  await retryOnContention(() =>
+    db.runTransaction(async (transaction) => {
+      await handlePaymentFailed(buildPaymentTx(db, transaction), params);
+    })
+  );
 }
 
 export { getFirestore };
