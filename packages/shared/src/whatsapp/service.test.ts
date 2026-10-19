@@ -27,7 +27,7 @@ describe('WhatsApp transport', () => {
     expect(await t.uploadDocument({ bytes: new Uint8Array([37, 80, 68, 70]), filename: 'KG-INV-2026-000001.pdf', mimeType: 'application/pdf' })).toBe('media_1');
     expect(await t.sendTemplate({ to: '+919876543210', template: 'karthys_invoice', language: 'en', components: [] })).toEqual({ providerMessageId: 'wamid.X' });
     const [url, init] = fetchMock.mock.calls[1]! as unknown as [string, RequestInit];
-    expect(url).toBe('https://graph.facebook.com/v21.0/555/messages');
+    expect(url).toBe('https://graph.facebook.com/v25.0/555/messages');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret');
     expect(JSON.parse(String(init.body))).toMatchObject({ to: '919876543210', type: 'template', template: { name: 'karthys_invoice', language: { code: 'en' } } });
   });
@@ -40,5 +40,15 @@ describe('WhatsApp transport', () => {
   it('uses overridable template names', () => {
     expect(templateNames({}).invoice).toBe('karthys_invoice');
     expect(templateNames({ WHATSAPP_TEMPLATE_INVOICE: 'kg_bill' }).invoice).toBe('kg_bill');
+  });
+});
+
+import { graphBase, DEFAULT_GRAPH_VERSION } from './service';
+describe('Graph API version', () => {
+  it('defaults to the current version and can be overridden, but only with a well-formed version', () => {
+    expect(DEFAULT_GRAPH_VERSION).toBe('v25.0');
+    expect(graphBase({})).toBe('https://graph.facebook.com/v25.0');
+    expect(graphBase({ WHATSAPP_GRAPH_VERSION: 'v26.0' })).toBe('https://graph.facebook.com/v26.0');
+    expect(graphBase({ WHATSAPP_GRAPH_VERSION: '../evil' })).toBe('https://graph.facebook.com/v25.0');
   });
 });

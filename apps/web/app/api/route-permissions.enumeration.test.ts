@@ -56,6 +56,13 @@ import { GET as productSetupGET, PUT as productSetupPUT } from './admin/products
 import { POST as pageApprovePOST, DELETE as pageApproveDELETE } from './admin/pages/[id]/approve/route';
 import { GET as pagePreviewGET } from './admin/pages/[id]/preview/route';
 import { GET as readinessGET } from './admin/readiness/route';
+import { POST as contactsImportPOST } from './admin/whatsapp/contacts/import/route';
+import { GET as contactsTemplateGET } from './admin/whatsapp/contacts/template/route';
+import { PUT as contactConsentPUT } from './admin/whatsapp/contacts/[id]/consent/route';
+import { PUT as templatesPUT } from './admin/whatsapp/templates/route';
+import { PUT as pricingPUT } from './admin/whatsapp/pricing/route';
+import { POST as campaignSendPOST } from './admin/marketing/campaigns/[id]/send/route';
+import { GET as campaignReportGET } from './admin/marketing/campaigns/[id]/report/route';
 
 function anonymousRequest(url: string, method = 'GET'): Request {
   return new Request(url, { method, headers: method === 'POST' ? { 'Content-Type': 'application/json' } : {}, body: method === 'POST' ? '{}' : undefined });
@@ -166,6 +173,14 @@ const cases: RouteCase[] = [
   { name: 'DELETE /api/admin/pages/[id]/approve', key: 'policies:approve', wrongRole: 'marketing_manager', method: 'DELETE', url: 'https://example.com/api/admin/pages/p1/approve', call: (r) => pageApproveDELETE(r, { params: Promise.resolve({ id: 'p1' }) }) },
   { name: 'GET /api/admin/pages/[id]/preview', key: 'content:write', wrongRole: 'catalogue_manager', url: 'https://example.com/api/admin/pages/p1/preview', call: (r) => pagePreviewGET(r, { params: Promise.resolve({ id: 'p1' }) }) },
   { name: 'GET /api/admin/readiness', key: 'settings:write', wrongRole: 'staff', url: 'https://example.com/api/admin/readiness', call: (r) => readinessGET(r) },
+  // WhatsApp customer list and campaigns: administrator-only actions (a marketing_manager lacks every one of these keys).
+  { name: 'POST /api/admin/whatsapp/contacts/import', key: 'whatsapp:contacts_import', wrongRole: 'marketing_manager', method: 'POST', url: 'https://example.com/api/admin/whatsapp/contacts/import', call: (r) => contactsImportPOST(r) },
+  { name: 'GET /api/admin/whatsapp/contacts/template', key: 'whatsapp:contacts_import', wrongRole: 'marketing_manager', url: 'https://example.com/api/admin/whatsapp/contacts/template', call: (r) => contactsTemplateGET(r) },
+  { name: 'PUT /api/admin/whatsapp/contacts/[id]/consent', key: 'whatsapp:consent_edit', wrongRole: 'marketing_manager', method: 'PUT', url: 'https://example.com/api/admin/whatsapp/contacts/p919876543210/consent', call: (r) => contactConsentPUT(r, { params: Promise.resolve({ id: 'p919876543210' }) }) },
+  { name: 'PUT /api/admin/whatsapp/templates', key: 'whatsapp:templates_manage', wrongRole: 'marketing_manager', method: 'PUT', url: 'https://example.com/api/admin/whatsapp/templates', call: (r) => templatesPUT(r) },
+  { name: 'PUT /api/admin/whatsapp/pricing', key: 'whatsapp:templates_manage', wrongRole: 'marketing_manager', method: 'PUT', url: 'https://example.com/api/admin/whatsapp/pricing', call: (r) => pricingPUT(r) },
+  { name: 'POST /api/admin/marketing/campaigns/[id]/send', key: 'whatsapp:campaign_send', wrongRole: 'marketing_manager', method: 'POST', url: 'https://example.com/api/admin/marketing/campaigns/c1/send', call: (r) => campaignSendPOST(r, { params: Promise.resolve({ id: 'c1' }) }) },
+  { name: 'GET /api/admin/marketing/campaigns/[id]/report?format=csv', key: 'whatsapp:export', wrongRole: 'marketing_manager', url: 'https://example.com/api/admin/marketing/campaigns/c1/report?format=csv', call: (r) => campaignReportGET(r, { params: Promise.resolve({ id: 'c1' }) }) },
   { name: 'PUT /api/admin/products/[id]/setup', key: 'catalogue:write', wrongRole: 'staff', method: 'PUT', url: 'https://example.com/api/admin/products/p1/setup', call: (r) => productSetupPUT(r, { params: Promise.resolve({ id: 'p1' }) }) },
 ];
 

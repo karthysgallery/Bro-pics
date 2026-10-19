@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { validSignature } from '../../../../lib/billing/webhook-signature';
-import { customerIdForPhone, newCustomer, normalizeIndianMobile } from '@bro-pics/shared';
+import { customerIdForPhone, normalizeIndianMobile } from '@bro-pics/shared';
 import { billingDb, whatsappService } from '../../../../lib/billing/server';
 import { logger } from '@bro-pics/shared';
+import { recordCustomerOptIn, recordMarketingOptOut } from '@bro-pics/shared/src/whatsapp/consent';
 
 /**
  * WhatsApp Cloud API webhook.
@@ -70,16 +71,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           continue;
         }
         const at = new Date().toISOString();
-        const ref = db.collection('customers').doc(customerIdForPhone(phone));
-        const marketing = { status: wantsOut ? ('opted_out' as const) : ('opted_in' as const), at, source: 'whatsapp_reply' };
-        await db.runTransaction(async (tx) => {
-          const snap = await tx.get(ref);
-          if (snap.exists) tx.update(ref, { 'consent.marketing': marketing, updatedAt: at });
-          else {
-            const fresh = newCustomer({ phone, name: 'WhatsApp contact', source: 'admin' }, at);
-            tx.set(ref, { ...fresh, consent: { ...fresh.consent, marketing } });
-          }
-        });
+        // STOP: opt out and join the suppression list at once. START: the customer's own opt-in, kept with the reply as its evidence.
+        if (wantsOut) await recordMarketingOptOut(db, { phone, source: 'whatsapp_reply', nowIso: at });
+        else await recordCustomerOptIn(db, { phone, source: 'whatsapp_reply', evidence: 'Customer replied START on WhatsApp', nowIso: at });
         logger.info('WhatsApp marketing consent changed by the customer', { customer: customerIdForPhone(phone), status: wantsOut ? 'opted_out' : 'opted_in' });
       }
     }

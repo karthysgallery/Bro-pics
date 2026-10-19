@@ -355,6 +355,8 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Reviews', href: '/admin/reviews', permission: 'reviews:moderate', icon: 'reviews' },
       { label: 'Merchandising', href: '/admin/merchandising', permission: 'catalogue:write', icon: 'merchandising' },
       { label: 'WhatsApp Campaigns', href: '/admin/marketing/whatsapp', permission: 'marketing:whatsapp', icon: 'notifications' },
+      { label: 'WhatsApp Contacts', href: '/admin/whatsapp/contacts', permission: 'customers:read', icon: 'notifications' },
+      { label: 'WhatsApp Templates', href: '/admin/whatsapp/templates', permission: 'whatsapp:logs', icon: 'notifications' },
       { label: 'WhatsApp Message Logs', href: '/admin/whatsapp/messages', permission: 'whatsapp:logs', icon: 'notifications' },
     ],
   },

@@ -4,25 +4,10 @@ import { createHmac } from 'node:crypto';
 const recordStatus = vi.hoisted(() => vi.fn());
 const store = vi.hoisted(() => new Map<string, Record<string, unknown>>());
 
-vi.mock('../../../../lib/billing/server', () => ({
-  whatsappService: () => ({ recordStatus }),
-  billingDb: () => ({
-    collection: (name: string) => ({ doc: (id: string) => ({ path: `${name}/${id}` }) }),
-    runTransaction: async (fn: (tx: unknown) => Promise<void>) =>
-      fn({
-        get: async (ref: { path: string }) => ({ exists: store.has(ref.path), data: () => store.get(ref.path) }),
-        update: (ref: { path: string }, patch: Record<string, unknown>) => {
-          const doc = { ...store.get(ref.path) } as Record<string, unknown>;
-          for (const [k, v] of Object.entries(patch)) {
-            if (k === 'consent.marketing') doc.consent = { ...(doc.consent as object), marketing: v };
-            else doc[k] = v;
-          }
-          store.set(ref.path, doc);
-        },
-        set: (ref: { path: string }, doc: Record<string, unknown>) => store.set(ref.path, doc),
-      }),
-  }),
-}));
+const optOut = vi.hoisted(() => vi.fn());
+const optIn = vi.hoisted(() => vi.fn());
+vi.mock('../../../../lib/billing/server', () => ({ whatsappService: () => ({ recordStatus }), billingDb: () => ({}) }));
+vi.mock('@bro-pics/shared/src/whatsapp/consent', () => ({ recordMarketingOptOut: optOut, recordCustomerOptIn: optIn }));
 
 import { GET, POST } from './route';
 
@@ -41,6 +26,8 @@ describe('WhatsApp webhook', () => {
   beforeEach(() => {
     recordStatus.mockReset();
     store.clear();
+    optOut.mockReset();
+    optIn.mockReset();
     vi.stubEnv('WHATSAPP_APP_SECRET', SECRET);
     vi.stubEnv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', 'verify-me');
   });
@@ -78,25 +65,22 @@ describe('WhatsApp webhook', () => {
     expect(recordStatus).toHaveBeenCalledWith(expect.objectContaining({ providerMessageId: 'wamid.2', status: 'failed', error: 'Message undeliverable (code 131026)' }));
   });
 
-  it('opts an existing customer out on STOP and back in on START, leaving transactional consent alone', async () => {
-    store.set('customers/p919876543210', { phone: '+919876543210', consent: { transactional: { status: 'opted_in' }, marketing: { status: 'opted_in' } } });
+  it('STOP opts the number out (and onto the suppression list) through the shared consent code; START is the customer\'s own opt-in with the reply kept as evidence', async () => {
     await post(wrap({ messages: [{ from: '919876543210', type: 'text', text: { body: 'STOP' } }] }));
-    let doc = store.get('customers/p919876543210') as { consent: Record<string, { status: string; source?: string }> };
-    expect(doc.consent.marketing).toMatchObject({ status: 'opted_out', source: 'whatsapp_reply' });
-    expect(doc.consent.transactional.status).toBe('opted_in');
+    expect(optOut).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ phone: '+919876543210', source: 'whatsapp_reply' }));
+    expect(optIn).not.toHaveBeenCalled();
 
     await post(wrap({ messages: [{ from: '919876543210', type: 'button', button: { text: 'Start' } }] }));
-    doc = store.get('customers/p919876543210') as typeof doc;
-    expect(doc.consent.marketing.status).toBe('opted_in');
+    expect(optIn).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ phone: '+919876543210', source: 'whatsapp_reply', evidence: expect.stringMatching(/START/) }));
   });
 
-  it('creates an opted-out record for an unknown number that replies STOP, and ignores ordinary chat', async () => {
+  it('an unknown number that replies stop is handled, and ordinary chat changes nothing', async () => {
     await post(wrap({ messages: [{ from: '919811112222', type: 'text', text: { body: 'stop' } }] }));
-    const doc = store.get('customers/p919811112222') as { phone: string; consent: { marketing: { status: string } } };
-    expect(doc.phone).toBe('+919811112222');
-    expect(doc.consent.marketing.status).toBe('opted_out');
+    expect(optOut).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ phone: '+919811112222' }));
 
+    optOut.mockClear();
     await post(wrap({ messages: [{ from: '919833334444', type: 'text', text: { body: 'Is my order ready?' } }] }));
-    expect(store.has('customers/p919833334444')).toBe(false);
+    expect(optOut).not.toHaveBeenCalled();
+    expect(optIn).not.toHaveBeenCalled();
   });
 });

@@ -92,6 +92,7 @@ export * from './personalization';
 export * from './schemas/combo';
 export * from './billing/running-costs';
 export * from './schemas/billing';
+export * from './whatsapp/contact-import';
 export * from './billing/invoice-engine';
 export * from './billing/reports';
 export * from './catalogue/product-designs';

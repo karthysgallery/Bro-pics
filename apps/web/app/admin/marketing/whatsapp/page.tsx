@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { Campaign, CampaignAudience } from '@bro-pics/shared';
+import { useAuth } from '../../../../lib/auth-context';
 import { useAdminApi } from '../../../../components/admin/template-builder/use-admin-api';
 import { Badge, Notice, PageHeader, button, card, dateTime, input, primaryButton, sectionTitle } from '../../../../components/admin/billing/ui';
 
@@ -13,9 +14,11 @@ const AUDIENCES: Array<{ type: AudienceType; label: string }> = [
   { type: 'purchased_within_days', label: 'Bought in the last 30 / 60 / 90 days' },
   { type: 'high_value', label: 'High-value customers' },
   { type: 'lapsed', label: "Haven't bought recently" },
+  { type: 'origin', label: 'Offline / online customers' },
+  { type: 'tag', label: 'Customers with a tag' },
 ];
 
-const blank = { name: '', template: '', language: 'en', bodyParams: '{{name}}', previewText: '', audienceType: 'all_opted_in' as AudienceType, categoryId: '', days: 30, minSpent: 5000, lapsedDays: 90 };
+const blank = { name: '', template: '', language: 'en', bodyParams: '{{name}}', previewText: '', audienceType: 'all_opted_in' as AudienceType, categoryId: '', days: 30, minSpent: 5000, lapsedDays: 90, origin: 'offline', tag: '' };
 
 /**
  * Admin → Marketing → WhatsApp campaigns. Separate from invoices and OTP:
@@ -24,9 +27,11 @@ const blank = { name: '', template: '', language: 'en', bodyParams: '{{name}}', 
  */
 export default function WhatsAppCampaignsPage() {
   const api = useAdminApi();
+  const { user } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [form, setForm] = useState(blank);
-  const [preview, setPreview] = useState<{ count: number; optedOut: number; sample: Array<{ name: string; phone: string }> } | null>(null);
+  type Preview = { count: number; optedOut: number; exclusions?: { notOptedIn: number; optedOut: number; suppressed: number; outsideAudience: number }; estimate?: { totalInr: number; rateInr: number; rateCheckedOn: string | null } | null; sample: Array<{ name: string; phone: string }> };
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,21 +54,25 @@ export default function WhatsAppCampaignsPage() {
         return { type: 'high_value', minSpent: Math.round(form.minSpent * 100) };
       case 'lapsed':
         return { type: 'lapsed', days: form.lapsedDays };
+      case 'origin':
+        return { type: 'origin', origin: form.origin as 'offline' | 'online' | 'other' };
+      case 'tag':
+        return { type: 'tag', tag: form.tag.trim().toLowerCase() };
       default:
         return { type: form.audienceType } as CampaignAudience;
     }
   };
 
   useEffect(() => {
-    if (form.audienceType === 'purchased_category' && !form.categoryId) return setPreview(null);
+    if ((form.audienceType === 'purchased_category' && !form.categoryId) || (form.audienceType === 'tag' && !form.tag.trim())) return setPreview(null);
     const t = setTimeout(() => {
-      api<{ count: number; optedOut: number; sample: Array<{ name: string; phone: string }> }>('/api/admin/marketing/audience', { method: 'POST', body: JSON.stringify({ audience: audience() }) })
+      api<Preview>('/api/admin/marketing/audience', { method: 'POST', body: JSON.stringify({ audience: audience() }) })
         .then(setPreview)
         .catch(() => setPreview(null));
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, form.audienceType, form.categoryId, form.days, form.minSpent, form.lapsedDays]);
+  }, [api, form.audienceType, form.categoryId, form.days, form.minSpent, form.lapsedDays, form.origin, form.tag]);
 
   const create = async () => {
     setBusy(true);
@@ -91,9 +100,19 @@ export default function WhatsAppCampaignsPage() {
     }
   };
 
-  const act = async (c: Campaign, action: 'send' | 'cancel' | 'schedule') => {
-    if (action === 'send' && !window.confirm(`Send “${c.name}” now to the opted-in customers in its audience?`)) return;
+  const act = async (c: Campaign, action: 'send' | 'cancel' | 'schedule' | 'pause' | 'resume' | 'retry_failed') => {
     let scheduledAt: string | null = null;
+    let confirmAudience: number | undefined;
+    if (action === 'send') {
+      // The audience is recounted on the server just now; the administrator confirms THAT number.
+      const fresh = await api<Preview>('/api/admin/marketing/audience', { method: 'POST', body: JSON.stringify({ audience: c.audience }) }).catch(() => null);
+      if (!fresh) return setMsg({ ok: false, text: 'Could not work out the audience. Try again.' });
+      const ex = fresh.exclusions;
+      const lines = [`Send “${c.name}” to ${fresh.count} customer(s) who agreed to marketing messages?`, ex ? `Left out: ${ex.notOptedIn} without permission, ${ex.optedOut} opted out, ${ex.suppressed} suppressed, ${ex.outsideAudience} outside this audience.` : '', fresh.estimate ? `Estimated cost about ₹${fresh.estimate.totalInr} at ₹${fresh.estimate.rateInr} per message (rate checked ${fresh.estimate.rateCheckedOn ?? 'on an unknown date'}; Meta’s bill is what counts).` : 'No cost estimate: enter the current rate under WhatsApp templates.', 'This cannot be undone once messages are sent.'].filter(Boolean);
+      if (!window.confirm(lines.join('\n\n'))) return;
+      confirmAudience = fresh.count;
+    }
+    if (action === 'cancel' && !window.confirm('Cancel this campaign? Messages not yet sent will not be sent.')) return;
     if (action === 'schedule') {
       const v = window.prompt('Send at (YYYY-MM-DD HH:MM, India time)');
       if (!v) return;
@@ -103,8 +122,8 @@ export default function WhatsAppCampaignsPage() {
     }
     setBusy(true);
     try {
-      if (action === 'send') await api(`/api/admin/marketing/campaigns/${c.id}/send`, { method: 'POST', body: '{}' });
-      else await api(`/api/admin/marketing/campaigns/${c.id}`, { method: 'PATCH', body: JSON.stringify(action === 'cancel' ? { action: 'cancel' } : { action: 'schedule', scheduledAt }) });
+      if (action === 'send') await api(`/api/admin/marketing/campaigns/${c.id}/send`, { method: 'POST', body: JSON.stringify({ confirmAudience }) });
+      else await api(`/api/admin/marketing/campaigns/${c.id}`, { method: 'PATCH', body: JSON.stringify(action === 'schedule' ? { action, scheduledAt } : { action }) });
       load();
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : 'Failed.' });
@@ -113,8 +132,21 @@ export default function WhatsAppCampaignsPage() {
     }
   };
 
+  const downloadReport = async (c: Campaign) => {
+    if (!user) return;
+    const token = await user.getIdToken();
+    const res = await fetch(`/api/admin/marketing/campaigns/${c.id}/report?format=csv`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return setMsg({ ok: false, text: 'You do not have permission to export reports.' });
+    const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaign-${c.id}-report.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const f = (k: keyof typeof blank, v: string | number) => setForm({ ...form, [k]: v });
-  const valid = form.name.trim() && /^[a-z0-9_]{1,100}$/.test(form.template.trim()) && (form.audienceType !== 'purchased_category' || form.categoryId);
+  const valid = form.name.trim() && /^[a-z0-9_]{1,100}$/.test(form.template.trim()) && (form.audienceType !== 'purchased_category' || form.categoryId) && (form.audienceType !== 'tag' || form.tag.trim());
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-6 md:p-8">
       <PageHeader title="WhatsApp campaigns">
@@ -167,8 +199,22 @@ export default function WhatsAppCampaignsPage() {
           {form.audienceType === 'lapsed' && (
             <label className="block space-y-1"><span className="text-2xs font-semibold text-ink/60">No purchase for (days)</span><input className={input} type="number" min={1} value={form.lapsedDays} onChange={(e) => f('lapsedDays', Number(e.target.value) || 1)} /></label>
           )}
-          <div className="self-end text-xs text-ink/70">
-            {preview ? <>Reaches <strong>{preview.count}</strong> opted-in customer{preview.count === 1 ? '' : 's'} · {preview.optedOut} opted out (never messaged)</> : '—'}
+          {form.audienceType === 'origin' && (
+            <label className="block space-y-1"><span className="text-2xs font-semibold text-ink/60">Customers who are</span>
+              <select className={input} value={form.origin} onChange={(e) => f('origin', e.target.value)}><option value="offline">Offline</option><option value="online">Online</option><option value="other">Other</option></select>
+            </label>
+          )}
+          {form.audienceType === 'tag' && (
+            <label className="block space-y-1"><span className="text-2xs font-semibold text-ink/60">Tag</span><input className={input} value={form.tag} onChange={(e) => f('tag', e.target.value)} placeholder="diwali-2025" /></label>
+          )}
+          <div className="self-end text-xs text-ink/70" data-testid="audience-summary">
+            {preview ? (
+              <>
+                Reaches <strong>{preview.count}</strong> customer{preview.count === 1 ? '' : 's'} with marketing permission.
+                {preview.exclusions && <> Left out: {preview.exclusions.notOptedIn} without permission, {preview.exclusions.optedOut} opted out, {preview.exclusions.suppressed} suppressed.</>}
+                {preview.estimate ? <> Estimate ≈ ₹{preview.estimate.totalInr} (rate ₹{preview.estimate.rateInr}, checked {preview.estimate.rateCheckedOn ?? '?'}).</> : <> No cost estimate (enter the current rate under WhatsApp templates).</>}
+              </>
+            ) : '—'}
           </div>
         </div>
         <button type="button" className={primaryButton} disabled={!valid || busy} onClick={() => void create()}>Save as draft</button>
@@ -191,7 +237,11 @@ export default function WhatsAppCampaignsPage() {
                   <div className="flex justify-end gap-1.5">
                     {['draft', 'scheduled'].includes(c.status) && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'send')}>Send now</button>}
                     {c.status === 'draft' && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'schedule')}>Schedule</button>}
-                    {['draft', 'scheduled', 'sending'].includes(c.status) && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'cancel')}>Cancel</button>}
+                    {['sending', 'scheduled'].includes(c.status) && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'pause')}>Pause</button>}
+                    {c.status === 'paused' && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'resume')}>Resume</button>}
+                    {['sending', 'sent', 'paused'].includes(c.status) && c.counts.failed > 0 && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'retry_failed')}>Retry failed</button>}
+                    {['draft', 'scheduled', 'sending', 'paused'].includes(c.status) && <button type="button" className={button} disabled={busy} onClick={() => void act(c, 'cancel')}>Cancel</button>}
+                    {c.counts.targeted > 0 && <button type="button" className={button} onClick={() => void downloadReport(c)}>Report</button>}
                   </div>
                 </td>
               </tr>
@@ -200,7 +250,7 @@ export default function WhatsAppCampaignsPage() {
           </tbody>
         </table>
       </section>
-      <p className="text-2xs text-ink/55">Delivered and read counts come from WhatsApp’s delivery reports; they stay at 0 until the webhook is connected. Nothing is estimated.</p>
+      <p className="text-2xs text-ink/55">“Sent” means WhatsApp accepted the message. Delivered and read counts come only from WhatsApp’s delivery reports and stay at 0 until the webhook is connected. Nothing is estimated.</p>
     </div>
   );
 }

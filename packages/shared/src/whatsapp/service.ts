@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { Customer, Invoice, WhatsAppCategory, WhatsAppMessage } from '../schemas/billing';
+import { isSuppressed, marketingEligibility } from './consent';
 
 /**
  * ONE WhatsApp Business integration for the whole shop, with three
@@ -43,7 +44,17 @@ export class WhatsAppNotConfiguredError extends Error {
   }
 }
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+/**
+ * The Graph API version for every WhatsApp call. Meta retires old versions (v21.0 is scheduled to stop working on
+ * 21 January 2027), so it is one setting, WHATSAPP_GRAPH_VERSION, with a current default (v25.0, the version the setup
+ * script already registered the number and sent a test message with).
+ */
+export const DEFAULT_GRAPH_VERSION = 'v25.0';
+export function graphBase(env: Record<string, string | undefined> = process.env): string {
+  const v = (env.WHATSAPP_GRAPH_VERSION ?? '').trim();
+  return `https://graph.facebook.com/${/^v\d{2}\.\d$/.test(v) ? v : DEFAULT_GRAPH_VERSION}`;
+}
+const GRAPH = graphBase();
 
 export class CloudTransport implements WhatsAppTransport {
   readonly mode = 'cloud' as const;
@@ -244,7 +255,8 @@ export function createWhatsAppService(deps: WhatsAppServiceDeps) {
 
     /** Marketing: refused unless the customer has a recorded marketing opt-in (and no later opt-out). */
     async sendMarketingMessage(input: { customer: Customer; campaignId: string; template: string; bodyParams: string[] }): Promise<SendOutcome> {
-      if (input.customer.consent.marketing.status !== 'opted_in') return { status: 'skipped', reason: 'No marketing opt-in.' };
+      const eligible = marketingEligibility(input.customer, { suppressed: await isSuppressed(db, input.customer.id) });
+      if (!eligible.eligible) return { status: 'skipped', reason: eligible.reason === 'not_opted_in' ? 'No marketing opt-in.' : `Not eligible for marketing (${eligible.reason}).` };
       return send({
         category: 'marketing',
         template: input.template,

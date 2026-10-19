@@ -1,3 +1,9 @@
+/** Same rule as the rest of the WhatsApp code (packages/shared/src/whatsapp/service.ts): one version setting, current default. */
+function graphBase(): string {
+  const v = (process.env.WHATSAPP_GRAPH_VERSION ?? '').trim();
+  return `https://graph.facebook.com/${/^v\d{2}\.\d$/.test(v) ? v : 'v25.0'}`;
+}
+
 import {
   type WhatsAppOtpProvider,
   type SendOtpOptions,
@@ -85,7 +91,7 @@ export class CloudWhatsAppOtpProvider implements WhatsAppOtpProvider {
         },
       };
 
-      const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`${graphBase()}/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

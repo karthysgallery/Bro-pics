@@ -66,6 +66,10 @@ export const ConsentSchema = z.object({
   at: z.string().nullable(),
   /** Where it came from: pos (staff asked), checkout, whatsapp_reply (STOP), admin, signup… */
   source: z.string().nullable(),
+  /** What proves it (a form number, a signed sheet reference). Never invented; absent when nothing was recorded. */
+  evidence: z.string().max(300).nullable().optional(),
+  /** Which wording/policy the customer agreed to, when one existed. */
+  policyVersion: z.string().max(60).nullable().optional(),
 });
 export type Consent = z.infer<typeof ConsentSchema>;
 export const UNKNOWN_CONSENT: Consent = { status: 'unknown', at: null, source: null };
@@ -79,6 +83,11 @@ export const CustomerSchema = z.object({
   /** Website account, when the customer has one (users/{uid}). */
   userId: z.string().nullable().optional(),
   source: z.enum(['online', 'pos', 'admin']),
+  /** Where the customer came from, as the owner describes it (an imported list says offline/online/other). */
+  origin: z.enum(['offline', 'online', 'other']).nullable().optional(),
+  city: z.string().max(120).nullable().optional(),
+  state: z.string().max(120).nullable().optional(),
+  tags: z.array(z.string().max(30)).max(10).optional(),
   stats: z.object({
     onlineOrders: z.number().int().nonnegative(),
     posPurchases: z.number().int().nonnegative(),
@@ -263,6 +272,11 @@ export const WhatsAppMessageSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   statusHistory: z.array(z.object({ status: z.string(), at: z.string() })),
+  /** Order lifecycle event this message was for (order_confirmed, order_shipped…). With the order id it makes the send happen once. */
+  event: z.string().optional(),
+  attempts: z.number().int().nonnegative().optional(),
+  /** When a failed message may be retried; null once retrying has stopped. */
+  nextAttemptAt: z.string().nullable().optional(),
 });
 export type WhatsAppMessage = z.infer<typeof WhatsAppMessageSchema>;
 
@@ -273,6 +287,8 @@ export const CampaignAudienceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('purchased_within_days'), days: z.union([z.literal(30), z.literal(60), z.literal(90)]) }),
   z.object({ type: z.literal('high_value'), minSpent: z.number().int().positive() }),
   z.object({ type: z.literal('lapsed'), days: z.number().int().positive() }),
+  z.object({ type: z.literal('origin'), origin: z.enum(['offline', 'online', 'other']) }),
+  z.object({ type: z.literal('tag'), tag: z.string().min(1).max(30) }),
 ]);
 export type CampaignAudience = z.infer<typeof CampaignAudienceSchema>;
 
@@ -287,7 +303,7 @@ export const CampaignSchema = z.object({
   /** The approved text, for the preview only (WhatsApp sends its own copy). */
   previewText: z.string().max(1024),
   audience: CampaignAudienceSchema,
-  status: z.enum(['draft', 'scheduled', 'sending', 'sent', 'cancelled']),
+  status: z.enum(['draft', 'scheduled', 'sending', 'paused', 'sent', 'cancelled']),
   scheduledAt: z.string().nullable(),
   counts: z.object({
     targeted: z.number().int().nonnegative(),

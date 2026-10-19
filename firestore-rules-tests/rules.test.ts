@@ -78,6 +78,27 @@ describe('pages collection', () => {
   });
 });
 
+describe('WhatsApp CRM collections are server-only', () => {
+  const collections = ['customers', 'whatsappMessages', 'whatsappCampaigns', 'whatsappSuppressions', 'whatsappImports', 'whatsappTemplates', 'whatsappConfig'];
+  it.each(collections)('%s cannot be read or written by a signed-out visitor', async (name) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`${name}/x`).set({ phone: '+919000000000', consent: { marketing: { status: 'opted_in' } } });
+    });
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(db.doc(`${name}/x`).get());
+  });
+  it.each(collections)('%s cannot be written by a signed-in customer, even their own record', async (name) => {
+    const db = testEnv.authenticatedContext('user_a').firestore();
+    await assertFails(db.doc(`${name}/x`).set({ consent: { marketing: { status: 'opted_in' } } }));
+  });
+  it('a signed-in customer cannot read another person\'s customer or suppression record', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('customers/p919000000000').set({ phone: '+919000000000' });
+    });
+    await assertFails(testEnv.authenticatedContext('user_a').firestore().doc('customers/p919000000000').get());
+  });
+});
+
 describe('orders collection', () => {
   it('allows the owning user to read their own order', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

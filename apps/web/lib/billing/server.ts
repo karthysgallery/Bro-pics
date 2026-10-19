@@ -7,6 +7,7 @@ import { createWhatsAppService, transportFromEnv, type WhatsAppService } from '@
 import type { FinishDeps } from '@bro-pics/shared/src/billing/invoice-service';
 import { getAdminApp } from '../firebase-admin';
 import { getPermissionContext } from '../require-permission';
+import { hasMfaProof, mfaEnforced } from '../security/admin-mfa';
 import { adminApiError } from '../admin-api-error';
 import { checkRateLimit } from '../rate-limit';
 
@@ -58,6 +59,8 @@ export async function guard(request: Request, key: PermissionKey): Promise<Billi
   const ctx = await getPermissionContext(request);
   if (!ctx.authenticated) return { ok: false, response: adminApiError(401, 'unauthenticated', 'Sign in again to continue') };
   if (!ctx.role || !roleHasPermission(ctx.role, key)) return { ok: false, response: adminApiError(403, 'forbidden', 'You do not have access to this part of billing') };
+  // Same second factor as every other admin route: a password or a stolen sign-in token alone is not enough.
+  if (mfaEnforced() && !(await hasMfaProof(billingDb(), request, ctx.uid))) return { ok: false, response: adminApiError(401, 'unauthenticated', 'Enter your authenticator code to continue') };
   const role = ctx.role;
   return { ok: true, uid: ctx.uid, role, can: (k) => roleHasPermission(role, k) };
 }

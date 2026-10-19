@@ -58,6 +58,13 @@ export const PERMISSION_KEYS = [
   // Backwards-compatible content keys for legacy routes
   'content:read',
   'content:write',
+  // WhatsApp customer list: importing contacts, and changing who has agreed to marketing.
+  'whatsapp:contacts_import',
+  'whatsapp:consent_edit',
+  // Starting a campaign (the marketing role can prepare one but not send it), recording template approvals, exporting reports.
+  'whatsapp:campaign_send',
+  'whatsapp:templates_manage',
+  'whatsapp:export',
   // Business facts, shipping charges, return rules and approval of legal pages: what customers are promised.
   'policies:approve',
 ] as const;
@@ -100,6 +107,11 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'content:read',
     'content:write',
     'policies:approve',
+    'whatsapp:contacts_import',
+    'whatsapp:consent_edit',
+    'whatsapp:campaign_send',
+    'whatsapp:templates_manage',
+    'whatsapp:export',
   ],
   admin: [
     'billing:view',
@@ -136,6 +148,11 @@ export const ROLE_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
     'content:read',
     'content:write',
     'policies:approve',
+    'whatsapp:contacts_import',
+    'whatsapp:consent_edit',
+    'whatsapp:campaign_send',
+    'whatsapp:templates_manage',
+    'whatsapp:export',
   ],
   staff: [
     'billing:view',

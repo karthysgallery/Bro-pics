@@ -286,3 +286,8 @@ Evidence-based status, nothing marked complete without a test or a read-only che
 * Security: new `policies:approve` permission guards what customers are promised; the `pages` Firestore read rule is tightened in the repo (not deployed); the Razorpay webhook does not compare amount/currency (not changed).
 * Live read-only facts: 3 of 16 functions deployed, no print-render service, only `settings/theme` saved, 0 pages, shipping PIN directory empty, `SITE_PREVIEW=1` (noindex), domain resolves to Firebase Hosting, Cloud Run has no `WHATSAPP_*` variables.
 * Still blocking: owner facts/decisions, professional legal and tax review, hard-coded delivery promises, deploys (rules, functions, print-render, webhook), real-order proof, data cleanup, go-live rebuild.
+
+---
+
+## WhatsApp CRM and notifications (2026-10-18): see `docs/WHATSAPP_READINESS_REPORT.md`
+Built and tested locally: contact import with consent-unknown default, suppression list, once-per-event order notifier (functions, not deployed), template registry, campaign manager hardening, new permissions. **Nothing is live and `WHATSAPP_MODE` stays `disabled`.** Blockers: functions and webhook secrets not deployed, no approved templates, no consent collected, indexes not deployed, new screens not browser-tested. Graph v21.0 (retired by Meta on 21 Jan 2027) replaced by a configurable default of v25.0: verify one login code after the next deploy.

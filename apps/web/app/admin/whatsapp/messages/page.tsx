@@ -42,7 +42,7 @@ export default function WhatsAppMessageLogsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line bg-field/60 text-left text-2xs uppercase tracking-wider text-ink/55">
-              <th className="p-3">Customer</th><th className="p-3">Type</th><th className="p-3">Template</th><th className="p-3">Status</th><th className="p-3">Created</th><th className="p-3">Provider message id</th><th className="p-3">Failure reason</th>
+              <th className="p-3">Customer</th><th className="p-3">Type</th><th className="p-3">Template</th><th className="p-3">Status</th><th className="p-3">Created</th><th className="p-3">Provider message id</th><th className="p-3">Tries</th><th className="p-3">Failure reason</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -56,11 +56,12 @@ export default function WhatsAppMessageLogsPage() {
                   <td className="p-3"><Badge value={m.status} /></td>
                   <td className="p-3 text-xs text-ink/70">{dateTime(m.createdAt)}</td>
                   <td className="p-3 font-mono text-2xs text-ink/60">{m.providerMessageId ?? '—'}</td>
+                  <td className="p-3 text-xs text-ink/70">{m.attempts ?? '—'}{m.status === 'failed' && m.nextAttemptAt && <span className="block text-2xs text-ink/50">next try {dateTime(m.nextAttemptAt)}</span>}{m.status === 'failed' && !m.nextAttemptAt && m.event && <span className="block text-2xs text-alert">gave up</span>}</td>
                   <td className="p-3 text-xs text-alert">{m.error ?? ''}</td>
                 </tr>
               );
             })}
-            {rows && rows.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-xs text-ink/50">No messages match.</td></tr>}
+            {rows && rows.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-xs text-ink/50">No messages match.</td></tr>}
           </tbody>
         </table>
       </section>

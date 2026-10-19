@@ -54,6 +54,13 @@ describe('roleHasPermission', () => {
     for (const role of ['staff', 'catalogue_manager', 'marketing_manager', 'content_manager'] as const) expect(roleHasPermission(role, 'policies:approve')).toBe(false);
   });
 
+  it('only super_admin and admin can import contacts, change consent, send campaigns, record template approvals or export', () => {
+    for (const key of ['whatsapp:contacts_import', 'whatsapp:consent_edit', 'whatsapp:campaign_send', 'whatsapp:templates_manage', 'whatsapp:export'] as const) {
+      for (const role of ['super_admin', 'admin'] as const) expect(roleHasPermission(role, key)).toBe(true);
+      for (const role of ['staff', 'catalogue_manager', 'marketing_manager', 'content_manager'] as const) expect(roleHasPermission(role, key)).toBe(false);
+    }
+  });
+
   it('scopes catalogue_manager to catalogue and inventory writes', () => {
     expect(roleHasPermission('catalogue_manager', 'catalogue:read')).toBe(true);
     expect(roleHasPermission('catalogue_manager', 'catalogue:write')).toBe(true);
