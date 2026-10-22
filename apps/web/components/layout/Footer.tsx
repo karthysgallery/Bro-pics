@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { isLegalSlug } from '@bro-pics/shared';
+import { LANDING_PAGES } from '../../lib/seo/landing-pages';
 
 interface FooterProps {
   settings?: {
@@ -79,6 +80,19 @@ export function Footer({ settings = null, supportPhone, liveLegalSlugs = [] }: F
             </div>
           )}
         </div>
+
+        {/* What people search for: helps shoppers browse and helps Google find these pages. */}
+        <nav aria-label="Shop photo frames" className="border-t border-line/60 pt-5">
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-ink/60">
+            {LANDING_PAGES.map((p) => (
+              <li key={p.slug}>
+                <Link href={`/photo-frames/${p.slug}`} className="hover:text-ink transition-colors">
+                  {p.h1}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         <nav aria-label="Footer" className="border-t border-line/60 pt-5">
           <ul className="flex flex-wrap gap-x-5 gap-y-0 text-[13px] text-ink/60">

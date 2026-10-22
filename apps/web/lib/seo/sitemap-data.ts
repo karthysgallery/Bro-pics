@@ -1,10 +1,11 @@
 import 'server-only';
 import { getFirestore } from 'firebase-admin/firestore';
-import type { Category, Product, ProductMedia } from '@bro-pics/shared';
+import { isLegalSlug, type Category, type Product, type ProductMedia } from '@bro-pics/shared';
 import { getAdminApp } from '../firebase-admin';
 import { getPublishedCombos } from '../firestore-combos';
 import { absoluteUrl, canonicalUrl } from './site';
 import type { SitemapEntry, SitemapImage } from './sitemap-xml';
+import { LANDING_PAGES } from './landing-pages';
 
 /** Public information pages that exist as routes (app/(content)/*). Keep in step with those routes. */
 export const STATIC_PAGES: Array<{ path: string; priority: number; changefreq: SitemapEntry['changefreq'] }> = [
@@ -119,6 +120,23 @@ export async function comboSitemapEntries(): Promise<SitemapEntry[]> {
   ];
 }
 
-export function pageSitemapEntries(): SitemapEntry[] {
-  return [{ loc: canonicalUrl('/'), changefreq: 'daily', priority: 1 }, ...STATIC_PAGES.map((p) => ({ loc: canonicalUrl(p.path), changefreq: p.changefreq, priority: p.priority }))];
+/**
+ * Legal pages (about, contact, policies) are listed only while their approved text is live, and landing pages only while
+ * they show at least one product — otherwise both are noindex.
+ */
+export function pageSitemapEntries(liveLegalSlugs?: string[], stockedLandingSlugs?: string[]): SitemapEntry[] {
+  return [
+    { loc: canonicalUrl('/'), changefreq: 'daily', priority: 1 },
+    { loc: canonicalUrl('/photo-frames'), changefreq: 'weekly', priority: 0.8 },
+    ...LANDING_PAGES.filter((p) => !stockedLandingSlugs || stockedLandingSlugs.includes(p.slug)).map((p) => ({
+      loc: canonicalUrl(`/photo-frames/${p.slug}`),
+      changefreq: 'weekly' as const,
+      priority: 0.8,
+    })),
+    ...STATIC_PAGES.filter((p) => !liveLegalSlugs || !isLegalSlug(p.path.slice(1)) || liveLegalSlugs.includes(p.path.slice(1))).map((p) => ({
+      loc: canonicalUrl(p.path),
+      changefreq: p.changefreq,
+      priority: p.priority,
+    })),
+  ];
 }

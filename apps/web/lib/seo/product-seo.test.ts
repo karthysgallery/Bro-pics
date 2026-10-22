@@ -23,6 +23,15 @@ describe('productSeoTitle', () => {
   });
 });
 
+describe('old brand name in saved SEO text', () => {
+  it('is shown as KarthysGallery in the title, description and image text', () => {
+    const p = { ...base, seo: { title: 'Collage Frame | BroPics', description: 'Order from Bro Pics today.', imageAlt: 'bropics collage' } };
+    expect(productSeoTitle(p)).toBe('Collage Frame | KarthysGallery');
+    expect(productSeoDescription(p)).toBe('Order from KarthysGallery today.');
+    expect(productImageAlt(p)).toBe('KarthysGallery collage');
+  });
+});
+
 describe('productSeoDescription', () => {
   it('is built from the product\'s own data: description, photo count, starting price', () => {
     const d = productSeoDescription(base);

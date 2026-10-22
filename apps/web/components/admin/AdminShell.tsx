@@ -10,26 +10,10 @@ import { PhoneSignIn } from '../auth/PhoneSignIn';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { getFirebaseApp } from '../../lib/firebase-client';
 import { getPaymentModeClient } from '../../lib/payment-mode-client';
-import {
-  type Role,
-  type PermissionKey,
-  roleHasPermission,
-  isValidRole,
-} from '@bro-pics/shared';
+import { type Role, isValidRole } from '@bro-pics/shared';
+import { activePageHref, moduleForPath, visibleModules } from '../../lib/admin-modules';
 
-interface NavItem {
-  label: string;
-  href: string;
-  permission?: PermissionKey;
-  icon: string;
-}
-
-interface NavGroup {
-  group: string;
-  items: NavItem[];
-}
-
-function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className?: string }) {
+export function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className?: string }) {
   switch (name) {
     case 'theme':
       return (
@@ -275,112 +259,6 @@ function AdminNavIcon({ name, className = 'w-4 h-4' }: { name: string; className
   }
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    group: 'Overview',
-    items: [
-      { label: 'Dashboard', href: '/admin', permission: 'analytics:read', icon: 'dashboard' },
-    ],
-  },
-  {
-    group: 'Catalogue',
-    items: [
-      { label: 'Products', href: '/admin/products', permission: 'catalogue:read', icon: 'products' },
-      { label: 'Frame Models', href: '/admin/frame-models', permission: 'catalogue:read', icon: 'frame' },
-      { label: 'Categories', href: '/admin/categories', permission: 'catalogue:read', icon: 'categories' },
-      { label: 'Collections', href: '/admin/collections', permission: 'catalogue:read', icon: 'collections' },
-      { label: 'Combo Offers', href: '/admin/combos', permission: 'catalogue:read', icon: 'collections' },
-      { label: 'Frame Templates', href: '/admin/frame-templates', permission: 'catalogue:read', icon: 'templates' },
-      { label: 'Collage Templates', href: '/admin/personalization-templates', permission: 'catalogue:read', icon: 'templates' },
-      { label: 'Inventory Matrix', href: '/admin/inventory', permission: 'catalogue:read', icon: 'inventory' },
-      { label: 'Media Assets', href: '/admin/media', permission: 'catalogue:read', icon: 'media' },
-    ],
-  },
-  {
-    group: 'Operations',
-    items: [
-      { label: 'Orders Queue', href: '/admin/orders', permission: 'orders:read', icon: 'orders' },
-      { label: 'Photo Validation', href: '/admin/orders/photo-validation', permission: 'orders:read', icon: 'validation' },
-      { label: 'Production Board', href: '/admin/production', permission: 'orders:read', icon: 'production' },
-      { label: 'QC Terminal', href: '/admin/production/qc', permission: 'production:write', icon: 'qc' },
-      { label: 'Print Jobs (DLQ)', href: '/admin/production/jobs', permission: 'production:write', icon: 'jobs' },
-      { label: 'Returns & Refunds', href: '/admin/returns', permission: 'returns:read', icon: 'returns' },
-    ],
-  },
-  {
-    group: 'Billing / POS',
-    items: [
-      { label: 'New Bill', href: '/admin/billing/new', permission: 'billing:create', icon: 'billing' },
-      { label: 'Bills / Invoices', href: '/admin/billing/invoices', permission: 'billing:view', icon: 'billing' },
-      { label: 'Customers', href: '/admin/billing/customers', permission: 'billing:view', icon: 'customers' },
-      { label: 'Offline Sales', href: '/admin/billing/pos-sales', permission: 'billing:view', icon: 'analytics' },
-      { label: 'Online Orders', href: '/admin/billing/invoices?channel=online', permission: 'billing:view', icon: 'orders' },
-      { label: 'Returns / Refunds', href: '/admin/billing/invoices?kind=credit_note', permission: 'billing:view', icon: 'returns' },
-      { label: 'Billing Reports', href: '/admin/billing/reports', permission: 'billing:reports', icon: 'analytics' },
-      { label: 'WhatsApp Invoice Settings', href: '/admin/billing/whatsapp', permission: 'billing:view', icon: 'notifications' },
-      { label: 'Billing Settings', href: '/admin/billing/settings', permission: 'billing:view', icon: 'settings' },
-    ],
-  },
-  {
-    group: 'Logistics',
-    items: [
-      { label: 'Pincode Coverage', href: '/admin/delivery/serviceability', permission: 'settings:read', icon: 'pincode' },
-      { label: 'Shipping Rates', href: '/admin/settings', permission: 'shipping:write', icon: 'rates' },
-      { label: 'Courier Partners', href: '/admin/delivery/couriers', permission: 'shipping:write', icon: 'couriers' },
-      { label: 'Shipments Center', href: '/admin/delivery/shipments', permission: 'shipping:write', icon: 'shipments' },
-    ],
-  },
-  {
-    group: 'Customers',
-    items: [
-      { label: 'Customer Directory', href: '/admin/customers', permission: 'customers:read', icon: 'customers' },
-    ],
-  },
-  {
-    group: 'Website',
-    items: [
-      { label: 'Colours & Themes', href: '/admin/themes', permission: 'settings:write', icon: 'theme' },
-      { label: 'Appearance', href: '/admin/appearance', permission: 'settings:write', icon: 'theme' },
-      { label: 'Header & Footer', href: '/admin/navigation', permission: 'settings:write', icon: 'pages' },
-      { label: 'Site Text', href: '/admin/site-text', permission: 'settings:write', icon: 'pages' },
-      { label: 'Homepage', href: '/admin/homepage', permission: 'content:read', icon: 'homepage' },
-      { label: 'Pages', href: '/admin/pages', permission: 'content:read', icon: 'pages' },
-      { label: 'Videos', href: '/admin/videos', permission: 'content:read', icon: 'videos' },
-    ],
-  },
-  {
-    group: 'Marketing & Merchandising',
-    items: [
-      { label: 'Coupons', href: '/admin/coupons', permission: 'coupons:write', icon: 'coupons' },
-      { label: 'Reviews', href: '/admin/reviews', permission: 'reviews:moderate', icon: 'reviews' },
-      { label: 'Merchandising', href: '/admin/merchandising', permission: 'catalogue:write', icon: 'merchandising' },
-      { label: 'WhatsApp Campaigns', href: '/admin/marketing/whatsapp', permission: 'marketing:whatsapp', icon: 'notifications' },
-      { label: 'WhatsApp Contacts', href: '/admin/whatsapp/contacts', permission: 'customers:read', icon: 'notifications' },
-      { label: 'WhatsApp Templates', href: '/admin/whatsapp/templates', permission: 'whatsapp:logs', icon: 'notifications' },
-      { label: 'WhatsApp Message Logs', href: '/admin/whatsapp/messages', permission: 'whatsapp:logs', icon: 'notifications' },
-    ],
-  },
-  {
-    group: 'Intelligence',
-    items: [
-      { label: 'Analytics Reports', href: '/admin/analytics', permission: 'analytics:read', icon: 'analytics' },
-      { label: 'Running costs', href: '/admin/running-costs', permission: 'audit:read', icon: 'costs' },
-    ],
-  },
-  {
-    group: 'Configuration',
-    items: [
-      { label: 'Store & GST Settings', href: '/admin/settings', permission: 'settings:read', icon: 'settings' },
-      { label: 'Billing', href: '/admin/billing/settings', permission: 'billing:view', icon: 'billing' },
-      { label: 'Notifications', href: '/admin/settings/notifications', permission: 'settings:read', icon: 'notifications' },
-      { label: 'Team & Roles', href: '/admin/settings/team', permission: 'team:manage', icon: 'team' },
-      { label: 'Audit Trail', href: '/admin/audit', permission: 'audit:read', icon: 'audit' },
-      // Everyone who can sign in to the admin: their own fingerprint / Face ID devices.
-      { label: 'My sign-in & security', href: '/admin/security', icon: 'settings' },
-    ],
-  },
-];
-
 export function AdminShell({ children }: { children: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
@@ -397,7 +275,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (loading) return;
@@ -447,10 +324,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
     } else {
       router.push(`/admin/products?q=${encodeURIComponent(query)}`);
     }
-  };
-
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
   };
 
   /** Signs out of the admin completely: the verified state, the server session and Firebase. */
@@ -584,6 +457,17 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   const roleFormatted = role.replace(/_/g, ' ').toUpperCase();
+  const modules = visibleModules(role);
+  const isDashboard = pathname === '/admin' || pathname === '/admin/';
+  const currentModule = modules.find((m) => m.id === moduleForPath(pathname)?.id) ?? null;
+  const activeHref = currentModule && pathname ? activePageHref(currentModule, pathname) : null;
+  const moduleGroups: Array<[string, typeof modules[number]['pages']]> = [];
+  for (const page of currentModule?.pages ?? []) {
+    const key = page.group ?? '';
+    const found = moduleGroups.find(([g]) => g === key);
+    if (found) found[1].push(page);
+    else moduleGroups.push([key, [page]]);
+  }
 
   const shell = (
     <div className="min-h-screen bg-field flex flex-col antialiased">
@@ -694,74 +578,73 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <aside
           className={`fixed inset-y-0 left-0 z-40 w-64 bg-paper border-r border-line transform transition-transform duration-200 ease-in-out md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:self-start md:translate-x-0 pt-14 md:pt-0 flex flex-col ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          } ${isDashboard ? 'md:hidden' : ''}`}
         >
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-4">
-            {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter((item) => {
-                if (!item.permission) return true;
-                return roleHasPermission(role, item.permission);
-              });
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-5">
+            <Link
+              href="/admin"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-ink/70 hover:bg-tint hover:text-ink transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Dashboard
+            </Link>
 
-              if (visibleItems.length === 0) return null;
-
-              const isCollapsed = !!collapsedGroups[group.group];
-
-              return (
-                <div key={group.group} className="space-y-0.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.group)}
-                    className="w-full flex items-center justify-between px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-ink/40 hover:text-ink transition-colors"
-                  >
-                    <span>{group.group}</span>
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`text-ink/40 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
-                      aria-hidden="true"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-
-                  {!isCollapsed && (
-                    <div className="space-y-0.5">
-                      {visibleItems.map((item) => {
-                        const isActive =
-                          item.href === '/admin'
-                            ? pathname === '/admin'
-                            : pathname?.startsWith(item.href);
-
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              isActive
-                                ? 'bg-ink text-gold font-semibold shadow-xs'
-                                : 'text-ink/75 hover:bg-tint hover:text-ink'
-                            }`}
-                          >
-                            <span className="shrink-0 opacity-80">
-                              <AdminNavIcon name={item.icon} className="w-4 h-4" />
-                            </span>
-                            <span className="truncate">{item.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
+            {currentModule ? (
+              <nav aria-label={currentModule.title} className="space-y-1">
+                <div className="flex items-center gap-2 px-2.5 pb-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-gold">
+                    <AdminNavIcon name={currentModule.icon} className="w-4 h-4" />
+                  </span>
+                  <span className="font-display text-sm font-bold text-ink leading-tight">{currentModule.title}</span>
                 </div>
-              );
-            })}
+                {moduleGroups.map(([group, pages]) => (
+                  <div key={group || 'main'} className="space-y-0.5">
+                    {group && <p className="px-2.5 pt-3 pb-1 text-[11px] font-semibold text-ink/45">{group}</p>}
+                    {pages.map((page) => {
+                      const isActive = activeHref === page.href.split('?')[0];
+                      return (
+                        <Link
+                          key={page.href}
+                          href={page.href}
+                          aria-current={isActive ? 'page' : undefined}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                            isActive ? 'bg-ink text-gold font-semibold' : 'text-ink/75 hover:bg-tint hover:text-ink'
+                          }`}
+                        >
+                          <span className="shrink-0 opacity-80">
+                            <AdminNavIcon name={page.icon} className="w-4 h-4" />
+                          </span>
+                          <span className="truncate">{page.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
+              </nav>
+            ) : null}
+
+            <div className="space-y-0.5 border-t border-line pt-4">
+              <p className="px-2.5 pb-1 text-[11px] font-semibold text-ink/45">{currentModule ? 'Other modules' : 'Modules'}</p>
+              {modules
+                .filter((m) => m.id !== currentModule?.id)
+                .map((m) => (
+                  <Link
+                    key={m.id}
+                    href={m.pages[0].href}
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-ink/60 hover:bg-tint hover:text-ink transition-colors"
+                  >
+                    <span className="shrink-0 opacity-70">
+                      <AdminNavIcon name={m.icon} className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="truncate">{m.title}</span>
+                  </Link>
+                ))}
+            </div>
           </div>
 
           <div className="p-3 border-t border-line bg-field/60 text-2xs text-ink/50 flex flex-col gap-0.5">

@@ -24,6 +24,14 @@ export function truncateAtWord(text: string, limit: number): string {
 type SeoProduct = Pick<Product, 'title' | 'slug' | 'shortDesc' | 'photoSlots' | 'allowsTextPersonalization' | 'seo' | 'primaryImageUrl'> & { minPrice?: number };
 
 const TITLE_LIMIT = 60;
+
+/** The shop's old working name, still found in some early products' saved SEO text. */
+const OLD_BRAND = /\bBro[\s-]?Pics\b/gi;
+
+/** The owner's saved wording with the old working name replaced by the shop's name. */
+function ownWording(text: string | undefined): string {
+  return (text ?? '').trim().replace(OLD_BRAND, SITE_NAME);
+}
 const DESCRIPTION_LIMIT = 160;
 const DESCRIPTION_MIN = 70;
 
@@ -32,7 +40,8 @@ const DESCRIPTION_MIN = 70;
  * product's own name. When the branded form would be too long to show in full, the name alone is used.
  */
 export function productSeoTitle(product: Pick<Product, 'title' | 'seo'>): string {
-  if (product.seo?.title?.trim()) return product.seo.title.trim();
+  const own = ownWording(product.seo?.title);
+  if (own) return own;
   const branded = `${product.title} | ${SITE_NAME}`;
   return branded.length <= TITLE_LIMIT ? branded : product.title;
 }
@@ -43,7 +52,8 @@ export function productSeoTitle(product: Pick<Product, 'title' | 'seo'>): string
  * products never share a description unless the owner gave them the same short description.
  */
 export function productSeoDescription(product: SeoProduct): string {
-  if (product.seo?.description?.trim()) return product.seo.description.trim();
+  const saved = ownWording(product.seo?.description);
+  if (saved) return saved;
   const own = plainText(product.shortDesc ?? '');
   const lead = own ? (/[.!?]$/.test(own) ? own : `${own}.`) : `${product.title}.`;
   // Name the product first unless its own text already does (or there is no own text: the lead IS the name).
@@ -73,7 +83,7 @@ export function productCanonicalUrl(slug: string): string {
 
 /** Alt text for the product's main image: the owner's, or a plain description from the product's name. */
 export function productImageAlt(product: Pick<Product, 'title' | 'seo'>): string {
-  return product.seo?.imageAlt?.trim() || `${product.title} — personalized photo frame`;
+  return ownWording(product.seo?.imageAlt) || `${product.title} — personalized photo frame`;
 }
 
 export interface SeoCheck {

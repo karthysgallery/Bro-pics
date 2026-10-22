@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AdminShell } from './AdminShell';
 
+const mockPathname = vi.fn(() => '/admin');
 vi.mock('next/navigation', () => ({
-  usePathname: vi.fn(() => '/admin'),
+  usePathname: () => mockPathname(),
   useRouter: vi.fn(() => ({ push: vi.fn() })),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('../../lib/payment-mode-client', () => ({ getPaymentModeClient: () => mo
 
 describe('AdminShell [AFE-01]', () => {
   beforeEach(() => {
+    mockPathname.mockReturnValue('/admin');
     mockPaymentMode.mockReset();
     mockPaymentMode.mockResolvedValue('razorpay');
   });
@@ -40,7 +42,8 @@ describe('AdminShell [AFE-01]', () => {
     expect(screen.queryByText('Admin Content')).not.toBeInTheDocument();
   });
 
-  it('renders sidebar navigation, global search, and children for an authorized admin', async () => {
+  it('inside a module, the sidebar lists that module\'s pages and the other modules, for an authorized admin', async () => {
+    mockPathname.mockReturnValue('/admin/products');
     mockUseAuth.mockReturnValue({
       user: {
         email: 'admin@bropics.in',
@@ -57,8 +60,14 @@ describe('AdminShell [AFE-01]', () => {
     );
 
     expect(await screen.findByTestId('admin-child')).toBeInTheDocument();
-    expect(screen.getByText('Products')).toBeInTheDocument();
-    expect(screen.getByText('Orders Queue')).toBeInTheDocument();
+    const sidebar = screen.getByRole('navigation', { name: 'Catalogue' });
+    expect(sidebar).toHaveTextContent('Products');
+    expect(sidebar).toHaveTextContent('Collage designs');
+    expect(sidebar).not.toHaveTextContent('Orders');
+    expect(screen.getByRole('link', { name: /Products/ })).toHaveAttribute('aria-current', 'page');
+    // The other modules stay one click away, and the dashboard is linked.
+    expect(screen.getByRole('link', { name: /Orders & Production/ })).toHaveAttribute('href', '/admin/orders');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/admin');
     expect(screen.getAllByText('ADMIN').length).toBeGreaterThanOrEqual(1);
     // The old hard-coded "STAGING" badge is gone; test-payments only shows when it's true.
     expect(screen.queryByText('STAGING')).not.toBeInTheDocument();
@@ -83,7 +92,8 @@ describe('AdminShell [AFE-01]', () => {
     expect(await screen.findByText('TEST PAYMENTS')).toBeInTheDocument();
   });
 
-  it('filters navigation items for a scoped role (e.g. staff only sees orders/returns/reviews)', async () => {
+  it('filters modules and pages for a scoped role (e.g. staff only sees orders/returns/reviews)', async () => {
+    mockPathname.mockReturnValue('/admin/orders');
     mockUseAuth.mockReturnValue({
       user: {
         email: 'fulfillment@bropics.in',
@@ -100,13 +110,13 @@ describe('AdminShell [AFE-01]', () => {
     );
 
     expect(await screen.findByText('Staff Content')).toBeInTheDocument();
-    expect(screen.getByText('Orders Queue')).toBeInTheDocument();
-    expect(screen.getByText('Returns & Refunds')).toBeInTheDocument();
-    expect(screen.getByText('Reviews')).toBeInTheDocument();
+    const sidebar = screen.getByRole('navigation', { name: 'Orders & Production' });
+    expect(sidebar).toHaveTextContent('Orders');
+    expect(sidebar).toHaveTextContent('Returns & refunds');
 
-    // Staff cannot see Settings, Coupons, or Content CMS
+    // Staff cannot see Coupons or the website editor; Settings only for their own sign-in security.
     expect(screen.queryByText('Coupons')).not.toBeInTheDocument();
-    expect(screen.queryByText('Homepage Builder')).not.toBeInTheDocument();
-    expect(screen.queryByText('Team & Roles')).not.toBeInTheDocument();
+    expect(screen.queryByText('Website')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Settings & Security/ })).toHaveAttribute('href', '/admin/security');
   });
 });

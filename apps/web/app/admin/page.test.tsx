@@ -2,11 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AdminDashboardPage from './page';
 
+const mockRole = vi.fn(() => 'admin');
 vi.mock('../../lib/auth-context', () => ({
   useAuth: () => ({
     user: {
       email: 'admin@bropics.in',
       getIdToken: () => Promise.resolve('mock-token'),
+      getIdTokenResult: () => Promise.resolve({ token: 'mock-token', claims: { role: mockRole() } }),
     },
     loading: false,
     signOut: vi.fn(),
@@ -50,7 +52,8 @@ const sampleDashboardResponse = {
 };
 
 describe('AdminDashboardPage [AFE-03, AFE-12]', () => {
-  it('fetches and renders live dashboard KPIs, operational alerts, and production stations', async () => {
+  it('shows today\'s numbers, what needs attention, and one card per module with its live status', async () => {
+    mockRole.mockReturnValue('admin');
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(sampleDashboardResponse),
@@ -58,16 +61,35 @@ describe('AdminDashboardPage [AFE-03, AFE-12]', () => {
 
     render(<AdminDashboardPage />);
 
-    expect(await screen.findByText('Operations Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Today\'s Net Revenue')).toBeInTheDocument();
-    expect(screen.getByText('₹14,000')).toBeInTheDocument();
+    expect(await screen.findByText('₹14,000')).toBeInTheDocument();
+    expect(screen.getByText('Today\'s sales')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
+    // 3 + 1 + 4 + 5 + 2 + 1 orders between photo check and packed
+    expect(screen.getByText('16')).toBeInTheDocument();
 
-    // Operational alerts
-    expect(screen.getByText('3 orders waiting for low-DPI photo review')).toBeInTheDocument();
+    // What needs attention links to the right queue.
+    expect(screen.getByText('3 orders waiting for low-DPI photo review').closest('a')).toHaveAttribute('href', '/admin/orders?status=photo_validation');
 
-    // Production station counts
-    expect(screen.getByText('Photo Review')).toBeInTheDocument();
-    expect(screen.getByText('Print Ready')).toBeInTheDocument();
+    // Every module an admin can use has a card; each card opens its module.
+    for (const title of ['Orders & Production', 'Catalogue', 'Shop Billing', 'Customers & WhatsApp', 'Delivery', 'Website', 'Marketing & Google', 'Reports', 'Settings & Security']) {
+      expect(screen.getByRole('link', { name: title })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('link', { name: 'Catalogue' })).toHaveAttribute('href', '/admin/products');
+    expect(screen.getByText('16 in work · 3 photo checks · 1 returns')).toBeInTheDocument();
+    expect(screen.getByText('4 reviews to approve')).toBeInTheDocument();
+  });
+
+  it('a staff member without the reports permission still gets their module cards (no numbers)', async () => {
+    mockRole.mockReturnValue('staff');
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403, json: () => Promise.resolve({}) });
+
+    render(<AdminDashboardPage />);
+
+    expect(await screen.findByRole('link', { name: 'Orders & Production' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Website' })).not.toBeInTheDocument();
+    // Settings stays, opening their own sign-in security (the only settings page staff may use).
+    expect(screen.getByRole('link', { name: 'Settings & Security' })).toHaveAttribute('href', '/admin/security');
+    expect(screen.queryByText('Today\'s sales')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

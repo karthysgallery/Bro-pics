@@ -16,20 +16,23 @@ export async function legalPageMetadata(slug: string, fallback: Metadata): Promi
   return contentPageMetadata(page, fallback, `/${slug}`);
 }
 
+/** Same reading column as the other content pages (FAQ, How it works). */
+const SHELL = 'mx-auto w-full max-w-3xl px-4 md:px-6 py-6 md:py-10';
+
 export async function LegalPageView({ slug, title }: { slug: string; title: string }) {
   const page = await getPageBySlug(slug).catch(() => null);
   if (page) {
     return (
-      <>
+      <div className={SHELL}>
         <PageIntro title={page.title} />
         <div dangerouslySetInnerHTML={{ __html: page.bodyHtml }} />
-      </>
+      </div>
     );
   }
   const details = await getBusinessDetails().catch(() => null);
   const wa = whatsappDigits(details?.supportWhatsapp);
   return (
-    <>
+    <div className={SHELL}>
       <PageIntro title={title} />
       <p data-testid="policy-pending">This page is being finalised and will be published here soon.</p>
       {(wa || details?.supportEmail) && (
@@ -49,6 +52,6 @@ export async function LegalPageView({ slug, title }: { slug: string; title: stri
           </ul>
         </>
       )}
-    </>
+    </div>
   );
 }
