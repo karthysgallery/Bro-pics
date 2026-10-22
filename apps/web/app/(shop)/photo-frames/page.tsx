@@ -8,7 +8,7 @@ export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: { absolute: 'Photo Frames Online for Every Occasion | KarthysGallery' },
-  description: 'Find the right photo frame: personalised frames, photo collages, birthday, wedding, baby, couple, family and calendar frames. Free delivery across Tamil Nadu.',
+  description: 'Personalised photo frames, photo collages, birthday, wedding, baby, couple, family and calendar frames, delivered across India. Free delivery in Tamil Nadu.',
   alternates: { canonical: '/photo-frames' },
   openGraph: { type: 'website', url: '/photo-frames', title: 'Photo Frames Online | KarthysGallery' },
 };
@@ -24,7 +24,7 @@ export default function PhotoFramesIndexPage() {
       <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">Photo frames for every moment</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-ink/75">
         Every frame is personalised with your own photos and made to order. Choose what you are celebrating, preview the finished frame on screen, and we
-        deliver it free anywhere in Tamil Nadu.
+        deliver it anywhere in India — free within Tamil Nadu.
       </p>
       <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {LANDING_PAGES.map((p) => (
