@@ -35,6 +35,8 @@ export function buildOrganizationJsonLd(contact: { email?: string; whatsappDigit
     '@type': 'Organization',
     name: 'KarthysGallery',
     url: SITE_URL,
+    // The square brand mark (app/icon.png) — Google shows it beside the site in results.
+    logo: `${SITE_URL}/icon.png`,
     ...(contact.email && { email: contact.email }),
     ...(contact.whatsappDigits && { sameAs: [`https://wa.me/${contact.whatsappDigits}`] }),
   };
