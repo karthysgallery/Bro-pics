@@ -8,6 +8,7 @@ import { DataTable, type Column, type BulkAction } from '../../../components/adm
 import { StatusChip } from '../../../components/admin/StatusChip';
 import { useToast } from '../../../components/ui/Toast';
 import type { Product } from '@bro-pics/shared';
+import { RemakePhotosButton } from '../../../components/admin/product-editor/bulk/RemakePhotosButton';
 
 export default function AdminProductsPage() {
   const { user } = useAuth();
@@ -181,6 +182,7 @@ export default function AdminProductsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          <RemakePhotosButton products={products.map((p) => ({ id: p.id, title: p.title }))} onDone={() => void fetchProducts()} />
           <Link
             href="/admin/products/bulk"
             className="px-4 py-2 rounded-xl border border-line bg-paper hover:bg-tint text-ink font-semibold text-xs transition-colors"
