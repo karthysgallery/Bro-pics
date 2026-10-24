@@ -102,4 +102,30 @@ describe('cutOutBackground', () => {
     const r = cutOutBackground(p)!;
     expect(r.box).toEqual({ x: 5, y: 5, width: 30, height: 20 });
   });
+
+  it('removes a shaded backdrop and the frame shadow, and leaves out a badge standing apart from the frame', () => {
+    // A product photo: backdrop lighter towards the middle (a soft vignette), a dark frame, a white mat inside it,
+    // and a dark caption badge in the bottom-right corner, apart from the frame.
+    const w = 80;
+    const h = 60;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const dist = Math.hypot(x - w / 2, y - h / 2) / Math.hypot(w / 2, h / 2);
+        let c = 245 - Math.round(dist * 30); // 245 in the middle, 215 at the corners
+        const inFrame = x >= 25 && x < 55 && y >= 10 && y < 45;
+        const inMat = x >= 28 && x < 52 && y >= 13 && y < 42;
+        const inBadge = x >= 62 && x < 76 && y >= 50 && y < 56;
+        if (inBadge) c = 40;
+        if (inFrame) c = inMat ? 255 : 20;
+        data[i] = data[i + 1] = data[i + 2] = c;
+        data[i + 3] = 255;
+      }
+    }
+    const r = cutOutBackground({ width: w, height: h, data })!;
+    expect(r).not.toBeNull();
+    expect(r.box).toEqual({ x: 25, y: 10, width: 30, height: 35 });
+    expect(alphaAt(r.pixels, 15, 15)).toBe(255); // the white mat stays
+  });
 });

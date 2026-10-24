@@ -75,6 +75,12 @@ export interface PreviewScene {
   tone?: SceneTone;
   /** Smallest the frame's longer side may be drawn, as a share of the stage width (keeps tiny frames legible). */
   minFraction?: number;
+  /**
+   * Showcase sizing: the share of the stage width a frame whose longer side is 12in fills. Larger sizes grow with
+   * the square root of their size (an 18in frame is ~1.22x, a 24in ~1.41x), up to `maxFraction`. Used for the
+   * shop's room pictures, where a frame drawn at true scale in a whole room is too small for the customer to see.
+   */
+  showcaseFraction?: number;
 }
 
 /**
@@ -99,7 +105,9 @@ export const DEFAULT_PREVIEW_SCENES: PreviewScene[] = [
       credit: 'Photo: Alexandra Gorn on Unsplash',
     },
     stageWidthIn: 109,
-    frame: { x: 0.304, y: 0.305, anchor: 'center', maxFraction: 0.34 },
+    // Above the sofa, clear of the plant on the left and the dresser on the right.
+    frame: { x: 0.35, y: 0.3, anchor: 'center', maxFraction: 0.4 },
+    showcaseFraction: 0.3,
     light: { angleDeg: 75, strength: 0.5 },
     tone: { brightness: 0.99, contrast: 1, saturate: 0.96 },
     minFraction: 0.14,
@@ -115,7 +123,9 @@ export const DEFAULT_PREVIEW_SCENES: PreviewScene[] = [
       credit: 'Photo: Clay Banks on Unsplash',
     },
     stageWidthIn: 101,
-    frame: { x: 0.5545, y: 0.2256, anchor: 'center', maxFraction: 0.34 },
+    // Above the headboard: the wall is clear from the top of the photo down to the pillows (48% of its height).
+    frame: { x: 0.565, y: 0.258, anchor: 'center', maxFraction: 0.32 },
+    showcaseFraction: 0.255,
     light: { angleDeg: 35, strength: 0.6 },
     tone: { brightness: 0.93, contrast: 1.03, saturate: 0.98, warmth: 0.12 },
     minFraction: 0.14,
@@ -149,7 +159,8 @@ export const DEFAULT_PREVIEW_SCENES: PreviewScene[] = [
     // A 42in dresser; the frame leans against the wall in the gap between the
     // vase and the stacked books, lit by the lamp on the right.
     stageWidthIn: 52,
-    frame: { x: 0.49, y: 0.633, anchor: 'bottom', maxFraction: 0.5 },
+    frame: { x: 0.49, y: 0.633, anchor: 'bottom', maxFraction: 0.4 },
+    showcaseFraction: 0.3,
     light: { angleDeg: 150, strength: 0.55 },
     tone: { brightness: 1, warmth: 0.06 },
     minFraction: 0.16,
@@ -183,7 +194,13 @@ export function layoutFrameInScene(
   const max = scene.frame.maxFraction;
   let width: number;
   let height: number;
-  if (inches && inches.widthIn > 0 && inches.heightIn > 0) {
+  if (scene.showcaseFraction) {
+    // Big enough to see the design clearly; a larger size still looks larger.
+    const longestIn = inches && inches.widthIn > 0 && inches.heightIn > 0 ? Math.max(inches.widthIn, inches.heightIn) : 12;
+    const longest = scene.showcaseFraction * Math.sqrt(Math.max(longestIn, 6) / 12);
+    width = safeAspect >= 1 ? longest : longest * safeAspect;
+    height = width / safeAspect;
+  } else if (inches && inches.widthIn > 0 && inches.heightIn > 0) {
     // Variant dimensions may be listed the other way round from the picture.
     const swap = inches.widthIn >= inches.heightIn !== safeAspect >= 1;
     width = (swap ? inches.heightIn : inches.widthIn) / scene.stageWidthIn;

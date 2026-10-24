@@ -25,6 +25,10 @@ export interface CutoutOptions {
   minRemoved?: number;
   /** Cut-outs that remove more than this share are rejected (the frame would be gone). */
   maxRemoved?: number;
+  /** Largest per-channel step between neighbouring backdrop pixels the flood follows (a shaded backdrop). 0 = flat colour only. */
+  gradientStep?: number;
+  /** How far a shaded backdrop (or the frame's soft shadow) may drift from the corner colour and still be removed. */
+  maxDrift?: number;
 }
 
 export interface CutoutResult {
@@ -64,43 +68,96 @@ export function cutOutBackground(source: Pixels, options: CutoutOptions = {}): C
   const bg = detectBackground(source, tolerance, minBackgroundLuma);
   if (!bg) return null;
 
-  const d = source.data;
-  const isBackground = (px: number): boolean => {
+  // A product photo's backdrop is rarely one flat colour: it is shaded (lighter behind the frame) and the frame casts
+  // a soft shadow. So the flood may also step to a neighbour that is only slightly different from the pixel it came
+  // from (a smooth gradient), as long as it stays near the backdrop colour. A frame's edge is a sharp step, so the
+  // flood still stops there. If that would remove too much (a pale frame on a pale backdrop), the strict flat-colour
+  // flood is used instead.
+  const attempts = bg.transparent ? [0] : [options.gradientStep ?? 6, 0];
+  for (const step of attempts) {
+    const result = floodCutout(source, bg, { tolerance, step, maxDrift: options.maxDrift ?? 72, minRemoved, maxRemoved });
+    if (result) return result;
+  }
+  return null;
+}
+
+function floodCutout(
+  source: Pixels,
+  bg: { transparent: boolean; r: number; g: number; b: number },
+  o: { tolerance: number; step: number; maxDrift: number; minRemoved: number; maxRemoved: number }
+): CutoutResult | null {
+  const { width: w, height: h, data: d } = source;
+  const opaqueBackground = (px: number, from: number): boolean => {
     const i = px * 4;
-    if (bg.transparent) return d[i + 3] < ALPHA_OPAQUE_MIN;
-    return d[i + 3] > 250 && channelDistance(d, i, bg.r, bg.g, bg.b) <= tolerance;
+    if (d[i + 3] <= 250) return false;
+    const fromBg = channelDistance(d, i, bg.r, bg.g, bg.b);
+    if (fromBg <= o.tolerance) return true;
+    return o.step > 0 && from >= 0 && fromBg <= o.maxDrift && channelDistance(d, i, d[from * 4], d[from * 4 + 1], d[from * 4 + 2]) <= o.step;
   };
+  const isBackground = (px: number, from: number): boolean => (bg.transparent ? d[px * 4 + 3] < ALPHA_OPAQUE_MIN : opaqueBackground(px, from));
 
   // Flood fill from every background pixel on the border.
   const outside = new Uint8Array(w * h);
   const queue = new Int32Array(w * h);
   let head = 0;
   let tail = 0;
-  const push = (px: number) => {
-    if (outside[px] || !isBackground(px)) return;
+  const push = (px: number, from: number) => {
+    if (outside[px] || !isBackground(px, from)) return;
     outside[px] = 1;
     queue[tail++] = px;
   };
   for (let x = 0; x < w; x++) {
-    push(x);
-    push((h - 1) * w + x);
+    push(x, -1);
+    push((h - 1) * w + x, -1);
   }
   for (let y = 1; y < h - 1; y++) {
-    push(y * w);
-    push(y * w + (w - 1));
+    push(y * w, -1);
+    push(y * w + (w - 1), -1);
   }
   while (head < tail) {
     const px = queue[head++];
     const x = px % w;
-    if (x > 0) push(px - 1);
-    if (x < w - 1) push(px + 1);
-    if (px >= w) push(px - w);
-    if (px < w * (h - 1)) push(px + w);
+    if (x > 0) push(px - 1, px);
+    if (x < w - 1) push(px + 1, px);
+    if (px >= w) push(px - w, px);
+    if (px < w * (h - 1)) push(px + w, px);
   }
 
-  const removed = tail;
-  const removedFraction = removed / (w * h);
-  if (removedFraction < minRemoved || removedFraction > maxRemoved) return null;
+  // Keep only the frame: the largest connected piece of what is left. Anything else standing on the backdrop
+  // (a caption badge, a logo, specks of shadow) would otherwise be pasted onto the room with it.
+  const label = new Int32Array(w * h);
+  let best = 0;
+  let bestSize = 0;
+  let next = 0;
+  for (let start = 0; start < w * h; start++) {
+    if (outside[start] || label[start]) continue;
+    next++;
+    let size = 0;
+    head = 0;
+    tail = 0;
+    label[start] = next;
+    queue[tail++] = start;
+    while (head < tail) {
+      const px = queue[head++];
+      size++;
+      const x = px % w;
+      const around = [x > 0 ? px - 1 : -1, x < w - 1 ? px + 1 : -1, px >= w ? px - w : -1, px < w * (h - 1) ? px + w : -1];
+      for (const n of around) {
+        if (n < 0 || outside[n] || label[n]) continue;
+        label[n] = next;
+        queue[tail++] = n;
+      }
+    }
+    if (size > bestSize) {
+      bestSize = size;
+      best = next;
+    }
+  }
+  if (best === 0) return null;
+  for (let px = 0; px < w * h; px++) if (!outside[px] && label[px] !== best) outside[px] = 1;
+
+  const removedFraction = 1 - bestSize / (w * h);
+  if (removedFraction < o.minRemoved || removedFraction > o.maxRemoved) return null;
 
   // Bounding box of what is kept (plus the 1px anti-aliased edge around it).
   let minX = w;
@@ -139,11 +196,12 @@ export function cutOutBackground(source: Pixels, options: CutoutOptions = {}): C
       // are partly background, so the nearer they are to it, the more
       // transparent they become. This avoids a pale fringe on dark walls.
       if (!bg.transparent) {
-        const touchesOutside =
-          (sx > 0 && outside[px - 1]) || (sx < w - 1 && outside[px + 1]) || (sy > 0 && outside[px - w]) || (sy < h - 1 && outside[px + w]);
-        if (touchesOutside) {
-          const dist = channelDistance(d, si, bg.r, bg.g, bg.b);
-          const coverage = Math.min(1, Math.max(0, (dist - tolerance) / 160));
+        const neighbour = sx > 0 && outside[px - 1] ? px - 1 : sx < w - 1 && outside[px + 1] ? px + 1 : sy > 0 && outside[px - w] ? px - w : sy < h - 1 && outside[px + w] ? px + w : -1;
+        if (neighbour >= 0) {
+          // Compared with the backdrop right beside it, which may be shaded differently from the corners.
+          const ni = neighbour * 4;
+          const dist = channelDistance(d, si, d[ni], d[ni + 1], d[ni + 2]);
+          const coverage = Math.min(1, Math.max(0, (dist - o.tolerance) / 160));
           alpha = Math.round(alpha * coverage);
         }
       }
