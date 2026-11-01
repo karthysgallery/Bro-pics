@@ -21,6 +21,8 @@ import type { Orientation } from '../../lib/orientation';
 import { BuyBox } from '../product/BuyBox';
 import { CustomizerPreview } from './CustomizerPreview';
 import { CustomizerControls } from './CustomizerControls';
+import { LowResDialog, unconfirmedLowRes } from './LowResDialog';
+import { useToast } from '../ui/Toast';
 import { carryOverState } from './state-carry';
 import { useTemplateCustomizer } from './use-template-customizer';
 
@@ -102,18 +104,27 @@ function TemplateEditorSession({
   const sessionRef = useRef<string | null>(null);
   const sessionId = useCallback(() => (sessionRef.current ??= getOrCreateSessionId()), []);
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
-  // The product photos for the gallery, named for what they show (the five automatic ones in their order).
+  // The product photos for the gallery, named for what they show (the automatic ones in their order). Photo sets
+  // made since the styled shop-card photos carry a `role` on those two; older sets keep their original order.
   const galleryPhotos = useMemo(() => {
-    const AUTO = ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print', 'Matte vs glitter'];
+    type Shown = { auto?: boolean; role?: string };
+    const images = media.filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id));
+    const styledSet = images.some((m) => (m as Shown).role);
+    const AUTO = styledSet
+      ? ['In the frame', '', '', 'Sizes', 'Frame details', 'The print', 'Matte vs glitter']
+      : ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print', 'Matte vs glitter'];
     let auto = 0;
     let own = 0;
-    return media
-      .filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id))
-      .map((m) => ({
-        url: m.url,
-        alt: m.alt || product.title,
-        label: (m as { auto?: boolean }).auto ? (AUTO[auto++] ?? 'Photo') : `Photo ${++own}`,
-      }));
+    return images.map((m) => {
+      const shown = m as Shown;
+      const alt = m.alt || product.title;
+      let label: string;
+      if (shown.role) {
+        auto++;
+        label = /table/i.test(alt) ? 'On a table' : 'On the wall';
+      } else label = shown.auto ? AUTO[auto++] || 'Photo' : `Photo ${++own}`;
+      return { url: m.url, alt, label };
+    });
   }, [media, selectedVariant.id, product.title]);
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
   const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
@@ -246,6 +257,34 @@ function TemplateEditorSession({
         ? `Add ${completeness.blockers.length} more photos to finish your design.`
         : completeness.blockers[0];
 
+  // "Add to cart" on an unfinished design shows what is left instead of doing nothing: low-resolution photos are
+  // listed together in a dialog; anything else scrolls to the photos and text, highlighted, with the reason.
+  const { showToast } = useToast();
+  const [lowResOpen, setLowResOpen] = useState(false);
+  const [pendingQuantity, setPendingQuantity] = useState<number | null>(null);
+  const [highlightControls, setHighlightControls] = useState(false);
+  const explainBlocked = (quantity: number) => {
+    if (unconfirmedLowRes(customizer).length > 0) {
+      setPendingQuantity(quantity);
+      setLowResOpen(true);
+      return;
+    }
+    const missing = template.photoSlots.find((s) => s.required && !customizer.state.slots[s.id]);
+    if (missing) customizer.setActiveSlotId(missing.id);
+    document.getElementById('your-photos')?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightControls(true);
+    window.setTimeout(() => setHighlightControls(false), 2200);
+    if (reason) showToast(reason, 'error');
+  };
+  const continueAfterLowRes = () => {
+    setLowResOpen(false);
+    const quantity = pendingQuantity;
+    setPendingQuantity(null);
+    if (quantity === null) return;
+    if (ready) void handleAddToCart(quantity);
+    else explainBlocked(quantity);
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {customizer.draftOffer && (
@@ -275,6 +314,7 @@ function TemplateEditorSession({
           onSelectOrientation={onSelectOrientation}
           personalizationReady={ready}
           personalizationReason={ready ? undefined : reason}
+          onBlockedAddToCart={fixedDesign ? undefined : explainBlocked}
           submitting={submitting}
           submitError={submitError}
           onAddToCart={(quantity) => void handleAddToCart(quantity)}
@@ -283,9 +323,27 @@ function TemplateEditorSession({
           finish={finish}
           onFinishChange={setChosenFinish}
         >
-          {!fixedDesign && <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />}
+          {!fixedDesign && (
+            <div className={`rounded-2xl transition-shadow duration-300 ${highlightControls ? 'shadow-[0_0_0_3px_rgb(var(--color-gold))]' : ''}`}>
+              <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />
+            </div>
+          )}
         </BuyBox>
       </div>
+      <LowResDialog
+        customizer={customizer}
+        open={lowResOpen}
+        onClose={() => {
+          setLowResOpen(false);
+          setPendingQuantity(null);
+        }}
+        onAllAccepted={continueAfterLowRes}
+        onReplace={(slotId) => {
+          setLowResOpen(false);
+          setPendingQuantity(null);
+          requestPhoto(slotId);
+        }}
+      />
       <input
         ref={bulkInput}
         type="file"

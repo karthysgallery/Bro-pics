@@ -12,6 +12,7 @@ const paths = {
   photos: <path d="M3 7h3l2-3h8l2 3h3v13H3zM12 10a4 4 0 100 8 4 4 0 000-8z" />,
   alert: <path d="M12 3l9.5 17h-19L12 3zM12 10v4M12 17.5v.5" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  pen: <path d="M4 20l4-1L19 8a2.1 2.1 0 00-3-3L5 16l-1 4zM14 7l3 3" />,
 } as const;
 
 export type IconName = keyof typeof paths;

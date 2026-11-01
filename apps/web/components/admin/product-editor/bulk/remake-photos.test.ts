@@ -35,7 +35,12 @@ function deps(loaded: LoadedSetup) {
       return { productId: 'p1', warnings: [] };
     }) as RemakeDeps['api'],
     upload: vi.fn(async () => ({ id: `m${++n}`, url: `/api/media/m${n}/image`, width: 1600, height: 1600, alt: '' })),
-    makePhotos: vi.fn(async () => (['framed', 'sizes', 'frame', 'wall', 'picture'] as const).map((key) => ({ key, label: key, alt: `${key} alt`, dataUrl: 'data:image/jpeg;base64,AA==' }))),
+    makePhotos: vi.fn(async () =>
+      (['framed', 'pose-1', 'pose-2', 'sizes', 'frame', 'picture'] as const).map((key) => ({
+        key, label: key, alt: `${key} alt`, dataUrl: 'data:image/jpeg;base64,AA==',
+        ...(key === 'pose-1' ? { role: 'listing' as const } : key === 'pose-2' ? { role: 'listing-hover' as const } : {}),
+      }))
+    ),
     lookOf: () => null,
     renderCollage: vi.fn(async () => 'data:image/png;base64,AA=='),
     latestDesign: (v) => v[0] ?? null,
@@ -50,13 +55,17 @@ describe('remakeShopPhotos', () => {
     const loaded = setup();
     const { d, calls } = deps(loaded);
     const r = await remakeShopPhotos(d, 'p1', models, () => {});
-    expect(r).toEqual({ status: 'made', photos: 5 });
+    expect(r).toEqual({ status: 'made', photos: 6 });
     const put = calls.find((c) => c.init?.method === 'PUT')!;
     expect(put.path).toBe('/api/admin/products/p1/setup');
     const body = JSON.parse(String(put.init!.body));
-    expect(body.gallery.map((g: { mediaId: string }) => g.mediaId)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'plain']);
+    expect(body.gallery.map((g: { mediaId: string }) => g.mediaId)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'plain']);
+    // The styled photos are marked as the shop card's picture and its hover picture.
+    expect(body.gallery[1].role).toBe('listing');
+    expect(body.gallery[2].role).toBe('listing-hover');
+    expect(body.gallery[0].role).toBeUndefined();
     expect(body.gallery[0].auto).toBe(true);
-    expect(body.gallery[5].auto).toBe(false);
+    expect(body.gallery[6].auto).toBe(false);
     // Smallest size first: the same order the editor uses, so the editor sees the photos as up to date.
     expect(body.autoPhotoKey).toBe(
       photoKeyOf({ productType: 'collage', title: 'Heart Collage Frame', pictureSource: 'tpl1|/s1.jpg', models: [model], sizes: [{ widthIn: 12, heightIn: 8 }, { widthIn: 18, heightIn: 12 }], glitterExtra: 0 })

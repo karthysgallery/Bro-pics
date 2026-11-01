@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { activeThemeOffer, resolveActiveTheme } from '@bro-pics/shared';
+import { activeThemeOffer } from '@bro-pics/shared';
+import { shopTheme } from '../../lib/shop-theme';
 import { getThemeSettings } from '../../lib/firestore-settings';
 import { FestiveGreeting } from '../../components/theme/FestiveGreeting';
 import { DiwaliNight } from '../../components/theme/DiwaliNight';
@@ -16,8 +17,9 @@ import {
 } from '../../lib/firestore-homepage';
 import { getActiveCategories } from '../../lib/firestore-categories';
 import { getPublishedCombos } from '../../lib/firestore-combos';
-import { getSeoSettings } from '../../lib/firestore-settings';
+import { getSeoSettings, getShippingSettings } from '../../lib/firestore-settings';
 import { ComboOffersStrip } from '../../components/home/ComboOffersStrip';
+import { OfferBanner } from '../../components/home/OfferBanner';
 import { canonicalUrl, SITE_NAME } from '../../lib/seo/site';
 import { HeroSlider } from '../../components/home/HeroSlider';
 import { CategoryTiles } from '../../components/home/CategoryTiles';
@@ -82,10 +84,12 @@ export default async function HomePage() {
     getThemeSettings().catch(() => null),
   ]);
   // The festival on show (if any) greets visitors at the top of the homepage.
-  const theme = themeSettings ? resolveActiveTheme(themeSettings) : null;
+  const theme = themeSettings ? shopTheme(themeSettings) : null;
   const festival = theme && theme.id !== 'default' ? theme : null;
   const greeting = festival?.decor.greeting;
-  const offer = activeThemeOffer(festival?.decor);
+  // The running offer (any theme, the Everyday one included). Diwali's night art shows its own offer frame.
+  const offer = activeThemeOffer(theme?.decor);
+  const showOfferBanner = Boolean(offer) && greeting?.art !== 'diwali-night';
   const promos = festival?.decor.promos ?? [];
 
   // Every hero_slider doc becomes one poster in the single carousel at the
@@ -103,6 +107,8 @@ export default async function HomePage() {
     typeof featuredSection?.config.categoryId === 'string' ? featuredSection.config.categoryId : categories[0]?.id;
 
   const combos = await getPublishedCombos().catch(() => []);
+  // The delivery promise beside the offer comes from the real shipping settings, never a fixed sentence.
+  const homeState = showOfferBanner ? (await getShippingSettings().catch(() => null))?.homeState : undefined;
   const websiteJsonLd = { '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: canonicalUrl('/') };
 
   const [bestSellers, featuredProducts, trustVideos, featuredReviews] = await Promise.all([
@@ -181,6 +187,8 @@ export default async function HomePage() {
           id={section.type === 'best_sellers' ? 'best-sellers' : undefined}
         >
           {renderSection(section, index)}
+          {/* One quiet offer band right after the hero. */}
+          {index === firstHeroIndex && showOfferBanner && <OfferBanner offer={offer} note={homeState ? `Free delivery across ${homeState}` : null} />}
           {/* The festival's gift banners follow the hero. */}
           {index === firstHeroIndex && promos.length > 0 && <FestivePromos promos={promos} festival={festival!.name} />}
           {/* Combo offers sit right after the best sellers, where people are already comparing what to buy. */}

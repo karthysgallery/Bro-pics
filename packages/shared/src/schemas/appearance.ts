@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * How the shop LOOKS beyond its colours (Admin > Website > Appearance): the two typefaces, how rounded the corners
  * and buttons are, the browser-tab icon, and which sections the product page shows. Colours live in the theme
- * settings. Every default is exactly what the shop looked like before this was editable, so saving nothing
- * changes nothing, and "Reset" returns to it.
+ * settings. The defaults are the shop's own look (refined serif headings, softly rounded corners and buttons), so
+ * saving nothing changes nothing, and "Reset" returns to it.
  */
 
 /** Typefaces the admin can pick. Each is loaded for the shop (see apps/web/app/layout.tsx); `cssVar` is the next/font variable. */
@@ -27,8 +27,8 @@ const FONT_KEYS = FONT_CHOICES.map((f) => f.key) as [FontKey, ...FontKey[]];
 export const CORNER_STYLES = ['sharp', 'soft', 'default', 'round'] as const;
 export const BUTTON_STYLES = ['square', 'soft', 'default', 'pill'] as const;
 
-export const CORNER_LABELS: Record<(typeof CORNER_STYLES)[number], string> = { sharp: 'Sharp', soft: 'Soft', default: 'Current look', round: 'Very round' };
-export const BUTTON_LABELS: Record<(typeof BUTTON_STYLES)[number], string> = { square: 'Square', soft: 'Slightly rounded', default: 'Current look (pill)', pill: 'Pill' };
+export const CORNER_LABELS: Record<(typeof CORNER_STYLES)[number], string> = { sharp: 'Sharp', soft: 'Soft', default: 'Shop default (gently rounded)', round: 'Very round' };
+export const BUTTON_LABELS: Record<(typeof BUTTON_STYLES)[number], string> = { square: 'Square', soft: 'Slightly rounded', default: 'Shop default (gently rounded)', pill: 'Pill' };
 
 /** Sections of the product page the admin can switch off. */
 export const PRODUCT_PAGE_SECTIONS = [
@@ -58,7 +58,7 @@ export const AppearanceSchema = z
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
 export const DEFAULT_APPEARANCE: Appearance = {
-  displayFont: 'outfit',
+  displayFont: 'cormorant',
   bodyFont: 'manrope',
   corners: 'default',
   buttons: 'default',
@@ -82,15 +82,17 @@ export function fontChoice(key: FontKey) {
   return FONT_CHOICES.find((f) => f.key === key)!;
 }
 
-/** The corner radii (CSS custom properties) for each style. `default` equals Tailwind's own values, so it changes nothing. */
+/** The corner radii (CSS custom properties) for each style. `default` is the shop's own look, already set in globals.css. */
 const CORNER_VALUES: Record<(typeof CORNER_STYLES)[number], Record<string, string>> = {
   sharp: { '--radius-md': '0.125rem', '--radius-lg': '0.125rem', '--radius-xl': '0.125rem', '--radius-2xl': '0.25rem', '--radius-3xl': '0.25rem', '--radius-card': '2px' },
   soft: { '--radius-md': '0.25rem', '--radius-lg': '0.375rem', '--radius-xl': '0.5rem', '--radius-2xl': '0.625rem', '--radius-3xl': '0.875rem', '--radius-card': '8px' },
-  default: { '--radius-md': '0.375rem', '--radius-lg': '0.5rem', '--radius-xl': '0.75rem', '--radius-2xl': '1rem', '--radius-3xl': '1.5rem', '--radius-card': '12px' },
+  // The shop's own corners (globals.css sets the same values on :root).
+  default: { '--radius-md': '0.25rem', '--radius-lg': '0.3125rem', '--radius-xl': '0.375rem', '--radius-2xl': '0.5rem', '--radius-3xl': '0.75rem', '--radius-card': '6px' },
   round: { '--radius-md': '0.625rem', '--radius-lg': '0.875rem', '--radius-xl': '1.125rem', '--radius-2xl': '1.5rem', '--radius-3xl': '2rem', '--radius-card': '20px' },
 };
 
-const BUTTON_RADIUS: Record<(typeof BUTTON_STYLES)[number], string> = { square: '2px', soft: '8px', default: '9999px', pill: '9999px' };
+// `default` is the shop's own button shape, set in globals.css (gently rounded, 6px).
+const BUTTON_RADIUS: Record<(typeof BUTTON_STYLES)[number], string> = { square: '2px', soft: '8px', default: '6px', pill: '9999px' };
 
 /** The radii a corner style sets, for previews in the admin. */
 export function cornerValues(corners: (typeof CORNER_STYLES)[number]): Record<string, string> {

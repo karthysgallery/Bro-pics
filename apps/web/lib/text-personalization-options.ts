@@ -59,6 +59,22 @@ export const TEXT_COLOR_OPTIONS: TextColorOption[] = [
   { key: 'darkwood', label: 'Dark Wood', value: '#2b1e16' },
 ];
 
+/** The four colours offered as one-tap swatches; the pen next to them opens a picker for any other colour. */
+export const QUICK_TEXT_COLORS: TextColorOption[] = [
+  { key: 'black', label: 'Black', value: '#111111' },
+  { key: 'white', label: 'White', value: '#ffffff' },
+  { key: 'gold', label: 'Gold', value: '#c9a24b' },
+  { key: 'maroon', label: 'Maroon', value: '#8b1a2b' },
+];
+
+/** A colour as #rrggbb (what a colour picker needs), or null when it is not a hex colour. */
+export function toHexColor(value: string): string | null {
+  const v = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
+  return null;
+}
+
 export const DEFAULT_TEXT_COLOR = TEXT_COLOR_OPTIONS[0].value;
 
 export const MAX_TEXT_FIELD_LENGTH = 40;

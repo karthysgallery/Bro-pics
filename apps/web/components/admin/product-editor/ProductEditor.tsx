@@ -43,9 +43,11 @@ interface GalleryItem {
   mediaId: string | null;
   url: string;
   alt: string;
-  /** One of the five shop photos made automatically. */
+  /** One of the shop photos made automatically. */
   auto?: boolean;
   label?: string;
+  /** The shop card's picture, or the one shown when the card is hovered. */
+  role?: 'listing' | 'listing-hover';
 }
 
 interface State {
@@ -168,7 +170,7 @@ const TYPES: Array<{ type: ProductType; title: string; text: string; example: st
 ];
 
 /** The automatic photos, in the order they are made. */
-const AUTO_LABELS = ['Framed', 'Sizes', 'Frame', 'On the wall', 'The picture', 'Matte vs Glitter'];
+const AUTO_LABELS = ['Framed', 'Styled', 'Styled', 'Sizes', 'Frame', 'The picture', 'Matte vs Glitter'];
 
 const field = 'h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-ink';
 const area = 'w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-ink';
@@ -510,7 +512,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
       for (const ph of photos) {
         const blob = await (await fetch(ph.dataUrl)).blob();
         const img = await upload(new File([blob], `${slugify(s.title) || 'frame'}-${ph.key}.jpg`, { type: 'image/jpeg' }), { alt: ph.alt, tag: 'auto-product-photo' });
-        uploaded.push({ mediaId: img.id, url: img.url, alt: ph.alt, auto: true, label: ph.label });
+        uploaded.push({ mediaId: img.id, url: img.url, alt: ph.alt, auto: true, label: ph.label, ...(ph.role && { role: ph.role }) });
       }
       const gallery = [...uploaded, ...s.gallery.filter((g) => !g.auto)];
       set({ gallery, autoPhotoKey: photoKey });
@@ -598,7 +600,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         seo: { title: s.seo.seoTitle, description: s.seo.seoDesc, focusKeyword: s.seo.focusKeyword, keywords: s.seo.keywords, imageAlt: s.seo.imageAlt, noindex: s.seo.noindex },
         frameModelIds: s.frameModelIds,
         rows: s.rows.map(({ key: _k, legacyFinish: _l, ...r }) => ({ ...r, frameModelId: r.frameModelId! })),
-        gallery: gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt, auto: Boolean(g.auto) })),
+        gallery: gallery.filter((g) => g.mediaId).map((g) => ({ mediaId: g.mediaId!, alt: g.alt, auto: Boolean(g.auto), ...(g.role && { role: g.role }) })),
         autoPhotoKey,
         glitter: s.glitter,
         samplePhotos: s.productType === 'ready_made' ? [] : s.samplePhotos,

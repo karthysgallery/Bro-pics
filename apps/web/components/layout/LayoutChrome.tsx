@@ -10,7 +10,7 @@ import { WhatsAppButton } from './WhatsAppButton';
 import { AnnouncementBar } from './AnnouncementBar';
 import { ConsentBanner } from './ConsentBanner';
 import { freeShippingPromise, useShippingSettings } from '../../lib/use-shipping-settings';
-import { activeThemeOffer, type ThemeDecor } from '@bro-pics/shared';
+import { activeThemeOffer, type ThemeDecor, type ThemeOffer } from '@bro-pics/shared';
 import { useBusinessContact } from '../../lib/business-contact';
 import { FestiveOfferProvider } from '../theme/FestiveOfferContext';
 import { FestiveBand } from '../theme/FestiveBand';
@@ -32,6 +32,8 @@ interface LayoutChromeProps {
   liveLegalSlugs?: string[];
   /** Decorations of the theme the shop is showing (festivals); none for the Everyday theme. */
   themeDecor?: ThemeDecor | null;
+  /** The offer of the active theme, the Everyday theme included (shown on prices and at checkout). */
+  themeOffer?: ThemeOffer | null;
   children: ReactNode;
 }
 
@@ -43,6 +45,7 @@ export function LayoutChrome({
   storeSettings = null,
   liveLegalSlugs = [],
   themeDecor = null,
+  themeOffer,
   children,
 }: LayoutChromeProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -71,7 +74,7 @@ export function LayoutChrome({
   }
 
   return (
-    <FestiveOfferProvider offer={activeThemeOffer(themeDecor)}>
+    <FestiveOfferProvider offer={themeOffer !== undefined ? themeOffer : activeThemeOffer(themeDecor)}>
       <div className="sticky top-0 z-40 w-full shadow-xs">
         {themeDecor && <FestiveGarland garland={themeDecor.garland} />}
         <AnnouncementBar

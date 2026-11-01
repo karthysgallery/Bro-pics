@@ -59,6 +59,42 @@ const FONTS = [
     ],
   },
   {
+    filename: 'Allura-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/allura/Allura-Regular.ttf'],
+  },
+  {
+    filename: 'AlexBrush-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/alexbrush/AlexBrush-Regular.ttf'],
+  },
+  {
+    filename: 'Parisienne-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/parisienne/Parisienne-Regular.ttf'],
+  },
+  {
+    filename: 'PinyonScript-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/pinyonscript/PinyonScript-Regular.ttf'],
+  },
+  {
+    filename: 'Satisfy-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/apache/satisfy/Satisfy-Regular.ttf'],
+  },
+  {
+    filename: 'KaushanScript-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/kaushanscript/KaushanScript-Regular.ttf'],
+  },
+  {
+    filename: 'Lobster-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/lobster/Lobster-Regular.ttf'],
+  },
+  {
+    filename: 'PlayfairDisplay-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf'],
+  },
+  {
+    filename: 'Montserrat-Regular.ttf',
+    urls: ['https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf'],
+  },
+  {
     filename: 'NotoSansTamil-Regular.ttf',
     urls: [
       'https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstamil/NotoSansTamil%5Bwdth%2Cwght%5D.ttf',

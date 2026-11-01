@@ -46,7 +46,7 @@ export interface BulkJob {
   width: number;
   height: number;
   artwork?: UploadedImage;
-  gallery?: Array<{ mediaId: string; alt: string; auto: boolean }>;
+  gallery?: Array<{ mediaId: string; alt: string; auto: boolean; role?: 'listing' | 'listing-hover' }>;
   autoPhotoKey?: string | null;
   slug?: string;
   productCode?: string;
@@ -174,7 +174,7 @@ export async function processJob(
       step(`Uploading shop photo ${i + 1} of ${photos.length}…`);
       const blob = await (await fetch(ph.dataUrl)).blob();
       const img = await withRetry(deps, () => deps.upload(new File([blob], `${slugify(details.title) || 'frame'}-${ph.key}.jpg`, { type: 'image/jpeg' }), { alt: ph.alt, tag: 'auto-product-photo' }), wait);
-      made.push({ mediaId: img.id, alt: ph.alt, auto: true });
+      made.push({ mediaId: img.id, alt: ph.alt, auto: true, ...(ph.role && { role: ph.role }) });
     }
     gallery = made;
     update({ gallery, autoPhotoKey });
@@ -213,7 +213,7 @@ export function buildSetupBody(input: {
   artworkId: string;
   rows: Array<{ widthIn: number; heightIn: number; frameModelId: string; mrp: number; price: number; cost: number; isActive: boolean }>;
   frameModelIds: string[];
-  gallery: Array<{ mediaId: string; alt: string; auto: boolean }>;
+  gallery: Array<{ mediaId: string; alt: string; auto: boolean; role?: 'listing' | 'listing-hover' }>;
   autoPhotoKey: string | null;
 }) {
   const { details, settings } = input;

@@ -153,15 +153,15 @@ export type ThemeSettings = z.infer<typeof ThemeSettingsSchema>;
 // --- Presets -------------------------------------------------------------
 
 export const DEFAULT_THEME_COLORS: ThemeColors = {
-  field: '#FAF8F4',
+  field: '#FBF7F1',
   paper: '#FFFFFF',
-  tint: '#EFEBE4',
-  line: '#E0DAD1',
-  ink: '#000000',
-  gold: '#FCA311',
-  goldDeep: '#E08F00',
-  accent: '#14213D',
-  accentDark: '#0B1428',
+  tint: '#F4E9DD',
+  line: '#E8DCCB',
+  ink: '#2B211A',
+  gold: '#C8A26B',
+  goldDeep: '#B08A54',
+  accent: '#7A5A2E',
+  accentDark: '#4E3920',
 };
 
 export const THEME_PRESETS: readonly StoreTheme[] = [

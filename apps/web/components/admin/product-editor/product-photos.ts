@@ -4,16 +4,21 @@ import { DEFAULT_PREVIEW_SCENES, layoutFrameInScene, type PreviewScene } from '.
 import { frameDesign, STOCK_FRAME, type FrameLook } from '../../customizer/frame-moulding';
 
 /**
- * The five shop photos every product gets automatically, drawn in the browser
+ * The shop photos every product gets automatically, drawn in the browser
  * from the product's own picture and frame (the same frame drawing the shop's
  * live preview uses), so they always match what the customer will receive:
  *
- *   1. Framed      — the picture in the default frame on a clean background (the card photo)
- *   2. Sizes       — the frame with its measurements, and every size side by side to scale
- *   3. Frame       — a close-up of the moulding with its name, material, width and colour
- *   4. On the wall — the frame hung in a room, at its real size
- *   5. The picture — the print itself, unframed, to show its detail
- *   6. Glitter (only when the product offers it) — the same frame split down the middle: matte | glitter
+ *   1. Framed      — the picture in the default frame on a clean background (the product's main photo:
+ *                    the room previews cut the frame out of it, and Google Shopping wants a plain background)
+ *   2. Styled      — the frame posed in a real setting (standing on a table, or hung on a wall): the shop card photo
+ *   3. Styled      — the same frame in the other setting: shown when the card is hovered
+ *   4. Sizes       — the frame with its measurements, and every size side by side to scale
+ *   5. Frame       — a close-up of the moulding with its name, material, width and colour
+ *   6. The picture — the print itself, unframed, to show its detail
+ *   7. Glitter (only when the product offers it) — the same frame split down the middle: matte | glitter
+ *
+ * No text is printed over the pictures: product pages say they are example photos, and Google Shopping rejects
+ * images with overlays.
  *
  * All are square (shop cards and Google Shopping are square).
  */
@@ -45,10 +50,12 @@ export interface ProductPhotoInput {
 }
 
 export interface ProductPhoto {
-  key: 'framed' | 'sizes' | 'frame' | 'wall' | 'picture' | 'glitter';
+  key: 'framed' | 'pose-1' | 'pose-2' | 'sizes' | 'frame' | 'picture' | 'glitter';
   label: string;
   alt: string;
   dataUrl: string;
+  /** The shop card's picture (`listing`) and the one shown when the card is hovered (`listing-hover`). */
+  role?: 'listing' | 'listing-hover';
 }
 
 const C = {
@@ -141,23 +148,6 @@ function text(ctx: CanvasRenderingContext2D, value: string, x: number, y: number
 
 const fmtIn = (n: number) => `${Math.round(n * 100) / 100}`;
 
-/** A small "sample photo" note, so a photo-frame picture is never mistaken for what is sold. */
-function sampleTag(ctx: CanvasRenderingContext2D, label = 'Sample photo — yours goes here') {
-  ctx.save();
-  ctx.font = `600 30px ${fonts().body}`;
-  const w = ctx.measureText(label).width + 56;
-  const x = PHOTO_SIZE - w - 48;
-  const y = PHOTO_SIZE - 104;
-  ctx.fillStyle = 'rgba(26,23,18,0.82)';
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, 60, 30);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + 28, y + 31);
-  ctx.restore();
-}
-
 async function framedOf(pictureUrl: string, size: { widthIn: number; heightIn: number }, look: FrameLook | null, glitter = false): Promise<HTMLImageElement> {
   const cropped = await cropToShape(pictureUrl, size.widthIn, size.heightIn);
   if (!cropped) throw new Error('The picture could not be loaded.');
@@ -172,7 +162,6 @@ async function photoFramed(input: ProductPhotoInput, framed: HTMLImageElement): 
   const { canvas, ctx } = square();
   backdrop(ctx);
   placeWithShadow(ctx, framed, { x: 170, y: 150, w: PHOTO_SIZE - 340, h: PHOTO_SIZE - 300 });
-  if (input.isSample) sampleTag(ctx);
   return toJpeg(canvas);
 }
 
@@ -356,53 +345,83 @@ async function photoFrame(input: ProductPhotoInput, framed: HTMLImageElement): P
   return toJpeg(canvas);
 }
 
-// 4 ─ on the wall ---------------------------------------------------------------------------------
-async function photoWall(input: ProductPhotoInput, framedDefault: HTMLImageElement): Promise<string> {
-  const scene = input.scene ?? DEFAULT_PREVIEW_SCENES.find((s) => s.id === 'living-room') ?? DEFAULT_PREVIEW_SCENES[0]!;
-  if (scene.backdrop.type !== 'photo') throw new Error('The room photo is missing.');
+// 2/3 ─ styled: the frame posed in a real setting ------------------------------------------------
+/**
+ * The settings a frame is shown in, as the shop's cards show them: standing on a dresser, or hung on a wall. Each
+ * places the frame itself (centre or standing point, as fractions of the room photo, and its longer side as a share
+ * of the photo's height) and how much of the square the frame fills once cropped around it.
+ */
+export const POSES = [
+  { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.68 },
+  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.6 },
+  { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.6 },
+] as const;
+export type Pose = (typeof POSES)[number];
+
+/** Two different settings for a product, chosen from its name so a grid of products shows a varied mix. */
+export function posesFor(title: string): [Pose, Pose] {
+  let h = 0;
+  for (const ch of title) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const i = h % POSES.length;
+  return [POSES[i]!, POSES[(i + 1) % POSES.length]!];
+}
+
+async function photoPose(pose: Pose, framed: HTMLImageElement): Promise<string> {
+  const scene = DEFAULT_PREVIEW_SCENES.find((s) => s.id === pose.sceneId);
+  if (!scene || scene.backdrop.type !== 'photo') throw new Error('The room photo is missing.');
   const room = await loadImage(scene.backdrop.src);
-  // The room photo drawn so its height fills the square; the square is centred on the frame.
-  const stageW = PHOTO_SIZE * scene.backdrop.aspect;
-  const stageH = PHOTO_SIZE;
-  // The same size as every other photo (the product's first size), so all five agree.
-  const size = input.sizes[0]!;
-  const moulding = input.frames[0]?.mouldingWidthIn ?? STOCK_FRAME.mouldingWidthIn;
-  const framed = framedDefault;
-  const layout = layoutFrameInScene(scene, framed.width / framed.height, { widthIn: size.widthIn + moulding * 2, heightIn: size.heightIn + moulding * 2 });
-  const fw = layout.width * stageW;
-  const fh = layout.height * stageW;
-  const cx = scene.frame.x * stageW;
-  const cy = scene.frame.y * stageH;
-  const fy = scene.frame.anchor === 'bottom' ? cy - fh : cy - fh / 2;
-  const offset = Math.max(0, Math.min(stageW - PHOTO_SIZE, cx - PHOTO_SIZE / 2));
+  const W = room.naturalWidth;
+  const H = room.naturalHeight;
+  // The frame, in room-photo pixels.
+  const aspect = framed.width / framed.height;
+  const longest = pose.longest * H;
+  const fw = aspect >= 1 ? longest : longest * aspect;
+  const fh = aspect >= 1 ? longest / aspect : longest;
+  const fx = pose.x * W - fw / 2;
+  const fy = pose.standing ? pose.y * H - fh : pose.y * H - fh / 2;
+  // A square crop around it (a little lower for a standing frame, so the tabletop shows), kept inside the photo.
+  const side = Math.min(W, H, Math.max(fw, fh) / pose.fill);
+  const cx = fx + fw / 2;
+  const cy = fy + fh / 2 + (pose.standing ? fh * 0.12 : fh * 0.04);
+  const x0 = Math.max(0, Math.min(W - side, cx - side / 2));
+  const y0 = Math.max(0, Math.min(H - side, cy - side / 2));
+  const k = PHOTO_SIZE / side;
 
   const { canvas, ctx } = square();
-  ctx.drawImage(room, -offset, 0, stageW, stageH);
+  // The room, very slightly softened so the frame reads as the subject (as a camera would).
+  ctx.save();
+  ctx.filter = 'blur(1.5px)';
+  ctx.drawImage(room, x0, y0, side, side, -4, -4, PHOTO_SIZE + 8, PHOTO_SIZE + 8);
+  ctx.restore();
+  const dx = (fx - x0) * k;
+  const dy = (fy - y0) * k;
+  const dw = fw * k;
+  const dh = fh * k;
+  if (pose.standing) {
+    // Contact shadow where the frame meets the table.
+    const g = ctx.createRadialGradient(dx + dw / 2, dy + dh, 2, dx + dw / 2, dy + dh, dw * 0.62);
+    g.addColorStop(0, 'rgba(25,15,5,0.42)');
+    g.addColorStop(1, 'rgba(25,15,5,0)');
+    ctx.save();
+    ctx.translate(dx + dw / 2, dy + dh);
+    ctx.scale(1, 0.08);
+    ctx.translate(-(dx + dw / 2), -(dy + dh));
+    ctx.fillStyle = g;
+    ctx.fillRect(dx - dw * 0.2, dy + dh - dw * 0.7, dw * 1.4, dw * 1.4);
+    ctx.restore();
+  }
   const light = scene.light ?? { angleDeg: 90, strength: 0.5 };
   const rad = (light.angleDeg * Math.PI) / 180;
   ctx.save();
-  ctx.shadowColor = `rgba(20,12,4,${0.28 + 0.25 * light.strength})`;
-  ctx.shadowBlur = Math.max(fw, fh) * 0.06;
-  ctx.shadowOffsetX = Math.cos(rad) * Math.max(fw, fh) * 0.025;
-  ctx.shadowOffsetY = Math.sin(rad) * Math.max(fw, fh) * 0.025;
+  ctx.shadowColor = `rgba(35,22,10,${0.3 + 0.2 * light.strength})`;
+  ctx.shadowBlur = Math.max(dw, dh) * 0.07;
+  ctx.shadowOffsetX = Math.cos(rad) * Math.max(dw, dh) * 0.02;
+  ctx.shadowOffsetY = Math.sin(rad) * Math.max(dw, dh) * 0.025;
   if (scene.tone) {
     const t = scene.tone;
     ctx.filter = `brightness(${t.brightness ?? 1}) contrast(${t.contrast ?? 1}) saturate(${t.saturate ?? 1})`;
   }
-  ctx.drawImage(framed, cx - fw / 2 - offset, fy, fw, fh);
-  ctx.restore();
-  // Size label, like a shop tag.
-  const label = `${fmtIn(size.widthIn)} × ${fmtIn(size.heightIn)} in, shown to scale`;
-  ctx.save();
-  ctx.font = `600 30px ${fonts().body}`;
-  const w = ctx.measureText(label).width + 56;
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.beginPath();
-  ctx.roundRect(48, 48, w, 60, 30);
-  ctx.fill();
-  ctx.fillStyle = C.ink;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, 76, 79);
+  ctx.drawImage(framed, dx, dy, dw, dh);
   ctx.restore();
   return toJpeg(canvas);
 }
@@ -416,8 +435,6 @@ async function photoPicture(input: ProductPhotoInput): Promise<string> {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
   placeWithShadow(ctx, img, { x: 110, y: 110, w: PHOTO_SIZE - 220, h: PHOTO_SIZE - 220 }, 0.35);
-  if (input.isSample) sampleTag(ctx);
-  else sampleTag(ctx, 'The print, before framing');
   return toJpeg(canvas);
 }
 
@@ -465,18 +482,21 @@ async function photoGlitter(input: ProductPhotoInput, matte: HTMLImageElement): 
   return toJpeg(canvas);
 }
 
-/** Draws all five photos (six when the product offers glitter). Throws a readable error if the picture or a frame photo cannot be loaded. */
+/** Draws all six photos (seven when the product offers glitter). Throws a readable error if the picture or a frame photo cannot be loaded. */
 export async function makeProductPhotos(input: ProductPhotoInput): Promise<ProductPhoto[]> {
   if (!input.sizes.length) throw new Error('Add at least one size first.');
   await document.fonts?.ready;
   const framed = await framedOf(input.pictureUrl, input.sizes[0]!, input.frames[0]?.look ?? null);
   const name = input.title || 'Photo frame';
   const frameName = input.frames[0]?.name ?? 'frame';
+  const [first, second] = posesFor(name);
+  const poseAlt = (pose: Pose) => `${name} ${pose.standing ? 'standing on a table' : `hung ${pose.label.toLowerCase().replace(/^on /, 'on ')}`}`;
   return [
     { key: 'framed', label: 'Framed', alt: `${name} in a ${frameName} frame`, dataUrl: await photoFramed(input, framed) },
+    { key: 'pose-1', label: first.label, alt: poseAlt(first), dataUrl: await photoPose(first, framed), role: 'listing' },
+    { key: 'pose-2', label: second.label, alt: poseAlt(second), dataUrl: await photoPose(second, framed), role: 'listing-hover' },
     { key: 'sizes', label: 'Sizes', alt: `${name} sizes: ${input.sizes.map((s) => `${fmtIn(s.widthIn)}x${fmtIn(s.heightIn)}`).join(', ')} inches`, dataUrl: await photoSizes(input, framed) },
     { key: 'frame', label: 'Frame', alt: `${frameName} frame close-up for ${name}`, dataUrl: await photoFrame(input, framed) },
-    { key: 'wall', label: 'On the wall', alt: `${name} hung on a living room wall`, dataUrl: await photoWall(input, framed) },
     { key: 'picture', label: 'The picture', alt: `${name} print`, dataUrl: await photoPicture(input) },
     ...(input.glitter ? [{ key: 'glitter' as const, label: 'Matte vs Glitter', alt: `${name} in a matte finish and in a glitter finish, side by side`, dataUrl: await photoGlitter(input, framed) }] : []),
   ];

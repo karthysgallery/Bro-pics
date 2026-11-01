@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AppearanceSchema, DEFAULT_APPEARANCE, FONT_CHOICES, appearanceCss, resolveAppearance } from './appearance';
 
 describe('appearance defaults', () => {
-  it('are valid and produce no CSS at all: the shop looks exactly as it did before this was editable', () => {
+  it('are valid and produce no CSS at all: the shop\'s own look lives in globals.css', () => {
     expect(AppearanceSchema.safeParse(DEFAULT_APPEARANCE).success).toBe(true);
     expect(appearanceCss(DEFAULT_APPEARANCE)).toBe('');
     expect(Object.values(DEFAULT_APPEARANCE.productPage).every(Boolean)).toBe(true);
@@ -17,7 +17,7 @@ describe('resolveAppearance', () => {
   it('fills anything missing from the defaults and ignores bad values', () => {
     expect(resolveAppearance(null)).toEqual(DEFAULT_APPEARANCE);
     expect(resolveAppearance({ corners: 'round' }).corners).toBe('round');
-    expect(resolveAppearance({ corners: 'round' }).displayFont).toBe('outfit');
+    expect(resolveAppearance({ corners: 'round' }).displayFont).toBe('cormorant');
     expect(resolveAppearance({ corners: 'triangle' })).toEqual(DEFAULT_APPEARANCE);
     expect(resolveAppearance({ productPage: { showReviews: false } }).productPage).toMatchObject({ showReviews: false, showRelated: true });
   });

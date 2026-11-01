@@ -34,14 +34,14 @@ export function AnnouncementBar({
     <div
       role="img"
       aria-label={displayText}
-      className="w-full h-8 sm:h-8.5 flex items-center overflow-hidden bg-accent-dark"
+      className="w-full h-8 sm:h-8.5 flex items-center overflow-hidden bg-ink"
     >
       <div className="flex w-max animate-announcement-marquee" aria-hidden="true">
         {/* Track Group 1 */}
         <div className="flex items-center shrink-0">
           {items.map((item, idx) => (
             <span key={`g1-${idx}`} className="inline-flex items-center">
-              <span className="px-3.5 sm:px-4 text-[12.5px] sm:text-[13px] font-bold tracking-wide uppercase text-white whitespace-nowrap">
+              <span className="px-3.5 sm:px-4 text-[11.5px] sm:text-[12px] font-medium tracking-[0.18em] uppercase text-[#f3e6cf] whitespace-nowrap">
                 {item}
               </span>
               <span
@@ -58,7 +58,7 @@ export function AnnouncementBar({
         <div className="flex items-center shrink-0">
           {items.map((item, idx) => (
             <span key={`g2-${idx}`} className="inline-flex items-center">
-              <span className="px-3.5 sm:px-4 text-[12.5px] sm:text-[13px] font-bold tracking-wide uppercase text-white whitespace-nowrap">
+              <span className="px-3.5 sm:px-4 text-[11.5px] sm:text-[12px] font-medium tracking-[0.18em] uppercase text-[#f3e6cf] whitespace-nowrap">
                 {item}
               </span>
               <span

@@ -121,12 +121,12 @@ export async function remakeShopPhotos(
     sizes,
     glitter: p.glitter.enabled ? { extraPrice: p.glitter.extraPrice } : null,
   });
-  const made: Array<{ mediaId: string; alt: string; auto: boolean }> = [];
+  const made: Array<{ mediaId: string; alt: string; auto: boolean; role?: 'listing' | 'listing-hover' }> = [];
   for (const [i, ph] of photos.entries()) {
     step(`Uploading shop photo ${i + 1} of ${photos.length}…`);
     const blob = await (await fetch(ph.dataUrl)).blob();
     const img = await withRetry(deps, () => deps.upload(new File([blob], `${slugify(p.title) || 'frame'}-${ph.key}.jpg`, { type: 'image/jpeg' }), { alt: ph.alt, tag: 'auto-product-photo' }), wait);
-    made.push({ mediaId: img.id, alt: ph.alt, auto: true });
+    made.push({ mediaId: img.id, alt: ph.alt, auto: true, ...(ph.role && { role: ph.role }) });
   }
 
   // The new photos first (the first is the shop card), then the owner's own photos as they were.

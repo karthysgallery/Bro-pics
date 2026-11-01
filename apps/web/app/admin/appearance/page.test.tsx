@@ -24,7 +24,7 @@ describe('admin appearance', () => {
     expect(await screen.findByRole('heading', { name: 'Appearance' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Reset to original look' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByLabelText('Headings and prices') as HTMLSelectElement).value).toBe('outfit');
+    expect((screen.getByLabelText('Headings and prices') as HTMLSelectElement).value).toBe('cormorant');
   });
 
   it('saves a new heading font, round corners, a square button, a favicon and a hidden section', async () => {

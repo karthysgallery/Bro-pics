@@ -24,8 +24,8 @@ const FALLBACK_IMAGES: Record<string, string> = {
 };
 
 /**
- * Horizontal category tiles. Clean image-left / text-right layout.
- * Minimal rounding, no shadows, warm border on hover.
+ * Category tiles as gallery pictures: a large image (4:5) with the name on a band under a fine gold rule.
+ * Two across on phones, four on desktop.
  */
 export function CategoryTiles({ title, categories }: CategoryTilesProps) {
   if (categories.length === 0) return null;
@@ -33,7 +33,7 @@ export function CategoryTiles({ title, categories }: CategoryTilesProps) {
   return (
     <Section>
       <SectionHeader title={title} subtitle="Find the perfect piece for every moment" href="/category" />
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <ul className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {categories.map((category) => {
           const imgSrc =
             category.image ||
@@ -45,34 +45,24 @@ export function CategoryTiles({ title, categories }: CategoryTilesProps) {
             <li key={category.id}>
               <Link
                 href={`/category/${category.slug}`}
-                className="group flex items-stretch h-16 sm:h-[72px] rounded-card bg-paper overflow-hidden border border-line/60 hover:border-ink/20 transition-colors duration-180"
+                className="group block overflow-hidden rounded-card bg-paper ring-1 ring-line/70 transition-shadow duration-300 hover:shadow-[0_16px_36px_-16px_rgb(78_57_32/0.4)]"
               >
-                {/* Left image */}
-                <div className="relative w-[30%] h-full shrink-0 overflow-hidden bg-tint">
+                {/* Large picture, as in a gallery: the frames are the point. */}
+                <div className="relative aspect-[4/5] w-full overflow-hidden bg-tint">
                   <Image
                     src={imgSrc}
                     alt=""
                     fill
-                    sizes="(max-width: 640px) 100px, 140px"
-                    className="object-cover transition-transform duration-300 group-hover:scale-[1.06]"
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                   />
                 </div>
-
-                {/* Right text */}
-                <div className="flex-1 flex flex-col justify-center px-4 py-2 min-w-0">
-                  <span className="block text-[13px] font-semibold text-ink truncate leading-tight group-hover:text-accent transition-colors duration-140">
+                {/* Name band under a fine gold rule. */}
+                <div className="border-t border-gold/60 px-3 py-3 text-center sm:px-4 sm:py-4">
+                  <span className="block line-clamp-2 font-display text-[16px] font-semibold leading-[1.15] text-ink transition-colors group-hover:text-accent sm:text-[20px]">
                     {category.name}
                   </span>
-                  <span className="block text-[11px] text-ink/45 truncate mt-0.5">
-                    {tagline}
-                  </span>
-                </div>
-
-                {/* Trailing arrow */}
-                <div className="flex items-center pr-3 text-ink/30 group-hover:text-ink/60 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
+                  <span className="mt-1 block truncate text-[11px] uppercase tracking-[0.14em] text-ink/55">{tagline}</span>
                 </div>
               </Link>
             </li>

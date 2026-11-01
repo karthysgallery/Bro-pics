@@ -14,14 +14,15 @@ export function ProductCard({ product }: ProductCardProps) {
       ? `${formatPaise(product.minPrice)} – ${formatPaise(product.maxPrice)}`
       : formatPaise(product.minPrice);
 
-  const rawSize = product.availableSizes?.[0] || '';
-  const formattedSize = rawSize.replace(/\s*x\s*/gi, ' × ');
-  const rawColour = product.availableColours?.[0] || '';
+  // What the customer most wants to know at a glance: how many photos it takes and how many sizes it comes in.
+  const slots = product.photoSlots ?? 0;
+  const sizeCount = product.availableSizes?.length ?? 0;
+  const kindLabel = slots > 1 ? `${slots} photos` : slots === 1 ? 'Single photo' : 'Ready-made design';
+  const metaLabel = sizeCount > 1 ? `${kindLabel} · ${sizeCount} sizes` : kindLabel;
 
-  // Clean, concise meta — only show what's real
-  const metaLabel = formattedSize && rawColour
-    ? `${formattedSize} · ${rawColour}`
-    : formattedSize || rawColour || null;
+  // The card shows the frame posed in a real setting (table or wall) when those photos exist; the other pose on hover.
+  const cardImage = product.listingImageUrl || product.primaryImageUrl;
+  const cardHover = product.listingImageUrl ? product.listingHoverImageUrl || null : product.hoverImageUrl;
 
   // Only real reviews are shown: a product with none has no rating line at all.
   const displayRating = product.ratingAverage;
@@ -35,24 +36,24 @@ export function ProductCard({ product }: ProductCardProps) {
       <Link href={`/product/${product.slug}`} className="flex flex-col flex-1">
 
         {/* Image — clean square with minimal rounding */}
-        <div className="relative aspect-square w-full rounded-card overflow-hidden bg-tint shrink-0">
-          {product.primaryImageUrl ? (
+        <div className="relative aspect-square w-full rounded-card overflow-hidden bg-tint shrink-0 ring-1 ring-line/70 transition-shadow duration-300 group-hover:shadow-[0_14px_34px_-14px_rgb(78_57_32/0.35)]">
+          {cardImage ? (
             <Image
-              src={product.primaryImageUrl}
+              src={cardImage}
               alt={product.seo?.imageAlt || product.title}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-              className={`object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04] ${
-                product.hoverImageUrl ? 'group-hover:opacity-0' : ''
+              className={`object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] ${
+                cardHover ? 'group-hover:opacity-0' : ''
               }`}
             />
           ) : (
             <div className="w-full h-full bg-tint" />
           )}
 
-          {product.hoverImageUrl && (
+          {cardHover && (
             <Image
-              src={product.hoverImageUrl}
+              src={cardHover}
               alt=""
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
@@ -76,29 +77,29 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {/* Product info — clean typographic hierarchy */}
-        <div className="pt-3 pb-1 flex flex-col flex-1">
+        <div className="pt-3.5 pb-1 flex flex-col flex-1">
 
           {/* Size / colour meta */}
           {metaLabel && (
-            <p className="text-[11px] text-ink/45 font-normal leading-none mb-1.5 truncate">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent/85 leading-none mb-2 truncate">
               {metaLabel}
             </p>
           )}
 
           {/* Title */}
-          <h3 className="text-[14px] sm:text-[15px] font-semibold text-ink leading-snug line-clamp-2 mb-auto group-hover:text-accent transition-colors duration-140">
+          <h3 className="font-display text-[17px] sm:text-[19px] font-semibold text-ink leading-[1.2] line-clamp-2 mb-auto group-hover:text-accent transition-colors duration-140">
             {product.title}
           </h3>
 
           {/* Price and rating row */}
-          <div className="flex items-baseline justify-between gap-2 mt-3">
-            <span className="text-[15px] font-bold text-ink tabular-nums">
+          <div className="flex items-baseline justify-between gap-2 mt-2.5">
+            <span className="text-[15px] font-semibold text-ink tabular-nums">
               {priceLabel}
             </span>
 
             {displayRatingCount > 0 && (
               <div className="flex items-center gap-1 shrink-0">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#FCA311" aria-hidden="true">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-gold" aria-hidden="true">
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
                 <span className="text-[11px] font-semibold text-ink leading-none">

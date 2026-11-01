@@ -1,7 +1,7 @@
 'use client';
 
 import { FONT_MAP, formatCalendarDate, parseCalendarDate, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
-import { TEXT_COLOR_OPTIONS } from '../../lib/text-personalization-options';
+import { QUICK_TEXT_COLORS, toHexColor } from '../../lib/text-personalization-options';
 import { Icon } from './icons';
 import { fontKeyOf } from './render-template';
 import type { TemplateCustomizer } from './use-template-customizer';
@@ -47,7 +47,11 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
   const fontKey = fontKeyOf(value?.fontFamily, slot.defaultFontFamily);
   const colour = value?.color ?? slot.defaultColor ?? '#000000';
   const fonts = slot.allowedFonts?.length ? FONT_MAP.filter((f) => slot.allowedFonts!.includes(f.key)) : FONT_MAP;
-  const colours = slot.allowedColors?.length ? slot.allowedColors.map((c) => ({ key: c, label: c, value: c })) : TEXT_COLOR_OPTIONS;
+  // The designer may limit a field to its own colours; otherwise four quick colours plus a picker for any colour.
+  const restricted = Boolean(slot.allowedColors?.length);
+  const colours = restricted ? slot.allowedColors!.map((c) => ({ key: c, label: c, value: c })) : QUICK_TEXT_COLORS;
+  const isQuick = colours.some((c) => c.value.toLowerCase() === colour.toLowerCase());
+  const pickerValue = toHexColor(colour) ?? '#111111';
   const inputId = `text-${slot.id}`;
 
   return (
@@ -85,20 +89,45 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
           </button>
         ))}
       </div>
-      <div role="radiogroup" aria-label={`Colour for ${slot.label}`} className="flex flex-wrap gap-2">
-        {colours.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            role="radio"
-            aria-checked={colour.toLowerCase() === c.value.toLowerCase()}
-            aria-label={c.label}
-            title={c.label}
-            onClick={() => customizer.updateText(slot.id, { color: c.value })}
-            className={`h-8 w-8 rounded-full border-2 transition-transform ${colour.toLowerCase() === c.value.toLowerCase() ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.2)]'}`}
-            style={{ backgroundColor: c.value }}
-          />
-        ))}
+      <div role="radiogroup" aria-label={`Colour for ${slot.label}`} className="flex flex-wrap items-center gap-1">
+        {colours.map((c) => {
+          const on = colour.toLowerCase() === c.value.toLowerCase();
+          return (
+            <button
+              key={c.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={c.label}
+              title={c.label}
+              onClick={() => customizer.updateText(slot.id, { color: c.value })}
+              className="flex h-11 w-9 items-center justify-center"
+            >
+              <span
+                className={`h-7 w-7 rounded-full border-2 transition-transform ${on ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]'}`}
+                style={{ backgroundColor: c.value }}
+              />
+            </button>
+          );
+        })}
+        {!restricted && (
+          <label
+            title="Pick any colour"
+            className={`relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 transition-transform ${!isQuick ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]'}`}
+            style={!isQuick ? { backgroundColor: colour } : { background: 'conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935)' }}
+          >
+            <span className={`flex h-4 w-4 items-center justify-center rounded-full ${!isQuick ? 'bg-paper/85' : 'bg-paper'}`}>
+              <Icon name="pen" className="h-3 w-3 text-ink" />
+            </span>
+            <input
+              type="color"
+              aria-label={`Pick any colour for ${slot.label}`}
+              value={pickerValue}
+              onChange={(e) => customizer.updateText(slot.id, { color: e.target.value })}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+        )}
       </div>
     </div>
   );

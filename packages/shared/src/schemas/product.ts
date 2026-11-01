@@ -74,6 +74,10 @@ export const ProductSchema = z.object({
   // sourced from variant-agnostic (variantId === null) image media only.
   primaryImageUrl: z.string(),
   hoverImageUrl: z.string().nullable(),
+  /** The shop card's picture: the frame posed in a real setting (made with the automatic photos). Falls back to primaryImageUrl. */
+  listingImageUrl: z.string().nullable().optional(),
+  /** Shown when the shop card is hovered: the same frame in another setting. Falls back to hoverImageUrl. */
+  listingHoverImageUrl: z.string().nullable().optional(),
 
   // [ABE-04] Editorial workflow status, additive to `isActive` — NOT a
   // replacement for it. `isActive` stays the single field every storefront

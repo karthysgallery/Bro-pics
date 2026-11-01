@@ -17,6 +17,9 @@ export function photoKeyOf(input: {
   glitterExtra: number;
 }): string {
   return JSON.stringify({
+    // The photo set's own version: raising it marks every product's photos as out of date (remade on next save).
+    // v2: styled table/wall photos for the shop card, no text over the pictures.
+    v: 2,
     t: input.productType,
     n: input.title,
     p: input.pictureSource,

@@ -9,7 +9,8 @@
  * the print renderer resolves it against its own bundled `fonts/` folder.
  *
  * ALL FONTS LISTED HERE ARE GOOGLE FONTS RELEASED UNDER THE OFL (SIL OPEN
- * FONT LICENSE) — free to bundle and redistribute.
+ * FONT LICENSE) or, for Satisfy, the Apache 2.0 licence — free to bundle and
+ * redistribute.
  */
 
 export interface FontEntry {
@@ -34,6 +35,15 @@ export const FONT_MAP: readonly FontEntry[] = [
   { key: 'cinzel', label: 'Cinzel', cssVariable: '--font-cinzel', ttfFilename: 'Cinzel-Regular.ttf' },
   { key: 'caveat', label: 'Caveat', cssVariable: '--font-caveat', ttfFilename: 'Caveat-Regular.ttf' },
   { key: 'josefin', label: 'Josefin Sans', cssVariable: '--font-josefin', ttfFilename: 'JosefinSans-Regular.ttf' },
+  { key: 'allura', label: 'Allura', cssVariable: '--font-allura', ttfFilename: 'Allura-Regular.ttf' },
+  { key: 'alex-brush', label: 'Alex Brush', cssVariable: '--font-alex-brush', ttfFilename: 'AlexBrush-Regular.ttf' },
+  { key: 'parisienne', label: 'Parisienne', cssVariable: '--font-parisienne', ttfFilename: 'Parisienne-Regular.ttf' },
+  { key: 'pinyon', label: 'Pinyon Script', cssVariable: '--font-pinyon', ttfFilename: 'PinyonScript-Regular.ttf' },
+  { key: 'satisfy', label: 'Satisfy', cssVariable: '--font-satisfy', ttfFilename: 'Satisfy-Regular.ttf' },
+  { key: 'kaushan', label: 'Kaushan Script', cssVariable: '--font-kaushan', ttfFilename: 'KaushanScript-Regular.ttf' },
+  { key: 'lobster', label: 'Lobster', cssVariable: '--font-lobster', ttfFilename: 'Lobster-Regular.ttf' },
+  { key: 'playfair', label: 'Playfair Display', cssVariable: '--font-playfair', ttfFilename: 'PlayfairDisplay-Regular.ttf' },
+  { key: 'montserrat', label: 'Montserrat', cssVariable: '--font-montserrat', ttfFilename: 'Montserrat-Regular.ttf' },
 ] as const;
 
 /**

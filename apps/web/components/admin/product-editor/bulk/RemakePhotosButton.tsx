@@ -45,7 +45,7 @@ export function RemakePhotosButton({ products, onDone }: Props) {
         setLine({ id: p.id, title: p.title, text: 'Checking…', tone: 'muted' });
         try {
           const r = await remakeShopPhotos(deps, p.id, models, (text) => setLine({ id: p.id, title: p.title, text, tone: 'muted' }));
-          if (r.status === 'made') setLine({ id: p.id, title: p.title, text: `Done — ${r.photos} photos, framed photo on the shop card`, tone: 'ok' });
+          if (r.status === 'made') setLine({ id: p.id, title: p.title, text: `Done — ${r.photos} photos, styled photo on the shop card`, tone: 'ok' });
           else if (r.status === 'up-to-date') setLine({ id: p.id, title: p.title, text: 'Already has its framed photos', tone: 'muted' });
           else setLine({ id: p.id, title: p.title, text: `Skipped: ${r.reason}`, tone: 'warn' });
         } catch (e) {
@@ -80,8 +80,9 @@ export function RemakePhotosButton({ products, onDone }: Props) {
           <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-paper p-5 shadow-xl">
             <h2 id="remake-title" className="text-base font-bold text-ink">Make framed shop photos</h2>
             <p className="mt-1 text-sm text-ink/70">
-              For each of the {products.length} products in the list, draws the picture in its frame (the shop card photo), the sizes, a frame
-              close-up, a wall view and the picture itself — the same photos the editor makes when you save. Products that already have
+              For each of the {products.length} products in the list, draws the framed picture, two styled photos (standing on a table or hung on
+              a wall: these become the shop card and its hover picture), the sizes, a frame close-up and the picture itself — the same photos the
+              editor makes when you save. Products that already have
               up-to-date photos are left alone, and your own photos are kept after the new ones.
             </p>
             {lines.length > 0 && (

@@ -13,7 +13,7 @@ import { getLiveLegalSlugs } from '../lib/firestore-content';
 import { getBusinessDetails, getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings, getSiteText } from '../lib/firestore-settings';
 import { SiteTextProvider } from '../components/layout/SiteTextContext';
 import { DEFAULT_SITE_TEXT, type SiteText } from '@bro-pics/shared';
-import { resolveActiveTheme, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
+import { activeThemeOffer, themeCssVariables, type StoreTheme } from '@bro-pics/shared';
 import { CANONICAL_ORIGIN } from '../lib/seo/site';
 import { getAppearanceSettings } from '../lib/firestore-settings';
 import { appearanceCss, DEFAULT_APPEARANCE, type Appearance } from '@bro-pics/shared';
@@ -22,7 +22,8 @@ import { withComboNavLink } from '../lib/combo-nav';
 import { BusinessContactProvider, type BusinessContact } from '../lib/business-contact';
 import { whatsappDigits } from '@bro-pics/shared';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
-import { Inter, DM_Sans, Poppins, Nunito_Sans, Montserrat, Playfair_Display, Lora, Fraunces, Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans } from 'next/font/google';
+import { Inter, DM_Sans, Poppins, Nunito_Sans, Montserrat, Playfair_Display, Lora, Fraunces, Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans, Allura, Alex_Brush, Parisienne, Satisfy, Kaushan_Script, Lobster, Pinyon_Script } from 'next/font/google';
+import { shopTheme } from '../lib/shop-theme';
 
 // One UI typeface for the whole interface. Manrope holds up at the 11–14px
 // sizes a dense catalogue runs on, and its open, slightly geometric figures
@@ -35,9 +36,9 @@ const sansFont = Manrope({
   display: 'swap',
 });
 
-// Headlines only. Outfit is wide and geometric — right for signage-sized
-// type, wrong for a 13px product title, which is why the body stays Manrope.
-const displayFont = Outfit({
+// Headlines only: a refined serif (Cormorant Garamond) for the shop's premium, editorial look. Body text stays
+// Manrope for legibility at small sizes. The admin points --font-display back at Outfit (globals.css).
+const displayFont = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   variable: '--font-display',
@@ -75,6 +76,14 @@ const cormorant = Cormorant_Garamond({ subsets: ['latin'], weight: ['400', '600'
 const cinzel = Cinzel({ subsets: ['latin'], variable: '--font-cinzel', display: 'swap' });
 const caveat = Caveat({ subsets: ['latin'], variable: '--font-caveat', display: 'swap' });
 const josefinSans = Josefin_Sans({ subsets: ['latin'], variable: '--font-josefin', display: 'swap' });
+// More lettering for names and wishes. Not preloaded: a page fetches one only when a customer picks it.
+const allura = Allura({ subsets: ['latin'], weight: '400', variable: '--font-allura', display: 'swap', preload: false });
+const alexBrush = Alex_Brush({ subsets: ['latin'], weight: '400', variable: '--font-alex-brush', display: 'swap', preload: false });
+const parisienne = Parisienne({ subsets: ['latin'], weight: '400', variable: '--font-parisienne', display: 'swap', preload: false });
+const satisfy = Satisfy({ subsets: ['latin'], weight: '400', variable: '--font-satisfy', display: 'swap', preload: false });
+const kaushan = Kaushan_Script({ subsets: ['latin'], weight: '400', variable: '--font-kaushan', display: 'swap', preload: false });
+const lobster = Lobster({ subsets: ['latin'], weight: '400', variable: '--font-lobster', display: 'swap', preload: false });
+const pinyon = Pinyon_Script({ subsets: ['latin'], weight: '400', variable: '--font-pinyon', display: 'swap', preload: false });
 
 const textFieldFontVariables = [
   dancingScript.variable,
@@ -85,6 +94,13 @@ const textFieldFontVariables = [
   cinzel.variable,
   caveat.variable,
   josefinSans.variable,
+  allura.variable,
+  alexBrush.variable,
+  parisienne.variable,
+  satisfy.variable,
+  kaushan.variable,
+  lobster.variable,
+  pinyon.variable,
 ].join(' ');
 
 const FALLBACK_TITLE = 'KarthysGallery — Personalized Photo Frames';
@@ -183,7 +199,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // set for the shop only: the admin (data-admin-root) keeps the defaults.
   let theme: StoreTheme | null = null;
   try {
-    theme = resolveActiveTheme(await getThemeSettings());
+    theme = shopTheme(await getThemeSettings());
   } catch (error) {
     console.error('Failed to load theme settings:', error);
   }
@@ -237,6 +253,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 liveLegalSlugs={liveLegalSlugs}
                 storeSettings={storeSettings}
                 themeDecor={festive?.decor ?? null}
+                themeOffer={theme ? activeThemeOffer(theme.decor) : null}
               >
                 {children}
               </LayoutChrome>

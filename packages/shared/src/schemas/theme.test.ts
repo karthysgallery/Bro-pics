@@ -53,7 +53,7 @@ describe('festival themes', () => {
 
   it('turns colours into stylesheet variables', () => {
     expect(hexToChannels('#FCA311')).toBe('252 163 17');
-    expect(themeCssVariables(THEME_PRESETS[0].colors)['--color-gold-deep']).toBe('224 143 0');
+    expect(themeCssVariables(THEME_PRESETS[0].colors)['--color-gold-deep']).toBe('176 138 84');
     expect(indiaDate(new Date('2026-10-24T19:00:00Z'))).toBe('2026-10-25');
   });
 });

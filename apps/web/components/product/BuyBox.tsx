@@ -71,6 +71,8 @@ interface BuyBoxProps {
   // state it produced and, on click, asks the parent to submit it.
   personalizationReady: boolean;
   personalizationReason?: string;
+  /** Pressing "Add to cart" before the design is finished: shows the customer what is left (instead of a dead button). */
+  onBlockedAddToCart?: (quantity: number) => void;
   submitting: boolean;
   submitError: string | null;
   onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => void;
@@ -98,6 +100,7 @@ export function BuyBox({
   onSelectOrientation,
   personalizationReady,
   personalizationReason,
+  onBlockedAddToCart,
   submitting,
   submitError,
   onAddToCart,
@@ -170,8 +173,16 @@ export function BuyBox({
         ? 'On backorder — dispatch will take longer than usual'
         : 'Out of stock';
 
+  // With a way to explain what is missing, an unfinished design leaves the button pressable.
+  const blockedByDesign = !personalizationReady && Boolean(onBlockedAddToCart);
+  const cartDisabled = !inStock || !selectedVariant || !onAddToCart || (!personalizationReady && !onBlockedAddToCart) || submitting;
+
   const handleAddToCart = () => {
     if (!selectedVariant || !onAddToCart) return;
+    if (!personalizationReady) {
+      onBlockedAddToCart?.(quantity);
+      return;
+    }
     onAddToCart(quantity, (personalizationId, previewPath) => {
       if (isEditingCartLine) {
         // Same personalizationId, same line — only the fields a re-edit
@@ -369,8 +380,9 @@ export function BuyBox({
 
         <Button
           onClick={handleAddToCart}
-          disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
-          className="w-full h-12 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+          disabled={cartDisabled}
+          aria-disabled={blockedByDesign || undefined}
+          className={`w-full h-12 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 ${blockedByDesign ? 'opacity-70' : ''}`}
         >
           {comboFrame
             ? submitting ? 'Saving…' : `Save ${comboFrame.label}`
@@ -414,8 +426,9 @@ export function BuyBox({
           type="button"
           aria-label="Quick checkout"
           onClick={handleAddToCart}
-          disabled={!inStock || !selectedVariant || !onAddToCart || !personalizationReady || submitting}
-          className="h-11 min-h-[44px] px-6 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs"
+          disabled={cartDisabled}
+          aria-disabled={blockedByDesign || undefined}
+          className={`h-11 min-h-[44px] px-6 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs ${blockedByDesign ? 'opacity-70' : ''}`}
         >
           {comboFrame
             ? submitting ? 'Saving…' : 'Save frame'

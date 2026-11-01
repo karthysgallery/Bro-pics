@@ -43,7 +43,7 @@ describe('guided product editor', () => {
     );
     makeProductPhotos.mockReset();
     makeProductPhotos.mockResolvedValue(
-      (['framed', 'sizes', 'frame', 'wall', 'picture'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/' }))
+      (['framed', 'pose-1', 'pose-2', 'sizes', 'frame', 'picture'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/', ...(key === 'pose-1' ? { role: 'listing' as const } : key === 'pose-2' ? { role: 'listing-hover' as const } : {}) }))
     );
   });
 
@@ -100,7 +100,10 @@ describe('guided product editor', () => {
     expect(body.faq.length).toBeGreaterThanOrEqual(4);
     // The five shop photos were made from the artwork and default frame, uploaded and put first.
     expect(makeProductPhotos).toHaveBeenCalledWith(expect.objectContaining({ isSample: false, sizes: [{ widthIn: 8, heightIn: 12 }, { widthIn: 12, heightIn: 18 }], frames: [expect.objectContaining({ name: 'Teak Classic' }), expect.objectContaining({ name: 'Royal Gold' })] }));
-    expect(body.gallery).toEqual([1, 2, 3, 4, 5].map((i) => expect.objectContaining({ mediaId: `auto${i}`, auto: true })));
+    expect(body.gallery).toEqual([1, 2, 3, 4, 5, 6].map((i) => expect.objectContaining({ mediaId: `auto${i}`, auto: true })));
+    // The two styled photos become the shop card's picture and its hover picture.
+    expect(body.gallery[1]).toMatchObject({ role: 'listing' });
+    expect(body.gallery[2]).toMatchObject({ role: 'listing-hover' });
     expect(typeof body.autoPhotoKey).toBe('string');
   });
 
@@ -230,14 +233,14 @@ describe('guided product editor', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate details/ }));
     await waitFor(() => expect(within(document.querySelector('aside')!).getByText('100')).toBeTruthy());
     makeProductPhotos.mockResolvedValue(
-      (['framed', 'sizes', 'frame', 'wall', 'picture', 'glitter'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/' }))
+      (['framed', 'pose-1', 'pose-2', 'sizes', 'frame', 'picture', 'glitter'] as const).map((key) => ({ key, label: key, alt: `Lord Murugan ${key}`, dataUrl: 'data:image/jpeg;base64,/9j/' }))
     );
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(replace).toHaveBeenCalled());
     expect(makeProductPhotos).toHaveBeenCalledWith(expect.objectContaining({ glitter: { extraPrice: 15000 } }));
     const body = JSON.parse(String(api.mock.calls.find(([p, i]) => p === '/api/admin/products/setup' && i?.method === 'POST')![1].body));
     expect(body.glitter).toEqual({ enabled: true, extraPrice: 15000 });
-    expect(body.gallery).toHaveLength(6);
+    expect(body.gallery).toHaveLength(7);
   });
 
   it('collage: the shop photos ask for one sample photo per photo space of the chosen design', async () => {

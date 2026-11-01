@@ -94,10 +94,10 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
             <img src={logoSrc} alt={storeName ?? 'KarthysGallery'} className="h-9 w-auto max-w-[180px] object-contain sm:h-10" />
           ) : (
             <>
-              <span className="font-display text-[1.2rem] sm:text-xl md:text-[1.35rem] font-bold tracking-snug text-ink leading-tight">
-                Karthys<span className="text-gold group-hover:text-gold-deep transition-colors">Gallery</span>
+              <span className="font-display text-[1.45rem] sm:text-[1.6rem] md:text-[1.75rem] font-semibold tracking-[0.01em] text-ink leading-none">
+                Karthys<span className="text-accent italic group-hover:text-accent-dark transition-colors">Gallery</span>
               </span>
-              <span className="text-[10px] text-ink/50 font-normal leading-none tracking-wide mt-0.5">
+              <span className="mt-1 text-[8.5px] sm:text-[9px] font-semibold uppercase tracking-[0.32em] text-accent/80 leading-none">
                 frames for a brighter you
               </span>
             </>

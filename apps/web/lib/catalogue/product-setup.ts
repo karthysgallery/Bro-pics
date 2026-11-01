@@ -78,7 +78,20 @@ export const ProductSetupBodySchema = z
     frameModelIds: z.array(z.string().min(1)).min(1, 'Choose at least one frame model.').max(12),
     rows: z.array(PriceRowSchema).min(1, 'Add at least one size.').max(120),
     // `auto`: one of the five shop photos the editor makes from the picture and frame (replaced when they change).
-    gallery: z.array(z.object({ mediaId: z.string().min(1), alt: z.string().trim().max(160).default(''), auto: z.boolean().default(false) }).strict()).max(20).default([]),
+    gallery: z
+      .array(
+        z
+          .object({
+            mediaId: z.string().min(1),
+            alt: z.string().trim().max(160).default(''),
+            auto: z.boolean().default(false),
+            /** The shop card's picture, and the one shown when the card is hovered (the styled photos). */
+            role: z.enum(['listing', 'listing-hover']).optional(),
+          })
+          .strict()
+      )
+      .max(20)
+      .default([]),
     /** What the automatic photos were made from (so the editor knows when to remake them); null = not made. */
     autoPhotoKey: z.string().max(4000).nullable().default(null),
     /** Glitter-finish printing: offered on this product or not, and the extra per frame (paise). */
@@ -279,8 +292,17 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
   const keep = new Set(gallery.map((g) => `g_${g.mediaId}`));
   for (const d of oldMedia.docs) if (!keep.has(d.id) && d.id.startsWith('g_')) batch.delete(d.ref);
   gallery.forEach((g, i) => {
-    batch.set(ref.collection('media').doc(`g_${g.mediaId}`), { id: `g_${g.mediaId}`, productId: id, variantId: null, type: 'image', url: mediaImageUrl(g.mediaId), alt: g.alt || body.seo.imageAlt || body.title, sortOrder: i, auto: 'auto' in g ? Boolean(g.auto) : false });
+    batch.set(ref.collection('media').doc(`g_${g.mediaId}`), {
+      id: `g_${g.mediaId}`, productId: id, variantId: null, type: 'image', url: mediaImageUrl(g.mediaId), alt: g.alt || body.seo.imageAlt || body.title, sortOrder: i,
+      auto: 'auto' in g ? Boolean(g.auto) : false,
+      ...('role' in g && g.role ? { role: g.role } : {}),
+    });
   });
+  // The shop card shows the styled photos when there are any; otherwise the main photo (and the second one on hover).
+  const roleUrl = (role: 'listing' | 'listing-hover') => {
+    const item = gallery.find((g) => 'role' in g && g.role === role);
+    return item ? mediaImageUrl(item.mediaId) : null;
+  };
   // Legacy (seeded) gallery docs stay as they are; the card images come from the new gallery when it has any.
   const legacyImages = oldMedia.docs.filter((d) => !d.id.startsWith('g_') && d.get('variantId') === null && d.get('type') === 'image').sort((a, b) => a.get('sortOrder') - b.get('sortOrder')).map((d) => String(d.get('url')));
   const cardImages = [...gallery.map((g) => mediaImageUrl(g.mediaId)), ...legacyImages];
@@ -323,6 +345,8 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     basePrice: Math.min(...(activeRows.length ? activeRows : body.rows).map((r) => r.price)),
     primaryImageUrl: cardImages[0] ?? before?.primaryImageUrl ?? '',
     hoverImageUrl: cardImages[1] ?? null,
+    listingImageUrl: roleUrl('listing'),
+    listingHoverImageUrl: roleUrl('listing-hover'),
     // Found by what the picture shows ("Vijay"), its search phrase and code too, not only by its name.
     ...buildProductSearchFields(body.title, body.shortDesc, body.seo.keywords, [body.subject, body.seo.focusKeyword, body.productCode, ...body.occasionTags]),
     updatedAt: now,
@@ -394,7 +418,14 @@ export async function loadProductSetup(db: Firestore, productId: string) {
     .map((d) => {
       const url = String(d.get('url'));
       const fromLibrary = /^\/api\/media\/([^/]+)\/image/.exec(url);
-      return { mediaId: fromLibrary ? decodeURIComponent(fromLibrary[1]!) : null, url, alt: String(d.get('alt') ?? ''), auto: d.get('auto') === true };
+      const role = d.get('role');
+      return {
+        mediaId: fromLibrary ? decodeURIComponent(fromLibrary[1]!) : null,
+        url,
+        alt: String(d.get('alt') ?? ''),
+        auto: d.get('auto') === true,
+        ...(role === 'listing' || role === 'listing-hover' ? { role: role as 'listing' | 'listing-hover' } : {}),
+      };
     });
   return {
     product: {
