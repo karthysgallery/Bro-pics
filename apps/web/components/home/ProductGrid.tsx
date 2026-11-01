@@ -27,8 +27,8 @@ export function ProductGrid({
         <SectionHeader eyebrow="A frame for every feeling" title={title} subtitle={subtitle} href={viewAllHref} linkLabel="Shop all frames" />
 
         {/* Product grid — 2 cols mobile, 4 cols desktop */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10">
-          {products.slice(0, 8).map((product) => (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-8 sm:gap-x-8 sm:gap-y-12 max-lg:[&>*:nth-child(9)]:hidden">
+          {products.slice(0, 9).map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>

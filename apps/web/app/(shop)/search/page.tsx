@@ -178,7 +178,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             availableOrientations={availableOrientations}
             initialSearch={urlParams.toString()}
           />
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-8 md:gap-x-8">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

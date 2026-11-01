@@ -352,9 +352,9 @@ async function photoFrame(input: ProductPhotoInput, framed: HTMLImageElement): P
  * of the photo's height) and how much of the square the frame fills once cropped around it.
  */
 export const POSES = [
-  { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.68 },
-  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.6 },
-  { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.6 },
+  { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.82 },
+  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.82 },
+  { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.82 },
 ] as const;
 export type Pose = (typeof POSES)[number];
 
@@ -379,10 +379,11 @@ async function photoPose(pose: Pose, framed: HTMLImageElement): Promise<string> 
   const fh = aspect >= 1 ? longest / aspect : longest;
   const fx = pose.x * W - fw / 2;
   const fy = pose.standing ? pose.y * H - fh : pose.y * H - fh / 2;
-  // A square crop around it (a little lower for a standing frame, so the tabletop shows), kept inside the photo.
+  // A square crop around it, the frame filling most of it (as shop cards show frames), a little lower for a standing
+  // frame so the tabletop shows; kept inside the photo.
   const side = Math.min(W, H, Math.max(fw, fh) / pose.fill);
   const cx = fx + fw / 2;
-  const cy = fy + fh / 2 + (pose.standing ? fh * 0.12 : fh * 0.04);
+  const cy = fy + fh / 2 + (pose.standing ? fh * 0.05 : 0);
   const x0 = Math.max(0, Math.min(W - side, cx - side / 2));
   const y0 = Math.max(0, Math.min(H - side, cy - side / 2));
   const k = PHOTO_SIZE / side;

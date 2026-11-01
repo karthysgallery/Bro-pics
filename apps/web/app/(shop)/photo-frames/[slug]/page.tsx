@@ -104,7 +104,7 @@ export default async function LandingPage({ params }: Props) {
         {products.length > 0 ? (
           <>
             <p className="mb-4 text-sm font-semibold text-ink/60">{products.length} designs</p>
-            <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-8 md:grid-cols-3">
               {products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

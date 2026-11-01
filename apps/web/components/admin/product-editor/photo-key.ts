@@ -19,7 +19,8 @@ export function photoKeyOf(input: {
   return JSON.stringify({
     // The photo set's own version: raising it marks every product's photos as out of date (remade on next save).
     // v2: styled table/wall photos for the shop card, no text over the pictures.
-    v: 2,
+    // v3: the frame fills most of the styled photos, so the design is easy to see.
+    v: 3,
     t: input.productType,
     n: input.title,
     p: input.pictureSource,
