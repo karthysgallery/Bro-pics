@@ -381,7 +381,8 @@ export function SearchTypeahead({
           <button
             type="submit"
             aria-label="Search"
-            className="shrink-0 w-8 h-8 rounded-full bg-gold hover:bg-gold-deep text-ink flex items-center justify-center transition-colors shadow-xs active:scale-95"
+            data-shape="circle"
+            className="shrink-0 w-9 h-9 rounded-full bg-gold hover:bg-gold-deep text-ink flex items-center justify-center transition-colors shadow-xs active:scale-95"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />

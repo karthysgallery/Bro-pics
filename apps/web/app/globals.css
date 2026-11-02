@@ -29,7 +29,7 @@
 }
 
 /* Main call-to-action buttons: gently rounded instead of pills, on the shop only. */
-:root:not(:has([data-admin-root])) body :is(button, a, input[type='submit'])[class~='rounded-full']:is([class~='bg-gold'], [class~='bg-ink']) {
+:root:not(:has([data-admin-root])) body :is(button, a, input[type='submit'])[class~='rounded-full']:is([class~='bg-gold'], [class~='bg-ink']):not([data-shape='circle']) {
   border-radius: 6px;
 }
 
@@ -284,8 +284,10 @@ p {
   /* Buttons keep their native layout (text centred by the browser, or the
      component's own flex classes) — forcing display:inline-flex here used to
      left-align every `text-center` button and label on phones. */
-  button,
-  [role="button"] {
+  /* Round icon buttons (data-shape="circle") keep their exact size: stretching them to 44px tall turns
+     the circle into an oval. They are sized 36px or more and spaced apart instead. */
+  button:not([data-shape='circle']),
+  [role="button"]:not([data-shape='circle']) {
     min-height: 44px;
   }
 
@@ -629,4 +631,14 @@ details > summary::-webkit-details-marker {
    button above it so the two never overlap. */
 @media (max-width: 767px) {
   body:has([data-mobile-cta]) .wa-fab { bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
+}
+
+/* WhatsApp button: a soft ring that breathes out every few seconds, so it reads as "live" without moving. */
+.wa-ring { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5); animation: wa-ring 2.8s ease-out infinite; }
+@keyframes wa-ring {
+  0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5); }
+  70%, 100% { box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-ring { animation: none; }
 }
