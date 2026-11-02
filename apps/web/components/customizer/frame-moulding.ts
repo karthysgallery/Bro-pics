@@ -41,6 +41,12 @@ export interface FrameLook {
 
 export const STOCK_FRAME: FrameLook = { src: FRAME_SRC, borderPx: FRAME_MOULDING_SRC_PX, mouldingWidthIn: MOULDING_IN };
 
+/**
+ * The shop's display frame: satin black with a fine gold inner lip (public/frames/premium-black.png, 100px moulding).
+ * Every product photo and preview shows it, so the catalogue looks consistent; the frame delivered may vary slightly.
+ */
+export const DISPLAY_FRAME: FrameLook = { src: '/frames/premium-black.png', borderPx: 100, mouldingWidthIn: 1 };
+
 type FrameGeo = { x: number; y: number; w: number; h: number };
 
 /** The frame's four sides, then its corners on top, drawn around an opening of (W - 2m) × (H - 2m). */

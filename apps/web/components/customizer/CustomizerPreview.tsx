@@ -112,7 +112,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       </PreviewGallery>
 
       {samples.length > 0 && !fixedDesign && photoCount < template.photoSlots.length && (
-        <p className="px-1 text-center text-2xs text-ink/55">Example photos. Tap a space to add your own.</p>
+        <p className="px-1 text-center text-2xs text-ink/55">Example photos. Tap a space to add your own. Frame finish may vary slightly.</p>
       )}
 
       {glitter && roomImage && (

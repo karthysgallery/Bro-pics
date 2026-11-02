@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_PREVIEW_SCENES, layoutFrameInScene, type PreviewScene } from '../../../lib/preview-scenes';
-import { frameDesign, STOCK_FRAME, type FrameLook } from '../../customizer/frame-moulding';
+import { DISPLAY_FRAME, frameDesign, STOCK_FRAME, type FrameLook } from '../../customizer/frame-moulding';
 
 /**
  * The shop photos every product gets automatically, drawn in the browser
@@ -352,9 +352,9 @@ async function photoFrame(input: ProductPhotoInput, framed: HTMLImageElement): P
  * of the photo's height) and how much of the square the frame fills once cropped around it.
  */
 export const POSES = [
-  { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.82 },
-  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.82 },
-  { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.82 },
+  { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.9 },
+  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.9 },
+  { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.9 },
 ] as const;
 export type Pose = (typeof POSES)[number];
 
@@ -383,9 +383,10 @@ async function photoPose(pose: Pose, framed: HTMLImageElement): Promise<string> 
   // frame so the tabletop shows; kept inside the photo.
   const side = Math.min(W, H, Math.max(fw, fh) / pose.fill);
   const cx = fx + fw / 2;
-  const cy = fy + fh / 2 + (pose.standing ? fh * 0.05 : 0);
   const x0 = Math.max(0, Math.min(W - side, cx - side / 2));
-  const y0 = Math.max(0, Math.min(H - side, cy - side / 2));
+  // A standing frame sits low in the square so a strip of tabletop shows under it; a hung one is centred.
+  const wantY = pose.standing ? fy + fh - side * 0.95 : fy + fh / 2 - side / 2;
+  const y0 = Math.max(0, Math.min(H - side, wantY));
   const k = PHOTO_SIZE / side;
 
   const { canvas, ctx } = square();
@@ -442,7 +443,7 @@ async function photoPicture(input: ProductPhotoInput): Promise<string> {
 // 6 ─ matte vs glitter -----------------------------------------------------------------------------
 async function photoGlitter(input: ProductPhotoInput, matte: HTMLImageElement): Promise<string> {
   const size = input.sizes[0]!;
-  const sparkle = await framedOf(input.pictureUrl, size, input.frames[0]?.look ?? null, true);
+  const sparkle = await framedOf(input.pictureUrl, size, { ...DISPLAY_FRAME, mouldingWidthIn: input.frames[0]?.mouldingWidthIn ?? DISPLAY_FRAME.mouldingWidthIn }, true);
   const { canvas, ctx } = square();
   backdrop(ctx);
   const f = fonts();
@@ -487,7 +488,9 @@ async function photoGlitter(input: ProductPhotoInput, matte: HTMLImageElement): 
 export async function makeProductPhotos(input: ProductPhotoInput): Promise<ProductPhoto[]> {
   if (!input.sizes.length) throw new Error('Add at least one size first.');
   await document.fonts?.ready;
-  const framed = await framedOf(input.pictureUrl, input.sizes[0]!, input.frames[0]?.look ?? null);
+  // Every product is photographed in the shop's premium black display frame, so the catalogue looks consistent.
+  const display: FrameLook = { ...DISPLAY_FRAME, mouldingWidthIn: input.frames[0]?.mouldingWidthIn ?? DISPLAY_FRAME.mouldingWidthIn };
+  const framed = await framedOf(input.pictureUrl, input.sizes[0]!, display);
   const name = input.title || 'Photo frame';
   const frameName = input.frames[0]?.name ?? 'frame';
   const [first, second] = posesFor(name);

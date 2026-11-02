@@ -20,7 +20,8 @@ export function photoKeyOf(input: {
     // The photo set's own version: raising it marks every product's photos as out of date (remade on next save).
     // v2: styled table/wall photos for the shop card, no text over the pictures.
     // v3: the frame fills most of the styled photos, so the design is easy to see.
-    v: 3,
+    // v4: the frame fills ~90% of the styled photos; every photo uses the premium black display frame.
+    v: 4,
     t: input.productType,
     n: input.title,
     p: input.pictureSource,

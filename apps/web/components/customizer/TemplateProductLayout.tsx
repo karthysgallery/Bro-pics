@@ -20,6 +20,7 @@ import { getOrCreateSessionId } from '../../lib/session-id';
 import type { Orientation } from '../../lib/orientation';
 import { BuyBox } from '../product/BuyBox';
 import { CustomizerPreview } from './CustomizerPreview';
+import { DISPLAY_FRAME } from './frame-moulding';
 import { CustomizerControls } from './CustomizerControls';
 import { LowResDialog, unconfirmedLowRes } from './LowResDialog';
 import { useToast } from '../ui/Toast';
@@ -128,7 +129,8 @@ function TemplateEditorSession({
   }, [media, selectedVariant.id, product.title]);
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
   const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
-  const frameLook = model?.image ? { src: model.image.url, borderPx: model.image.borderPx, mouldingWidthIn: model.mouldingWidthIn } : null;
+  // Every product is shown in the shop's premium black display frame (the moulding's real width is kept).
+  const frameLook = { ...DISPLAY_FRAME, mouldingWidthIn: model?.mouldingWidthIn ?? DISPLAY_FRAME.mouldingWidthIn };
   const printSizeIn = useMemo(() => ({ width: selectedVariant.widthIn, height: selectedVariant.heightIn }), [selectedVariant.widthIn, selectedVariant.heightIn]);
 
   const customizer = useTemplateCustomizer({
