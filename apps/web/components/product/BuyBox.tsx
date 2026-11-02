@@ -417,7 +417,7 @@ export function BuyBox({
       <HelpCallout whatsappHref={whatsappLink(businessContact, whatsappMessage)} email={businessContact.supportEmail} />
 
       {/* Sticky Mobile Bottom CTA Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-paper/95 backdrop-blur-md border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
+      <div data-mobile-cta className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-paper/95 backdrop-blur-md border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
         <div className="min-w-0">
           <div className="text-xs font-bold text-ink truncate">{comboFrame ? comboFrame.label : `Total ${formatPaise(price * quantity)}`}</div>
           <div className="text-3xs text-ink/60 truncate">{selectedSize || 'Standard'} · {selectedColour || 'Default'}</div>

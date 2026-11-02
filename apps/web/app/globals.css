@@ -624,3 +624,9 @@ details > summary::-webkit-details-marker {
   .kl-bar > i { transform: scaleX(1); }
   .kl-shine { display: none; }
 }
+
+/* On phones the product page has a sticky "Add to cart" bar along the bottom; lift the WhatsApp
+   button above it so the two never overlap. */
+@media (max-width: 767px) {
+  body:has([data-mobile-cta]) .wa-fab { bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
+}
