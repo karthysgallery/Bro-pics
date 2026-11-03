@@ -21,7 +21,8 @@ export function photoKeyOf(input: {
     // v2: styled table/wall photos for the shop card, no text over the pictures.
     // v3: the frame fills most of the styled photos, so the design is easy to see.
     // v4: the frame fills ~90% of the styled photos; every photo uses the premium black display frame.
-    v: 4,
+    // v5: no bedroom (dark wood) photos; only the table and the light living-room wall.
+    v: 5,
     t: input.productType,
     n: input.title,
     p: input.pictureSource,

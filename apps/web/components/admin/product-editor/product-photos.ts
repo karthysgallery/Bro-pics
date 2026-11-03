@@ -353,7 +353,7 @@ async function photoFrame(input: ProductPhotoInput, framed: HTMLImageElement): P
  */
 export const POSES = [
   { id: 'table', sceneId: 'table', label: 'On a table', x: 0.49, y: 0.633, standing: true, longest: 0.42, fill: 0.9 },
-  { id: 'bedroom', sceneId: 'bedroom', label: 'On the bedroom wall', x: 0.57, y: 0.26, standing: false, longest: 0.36, fill: 0.9 },
+  // No bedroom: its dark wooden wall hides the black frame.
   { id: 'living-room', sceneId: 'living-room', label: 'On the living room wall', x: 0.33, y: 0.3, standing: false, longest: 0.36, fill: 0.9 },
 ] as const;
 export type Pose = (typeof POSES)[number];
