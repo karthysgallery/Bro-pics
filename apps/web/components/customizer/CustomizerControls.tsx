@@ -10,6 +10,8 @@ interface CustomizerControlsProps {
   customizer: TemplateCustomizer;
   onAddPhotos: () => void;
   onRequestPhoto: (slotId: string) => void;
+  /** Opens the editor (zoom, move, rotate, fit) on this space's photo. */
+  onEditPhoto?: (slotId: string) => void;
 }
 
 const TIER_LABEL = { green: 'Sharp', amber: 'Good', red: 'Low resolution' } as const;
@@ -137,7 +139,7 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
  * Right column of a template product page (inside the buy box): every photo
  * space at a glance, a bulk "Add photos", photo quality, and the text fields.
  */
-export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: CustomizerControlsProps) {
+export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, onEditPhoto }: CustomizerControlsProps) {
   const { template, state, activeSlotId, completeness, activity } = customizer;
   const total = template.photoSlots.length;
   const filled = template.photoSlots.filter((s) => state.slots[s.id]).length;
@@ -209,8 +211,8 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
         </button>
       )}
 
-      {total > 1 && (
-        <ul className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+      {total >= 1 && (
+        <ul className="grid grid-cols-3 gap-x-2.5 gap-y-3 sm:grid-cols-4">
           {template.photoSlots.map((slot, i) => {
             const photo = state.slots[slot.id];
             const src = photo ? customizer.render.photoSrc(slot.id, photo) : null;
@@ -218,7 +220,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
             const busy = activity[slot.id]?.uploading;
             const isActive = slot.id === activeSlotId;
             return (
-              <li key={slot.id}>
+              <li key={slot.id} className="flex flex-col gap-1.5">
                 <button
                   type="button"
                   aria-pressed={isActive}
@@ -241,6 +243,41 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto }: 
                     <span className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-paper ${TIER_DOT[status.tier]}`} aria-hidden="true" />
                   )}
                 </button>
+                {/* Under every space: choose a photo while it is empty; once it has one, change it or edit it. */}
+                {photo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onRequestPhoto(slot.id)}
+                      aria-label={`Change image ${i + 1}`}
+                      className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-line bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink/50 active:bg-tint"
+                    >
+                      <Icon name="replace" className="h-3.5 w-3.5 shrink-0" />
+                      Change Image
+                    </button>
+                    {onEditPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPhoto(slot.id)}
+                        aria-label={`Edit image ${i + 1}`}
+                        className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-ink bg-ink text-[11px] font-semibold text-paper transition-colors hover:bg-ink/85"
+                      >
+                        <Icon name="pen" className="h-3.5 w-3.5 shrink-0" />
+                        Edit Image
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onRequestPhoto(slot.id)}
+                    aria-label={`Choose image ${i + 1}`}
+                    className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ink/35 bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink"
+                  >
+                    <Icon name="plus" className="h-3.5 w-3.5 shrink-0" />
+                    Choose Image
+                  </button>
+                )}
               </li>
             );
           })}

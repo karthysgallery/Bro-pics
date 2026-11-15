@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { DEFAULT_PREVIEW_SCENES, type PreviewScene } from '../../lib/preview-scenes';
 import type { FrameInches } from '../../lib/preview-scenes';
 import { SceneStage, useFrameCutout } from './LifestylePreview';
+import { ZoomPane } from '../ui/ZoomPane';
 
 /** The four views, in the order shoppers see them. */
 export type PreviewViewId = 'plain' | 'bedroom' | 'hall' | 'table';
@@ -412,7 +413,7 @@ export function PreviewGallery({
 
           <SideZoom
             stageRef={stageRef}
-            enabled={!active.photo}
+            enabled
             content={<div className="absolute inset-0">{renderItem(active, 1600, { alt: '', pics: zoomPictures })}</div>}
           />
         </div>
@@ -471,7 +472,7 @@ export function PreviewGallery({
   );
 }
 
-/** Full-screen browsing: arrows, swipe, ← → keys, Esc to close, and the strip to jump. */
+/** Full-screen browsing: every picture can be zoomed and moved around; arrows, swipe, ← → keys, Esc to close, and the strip to jump. */
 function FullscreenViewer({
   items,
   index,
@@ -486,7 +487,6 @@ function FullscreenViewer({
   render: (item: ItemDef, width: number) => ReactNode;
 }) {
   const step = (d: -1 | 1) => onIndex((index + d + items.length) % items.length);
-  const swipe = useSwipe(step, true);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -516,8 +516,11 @@ function FullscreenViewer({
           ×
         </button>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 touch-pan-y" {...swipe}>
-        <div className="relative aspect-square w-full max-w-[min(92vw,calc(100vh-200px))] overflow-hidden rounded-2xl bg-paper">{render(item, 2000)}</div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3">
+        {/* Pinch, wheel, double-tap or the buttons to zoom; drag to look around; swipe (not zoomed) for the next picture. */}
+        <ZoomPane resetKey={item.id} onSwipe={step} className="aspect-square w-full max-w-[min(92vw,calc(100vh-200px))] rounded-2xl bg-paper">
+          {render(item, 2400)}
+        </ZoomPane>
         <button type="button" onClick={() => step(-1)} aria-label="Previous picture" className={`${arrowButton} left-3 sm:left-6`}>
           <Chevron dir="left" />
         </button>

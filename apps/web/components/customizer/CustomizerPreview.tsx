@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canvasPrintWidthIn, MAX_SCALE, type Variant } from '@bro-pics/shared';
 import { PreviewGallery, type GalleryPhoto, type GalleryViewId } from '../editor/PreviewGallery';
 import { TemplateCanvas } from './TemplateCanvas';
@@ -23,6 +23,10 @@ interface CustomizerPreviewProps {
   glitter?: boolean;
   /** Example pictures for the empty photo spaces (the product's sample photos). */
   samples?: string[];
+  /** Raised (any new number) by an "Edit Image" button: shows the editor on the active space's photo. */
+  editRequest?: number;
+  /** "Done" after editing: back to the photo list. */
+  onDoneEditing?: () => void;
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -45,10 +49,18 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false, samples = [] }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false, samples = [], editRequest = 0, onDoneEditing }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<GalleryViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // "Edit Image": back to the editable design and into view, with that space's photo selected (the caller selects it).
+  useEffect(() => {
+    if (!editRequest) return;
+    setView('plain');
+    rootRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [editRequest]);
 
   const printWidthIn = canvasPrintWidthIn(template.canvas, { width: variant.widthIn, height: variant.heightIn });
   const printHeightIn = printWidthIn * (template.canvas.height / template.canvas.width);
@@ -84,7 +96,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
   const editing = view === 'plain' && photoCount > 0;
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-3 md:p-4 lg:sticky lg:top-24 lg:z-20">
+    <div ref={rootRef} className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-3 md:p-4 lg:sticky lg:top-24 lg:z-20">
       {editing && (
         <div className="flex items-center justify-end">
           <div className="flex items-center">
@@ -140,6 +152,16 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
               <ToolButton icon="fit" label="Fit to space" onClick={() => customizer.resetPhoto(activeSlot.id)} />
               <ToolButton icon="replace" label="Replace photo" onClick={() => onRequestPhoto(activeSlot.id)} />
               <ToolButton icon="remove" label="Remove photo" onClick={() => customizer.removePhoto(activeSlot.id)} />
+              {onDoneEditing && (
+                <button
+                  type="button"
+                  onClick={onDoneEditing}
+                  className="ml-1 inline-flex h-10 items-center gap-1 rounded-full bg-ink px-4 text-[13px] font-semibold text-paper transition-colors hover:bg-ink/85"
+                >
+                  <Icon name="check" className="h-4 w-4" />
+                  Done
+                </button>
+              )}
             </div>
           ) : (
             <button

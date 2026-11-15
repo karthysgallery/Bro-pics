@@ -171,6 +171,17 @@ function TemplateEditorSession({
     },
     [customizer]
   );
+  // "Edit Image" under a space: select its photo and bring the editor (the big preview) into view.
+  const [editRequest, setEditRequest] = useState(0);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const editPhoto = useCallback(
+    (slotId: string) => {
+      customizer.setActiveSlotId(slotId);
+      setEditRequest((n) => n + 1);
+    },
+    [customizer]
+  );
+  const doneEditing = useCallback(() => controlsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), []);
   const addPhotos = useCallback(() => {
     if (template.photoSlots.length === 1) requestPhoto(template.photoSlots[0].id);
     else bulkInput.current?.click();
@@ -303,7 +314,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} samples={product.samplePhotos} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} samples={product.samplePhotos} editRequest={editRequest} onDoneEditing={doneEditing} />
         <BuyBox
           product={product}
           variants={variants}
@@ -326,8 +337,8 @@ function TemplateEditorSession({
           onFinishChange={setChosenFinish}
         >
           {!fixedDesign && (
-            <div className={`rounded-2xl transition-shadow duration-300 ${highlightControls ? 'shadow-[0_0_0_3px_rgb(var(--color-gold))]' : ''}`}>
-              <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} />
+            <div ref={controlsRef} className={`scroll-mt-28 rounded-2xl transition-shadow duration-300 ${highlightControls ? 'shadow-[0_0_0_3px_rgb(var(--color-gold))]' : ''}`}>
+              <CustomizerControls customizer={customizer} onAddPhotos={addPhotos} onRequestPhoto={requestPhoto} onEditPhoto={editPhoto} />
             </div>
           )}
         </BuyBox>

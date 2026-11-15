@@ -65,7 +65,11 @@ export function Gallery({ media, productTitle }: GalleryProps) {
       )}
 
       {isZoomed && active.type === 'image' && (
-        <Lightbox src={active.url} alt={active.alt || productTitle} onClose={() => setIsZoomed(false)} />
+        <Lightbox
+          items={media.filter((m) => m.type === 'image').map((m) => ({ src: m.url, alt: m.alt || productTitle }))}
+          startIndex={media.filter((m) => m.type === 'image').indexOf(active)}
+          onClose={() => setIsZoomed(false)}
+        />
       )}
     </div>
   );

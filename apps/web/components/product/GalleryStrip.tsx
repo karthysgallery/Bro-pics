@@ -54,9 +54,8 @@ export function GalleryStrip({ media, productTitle }: GalleryStripProps) {
 
       {openItem && (
         <Lightbox
-          src={openItem.url}
-          alt={openItem.alt || productTitle}
-          type={openItem.type}
+          items={media.map((m) => ({ src: m.url, alt: m.alt || productTitle, type: m.type }))}
+          startIndex={openIndex ?? 0}
           onClose={() => setOpenIndex(null)}
         />
       )}

@@ -6,7 +6,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { HomepageSection } from '@bro-pics/shared';
 
-const AUTOPLAY_MS = 6000;
+// A little quicker than it was (6s), still slow enough to read each banner.
+const AUTOPLAY_MS = 4500;
 
 const BANNERS = ['/banners/gallery-wall.png', '/banners/reading-corner.png', '/banners/fireside.png'];
 
@@ -159,7 +160,7 @@ export function HeroSlider({ sections, hasTrustVideos = false }: HeroSliderProps
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${slides.length}`}
                 aria-hidden={index !== activeIndex}
-                className={`absolute inset-0 transition-opacity duration-700 ${
+                className={`absolute inset-0 transition-opacity duration-[900ms] ease-in-out ${
                   index === activeIndex ? 'opacity-100' : 'opacity-0'
                 }`}
               >

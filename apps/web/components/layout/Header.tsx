@@ -7,6 +7,7 @@ import type { Category } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { useAuth } from '../../lib/auth-context';
 import { getUnreadCount, subscribeToNotifications } from '../../lib/notifications';
+import { getWishlistIds, subscribeToWishlist } from '../../lib/wishlist';
 import { SearchTypeahead } from '../search/SearchTypeahead';
 import { AccountModal } from './AccountModal';
 
@@ -28,11 +29,19 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
 
   useEffect(() => {
     setUnreadCount(getUnreadCount());
     return subscribeToNotifications(() => setUnreadCount(getUnreadCount()));
   }, []);
+
+  // The heart's badge follows the saved wishlist (this tab, other tabs, and the account copy after sign-in).
+  useEffect(() => {
+    const sync = () => setWishlistCount(getWishlistIds().length);
+    sync();
+    return subscribeToWishlist(sync);
+  }, [user]);
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -94,10 +103,10 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
             <img src={logoSrc} alt={storeName ?? 'KarthysGallery'} className="h-9 w-auto max-w-[180px] object-contain sm:h-10" />
           ) : (
             <>
-              <span className="font-display text-[1.45rem] sm:text-[1.6rem] md:text-[1.75rem] font-semibold tracking-[0.01em] text-ink leading-none">
+              <span className="font-display text-[1.3rem] min-[400px]:text-[1.45rem] sm:text-[1.6rem] md:text-[1.75rem] font-semibold tracking-[0.01em] text-ink leading-none">
                 Karthys<span className="text-accent italic group-hover:text-accent-dark transition-colors">Gallery</span>
               </span>
-              <span className="mt-1 text-[8.5px] sm:text-[9px] font-semibold uppercase tracking-[0.32em] text-accent/80 leading-none">
+              <span className="mt-1 text-[7.5px] tracking-[0.2em] min-[400px]:text-[8.5px] min-[400px]:tracking-[0.32em] sm:text-[9px] font-semibold uppercase text-accent/80 leading-none">
                 frames for a brighter you
               </span>
             </>
@@ -110,13 +119,13 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
         </div>
 
         {/* Action icons */}
-        <div className="flex items-center gap-1 sm:gap-2 text-ink shrink-0">
+        <div className="-mr-2 flex items-center gap-0 text-ink shrink-0 sm:mr-0 sm:gap-2">
 
           {/* Account */}
           {user ? (
             <Link
               href="/account"
-              className="relative flex items-center justify-center w-10 h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
+              className="relative flex items-center justify-center w-11 h-11 sm:w-10 sm:h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
               aria-label="Account"
             >
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -130,7 +139,7 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
           ) : (
             <Link
               href="/signin"
-              className="flex items-center justify-center w-10 h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
+              className="flex items-center justify-center w-11 h-11 sm:w-10 sm:h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
               aria-label="Sign in"
             >
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -140,15 +149,20 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
             </Link>
           )}
 
-          {/* Wishlist — outline heart SVG */}
+          {/* Wishlist — outline heart SVG, on every screen size, with a count once something is saved */}
           <Link
             href="/account/wishlist"
-            className="hidden sm:flex items-center justify-center w-10 h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
-            aria-label="Wishlist"
+            className="relative flex items-center justify-center w-11 h-11 sm:w-10 sm:h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
+            aria-label={wishlistCount > 0 ? `Wishlist, ${wishlistCount} saved` : 'Wishlist'}
           >
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
+            {wishlistCount > 0 && (
+              <span data-testid="wishlist-count" aria-hidden="true" className="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] flex items-center justify-center bg-gold text-ink text-[10px] font-bold rounded-full px-1 leading-none shadow-sm">
+                {wishlistCount > 99 ? '99+' : wishlistCount}
+              </span>
+            )}
           </Link>
 
           {/* Cart — bag SVG with counter */}
@@ -156,7 +170,7 @@ export function Header({ categories, onCartClick, extraNavLinks, showCategories 
             type="button"
             aria-label={`Cart, ${totalCount} item${totalCount !== 1 ? 's' : ''}`}
             onClick={onCartClick}
-            className="relative flex items-center justify-center w-10 h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
+            className="relative flex items-center justify-center w-11 h-11 sm:w-10 sm:h-10 rounded-lg text-ink/70 hover:text-ink hover:bg-tint transition-colors"
           >
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
