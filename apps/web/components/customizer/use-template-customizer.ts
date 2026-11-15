@@ -359,6 +359,9 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     [apply, template.textSlots]
   );
 
+  /** The customer's choice of language for their wording (Tamil prints in a Tamil font; English is the default). */
+  const setTextLanguage = useCallback((language: 'en' | 'ta') => apply((s) => ({ ...s, textLanguage: language === 'ta' ? 'ta' : undefined })), [apply]);
+
   // --- Calendars ----------------------------------------------------------
 
   const setDate = useCallback(
@@ -512,6 +515,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     setZoom,
     setLowDpiConfirmed,
     updateText,
+    setTextLanguage,
     setDate,
     draftOffer,
     restoreDraft,

@@ -21,6 +21,8 @@ export interface RenderSlotInput {
   targetHeightPx: number;
   /** Authored at the slot's own aspect ratio — resized to match the target before compositing. */
   maskBuffer?: Buffer | null;
+  /** The slot is black & white: the photo is printed without colour. */
+  grayscale?: boolean;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface RenderSlotInput {
  * placed in the slot).
  */
 export async function renderSlotPhoto(input: RenderSlotInput): Promise<Buffer> {
-  const { photoBuffer, cropRect, rotationDeg, targetWidthPx, targetHeightPx, maskBuffer } = input;
+  const { photoBuffer, cropRect, rotationDeg, targetWidthPx, targetHeightPx, maskBuffer, grayscale } = input;
 
   const photo = sharp(photoBuffer, { limitInputPixels: false });
   const metadata = await photo.metadata();
@@ -100,12 +102,12 @@ export async function renderSlotPhoto(input: RenderSlotInput): Promise<Buffer> {
     .png()
     .toBuffer();
 
-  const extracted = await sharp(cropped, { limitInputPixels: false })
+  let pipeline = sharp(cropped, { limitInputPixels: false })
     .rotate(rotationDeg) // sharp rotates clockwise for a positive degree, matching Konva's convention.
-    .resize(targetWidthPx, targetHeightPx, { fit: 'fill' }) // 'fill': cropRect's aspect already matches the slot's, by construction — no letterboxing wanted.
-    .ensureAlpha()
-    .png()
-    .toBuffer();
+    .resize(targetWidthPx, targetHeightPx, { fit: 'fill' }); // 'fill': cropRect's aspect already matches the slot's, by construction — no letterboxing wanted.
+  // Black & white keeps three sRGB channels (and the alpha), so it composites like any other photo.
+  if (grayscale) pipeline = pipeline.grayscale().toColourspace('srgb');
+  const extracted = await pipeline.ensureAlpha().png().toBuffer();
 
   if (!maskBuffer) return extracted;
 

@@ -5,6 +5,7 @@ import {
   estimateTextWidth,
   fitTextToZone,
   fontKeyFromCssVar,
+  parseSpotifyLink,
   slotAspectRatio,
   slotBoxPx,
   visibleRegion,
@@ -148,6 +149,17 @@ export function traceSlotShape(
   }
 }
 
+/** Black & white, by luminance, in place (canvas filters are not supported in every browser the shop serves). */
+function desaturate(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const y = Math.round(0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]);
+    px[i] = px[i + 1] = px[i + 2] = y;
+  }
+  ctx.putImageData(data, 0, 0);
+}
+
 function applyShapeMask(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: number, h: number, maskImg: CanvasImageSource | undefined): void {
   if (slot.shape === 'rect' || (slot.shape === 'mask' && !maskImg)) return;
   ctx.save();
@@ -268,7 +280,7 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
   }
 
   const t = photo.transform;
-  const key = [cw, ch, src, photo.width, photo.height, photo.rotation, t.scale, t.offsetX, t.offsetY, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), maskImg ? maskSrc : ''].join('|');
+  const key = [cw, ch, src, photo.width, photo.height, photo.rotation, t.scale, t.offsetX, t.offsetY, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), maskImg ? maskSrc : '', slot.grayscale ? 'bw' : ''].join('|');
   const cached = input.slotCache?.get(slot.id);
   if (cached && cached.key === key) return cached.canvas;
   const canvas = cached && cached.canvas.width === cw && cached.canvas.height === ch ? cached.canvas : create(cw, ch);
@@ -281,6 +293,7 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
   // The source may be a downscaled copy; drawing it at the ORIGINAL size keeps the geometry exact.
   ctx.drawImage(img, 0, 0, photo.width, photo.height);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (slot.grayscale) desaturate(ctx, cw, ch);
   applyShapeMask(ctx, slot, cw, ch, maskImg);
   input.slotCache?.set(slot.id, { key, canvas });
   return canvas;
@@ -297,12 +310,47 @@ function alignedX(slot: TextSlot, zone: { x: number; width: number }): number {
   return zone.x + zone.width / 2;
 }
 
+/** The same-origin picture of a text space's Spotify code, or null when its value is not a Spotify link. */
+export function spotifyCodeSrc(slot: TextSlot, state: PersonalizationState): string | null {
+  const chosen = state.texts[slot.id];
+  const uri = parseSpotifyLink(chosen?.value ?? slot.defaultValue);
+  if (!uri) return null;
+  const color = chosen?.color ?? slot.defaultColor ?? '#000000';
+  return `/api/spotify-code?uri=${encodeURIComponent(uri)}&color=${encodeURIComponent(/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#000000')}`;
+}
+
+/** A Spotify code, as big as fits the space (its own 4:1 shape kept), placed by the space's alignment. */
+function drawSpotifyCode(ctx: CanvasRenderingContext2D, input: RenderInput, slot: TextSlot, zone: { x: number; y: number; width: number; height: number }): void {
+  const src = spotifyCodeSrc(slot, input.state);
+  const img = src ? input.getImage(src) : undefined;
+  if (!img) {
+    if (input.mode !== 'editor') return;
+    ctx.fillStyle = 'rgba(43,36,32,0.32)';
+    const size = Math.max(10, Math.min(zone.height * 0.4, 22 * (input.width / 400)));
+    ctx.font = `italic ${size}px ${input.fontFamily(fontKeyOf(undefined, slot.defaultFontFamily))}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(src ? 'Loading the Spotify code…' : 'Paste a Spotify link', alignedX(slot, zone), zone.y + zone.height / 2, zone.width);
+    return;
+  }
+  const k = Math.min(zone.width / 4, zone.height);
+  const w = 4 * k;
+  const x = slot.align === 'left' ? zone.x : slot.align === 'right' ? zone.x + zone.width - w : zone.x + (zone.width - w) / 2;
+  ctx.drawImage(img, x, zone.y + (zone.height - k) / 2, w, k);
+}
+
 function drawTextSlot(ctx: CanvasRenderingContext2D, input: RenderInput, slot: TextSlot): void {
   const chosen = input.state.texts[slot.id];
   const value = chosen?.value ?? slot.defaultValue;
   const W = input.width;
   const H = input.height;
   const zone = { x: slot.x * W, y: slot.y * H, width: slot.width * W, height: slot.height * H };
+  if (slot.spotifyCode) {
+    ctx.save();
+    ctx.textAlign = slot.align === 'left' ? 'left' : slot.align === 'right' ? 'right' : 'center';
+    drawSpotifyCode(ctx, input, slot, zone);
+    ctx.restore();
+    return;
+  }
   const family = input.fontFamily(fontKeyOf(chosen?.fontFamily, slot.defaultFontFamily));
   ctx.save();
   ctx.textAlign = slot.align === 'left' ? 'left' : slot.align === 'right' ? 'right' : 'center';
@@ -414,6 +462,10 @@ export function requiredImageSources(
     const src = input.photoSrc(slot.id, photo);
     if (src) srcs.push(src);
     else unresolvedPhotos.push(slot.id);
+  }
+  for (const slot of input.template.textSlots) {
+    const src = slot.spotifyCode ? spotifyCodeSrc(slot, input.state) : null;
+    if (src) srcs.push(src);
   }
   return { srcs: [...new Set(srcs)], unresolvedPhotos };
 }

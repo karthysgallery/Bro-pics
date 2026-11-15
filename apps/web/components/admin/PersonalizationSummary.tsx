@@ -89,6 +89,9 @@ export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: Or
         </dl>
       )}
 
+      {state.textLanguage === 'ta' && (
+        <p className="rounded-lg bg-amber-50 px-2 py-1.5 font-semibold text-amber-900">Tamil text requested: the customer wrote their wording in Tamil. Check it before printing.</p>
+      )}
       {template.textSlots.length > 0 && (
         <dl className="space-y-1">
           {template.textSlots.map((slot) => {

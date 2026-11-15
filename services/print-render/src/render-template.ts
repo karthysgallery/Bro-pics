@@ -4,6 +4,9 @@ import {
   slotAspectRatio,
   slotRectPx,
   FONT_MAP,
+  parseSpotifyLink,
+  spotifyCodeSvg,
+  spotifyScannablesUrl,
   type PersonalizationState,
   type PersonalizationTemplate,
   type PhotoSlot,
@@ -47,6 +50,25 @@ async function loadAsset(assets: AssetLoader, assetId: string): Promise<Buffer> 
   } catch (err) {
     throw new MissingAssetError(assetId, err);
   }
+}
+
+/** A Spotify code for a pasted link, `widthPx` wide, in `color` on transparent (Spotify's own generator draws it). */
+async function spotifyCodePng(link: string, color: string, widthPx: number, heightPx: number): Promise<Buffer | null> {
+  const uri = parseSpotifyLink(link);
+  if (!uri) return null;
+  let svg = '';
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(spotifyScannablesUrl(uri), { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`Spotify code request failed (${res.status})`);
+      svg = await res.text();
+      break;
+    } catch (err) {
+      // The order must not print without its code: fail the job (it is retried) rather than leave the space empty.
+      if (attempt >= 3) throw new MissingAssetError(uri, err);
+    }
+  }
+  return sharp(Buffer.from(spotifyCodeSvg(svg, color)), { density: 600 }).resize(widthPx, heightPx, { fit: 'fill' }).png().toBuffer();
 }
 
 /** White-on-transparent alpha mask for a slot's shape, at the slot's pixel size. null = no masking needed (plain rectangle). */
@@ -122,6 +144,7 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
         targetWidthPx: rect.width,
         targetHeightPx: rect.height,
         maskBuffer,
+        grayscale: slot.grayscale,
       });
 
       let left = rect.x;
@@ -152,6 +175,18 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
     const value = state.texts[layer.slotId]?.value ?? slot.defaultValue;
     if (!value.trim()) continue;
     const chosen = state.texts[layer.slotId];
+    if (slot.spotifyCode) {
+      // Same placement as the editor: as big as fits the space, its 4:1 shape kept, placed by the alignment.
+      const zone = slotRectPx(slot, width, height);
+      const k = Math.max(1, Math.floor(Math.min(zone.width / 4, zone.height)));
+      const w = 4 * k;
+      const code = await spotifyCodePng(value, chosen?.color ?? slot.defaultColor ?? '#000000', w, k);
+      if (code) {
+        const left = slot.align === 'left' ? zone.x : slot.align === 'right' ? zone.x + zone.width - w : zone.x + Math.round((zone.width - w) / 2);
+        composites.push({ input: code, left, top: zone.y + Math.round((zone.height - k) / 2) });
+      }
+      continue;
+    }
     const svg = buildTextZoneSvg(
       {
         zoneRect: { x: slot.x, y: slot.y, width: slot.width, height: slot.height },

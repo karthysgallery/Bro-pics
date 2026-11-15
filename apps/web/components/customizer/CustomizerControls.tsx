@@ -1,6 +1,6 @@
 'use client';
 
-import { FONT_MAP, formatCalendarDate, parseCalendarDate, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
+import { FONT_MAP, formatCalendarDate, parseCalendarDate, parseSpotifyLink, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
 import { QUICK_TEXT_COLORS, toHexColor } from '../../lib/text-personalization-options';
 import { Icon } from './icons';
 import { fontKeyOf } from './render-template';
@@ -43,7 +43,40 @@ function CalendarField({ customizer, slot }: { customizer: TemplateCustomizer; s
   );
 }
 
+/** A Spotify space: the customer pastes a link from the Spotify app and the design shows its scannable code. */
+function SpotifyField({ customizer, slot }: { customizer: TemplateCustomizer; slot: TextSlot }) {
+  const value = customizer.state.texts[slot.id];
+  const text = value?.value ?? slot.defaultValue;
+  const valid = !text.trim() || Boolean(parseSpotifyLink(text));
+  const inputId = `text-${slot.id}`;
+  return (
+    <div className="space-y-2">
+      <label htmlFor={inputId} className="block text-[13px] font-semibold text-ink">
+        {slot.label}
+      </label>
+      <input
+        id={inputId}
+        type="url"
+        inputMode="url"
+        value={text}
+        maxLength={slot.maxLength}
+        onChange={(e) => customizer.updateText(slot.id, { value: e.target.value })}
+        aria-invalid={!valid || undefined}
+        aria-describedby={`${inputId}-help`}
+        className={`h-11 w-full rounded-xl border bg-white px-3 text-sm text-ink outline-none transition-colors focus:border-ink ${valid ? 'border-line' : 'border-alert'}`}
+        placeholder="https://open.spotify.com/track/…"
+      />
+      <p id={`${inputId}-help`} className={`text-xs ${valid ? 'text-ink/60' : 'text-alert'}`}>
+        {valid
+          ? 'In Spotify, open your song, tap Share, then Copy link, and paste it here. The code on the frame plays that song when scanned.'
+          : 'This is not a Spotify link. In Spotify, tap Share, then Copy link (it starts with open.spotify.com).'}
+      </p>
+    </div>
+  );
+}
+
 function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot: TextSlot }) {
+  if (slot.spotifyCode) return <SpotifyField customizer={customizer} slot={slot} />;
   const value = customizer.state.texts[slot.id];
   const text = value?.value ?? slot.defaultValue;
   const fontKey = fontKeyOf(value?.fontFamily, slot.defaultFontFamily);
@@ -322,6 +355,36 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           {(template.calendarSlots ?? []).map((slot) => (
             <CalendarField key={slot.id} customizer={customizer} slot={slot} />
           ))}
+        </div>
+      )}
+
+      {template.textSlots.some((t) => !t.spotifyCode) && (
+        <div className="space-y-2 border-t border-line pt-4">
+          <p id="text-language" className="text-[13px] font-semibold text-ink">
+            Would you prefer Tamil text?
+          </p>
+          <div role="radiogroup" aria-labelledby="text-language" className="grid grid-cols-2 gap-2">
+            {([['en', 'English (default)'], ['ta', 'Tamil / தமிழ்']] as const).map(([lang, label]) => {
+              const chosen = (state.textLanguage ?? 'en') === lang;
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen}
+                  onClick={() => customizer.setTextLanguage(lang)}
+                  className={`h-10 rounded-xl border px-3 text-[13px] font-semibold transition-colors ${chosen ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:border-ink/50'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {state.textLanguage === 'ta' && (
+            <p className="rounded-xl bg-tint px-3 py-2 text-xs leading-relaxed text-ink/75">
+              Type your wording in Tamil in the boxes below. It prints in a clear Tamil font, and our team checks it before printing.
+            </p>
+          )}
         </div>
       )}
 

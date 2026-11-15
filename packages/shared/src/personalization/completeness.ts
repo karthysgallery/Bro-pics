@@ -1,4 +1,5 @@
 import { chosenCalendarDate, parseCalendarDate } from './calendar';
+import { parseSpotifyLink } from './spotify';
 import { dpiTier } from '../dpi/calculate';
 import { cropRectInOriginalPx, effectiveDpi, slotAspectRatio, type PrintSizeIn } from './geometry';
 import type { PersonalizationState } from './state';
@@ -70,6 +71,7 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     const value = (state.texts[slot.id]?.value ?? slot.defaultValue).trim();
     if (slot.required && !value) blockers.push(`Enter “${slot.label}”.`);
     if (value.length > slot.maxLength) blockers.push(`“${slot.label}” is too long (max ${slot.maxLength} characters).`);
+    if (slot.spotifyCode && value && !parseSpotifyLink(value)) blockers.push(`“${slot.label}”: paste a Spotify link (open.spotify.com/…).`);
   }
 
   for (const slot of template.calendarSlots ?? []) {

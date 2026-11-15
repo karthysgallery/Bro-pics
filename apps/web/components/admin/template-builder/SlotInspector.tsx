@@ -140,6 +140,19 @@ export function PhotoSlotInspector({
           <span className="block text-ink/60">The people are cut out automatically, so whatever is under this space shows around them, e.g. a mosaic of small photos. Put this space above the others.</span>
         </span>
       </label>
+      <label className="flex items-start gap-2 rounded-lg bg-tint px-2.5 py-2 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={slot.grayscale ?? false}
+          onChange={(e) => onChange({ grayscale: e.target.checked || undefined })}
+          disabled={disabled}
+          className="mt-0.5 h-4 w-4 accent-[#c9861a]"
+        />
+        <span>
+          <span className="font-semibold">Black &amp; white</span>
+          <span className="block text-ink/60">The customer&apos;s photo shows and prints in black and white in this space.</span>
+        </span>
+      </label>
       <label className="block space-y-1">
         <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Hint (optional)</span>
         <input value={slot.hint ?? ''} placeholder="e.g. Bride, Main photo" onChange={(e) => onChange({ hint: e.target.value || undefined })} disabled={disabled} className={inputClass} />

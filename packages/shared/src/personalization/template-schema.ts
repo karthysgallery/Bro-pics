@@ -82,6 +82,8 @@ export const PhotoSlotSchema = z
      * The editor swaps in the cut-out copy; renderers just draw a photo with alpha.
      */
     removeBackground: z.boolean().optional(),
+    /** Show and print the customer's photo in black & white (a design whose photos are monochrome strips). */
+    grayscale: z.boolean().optional(),
   })
   .refine((slot) => slot.width > 0 && slot.height > 0, { message: 'slot width/height must be > 0' });
 export type PhotoSlot = z.infer<typeof PhotoSlotSchema>;
@@ -103,6 +105,8 @@ export const TextSlotSchema = z.object({
   allowedColors: z.array(z.string()).optional(),
   minFontSizePx: z.number().positive().optional(),
   maxFontSizePx: z.number().positive().optional(),
+  /** The customer pastes a Spotify link here and the design shows its scannable Spotify code, in the text colour. */
+  spotifyCode: z.boolean().optional(),
 });
 export type TextSlot = z.infer<typeof TextSlotSchema>;
 

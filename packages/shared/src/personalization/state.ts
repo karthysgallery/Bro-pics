@@ -49,6 +49,8 @@ export const PersonalizationStateSchema = z.object({
   texts: z.record(z.string(), TextValueSchema).default({}),
   /** Keyed by CalendarSlot.id. Absent until a template with a calendar is used. */
   dates: z.record(z.string(), CalendarValueSchema).optional(),
+  /** 'ta' when the customer chose Tamil for their wording (English is the default); shown on the order for the team. */
+  textLanguage: z.enum(['en', 'ta']).optional(),
 });
 export type PersonalizationState = z.infer<typeof PersonalizationStateSchema>;
 

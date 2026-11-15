@@ -40,7 +40,8 @@ export function resolveFontFamilyForCanvas(key: string): string {
   const option = TEXT_FONT_OPTIONS.find((f) => f.key === key) ?? TEXT_FONT_OPTIONS[0];
   if (typeof window === 'undefined') return 'serif';
   const resolved = getComputedStyle(document.documentElement).getPropertyValue(option.cssVariable).trim();
-  return resolved || 'serif';
+  // Tamil wording: the shop fonts are Latin-only, so name the phone's own Tamil fonts next (the print uses Noto Sans Tamil).
+  return `${resolved || 'serif'}, 'Noto Sans Tamil', 'Tamil Sangam MN', 'Nirmala UI'`;
 }
 
 export interface TextColorOption {
