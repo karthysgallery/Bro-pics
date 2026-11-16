@@ -535,7 +535,7 @@ function FullscreenViewer({
   const item = items[index]!;
   // Rendered at the top of the page: inside the sticky preview card it would sit under the site header.
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label={`${item.label} — picture ${index + 1} of ${items.length}`} className="fixed inset-0 z-[200] flex flex-col bg-ink/95 text-paper">
+    <div role="dialog" aria-modal="true" aria-label={`${item.label} — picture ${index + 1} of ${items.length}`} style={{ backgroundColor: 'rgba(24,19,15,0.97)' }} className="fixed inset-0 z-[200] flex flex-col text-paper">
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-sm font-semibold">
           {item.label} <span className="font-normal tabular-nums text-paper/60">· {index + 1} / {items.length}</span>

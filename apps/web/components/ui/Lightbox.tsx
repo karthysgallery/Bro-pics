@@ -64,7 +64,8 @@ export function Lightbox({ src, alt = '', type = 'image', items, startIndex = 0,
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-ink/95 text-paper"
+      style={{ backgroundColor: 'rgba(24,19,15,0.97)' }}
+      className="fixed inset-0 z-[200] flex flex-col text-paper"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
