@@ -89,6 +89,12 @@ export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: Or
         </dl>
       )}
 
+      {state.photosVia === 'whatsapp' && (
+        <p className="rounded-lg bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-900">
+          Photos coming on WhatsApp: the customer ordered without photos and sends them on WhatsApp with the order number. The order waits at
+          photo validation; once the photos are in, make the print and move the order to In production.
+        </p>
+      )}
       {state.textLanguage === 'ta' && (
         <p className="rounded-lg bg-amber-50 px-2 py-1.5 font-semibold text-amber-900">Tamil text requested: the customer wrote their wording in Tamil. Check it before printing.</p>
       )}

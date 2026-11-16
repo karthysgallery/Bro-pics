@@ -360,6 +360,8 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
   );
 
   /** The customer's choice of language for their wording (Tamil prints in a Tamil font; English is the default). */
+  /** How the customer gives their photos: upload here, or send them on WhatsApp after ordering. */
+  const setPhotosVia = useCallback((via: 'upload' | 'whatsapp') => apply((s) => ({ ...s, photosVia: via === 'whatsapp' ? 'whatsapp' : undefined })), [apply]);
   const setTextLanguage = useCallback((language: 'en' | 'ta') => apply((s) => ({ ...s, textLanguage: language === 'ta' ? 'ta' : undefined })), [apply]);
 
   // --- Calendars ----------------------------------------------------------
@@ -516,6 +518,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     setLowDpiConfirmed,
     updateText,
     setTextLanguage,
+    setPhotosVia,
     setDate,
     draftOffer,
     restoreDraft,

@@ -64,8 +64,14 @@ export function buildPaymentTx(db: Firestore, transaction: Transaction): Payment
     async findOrderItems(orderId) {
       const itemsSnapshot = await transaction.get(db.collection('orders').doc(orderId).collection('items'));
       return itemsSnapshot.docs.map((doc) => {
-        const data = doc.data() as { personalizationId: string; productId: string; qty: number };
-        return { itemId: doc.id, personalizationId: data.personalizationId, productId: data.productId, qty: data.qty };
+        const data = doc.data() as { personalizationId: string; productId: string; qty: number; personalization?: { state?: { photosVia?: string } } };
+        return {
+          itemId: doc.id,
+          personalizationId: data.personalizationId,
+          productId: data.productId,
+          qty: data.qty,
+          ...(data.personalization?.state?.photosVia === 'whatsapp' && { awaitingWhatsAppPhotos: true }),
+        };
       });
     },
     markPaymentCaptured(orderId, razorpayPaymentId) {

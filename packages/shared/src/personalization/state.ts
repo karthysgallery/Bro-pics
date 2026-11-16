@@ -51,6 +51,11 @@ export const PersonalizationStateSchema = z.object({
   dates: z.record(z.string(), CalendarValueSchema).optional(),
   /** 'ta' when the customer chose Tamil for their wording (English is the default); shown on the order for the team. */
   textLanguage: z.enum(['en', 'ta']).optional(),
+  /**
+   * 'whatsapp' when the customer orders now and sends their photos on WhatsApp after paying: the design is bought
+   * without photos, and the paid order waits at photo validation for the team instead of printing automatically.
+   */
+  photosVia: z.enum(['upload', 'whatsapp']).optional(),
 });
 export type PersonalizationState = z.infer<typeof PersonalizationStateSchema>;
 

@@ -24,6 +24,8 @@ export interface OrderItemRef {
   // the right amount, not just +1 per line.
   productId: string;
   qty: number;
+  /** The customer chose to send this item's photos on WhatsApp: nothing to print until the team has them. */
+  awaitingWhatsAppPhotos?: boolean;
 }
 
 export interface PaymentEventTransaction {
@@ -180,8 +182,10 @@ export async function handlePaymentCaptured(
   // complexity for a fulfillment nuance nothing currently depends on —
   // staff reviews a held order as one unit via the existing admin UI.
   const anyRed = customizationsToLock.some((c) => c.dpiBand === 'red');
+  // Photos still to come on WhatsApp: the order waits here too, so nothing is printed without them.
+  const anyAwaitingPhotos = orderItems.some((i) => i.awaitingWhatsAppPhotos);
 
-  if (!anyRed) {
+  if (!anyRed && !anyAwaitingPhotos) {
     for (const item of orderItems) {
       paymentTx.queuePrintJob(order.id, item.itemId, item.personalizationId);
     }

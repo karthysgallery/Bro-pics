@@ -274,6 +274,22 @@ describe('handlePaymentCaptured', () => {
     });
   });
 
+  it('holds an order whose photos come on WhatsApp at photo_validation and queues no print job', async () => {
+    const webhookTx = makeWebhookTx(false);
+    const paymentTx = makePaymentTx(
+      { id: 'order_1', userId: 'user_1', status: 'pending_payment' },
+      [{ id: 'cust_1', personalizationId: 'p1', dpiBand: 'green' }],
+      [{ itemId: 'item_1', personalizationId: 'p1', productId: 'prod_1', qty: 1, awaitingWhatsAppPhotos: true }]
+    );
+
+    await handlePaymentCaptured(webhookTx, paymentTx, { eventId: 'pay_abc', razorpayOrderId: 'order_rzp_1', razorpayPaymentId: 'pay_abc' });
+
+    expect(paymentTx.markPaymentCaptured).toHaveBeenCalledWith('order_1', 'pay_abc');
+    expect(paymentTx.setOrderStatus).toHaveBeenCalledWith('order_1', 'photo_validation');
+    expect(paymentTx.setOrderStatus).not.toHaveBeenCalledWith('order_1', 'print_rendering');
+    expect(paymentTx.queuePrintJob).not.toHaveBeenCalled();
+  });
+
   it('[BE-27a] queues a payment-confirmed email notification, keyed on {orderId}_paid', async () => {
     const webhookTx = makeWebhookTx(false);
     const paymentTx = makePaymentTx({ id: 'order_1', userId: 'user_1', status: 'pending_payment', orderNo: 'BP-2026-00042' });

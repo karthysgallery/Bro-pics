@@ -407,6 +407,31 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         )}
       </div>
 
+      {/* Photos the customer chose to send on WhatsApp after ordering. */}
+      {(() => {
+        const waiting = items.filter((i) => i.personalization?.state?.photosVia === 'whatsapp');
+        if (waiting.length === 0 || order.paymentStatus !== 'paid' || !contact.whatsappDigits) return null;
+        const lines = waiting.map((i) => `• ${i.title}`).join('\n');
+        const message = `Hi KarthysGallery, here are the photos for my order ${order.orderNo}:\n${lines}`;
+        return (
+          <div className="mb-6 rounded-2xl border border-[#25D366]/40 bg-[#25D366]/10 p-4 md:p-5">
+            <p className="font-display text-lg font-semibold text-ink">Send your photos on WhatsApp</p>
+            <p className="mt-1 text-sm text-ink/75">
+              You chose to send your photos after ordering. Tap below, then attach your photos in WhatsApp. Your order number {order.orderNo} is
+              already in the message, and we start making your frame as soon as we receive them.
+            </p>
+            <a
+              href={whatsappLink(contact, message)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex h-12 items-center gap-2 rounded-full bg-[#25D366] px-6 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02]"
+            >
+              Send photos on WhatsApp
+            </a>
+          </div>
+        );
+      })()}
+
       {/* Milestone Progress Card */}
       <div className="rounded-3xl bg-paper border border-line p-6 md:p-8 mb-8 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">

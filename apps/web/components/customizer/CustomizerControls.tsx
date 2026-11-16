@@ -186,6 +186,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
   const activePhoto = active ? state.slots[active.id] : undefined;
   const errors = Object.entries(activity).filter(([, a]) => a.error);
   const unavailable = new Set(customizer.unavailableSlots);
+  const byWhatsApp = state.photosVia === 'whatsapp';
 
   return (
     <section aria-labelledby="your-photos" className="my-4 space-y-4 rounded-2xl border border-line bg-paper p-4">
@@ -194,11 +195,13 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           <h2 id="your-photos" className="font-display text-lg font-semibold text-ink">
             {total === 1 ? 'Your photo' : 'Your photos'}
           </h2>
-          <span className="text-xs font-medium text-ink/60" aria-live="polite">
-            {filled} of {total} added
-          </span>
+          {!byWhatsApp && (
+            <span className="text-xs font-medium text-ink/60" aria-live="polite">
+              {filled} of {total} added
+            </span>
+          )}
         </div>
-        {total > 1 && (
+        {total > 1 && !byWhatsApp && (
           <p className="text-xs leading-relaxed text-ink/60">
             {empty > 0
               ? `Pick up to ${empty} photo${empty === 1 ? '' : 's'} at once: they fill the empty spaces in order. Tap any space to swap or adjust it.`
@@ -207,147 +210,186 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
         )}
       </header>
 
-      <button
-        type="button"
-        onClick={onAddPhotos}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/85"
-      >
-        <Icon name="photos" />
-        {filled === 0 ? (total === 1 ? 'Add your photo' : 'Add photos') : empty > 0 ? `Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}` : 'Replace photos'}
-      </button>
-
-      {customizer.notice && (
-        <p role="status" className="rounded-xl bg-tint px-3 py-2 text-xs text-ink/80">
-          {customizer.notice}
-        </p>
-      )}
-      {errors.length > 0 && (
-        <ul role="alert" className="space-y-1">
-          {errors.map(([slotId, a]) => (
-            <li key={slotId} className="flex items-start gap-2 text-xs text-alert">
-              <Icon name="alert" className="mt-px h-4 w-4 shrink-0" />
-              <span>
-                {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.error}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {total > 1 && emptyRegular > 0 && filledRegular > 0 && !customizer.uploading && (
-        <button
-          type="button"
-          onClick={() => customizer.repeatPhotos()}
-          className="w-full rounded-xl border border-dashed border-ink/40 px-3 py-2 text-xs font-semibold text-ink hover:border-ink"
-        >
-          Fill the {emptyRegular} empty space{emptyRegular === 1 ? '' : 's'} by repeating your photos
-        </button>
-      )}
-
-      {total >= 1 && (
-        <ul className="grid grid-cols-3 gap-x-2.5 gap-y-3 sm:grid-cols-4">
-          {template.photoSlots.map((slot, i) => {
-            const photo = state.slots[slot.id];
-            const src = photo ? customizer.render.photoSrc(slot.id, photo) : null;
-            const status = statusBySlot.get(slot.id);
-            const busy = activity[slot.id]?.uploading;
-            const isActive = slot.id === activeSlotId;
+      {total > 0 && (
+        <div role="radiogroup" aria-label="How you will give us your photos" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {([
+            ['upload', 'Add photos now', 'Upload them here and see your frame before you order.'],
+            ['whatsapp', 'Send photos on WhatsApp', 'Order now without photos, then send them on WhatsApp after paying.'],
+          ] as const).map(([via, title, note]) => {
+            const chosen = (state.photosVia ?? 'upload') === via;
             return (
-              <li key={slot.id} className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  aria-pressed={isActive}
-                  aria-label={`${slot.label}: ${photo ? (unavailable.has(slot.id) ? 'photo could not be loaded' : 'photo added') : 'empty, add a photo'}`}
-                  onClick={() => {
-                    customizer.setActiveSlotId(slot.id);
-                    if (!photo) onRequestPhoto(slot.id);
-                  }}
-                  className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl border-2 bg-tint transition-colors ${isActive ? 'border-gold' : 'border-transparent hover:border-line'}`}
-                >
-                  {src ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+              <button
+                key={via}
+                type="button"
+                role="radio"
+                aria-checked={chosen}
+                onClick={() => customizer.setPhotosVia(via)}
+                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${chosen ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:border-ink/50'}`}
+              >
+                <span className="block text-[13px] font-semibold">{title}</span>
+                <span className={`mt-0.5 block text-xs leading-snug ${chosen ? 'text-paper/75' : 'text-ink/60'}`}>{note}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {byWhatsApp ? (
+        <div className="space-y-2 rounded-xl bg-tint px-3 py-3 text-xs leading-relaxed text-ink/80">
+          <p className="font-semibold text-ink">How it works</p>
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>Choose your size{template.textSlots.length > 0 ? ' and fill in the text below' : ''}, then add to cart and pay.</li>
+            <li>On your order page, tap “Send photos on WhatsApp”. Your order number is filled in for you.</li>
+            <li>
+              Send your {total} photo{total === 1 ? '' : 's'}. Our team places them in the design and prints your frame.
+            </li>
+          </ol>
+        </div>
+      ) : (
+        <>
+      <button
+          type="button"
+          onClick={onAddPhotos}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/85"
+        >
+          <Icon name="photos" />
+          {filled === 0 ? (total === 1 ? 'Add your photo' : 'Add photos') : empty > 0 ? `Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}` : 'Replace photos'}
+        </button>
+  
+        {customizer.notice && (
+          <p role="status" className="rounded-xl bg-tint px-3 py-2 text-xs text-ink/80">
+            {customizer.notice}
+          </p>
+        )}
+        {errors.length > 0 && (
+          <ul role="alert" className="space-y-1">
+            {errors.map(([slotId, a]) => (
+              <li key={slotId} className="flex items-start gap-2 text-xs text-alert">
+                <Icon name="alert" className="mt-px h-4 w-4 shrink-0" />
+                <span>
+                  {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.error}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+  
+        {total > 1 && emptyRegular > 0 && filledRegular > 0 && !customizer.uploading && (
+          <button
+            type="button"
+            onClick={() => customizer.repeatPhotos()}
+            className="w-full rounded-xl border border-dashed border-ink/40 px-3 py-2 text-xs font-semibold text-ink hover:border-ink"
+          >
+            Fill the {emptyRegular} empty space{emptyRegular === 1 ? '' : 's'} by repeating your photos
+          </button>
+        )}
+  
+        {total >= 1 && (
+          <ul className="grid grid-cols-3 gap-x-2.5 gap-y-3 sm:grid-cols-4">
+            {template.photoSlots.map((slot, i) => {
+              const photo = state.slots[slot.id];
+              const src = photo ? customizer.render.photoSrc(slot.id, photo) : null;
+              const status = statusBySlot.get(slot.id);
+              const busy = activity[slot.id]?.uploading;
+              const isActive = slot.id === activeSlotId;
+              return (
+                <li key={slot.id} className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    aria-pressed={isActive}
+                    aria-label={`${slot.label}: ${photo ? (unavailable.has(slot.id) ? 'photo could not be loaded' : 'photo added') : 'empty, add a photo'}`}
+                    onClick={() => {
+                      customizer.setActiveSlotId(slot.id);
+                      if (!photo) onRequestPhoto(slot.id);
+                    }}
+                    className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl border-2 bg-tint transition-colors ${isActive ? 'border-gold' : 'border-transparent hover:border-line'}`}
+                  >
+                    {src ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={src} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <Icon name={unavailable.has(slot.id) ? 'alert' : 'plus'} className="h-5 w-5 text-ink/45" />
+                    )}
+                    <span className="absolute left-1 top-1 rounded-full bg-paper/90 px-1.5 text-2xs font-semibold text-ink">{i + 1}</span>
+                    {busy && <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-gold" aria-hidden="true" />}
+                    {status?.tier && !busy && (
+                      <span className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-paper ${TIER_DOT[status.tier]}`} aria-hidden="true" />
+                    )}
+                  </button>
+                  {/* Under every space: choose a photo while it is empty; once it has one, change it or edit it. */}
+                  {photo ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onRequestPhoto(slot.id)}
+                        aria-label={`Change image ${i + 1}`}
+                        className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-line bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink/50 active:bg-tint"
+                      >
+                        <Icon name="replace" className="h-3.5 w-3.5 shrink-0" />
+                        Change Image
+                      </button>
+                      {onEditPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => onEditPhoto(slot.id)}
+                          aria-label={`Edit image ${i + 1}`}
+                          className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-ink bg-ink text-[11px] font-semibold text-paper transition-colors hover:bg-ink/85"
+                        >
+                          <Icon name="pen" className="h-3.5 w-3.5 shrink-0" />
+                          Edit Image
+                        </button>
+                      )}
+                    </>
                   ) : (
-                    <Icon name={unavailable.has(slot.id) ? 'alert' : 'plus'} className="h-5 w-5 text-ink/45" />
-                  )}
-                  <span className="absolute left-1 top-1 rounded-full bg-paper/90 px-1.5 text-2xs font-semibold text-ink">{i + 1}</span>
-                  {busy && <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-gold" aria-hidden="true" />}
-                  {status?.tier && !busy && (
-                    <span className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-paper ${TIER_DOT[status.tier]}`} aria-hidden="true" />
-                  )}
-                </button>
-                {/* Under every space: choose a photo while it is empty; once it has one, change it or edit it. */}
-                {photo ? (
-                  <>
                     <button
                       type="button"
                       onClick={() => onRequestPhoto(slot.id)}
-                      aria-label={`Change image ${i + 1}`}
-                      className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-line bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink/50 active:bg-tint"
+                      aria-label={`Choose image ${i + 1}`}
+                      className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ink/35 bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink"
                     >
-                      <Icon name="replace" className="h-3.5 w-3.5 shrink-0" />
-                      Change Image
+                      <Icon name="plus" className="h-3.5 w-3.5 shrink-0" />
+                      Choose Image
                     </button>
-                    {onEditPhoto && (
-                      <button
-                        type="button"
-                        onClick={() => onEditPhoto(slot.id)}
-                        aria-label={`Edit image ${i + 1}`}
-                        className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-ink bg-ink text-[11px] font-semibold text-paper transition-colors hover:bg-ink/85"
-                      >
-                        <Icon name="pen" className="h-3.5 w-3.5 shrink-0" />
-                        Edit Image
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onRequestPhoto(slot.id)}
-                    aria-label={`Choose image ${i + 1}`}
-                    className="flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ink/35 bg-paper text-[11px] font-semibold text-ink transition-colors hover:border-ink"
-                  >
-                    <Icon name="plus" className="h-3.5 w-3.5 shrink-0" />
-                    Choose Image
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {Object.entries(activity)
-        .filter(([, a]) => a.working)
-        .map(([slotId, a]) => (
-          <p key={slotId} role="status" className="flex items-center gap-2 rounded-xl bg-tint px-3 py-2 text-xs text-ink">
-            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink/20 border-t-ink" aria-hidden="true" />
-            {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.working} This takes about half a minute.
-          </p>
-        ))}
-
-      {active && activePhoto && activeStatus?.tier && (
-        <div className="space-y-2 rounded-xl border border-line/80 px-3 py-2.5">
-          <p className="flex items-center gap-2 text-xs text-ink/75">
-            <span className={`h-2.5 w-2.5 rounded-full ${TIER_DOT[activeStatus.tier]}`} aria-hidden="true" />
-            <span>
-              <strong className="font-semibold text-ink">{active.label}</strong> · {TIER_LABEL[activeStatus.tier]}
-              {activeStatus.dpi ? ` (${Math.round(activeStatus.dpi)} DPI at this size)` : ''}
-            </span>
-          </p>
-          {activeStatus.message && <p className="text-xs text-ink/60">{activeStatus.message}</p>}
-          {activeStatus.tier === 'red' && (
-            <label className="flex items-start gap-2 text-xs text-ink">
-              <input
-                type="checkbox"
-                checked={activePhoto.confirmedLowDpi}
-                onChange={(e) => customizer.setLowDpiConfirmed(active.id, e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-[#c9861a]"
-              />
-              <span>Print this photo anyway. I understand it may look soft.</span>
-            </label>
-          )}
-        </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+  
+        {Object.entries(activity)
+          .filter(([, a]) => a.working)
+          .map(([slotId, a]) => (
+            <p key={slotId} role="status" className="flex items-center gap-2 rounded-xl bg-tint px-3 py-2 text-xs text-ink">
+              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink/20 border-t-ink" aria-hidden="true" />
+              {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.working} This takes about half a minute.
+            </p>
+          ))}
+  
+        {active && activePhoto && activeStatus?.tier && (
+          <div className="space-y-2 rounded-xl border border-line/80 px-3 py-2.5">
+            <p className="flex items-center gap-2 text-xs text-ink/75">
+              <span className={`h-2.5 w-2.5 rounded-full ${TIER_DOT[activeStatus.tier]}`} aria-hidden="true" />
+              <span>
+                <strong className="font-semibold text-ink">{active.label}</strong> · {TIER_LABEL[activeStatus.tier]}
+                {activeStatus.dpi ? ` (${Math.round(activeStatus.dpi)} DPI at this size)` : ''}
+              </span>
+            </p>
+            {activeStatus.message && <p className="text-xs text-ink/60">{activeStatus.message}</p>}
+            {activeStatus.tier === 'red' && (
+              <label className="flex items-start gap-2 text-xs text-ink">
+                <input
+                  type="checkbox"
+                  checked={activePhoto.confirmedLowDpi}
+                  onChange={(e) => customizer.setLowDpiConfirmed(active.id, e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#c9861a]"
+                />
+                <span>Print this photo anyway. I understand it may look soft.</span>
+              </label>
+            )}
+          </div>
+        )}
+        </>
       )}
 
       {(template.calendarSlots ?? []).length > 0 && (

@@ -44,8 +44,14 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
   const warnings: string[] = [];
   const slots: SlotStatus[] = [];
 
+  const photosByWhatsApp = state.photosVia === 'whatsapp';
   for (const slot of template.photoSlots) {
     const photo = state.slots[slot.id];
+    if (!photo && photosByWhatsApp) {
+      // The customer sends this photo on WhatsApp after ordering: not missing, just not here yet.
+      slots.push({ slotId: slot.id, filled: false, required: slot.required });
+      continue;
+    }
     if (!photo) {
       slots.push({ slotId: slot.id, filled: false, required: slot.required });
       if (slot.required) blockers.push(`Add a photo for “${slot.label}”.`);

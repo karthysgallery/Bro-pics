@@ -234,9 +234,10 @@ function TemplateEditorSession({
       }
       const cleanState = JSON.parse(JSON.stringify(PersonalizationStateSchema.parse(state))) as PersonalizationState;
       const personalizationId = editingLine?.personalizationId ?? crypto.randomUUID();
-      const previewPath = await uploadCartPreview(personalizationId);
+      // Photos coming on WhatsApp: the cart shows the product's own picture rather than an empty design.
+      const previewPath = cleanState.photosVia === 'whatsapp' ? undefined : await uploadCartPreview(personalizationId);
       const line = {
-        title: `${product.title} — ${selectedVariant.sizeLabel}`,
+        title: `${product.title} — ${selectedVariant.sizeLabel}${cleanState.photosVia === 'whatsapp' ? ' (photos on WhatsApp)' : ''}`,
         unitPriceSnapshot: selectedVariant.price + finishExtra,
         ...(previewPath && { previewPath }),
         ...(finish && { finish, finishExtra }),

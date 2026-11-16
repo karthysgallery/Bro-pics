@@ -14,7 +14,8 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   // Auto-advances to print_rendering for green/yellow customizations;
   // holds here for a red-tier item until staff advances it manually via
   // the same staff-advance route used for every other transition.
-  photo_validation: ['print_rendering', 'cancelled', 'refunded'],
+  // in_production straight from here: an order whose photos came on WhatsApp is printed by the team by hand.
+  photo_validation: ['print_rendering', 'in_production', 'cancelled', 'refunded'],
   // print_ready is set automatically once every print job for the order
   // reaches 'done' (see completePrintJobAndAdvanceOrder).
   print_rendering: ['print_ready', 'cancelled', 'refunded'],
