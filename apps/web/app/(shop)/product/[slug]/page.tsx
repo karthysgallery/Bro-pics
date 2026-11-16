@@ -15,7 +15,6 @@ import { Suspense } from 'react';
 import { ProductDetailClient } from '../../../../components/product/ProductDetailClient';
 import { ProductDetailWithUrlParams } from '../../../../components/product/ProductDetailWithUrlParams';
 import { ProductTabs } from '../../../../components/product/ProductTabs';
-import { VideoRail } from '../../../../components/product/VideoRail';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
@@ -233,9 +232,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </section>
       )}
 
-      {show.showTabs && <ProductTabs product={product} variants={variants} />}
-      {show.showVideos && <VideoRail media={media} />}
-      {show.showReviews && <ReviewsSection product={product} reviews={reviews} />}
+      {/* Description and Reviews as two tabs; the product's video plays in the photo gallery above. */}
+      {show.showTabs ? (
+        <ProductTabs product={product} variants={variants} reviews={show.showReviews ? reviews : undefined} />
+      ) : (
+        show.showReviews && <ReviewsSection product={product} reviews={reviews} />
+      )}
       {show.showFrequentlyBought && frequentlyBoughtTogether.length > 0 && (
         <RelatedProducts products={frequentlyBoughtTogether} title="Frequently Bought Together" />
       )}
