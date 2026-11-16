@@ -4,7 +4,10 @@
  * returned as a JPEG data URL for the product gallery (where it can be zoomed like any photo).
  */
 
-const SIZE = 1400;
+const SIZE = 1600;
+/** One layer lying in the stack: its width runs right and down, its height left and down. */
+const U = { x: 380, y: 130 };
+const V = { x: -220, y: 200 };
 const BG = '#f7f1e8';
 const INK = '#2b211a';
 const GOLD = '#b08a54';
@@ -20,11 +23,23 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
 }
 
 /** Draw in a layer's own flat coordinates (0..w, 0..h), shown as a tilted plane lying in the stack. */
-function onPlane(ctx: CanvasRenderingContext2D, w: number, h: number, ox: number, oy: number, draw: () => void) {
-  const U = { x: 430, y: 150 }; // the layer's width runs right and slightly down
-  const V = { x: -250, y: 230 }; // its height runs left and down
+function onPlane(ctx: CanvasRenderingContext2D, w: number, h: number, ox: number, oy: number, draw: () => void, shadow = true) {
   ctx.save();
   ctx.setTransform(U.x / w, U.y / w, V.x / h, V.y / h, ox, oy);
+  if (shadow) {
+    // A soft shadow under the layer, so each one reads as a separate sheet.
+    ctx.save();
+    ctx.shadowColor = 'rgba(60,40,20,0.28)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.01)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+  // Nothing a layer draws may spill past its own edge.
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
   draw();
   ctx.restore();
 }
@@ -42,21 +57,21 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
   ctx.fillRect(0, 0, SIZE, SIZE);
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
-  ctx.font = '600 54px Georgia, "Times New Roman", serif';
+  ctx.font = '600 66px Georgia, "Times New Roman", serif';
   ctx.fillText('How your frame is made', 80, 110);
-  ctx.font = '28px Arial, sans-serif';
+  ctx.font = '34px Arial, sans-serif';
   ctx.fillStyle = 'rgba(43,33,26,0.6)';
-  ctx.fillText('Five layers, built by hand in our workshop', 80, 158);
+  ctx.fillText('Five layers, built by hand in our workshop', 80, 165);
 
   const w = portrait ? 1000 : 1500;
   const h = portrait ? 1500 : 1000;
-  const ox = 360;
-  const step = 165;
-  const top = 235;
+  const ox = 330;
+  const step = 235;
+  const top = 230;
   const m = w * 0.075; // moulding width
 
   // Back (bottom of the stack): MDF back with the hook and two bushes.
-  const backY = top + step * 4 + 95; // a little further down, so its hook shows below the MDF
+  const backY = top + step * 4;
   onPlane(ctx, w, h, ox, backY, () => {
     ctx.fillStyle = '#9a7646';
     ctx.fillRect(0, 0, w, h);
@@ -68,9 +83,9 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.moveTo(w * 0.62 - 120, h * 0.56);
-    ctx.lineTo(w * 0.62, h * 0.47);
-    ctx.lineTo(w * 0.62 + 120, h * 0.56);
+    ctx.moveTo(w / 2 - 130, h * 0.6);
+    ctx.lineTo(w / 2, h * 0.5);
+    ctx.lineTo(w / 2 + 130, h * 0.6);
     ctx.closePath();
     ctx.stroke();
     // bushes: small rubber pads at the bottom corners
@@ -123,7 +138,7 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
   // Laminate: a clear protective sheet with a shine.
   const lamY = top + step;
   onPlane(ctx, w, h, ox, lamY, () => {
-    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.fillStyle = 'rgba(214,232,244,0.75)';
     ctx.fillRect(0, 0, w, h);
     const g = ctx.createLinearGradient(0, 0, w, h);
     g.addColorStop(0.25, 'rgba(255,255,255,0)');
@@ -131,8 +146,8 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     g.addColorStop(0.55, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(120,150,170,0.9)';
+    ctx.lineWidth = 10;
     ctx.strokeRect(0, 0, w, h);
   });
 
@@ -153,10 +168,10 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     [mdfY, '8 mm MDF', 'Strong backing that keeps it flat'],
     [backY, 'Hook & bush', 'Ready to hang, sits straight on the wall'],
   ];
-  const lx = 900;
+  const lx = ox + U.x + 120;
   for (const [y, title, note] of labels) {
-    const anchorX = ox + 430 * 0.95;
-    const anchorY = y + 150 * 0.95 + 40;
+    const anchorX = ox + U.x - 6;
+    const anchorY = y + U.y;
     ctx.strokeStyle = GOLD;
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -168,11 +183,11 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     ctx.arc(anchorX, anchorY, 9, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = INK;
-    ctx.font = '600 40px Georgia, "Times New Roman", serif';
-    ctx.fillText(title, lx, anchorY + 4);
-    ctx.font = '25px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(43,33,26,0.68)';
-    wrap(ctx, note, lx, anchorY + 42, SIZE - lx - 50, 31);
+    ctx.font = '600 52px Georgia, "Times New Roman", serif';
+    ctx.fillText(title, lx, anchorY + 8);
+    ctx.font = '32px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(43,33,26,0.72)';
+    wrap(ctx, note, lx, anchorY + 54, SIZE - lx - 40, 38);
   }
 
   return canvas.toDataURL('image/jpeg', 0.9);
