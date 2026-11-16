@@ -7,3 +7,5 @@
 !lib/server.js
 !fonts/
 !fonts/**
+!models/
+!models/birefnet-lite.onnx
