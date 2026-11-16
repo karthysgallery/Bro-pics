@@ -23,6 +23,8 @@ import { OfferBanner } from '../../components/home/OfferBanner';
 import { canonicalUrl, SITE_NAME } from '../../lib/seo/site';
 import { HeroSlider } from '../../components/home/HeroSlider';
 import { CategoryTiles } from '../../components/home/CategoryTiles';
+import { CategorySlider } from '../../components/home/CategorySlider';
+import { getCategorySlides } from '../../lib/home-category-slides';
 import { ProductGrid } from '../../components/home/ProductGrid';
 import { ProductRail } from '../../components/home/ProductRail';
 import { OfferStrip } from '../../components/home/OfferStrip';
@@ -78,10 +80,11 @@ function trustTitle(title: string): string | undefined {
 // Reordering the homepage is therefore an admin action, not a code change —
 // which is the whole point of the section architecture.
 export default async function HomePage() {
-  const [sections, categories, themeSettings] = await Promise.all([
+  const [sections, categories, themeSettings, categorySlides] = await Promise.all([
     getActiveHomepageSections(),
     getActiveCategories(),
     getThemeSettings().catch(() => null),
+    getCategorySlides(),
   ]);
   // The festival on show (if any) greets visitors at the top of the homepage.
   const theme = themeSettings ? shopTheme(themeSettings) : null;
@@ -124,7 +127,8 @@ export default async function HomePage() {
         // Only the first hero doc draws the band; the rest are its posters.
         return index === firstHeroIndex ? <HeroSlider sections={heroSections} hasTrustVideos={trustVideos.length > 0} /> : null;
       case 'category_tiles':
-        return <CategoryTiles title={section.title} categories={categories} />;
+        // The owner's eight categories as a slider; the shop's own categories if those pages have no products yet.
+        return categorySlides.length > 0 ? <CategorySlider title={section.title} slides={categorySlides} /> : <CategoryTiles title={section.title} categories={categories} />;
       case 'best_sellers':
         return (
           <ProductGrid

@@ -217,6 +217,42 @@ export const LANDING_PAGES: LandingPage[] = [
     related: ['birthday-photo-frames', 'family-photo-frames', 'photo-collage-frames'],
   },
   {
+    slug: 'celebrity-photo-frames',
+    keyword: 'celebrity photo frame',
+    h1: 'Celebrity Photo Frames',
+    title: 'Celebrity & Leader Photo Frames | KarthysGallery',
+    description: 'Framed photos of your favourite stars and leaders, printed sharp and framed by hand. Ready to hang at home or in the office, delivered across India.',
+    lead: 'Your favourite star or leader, printed sharp and framed by hand — ready to hang at home, in your shop or office.',
+    sections: [
+      { heading: 'Printed sharp, framed by hand', paragraphs: ['Each picture is printed on premium paper, laminated and mounted on 8 mm MDF inside a plain black frame, so it stays bright for years.'] },
+      { heading: 'Delivered to your door', paragraphs: [DELIVERY] },
+    ],
+    faq: [
+      { q: 'Which sizes are available?', a: 'Usually 8×12, 12×18 and 16×24 inches; each frame shows its own sizes and prices.' },
+      { q: 'Is it ready to hang?', a: 'Yes. Every frame comes with a hook on the back, ready for the wall.' },
+    ],
+    match: { words: ['celebrity', 'actor', 'leader', 'thalapathy', 'vijay', 'cm of', 'chief minister', 'rajini', 'ajith'], tags: ['celebrity', 'leader'] },
+    related: ['personalised-photo-frames', 'god-photo-frames', 'tamil-nadu'],
+  },
+  {
+    slug: 'god-photo-frames',
+    keyword: 'god photo frame',
+    h1: 'God Photo Frames',
+    title: 'God Photo Frames for Pooja Room & Home | KarthysGallery',
+    description: 'God photo frames for your pooja room and home: Murugan, Ganesha, Lakshmi, Shiva, Perumal, Amman, Jesus and more, printed sharp and framed by hand.',
+    lead: 'Divine photo frames for your pooja room, home or shop — printed sharp, laminated and framed by hand.',
+    sections: [
+      { heading: 'For your pooja room', paragraphs: ['Choose a size that fits your pooja shelf or wall. Each picture is printed on premium paper, laminated against dust and moisture and mounted on 8 mm MDF.'] },
+      { heading: 'Delivered to your door', paragraphs: [DELIVERY] },
+    ],
+    faq: [
+      { q: 'Can I get a frame for a god not listed here?', a: 'Yes. Message us on WhatsApp with the picture you want and the size, and we will frame it for you.' },
+      { q: 'Is the print protected?', a: 'Yes. Every print is laminated, so it can be wiped clean and stays bright.' },
+    ],
+    match: { words: ['god', 'murugan', 'ganesh', 'vinayagar', 'lakshmi', 'shiva', 'perumal', 'balaji', 'amman', 'krishna', 'jesus', 'mary', 'mecca', 'pooja'], tags: ['god', 'devotional', 'pooja'] },
+    related: ['personalised-photo-frames', 'celebrity-photo-frames', 'tamil-nadu'],
+  },
+  {
     slug: 'family-photo-frames',
     keyword: 'family photo frame',
     h1: 'Family Photo Frames',
