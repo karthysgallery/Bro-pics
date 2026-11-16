@@ -169,6 +169,8 @@ export interface GalleryPhoto {
   url: string;
   alt: string;
   label: string;
+  /** A product video (plays with controls instead of being zoomed). */
+  video?: boolean;
 }
 
 /** The preview views, or one of the product photos ("photo-0", "photo-1"…). */
@@ -208,6 +210,10 @@ export interface PreviewGalleryProps {
   showEditor?: boolean;
   /** Product photos (sizes, frame close-up…), browsed in the same gallery after the views. */
   photos?: GalleryPhoto[];
+  /** Which preview views to show (all four by default). */
+  views?: PreviewViewId[];
+  /** Product photos placed right after the first view (e.g. "How it's made"), before the other views. */
+  photosAfterFirst?: GalleryPhoto[];
 }
 
 const arrowButton =
@@ -246,6 +252,21 @@ function useSwipe(onSwipe: (dir: -1 | 1) => void, enabled: boolean) {
 /** A product photo filling its box, with a soft placeholder while it loads. */
 function PhotoPicture({ photo, width, alt, eager }: { photo: GalleryPhoto; width: number; alt: string; eager?: boolean }) {
   const [loaded, setLoaded] = useState(false);
+  if (photo.video) {
+    // A thumbnail-sized video is a still with a play mark; the big one plays, never with sound on its own.
+    return width <= 300 ? (
+      <div className="absolute inset-0 flex items-center justify-center bg-ink">
+        <video src={photo.url} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover opacity-80" />
+        <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-paper/90 text-ink shadow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+        </span>
+      </div>
+    ) : (
+      <div className="absolute inset-0 flex items-center justify-center bg-ink">
+        <video src={photo.url} controls playsInline preload="metadata" aria-label={alt} className="max-h-full max-w-full" />
+      </div>
+    );
+  }
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-paper">
       {!loaded && <span className="absolute inset-0 animate-pulse bg-tint/70" aria-hidden="true" />}
@@ -283,6 +304,8 @@ export function PreviewGallery({
   scenes = DEFAULT_PREVIEW_SCENES,
   showEditor = true,
   photos = [],
+  views: shownViews,
+  photosAfterFirst = [],
 }: PreviewGalleryProps) {
   const [ownView, setOwnView] = useState<GalleryViewId>('plain');
   const view = controlledView ?? ownView;
@@ -324,10 +347,14 @@ export function PreviewGallery({
   );
   const roomsAwaitPhoto = !personalized && !productFitsRooms && product.status !== 'working';
 
-  const items: ItemDef[] = useMemo(
-    () => [...VIEWS.map((v) => ({ id: v.id, label: v.label, view: v })), ...photos.map((p, i) => ({ id: `photo-${i}` as const, label: p.label, photo: p }))],
-    [photos]
-  );
+  const viewKey = (shownViews ?? []).join(',');
+  const items: ItemDef[] = useMemo(() => {
+    const views = VIEWS.filter((v) => !shownViews || shownViews.includes(v.id)).map((v) => ({ id: v.id, label: v.label, view: v }));
+    const early = photosAfterFirst.map((p, i) => ({ id: `photo-${photos.length + i}` as const, label: p.label, photo: p }));
+    const late = photos.map((p, i) => ({ id: `photo-${i}` as const, label: p.label, photo: p }));
+    return [...views.slice(0, 1), ...early, ...views.slice(1), ...late];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos, photosAfterFirst, viewKey]);
   const index = Math.max(0, items.findIndex((i) => i.id === view));
   const active = items[index]!;
   const step = (dir: -1 | 1) => setView(items[(index + dir + items.length) % items.length]!.id);
@@ -368,7 +395,8 @@ export function PreviewGallery({
             {/* The live editor: always mounted so the finished design keeps updating. */}
             <div className={`absolute inset-0 items-center justify-center p-2 sm:p-4 ${showLiveEditor ? 'flex' : 'hidden'}`}>{children}</div>
 
-            {!showLiveEditor && (
+            {!showLiveEditor && active.photo?.video && renderItem(active, 1200, { alt })}
+            {!showLiveEditor && !active.photo?.video && (
               <button
                 type="button"
                 data-testid="preview-main-picture"
@@ -518,9 +546,13 @@ function FullscreenViewer({
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-3">
         {/* Pinch, wheel, double-tap or the buttons to zoom; drag to look around; swipe (not zoomed) for the next picture. */}
-        <ZoomPane resetKey={item.id} onSwipe={step} className="aspect-square w-full max-w-[min(92vw,calc(100vh-200px))] rounded-2xl bg-paper">
-          {render(item, 2400)}
-        </ZoomPane>
+        {item.photo?.video ? (
+          <div className="relative aspect-square w-full max-w-[min(92vw,calc(100vh-200px))] overflow-hidden rounded-2xl bg-ink">{render(item, 2400)}</div>
+        ) : (
+          <ZoomPane resetKey={item.id} onSwipe={step} className="aspect-square w-full max-w-[min(92vw,calc(100vh-200px))] rounded-2xl bg-paper">
+            {render(item, 2400)}
+          </ZoomPane>
+        )}
         <button type="button" onClick={() => step(-1)} aria-label="Previous picture" className={`${arrowButton} left-3 sm:left-6`}>
           <Chevron dir="left" />
         </button>

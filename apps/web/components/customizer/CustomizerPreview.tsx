@@ -27,6 +27,10 @@ interface CustomizerPreviewProps {
   editRequest?: number;
   /** "Done" after editing: back to the photo list. */
   onDoneEditing?: () => void;
+  /** Which preview views the gallery shows (all four by default). */
+  views?: GalleryViewId[];
+  /** Photos shown right after the first view (e.g. "How it's made"). */
+  photosAfterFirst?: GalleryPhoto[];
 }
 
 function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean }) {
@@ -49,7 +53,7 @@ function ToolButton({ icon, label, onClick, disabled }: { icon: IconName; label:
  * (editable) and the same design framed in a bedroom, a hall and on a table.
  * Until the first photo is added every view shows the product's own picture.
  */
-export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false, samples = [], editRequest = 0, onDoneEditing }: CustomizerPreviewProps) {
+export function CustomizerPreview({ customizer, variant, onRequestPhoto, defaultImageUrl = null, productTitle = 'Your design', frameLook = null, photos = [], glitter = false, samples = [], editRequest = 0, onDoneEditing, views, photosAfterFirst }: CustomizerPreviewProps) {
   const { template, state, activeSlotId } = customizer;
   const [view, setView] = useState<GalleryViewId>('plain');
   const [roomImage, setRoomImage] = useState<string | null>(null);
@@ -117,6 +121,8 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         onViewChange={setView}
         showEditor={!fixedDesign}
         photos={photos}
+        views={views as never}
+        photosAfterFirst={photosAfterFirst}
       >
         <div className="flex h-full max-h-full w-full items-center justify-center rounded-xl bg-tint/60 p-1 md:p-2">
           <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} fitParentHeight frame={{ look, printWidthIn }} />

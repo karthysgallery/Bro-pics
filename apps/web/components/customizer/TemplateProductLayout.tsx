@@ -24,6 +24,7 @@ import { DISPLAY_FRAME } from './frame-moulding';
 import { CustomizerControls } from './CustomizerControls';
 import { LowResDialog, unconfirmedLowRes } from './LowResDialog';
 import { PhotoEditDialog } from './PhotoEditDialog';
+import { frameConstructionImage } from '../product/frame-construction';
 import { useToast } from '../ui/Toast';
 import { carryOverState } from './state-carry';
 import { useTemplateCustomizer } from './use-template-customizer';
@@ -108,26 +109,36 @@ function TemplateEditorSession({
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
   // The product photos for the gallery, named for what they show (the automatic ones in their order). Photo sets
   // made since the styled shop-card photos carry a `role` on those two; older sets keep their original order.
+  const printPhotoRef = useRef<string | null>(null);
+  // The gallery keeps to five slides: the frame, how it is made, a room, the sizes, and the product's video.
   const galleryPhotos = useMemo(() => {
     type Shown = { auto?: boolean; role?: string };
     const images = media.filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id));
     const styledSet = images.some((m) => (m as Shown).role);
-    const AUTO = styledSet
-      ? ['In the frame', '', '', 'Sizes', 'Frame details', 'The print', 'Matte vs glitter']
-      : ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print', 'Matte vs glitter'];
+    // The automatic photos in their order; only "Sizes" is shown (the rest are covered by the other slides).
+    const AUTO = styledSet ? ['In the frame', '', '', 'Sizes', 'Frame details', 'The print'] : ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print'];
     let auto = 0;
-    let own = 0;
-    return images.map((m) => {
-      const shown = m as Shown;
-      const alt = m.alt || product.title;
-      let label: string;
-      if (shown.role) {
-        auto++;
-        label = /table/i.test(alt) ? 'On a table' : 'On the wall';
-      } else label = shown.auto ? AUTO[auto++] || 'Photo' : `Photo ${++own}`;
-      return { url: m.url, alt, label };
-    });
+    const labelled = images.map((m) => ({ m, label: (m as Shown).role ? (auto++, '') : (m as Shown).auto ? AUTO[auto++] ?? '' : '' }));
+    const sizes = labelled.find((x) => x.label === 'Sizes')?.m;
+    printPhotoRef.current = labelled.find((x) => x.label === 'The print')?.m.url ?? null;
+    const video = media.find((m) => m.type === 'video');
+    return [
+      ...(sizes ? [{ url: sizes.url, alt: sizes.alt || `${product.title} sizes`, label: 'Sizes' }] : []),
+      ...(video ? [{ url: video.url, alt: video.alt || `${product.title} video`, label: 'Video', video: true }] : []),
+    ];
   }, [media, selectedVariant.id, product.title]);
+  // "How it's made": the five layers, drawn with this product's own picture as the print.
+  const [construction, setConstruction] = useState<string | null>(null);
+  const printPicture = printPhotoRef.current || product.samplePhotos?.[0] || product.primaryImageUrl || null;
+  const portraitDesign = template.canvas.height >= template.canvas.width;
+  useEffect(() => {
+    let alive = true;
+    void frameConstructionImage(printPicture, portraitDesign).then((url) => alive && setConstruction(url));
+    return () => {
+      alive = false;
+    };
+  }, [printPicture, portraitDesign]);
+  const detailSlides = useMemo(() => (construction ? [{ url: construction, alt: `How the ${product.title} is made`, label: 'Details' }] : []), [construction, product.title]);
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
   const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
   // Every product is shown in the shop's premium black display frame (the moulding's real width is kept).
@@ -316,7 +327,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} samples={product.samplePhotos} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} views={['plain', 'hall']} photosAfterFirst={detailSlides} glitter={finish === 'glitter'} samples={product.samplePhotos} />
         <BuyBox
           product={product}
           variants={variants}
