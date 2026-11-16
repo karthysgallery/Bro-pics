@@ -291,6 +291,11 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     [apply]
   );
   const resetPhoto = useCallback((slotId: string) => apply((s) => resetSlotTransform(s, slotId)), [apply]);
+  /** Puts a space's photo back exactly as it was (Cancel in the photo editor). */
+  const restorePhoto = useCallback(
+    (slotId: string, photo: SlotPhoto) => apply((s) => (s.slots[slotId] ? { ...s, slots: { ...s.slots, [slotId]: photo } } : s)),
+    [apply]
+  );
   const setLowDpiConfirmed = useCallback((slotId: string, value: boolean) => apply((s) => confirmLowDpi(s, slotId, value)), [apply]);
 
   const slotById = useMemo(() => new Map(template.photoSlots.map((s) => [s.id, s])), [template]);
@@ -519,6 +524,7 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     updateText,
     setTextLanguage,
     setPhotosVia,
+    restorePhoto,
     setDate,
     draftOffer,
     restoreDraft,

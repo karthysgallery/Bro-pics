@@ -23,6 +23,7 @@ import { CustomizerPreview } from './CustomizerPreview';
 import { DISPLAY_FRAME } from './frame-moulding';
 import { CustomizerControls } from './CustomizerControls';
 import { LowResDialog, unconfirmedLowRes } from './LowResDialog';
+import { PhotoEditDialog } from './PhotoEditDialog';
 import { useToast } from '../ui/Toast';
 import { carryOverState } from './state-carry';
 import { useTemplateCustomizer } from './use-template-customizer';
@@ -172,16 +173,16 @@ function TemplateEditorSession({
     [customizer]
   );
   // "Edit Image" under a space: select its photo and bring the editor (the big preview) into view.
-  const [editRequest, setEditRequest] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null);
+  // "Edit Image" opens that photo in its own window (PhotoEditDialog).
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const editPhoto = useCallback(
     (slotId: string) => {
       customizer.setActiveSlotId(slotId);
-      setEditRequest((n) => n + 1);
+      setEditingSlot(slotId);
     },
     [customizer]
   );
-  const doneEditing = useCallback(() => controlsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), []);
   const addPhotos = useCallback(() => {
     if (template.photoSlots.length === 1) requestPhoto(template.photoSlots[0].id);
     else bulkInput.current?.click();
@@ -315,7 +316,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} samples={product.samplePhotos} editRequest={editRequest} onDoneEditing={doneEditing} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} glitter={finish === 'glitter'} samples={product.samplePhotos} />
         <BuyBox
           product={product}
           variants={variants}
@@ -344,6 +345,7 @@ function TemplateEditorSession({
           )}
         </BuyBox>
       </div>
+      {editingSlot && <PhotoEditDialog customizer={customizer} slotId={editingSlot} onClose={() => setEditingSlot(null)} />}
       <LowResDialog
         customizer={customizer}
         open={lowResOpen}
