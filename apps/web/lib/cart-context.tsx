@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { productIdOfVariant, rupees, trackMeta } from './meta-pixel';
 import { getFirestore, doc, onSnapshot, runTransaction, type Firestore } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { mergeCartItems, type CartLine } from '@bro-pics/shared';
@@ -223,6 +224,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const addItem = (item: CartItem) => {
       applyLocal((prev) => mergeOne(prev, item));
+      const metaId = productIdOfVariant(item.variantId);
+      trackMeta('AddToCart', {
+        content_ids: [metaId],
+        content_name: item.title,
+        content_type: 'product_group',
+        contents: [{ id: metaId, quantity: item.qty, item_price: rupees(item.unitPriceSnapshot) }],
+        value: rupees(item.unitPriceSnapshot * item.qty),
+        currency: 'INR',
+      });
       if (user) {
         runFirestoreOp((current) => mergeOne(current, item));
       }

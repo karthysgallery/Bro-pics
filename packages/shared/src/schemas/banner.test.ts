@@ -17,12 +17,12 @@ const validBanner = {
 
 describe('BannerSchema', () => {
   it('accepts a valid banner with no coupon or schedule', () => {
-    expect(BannerSchema.parse(validBanner)).toEqual(validBanner);
+    expect(BannerSchema.parse(validBanner)).toEqual({ ...validBanner, tabletImage: '', ctaLabel: '' });
   });
 
   it('accepts a banner with a linked coupon and schedule window', () => {
     const withLinks = { ...validBanner, couponCode: 'DIWALI30', startsAt: new Date('2026-10-01'), endsAt: new Date('2026-10-31') };
-    expect(BannerSchema.parse(withLinks)).toEqual(withLinks);
+    expect(BannerSchema.parse(withLinks)).toEqual({ ...withLinks, tabletImage: '', ctaLabel: '' });
   });
 
   it('rejects a missing title', () => {

@@ -25,6 +25,8 @@ import { CustomizerControls } from './CustomizerControls';
 import { LowResDialog, unconfirmedLowRes } from './LowResDialog';
 import { PhotoEditDialog } from './PhotoEditDialog';
 import { frameConstructionImage } from '../product/frame-construction';
+import { sizeGuideImage } from '../product/size-guide-image';
+import { trackMeta } from '../../lib/meta-pixel';
 import { useToast } from '../ui/Toast';
 import { carryOverState } from './state-carry';
 import { useTemplateCustomizer } from './use-template-customizer';
@@ -107,38 +109,66 @@ function TemplateEditorSession({
   const sessionRef = useRef<string | null>(null);
   const sessionId = useCallback(() => (sessionRef.current ??= getOrCreateSessionId()), []);
   const authToken = useCallback(async () => (userRef.current ? userRef.current.getIdToken() : null), []);
-  // The product photos for the gallery, named for what they show (the automatic ones in their order). Photo sets
-  // made since the styled shop-card photos carry a `role` on those two; older sets keep their original order.
-  const printPhotoRef = useRef<string | null>(null);
-  // The gallery keeps to five slides: the frame, how it is made, a room, the sizes, and the product's video.
-  const galleryPhotos = useMemo(() => {
-    type Shown = { auto?: boolean; role?: string };
-    const images = media.filter((m) => m.type === 'image' && (m.variantId === null || m.variantId === selectedVariant.id));
-    const styledSet = images.some((m) => (m as Shown).role);
-    // The automatic photos in their order; only "Sizes" is shown (the rest are covered by the other slides).
-    const AUTO = styledSet ? ['In the frame', '', '', 'Sizes', 'Frame details', 'The print'] : ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print'];
-    let auto = 0;
-    const labelled = images.map((m) => ({ m, label: (m as Shown).role ? (auto++, '') : (m as Shown).auto ? AUTO[auto++] ?? '' : '' }));
-    const sizes = labelled.find((x) => x.label === 'Sizes')?.m;
-    printPhotoRef.current = labelled.find((x) => x.label === 'The print')?.m.url ?? null;
-    const video = media.find((m) => m.type === 'video');
-    return [
-      ...(sizes ? [{ url: sizes.url, alt: sizes.alt || `${product.title} sizes`, label: 'Sizes' }] : []),
-      ...(video ? [{ url: video.url, alt: video.alt || `${product.title} video`, label: 'Video', video: true }] : []),
-    ];
-  }, [media, selectedVariant.id, product.title]);
-  // "How it's made": the five layers, drawn with this product's own picture as the print.
-  const [construction, setConstruction] = useState<string | null>(null);
-  const printPicture = printPhotoRef.current || product.samplePhotos?.[0] || product.primaryImageUrl || null;
+  // The standard gallery, the same for every frame: 1 the frame, 2 on a table, 3 on the wall above a sofa, 4 the size
+  // guide, 5 how it is made — then the product's video. Pictures 2–5 are made automatically from this product; the
+  // owner can replace any of them with their own photo (Admin → product → photo "Use as").
+  const owned = useMemo(() => {
+    type Shown = { role?: string };
+    const byRole = (role: string) => media.find((m) => m.type === 'image' && (m as Shown).role === role) ?? null;
+    return { table: byRole('gallery-table'), hall: byRole('gallery-hall'), size: byRole('gallery-size'), construction: byRole('gallery-construction') };
+  }, [media]);
+  const video = useMemo(() => media.find((m) => m.type === 'video') ?? null, [media]);
+  // The picture printed inside the drawn frames: a ready-made frame's own artwork, else a sample photo.
+  const printPicture = product.artwork?.url || product.samplePhotos?.[0] || product.primaryImageUrl || null;
   const portraitDesign = template.canvas.height >= template.canvas.width;
+  // "Premium Quality. Crafted Layer by Layer.": drawn with this product's own picture as the print.
+  const [construction, setConstruction] = useState<string | null>(null);
   useEffect(() => {
+    if (owned.construction) return;
     let alive = true;
     void frameConstructionImage(printPicture, portraitDesign).then((url) => alive && setConstruction(url));
     return () => {
       alive = false;
     };
-  }, [printPicture, portraitDesign]);
-  const detailSlides = useMemo(() => (construction ? [{ url: construction, alt: `How the ${product.title} is made`, label: 'Details' }] : []), [construction, product.title]);
+  }, [printPicture, portraitDesign, owned.construction]);
+  // Size guide from this product's own sizes, in the chosen orientation, with the chosen size shown big.
+  const guideModel = frameModels.find((m) => m.id === selectedVariant.frameModelId);
+  const guideSizes = useMemo(() => {
+    const landscape = selectedVariant.widthIn > selectedVariant.heightIn;
+    return variants.filter((v) => v.isActive !== false && v.widthIn > 0 && v.heightIn > 0 && v.widthIn > v.heightIn === landscape).map((v) => ({ widthIn: v.widthIn, heightIn: v.heightIn }));
+  }, [variants, selectedVariant.widthIn, selectedVariant.heightIn]);
+  const guideKey = `${JSON.stringify(guideSizes)}|${selectedVariant.widthIn}x${selectedVariant.heightIn}|${guideModel?.mouldingWidthIn ?? 1}|${printPicture}`;
+  const [sizeGuide, setSizeGuide] = useState<string | null>(null);
+  useEffect(() => {
+    if (owned.size || guideSizes.length === 0 || !(selectedVariant.widthIn > 0)) return;
+    let alive = true;
+    void sizeGuideImage({ printUrl: printPicture, sizes: guideSizes, selected: { widthIn: selectedVariant.widthIn, heightIn: selectedVariant.heightIn }, mouldingIn: guideModel?.mouldingWidthIn ?? 1 }).then(
+      (url) => alive && setSizeGuide(url)
+    );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guideKey, owned.size]);
+  const isFixed = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
+  // A ready-made frame shows the owner's own table/hall photos when they set them; a personalized frame always shows
+  // the live room views, because those carry the customer's own photo.
+  const ownRooms = isFixed && Boolean(owned.table || owned.hall);
+  const galleryViews: Array<'plain' | 'table' | 'hall'> = ownRooms ? ['plain', ...(owned.table ? [] : (['table'] as const)), ...(owned.hall ? [] : (['hall'] as const))] : ['plain', 'table', 'hall'];
+  const galleryPhotos = useMemo(
+    () => [
+      ...(ownRooms && owned.table ? [{ url: owned.table.url, alt: owned.table.alt || `${product.title} on a table`, label: 'Table' }] : []),
+      ...(ownRooms && owned.hall ? [{ url: owned.hall.url, alt: owned.hall.alt || `${product.title} on the wall`, label: 'Hall' }] : []),
+      ...(owned.size ? [{ url: owned.size.url, alt: owned.size.alt || `${product.title} size guide`, label: 'Size guide' }] : sizeGuide ? [{ url: sizeGuide, alt: `${product.title} size guide`, label: 'Size guide' }] : []),
+      ...(owned.construction
+        ? [{ url: owned.construction.url, alt: owned.construction.alt || `How the ${product.title} is made`, label: 'How it is made' }]
+        : construction
+          ? [{ url: construction, alt: `How the ${product.title} is made`, label: 'How it is made' }]
+          : []),
+      ...(video ? [{ url: video.url, alt: video.alt || `${product.title} video`, label: 'Video', video: true }] : []),
+    ],
+    [ownRooms, owned, sizeGuide, construction, video, product.title]
+  );
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
   const model = frameModels.find((m) => m.id === selectedVariant.frameModelId);
   // Every product is shown in the shop's premium black display frame (the moulding's real width is kept).
@@ -158,6 +188,14 @@ function TemplateEditorSession({
   });
 
   useEffect(() => onStateChange(customizer.state), [customizer.state, onStateChange]);
+  // Meta: the customer started making it their own (first photo added) — once per page visit.
+  const customizedRef = useRef(false);
+  const hasPhoto = Object.keys(customizer.state.slots ?? {}).length > 0;
+  useEffect(() => {
+    if (!hasPhoto || customizedRef.current) return;
+    customizedRef.current = true;
+    trackMeta('CustomizeProduct', { content_ids: [product.id], content_name: product.title, content_type: 'product_group' });
+  }, [hasPhoto, product.id, product.title]);
 
   // Editing a cart line: load its design once the cart has it.
   const editingLine = editPersonalizationId ? items.find((i) => i.personalizationId === editPersonalizationId && i.personalization) : undefined;
@@ -327,7 +365,7 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
-        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} views={['plain', 'hall']} photosAfterFirst={detailSlides} glitter={finish === 'glitter'} samples={product.samplePhotos} />
+        <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} views={galleryViews} glitter={finish === 'glitter'} samples={product.samplePhotos} />
         <BuyBox
           product={product}
           variants={variants}

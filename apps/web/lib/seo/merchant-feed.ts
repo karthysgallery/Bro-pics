@@ -7,7 +7,7 @@ export interface FeedProduct extends Pick<Product, 'id' | 'title' | 'slug' | 'sh
   categoryName?: string;
 }
 
-type FeedVariant = Pick<Variant, 'id' | 'sku' | 'price' | 'stockStatus' | 'sizeLabel' | 'frameColour' | 'material'>;
+type FeedVariant = Pick<Variant, 'id' | 'sku' | 'price' | 'stockStatus' | 'sizeLabel' | 'frameColour' | 'material'> & { compareAtPrice?: number | null };
 
 const AVAILABILITY: Record<string, string> = { in_stock: 'in_stock', backorder: 'backorder', out_of_stock: 'out_of_stock' };
 
@@ -15,7 +15,11 @@ const AVAILABILITY: Record<string, string> = { in_stock: 'in_stock', backorder: 
  * One Google Merchant Center item per sellable size/finish. All values come from the catalogue: nothing is made up
  * (no GTIN/MPN — custom products have none, so identifier_exists is "no"; no Google category — the owner picks it in Merchant Center).
  */
-export function buildMerchantItem(product: FeedProduct, variant: FeedVariant): string | null {
+/**
+ * `opts.salePrice` (the Meta catalogue): when the size has a higher original price, list that as the price and the
+ * selling price as `sale_price`, so ads can show the saving. The amount charged is always the selling price.
+ */
+export function buildMerchantItem(product: FeedProduct, variant: FeedVariant, opts: { salePrice?: boolean } = {}): string | null {
   if (!product.primaryImageUrl || variant.price <= 0) return null;
   const variantLabel = [variant.sizeLabel, variant.frameColour].filter(Boolean).join(', ');
   const title = `${product.title}${variantLabel ? ` — ${variantLabel}` : ''}`.slice(0, 150);
@@ -28,7 +32,9 @@ export function buildMerchantItem(product: FeedProduct, variant: FeedVariant): s
     `      <link>${escapeXml(`${canonicalUrl(`/product/${product.slug}`)}?variantId=${encodeURIComponent(variant.id)}`)}</link>`,
     `      <g:image_link>${escapeXml(absoluteUrl(product.primaryImageUrl))}</g:image_link>`,
     `      <g:availability>${AVAILABILITY[variant.stockStatus] ?? 'out_of_stock'}</g:availability>`,
-    `      <g:price>${(variant.price / 100).toFixed(2)} INR</g:price>`,
+    ...(opts.salePrice && variant.compareAtPrice && variant.compareAtPrice > variant.price
+      ? [`      <g:price>${(variant.compareAtPrice / 100).toFixed(2)} INR</g:price>`, `      <g:sale_price>${(variant.price / 100).toFixed(2)} INR</g:sale_price>`]
+      : [`      <g:price>${(variant.price / 100).toFixed(2)} INR</g:price>`]),
     '      <g:condition>new</g:condition>',
     `      <g:brand>${SITE_NAME}</g:brand>`,
     '      <g:identifier_exists>no</g:identifier_exists>',

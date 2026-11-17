@@ -26,6 +26,9 @@ import { TRANSIT_DAYS_MIN, TRANSIT_DAYS_MAX } from '../../components/product/Del
 import type { DeliveryMethod } from '@bro-pics/shared';
 import { useSiteText } from '../../components/layout/SiteTextContext';
 import { useFestiveOffer } from '../../components/theme/FestiveOfferContext';
+import { CheckoutStartEvent, PurchaseEvent, type MetaLine } from '../../components/meta/MetaEvents';
+import { productIdOfVariant, rupees, trackMeta } from '../../lib/meta-pixel';
+import { attributionForOrder } from '../../lib/attribution';
 
 const DELIVERY_METHOD_LABEL: Record<DeliveryMethod, string> = { standard: 'Standard', express: 'Express' };
 // Only the courier-transit portion changes by method — production/dispatch
@@ -59,6 +62,8 @@ export default function CheckoutPage() {
   const selectedAddressPincode = selectedAddress?.pincode ?? null;
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  // What was bought, kept after the cart empties, for the Meta Purchase event (fired only once payment is verified).
+  const [purchase, setPurchase] = useState<{ orderId: string; lines: MetaLine[]; totalPaise: number } | null>(null);
   const [paymentConfirming, setPaymentConfirming] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(null);
@@ -275,7 +280,7 @@ export default function CheckoutPage() {
       const response = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey, items }),
+        body: JSON.stringify({ addressId, couponCode: appliedCoupon?.code ?? undefined, deliveryMethod, idempotencyKey, items, attribution: attributionForOrder() }),
         signal: timeoutSignal(30_000),
       });
 
@@ -315,6 +320,9 @@ export default function CheckoutPage() {
 
       const { orderId: newOrderId, razorpayOrderId, amount, keyId, paymentProvider: provider, paymentStatus, orderNo: resOrderNo } = await response.json();
       setOrderId(newOrderId);
+      const metaLines: MetaLine[] = items.map((i) => ({ productId: productIdOfVariant(i.variantId), qty: i.qty, unitPricePaise: i.unitPriceSnapshot }));
+      setPurchase({ orderId: newOrderId, lines: metaLines, totalPaise: amount });
+      trackMeta('AddPaymentInfo', { content_ids: [...new Set(metaLines.map((l) => l.productId))], content_type: 'product_group', value: rupees(amount), currency: 'INR' });
       // Paid status is only ever reported by the server's settlement
       // pipeline (via the order listener) — never inferred client-side.
       setOrderStatus({ status: undefined, paymentStatus, orderNo: resOrderNo });
@@ -427,6 +435,8 @@ export default function CheckoutPage() {
 
   return (
     <main className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      <CheckoutStartEvent lines={items.map((i) => ({ productId: productIdOfVariant(i.variantId), qty: i.qty, unitPricePaise: i.unitPriceSnapshot }))} totalPaise={items.reduce((n, i) => n + i.unitPriceSnapshot * i.qty, 0)} />
+      {purchase && <PurchaseEvent orderId={purchase.orderId} paid={isPaid && orderId === purchase.orderId} lines={purchase.lines} totalPaise={purchase.totalPaise} />}
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
         <Link href="/" className="hover:text-ink">Home</Link>

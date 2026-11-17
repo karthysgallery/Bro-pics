@@ -2,6 +2,9 @@ export type ConsentStatus = 'accepted' | 'declined';
 
 const STORAGE_KEY = 'bropics_analytics_consent';
 
+/** Fired on window when the visitor makes a choice in the cookie banner. */
+export const CONSENT_EVENT = 'kg-consent-change';
+
 /**
  * [FE-40] The event-taxonomy instrumentation itself (page_view,
  * personalization_started/completed/abandoned, add_to_cart, etc.) is
@@ -29,6 +32,12 @@ export function setConsentStatus(status: ConsentStatus): void {
     window.localStorage.setItem(STORAGE_KEY, status);
   } catch {
     // localStorage can throw in private-browsing/blocked-storage contexts.
+  }
+  // Tracking that waits for consent (the Meta Pixel) starts the moment the visitor accepts.
+  try {
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: status }));
+  } catch {
+    // Very old browsers without CustomEvent: tracking starts on the next page load instead.
   }
 }
 

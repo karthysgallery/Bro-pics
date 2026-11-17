@@ -17,6 +17,7 @@ const mockDb = {
   collection: vi.fn(() => ({ doc: vi.fn(() => ({ id: 'banner_new_1', set: mockBannerSet })) })),
 };
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
+vi.mock('../../../../lib/revalidate-catalogue', () => ({ revalidateHomepage: vi.fn(), safeRevalidate: vi.fn() }));
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
 
 vi.mock('../../../../lib/rate-limit', async (importOriginal) => {

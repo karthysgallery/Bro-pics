@@ -35,7 +35,7 @@ export function ConsentBanner() {
     >
       <p className="text-sm text-paper/85">
         We use cookies to keep your cart and preferences working, and — only with your consent — to understand
-        how the site is used. See our <Link href="/privacy" className="underline hover:text-gold">privacy policy</Link>.
+        how the site is used and to measure our Facebook &amp; Instagram ads. See our <Link href="/privacy" className="underline hover:text-gold">privacy policy</Link>.
       </p>
       <div className="flex gap-2 shrink-0">
         <button

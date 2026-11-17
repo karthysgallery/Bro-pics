@@ -19,3 +19,4 @@ export { recordBudgetAlert } from './billing/budget-alerts';
 export { releaseStockOnCancel, releaseUnpaidStock } from './billing/stock-release';
 export { invoiceOnPayment, creditNoteOnRefund, sendWhatsAppCampaigns } from './billing/invoices';
 export { whatsappOnOrderChange, whatsappRetryFailed } from './whatsapp/order-notifications';
+export { metaPurchaseOnPaid, metaPurchaseRetry } from './marketing/meta-purchase';

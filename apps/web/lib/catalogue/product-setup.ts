@@ -1,4 +1,5 @@
 import 'server-only';
+import { GALLERY_ROLES, type ProductMediaRole } from '@bro-pics/shared';
 import { z } from 'zod';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
@@ -86,7 +87,7 @@ export const ProductSetupBodySchema = z
             alt: z.string().trim().max(160).default(''),
             auto: z.boolean().default(false),
             /** The shop card's picture, and the one shown when the card is hovered (the styled photos). */
-            role: z.enum(['listing', 'listing-hover']).optional(),
+            role: z.enum(['listing', 'listing-hover', 'gallery-table', 'gallery-hall', 'gallery-size', 'gallery-construction']).optional(),
           })
           .strict()
       )
@@ -104,6 +105,8 @@ export const ProductSetupBodySchema = z
     artworkMediaId: z.string().min(1).nullable().default(null),
     /** Collage: the design made in the template builder. */
     collageTemplateId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).nullable().default(null),
+    /** Discount codes skip this product (an offer product sold at its offer price). */
+    couponsExcluded: z.boolean().optional(),
   })
   .strict()
   .refine((b) => b.dispatchDaysMax >= b.dispatchDaysMin, { message: 'Maximum dispatch days must be at least the minimum.', path: ['dispatchDaysMax'] })
@@ -245,7 +248,7 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     }
   } else if (body.productType === 'single_photo') {
     for (const shape of shapes) {
-      const template = buildSinglePhotoTemplate({ productId: id, name: `${body.title} — ${shapeLabel(shape.largest)}`, size: shape.smallest });
+      const template = buildSinglePhotoTemplate({ productId: id, name: `${body.title} — ${shapeLabel(shape.largest)}`, size: shape.smallest, withText: body.allowsTextPersonalization });
       const published = await publishAutoDesign(db, template, now);
       designByShape.set(shape.key, published.id);
     }
@@ -327,6 +330,7 @@ export async function saveProductSetup(db: Firestore, store: ArtworkStore, produ
     isActive: body.status === 'published',
     isFeatured: body.isFeatured,
     allowsTextPersonalization: body.productType === 'ready_made' ? false : body.allowsTextPersonalization,
+    couponsExcluded: body.couponsExcluded === true,
     dispatchDaysMin: body.dispatchDaysMin,
     dispatchDaysMax: body.dispatchDaysMax,
     ...(body.hsnCode ? { hsnCode: body.hsnCode } : {}),
@@ -424,7 +428,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
         url,
         alt: String(d.get('alt') ?? ''),
         auto: d.get('auto') === true,
-        ...(role === 'listing' || role === 'listing-hover' ? { role: role as 'listing' | 'listing-hover' } : {}),
+        ...(typeof role === 'string' && (['listing', 'listing-hover', ...GALLERY_ROLES] as string[]).includes(role) ? { role: role as ProductMediaRole } : {}),
       };
     });
   return {
@@ -448,6 +452,7 @@ export async function loadProductSetup(db: Firestore, productId: string) {
       status: p.status ?? (p.isActive ? 'published' : 'draft'),
       isFeatured: Boolean(p.isFeatured),
       allowsTextPersonalization: Boolean(p.allowsTextPersonalization),
+      couponsExcluded: p.couponsExcluded === true,
       dispatchDaysMin: p.dispatchDaysMin ?? 2,
       dispatchDaysMax: p.dispatchDaysMax ?? 4,
       hsnCode: p.hsnCode ?? '',

@@ -1,7 +1,8 @@
 /**
- * "How your frame is made": an exploded view of the five layers of a KarthysGallery frame — frame, laminate,
- * premium print (the product's own picture), 8 mm MDF, and the back with its hook and bushes — drawn on a canvas and
- * returned as a JPEG data URL for the product gallery (where it can be zoomed like any photo).
+ * "Premium Quality. Crafted Layer by Layer.": an exploded view of how a KarthysGallery frame is built — outer
+ * frame, protective lamination, premium print (the product's own picture), 8 mm MDF backing, and the back with its
+ * push fixings and wall hook — drawn on a canvas and returned as a JPEG data URL for the product gallery (where it
+ * can be zoomed like any photo).
  */
 
 const SIZE = 1600;
@@ -57,45 +58,57 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
   ctx.fillRect(0, 0, SIZE, SIZE);
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
-  ctx.font = '600 66px Georgia, "Times New Roman", serif';
-  ctx.fillText('How your frame is made', 80, 110);
+  ctx.font = '600 62px Georgia, "Times New Roman", serif';
+  ctx.fillText('Premium Quality. Crafted Layer by Layer.', 80, 110);
   ctx.font = '34px Arial, sans-serif';
   ctx.fillStyle = 'rgba(43,33,26,0.6)';
-  ctx.fillText('Five layers, built by hand in our workshop', 80, 165);
+  ctx.fillText('Six parts, put together by hand in our workshop', 80, 165);
 
   const w = portrait ? 1000 : 1500;
   const h = portrait ? 1500 : 1000;
   const ox = 330;
-  const step = 235;
-  const top = 230;
+  const step = 205;
+  const top = 240;
   const m = w * 0.075; // moulding width
 
-  // Back (bottom of the stack): MDF back with the hook and two bushes.
+  // Back (bottom of the stack): the back board with its push fixings around the edge and the wall hook.
   const backY = top + step * 4;
+  const hookAt = { u: 0.5, v: 0.55 };
   onPlane(ctx, w, h, ox, backY, () => {
     ctx.fillStyle = '#9a7646';
     ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
     ctx.lineWidth = 6;
     ctx.strokeRect(0, 0, w, h);
-    // hook: a metal triangle hanger near the top
-    ctx.fillStyle = '#d9d9d9';
+    // push fixings: small metal tabs pressed in along the inside edge, holding the layers in the frame
+    ctx.fillStyle = '#c9c9c9';
+    ctx.strokeStyle = '#6b6b6b';
+    ctx.lineWidth = 4;
+    const tab = (x: number, y: number, horizontal: boolean) => {
+      ctx.beginPath();
+      if (horizontal) ctx.rect(x - 34, y - 9, 68, 18);
+      else ctx.rect(x - 9, y - 34, 18, 68);
+      ctx.fill();
+      ctx.stroke();
+    };
+    for (const f of [0.25, 0.75]) {
+      tab(w * f, 26, true);
+      tab(w * f, h - 26, true);
+      tab(26, h * f, false);
+      tab(w - 26, h * f, false);
+    }
+    // wall hook: a metal hanger at the top of the back
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.moveTo(w / 2 - 130, h * 0.6);
-    ctx.lineTo(w / 2, h * 0.5);
-    ctx.lineTo(w / 2 + 130, h * 0.6);
+    ctx.moveTo(w * hookAt.u - 130, h * (hookAt.v + 0.05));
+    ctx.lineTo(w * hookAt.u, h * (hookAt.v - 0.05));
+    ctx.lineTo(w * hookAt.u + 130, h * (hookAt.v + 0.05));
     ctx.closePath();
     ctx.stroke();
-    // bushes: small rubber pads at the bottom corners
-    ctx.fillStyle = '#222';
-    for (const x of [w * 0.12, w * 0.88]) {
-      ctx.beginPath();
-      ctx.arc(x, h * 0.9, 34, 0, Math.PI * 2);
-      ctx.fill();
-    }
   });
+  /** Where a point of a layer (fractions of its width and height) lands on the canvas. */
+  const at = (oy: number, u: number, v: number) => ({ x: ox + U.x * u + V.x * v, y: oy + U.y * u + V.y * v });
 
   // 8 mm MDF board, with its edge showing.
   const mdfY = top + step * 3;
@@ -135,7 +148,7 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     }
   });
 
-  // Laminate: a clear protective sheet with a shine.
+  // Lamination: a clear protective sheet with a shine.
   const lamY = top + step;
   onPlane(ctx, w, h, ox, lamY, () => {
     ctx.fillStyle = 'rgba(214,232,244,0.75)';
@@ -160,34 +173,34 @@ export async function frameConstructionImage(printUrl: string | null, portrait =
     ctx.fill('evenodd');
   });
 
-  // Labels with leader lines, on the right.
-  const labels: Array<[number, string, string]> = [
-    [top, 'Frame', 'Plain black moulding, finished by hand'],
-    [lamY, 'Laminate', 'Protects the print from dust and moisture'],
-    [printY, 'Premium print', 'Sharp detail, true colours'],
-    [mdfY, '8 mm MDF', 'Strong backing that keeps it flat'],
-    [backY, 'Hook & bush', 'Ready to hang, sits straight on the wall'],
+  // Labels with leader lines, on the right: each anchored to the part it names.
+  const corner = (y: number) => at(y, 1, 0);
+  const labels: Array<[{ x: number; y: number }, string, string]> = [
+    [corner(top), 'Outer frame', 'Hand-finished moulding around the picture'],
+    [corner(lamY), 'Protective lamination', 'Guards the print from dust and moisture'],
+    [corner(printY), 'Premium print', 'Sharp detail, true colours'],
+    [corner(mdfY), '8 mm MDF backing', 'Strong board that keeps it flat'],
+    [at(backY, hookAt.u, hookAt.v - 0.05), 'Wall hook', 'Fitted on the back, ready to hang'],
+    [at(backY, 1, 0.85), 'Back fixing', 'Push fittings hold every layer firmly'],
   ];
   const lx = ox + U.x + 120;
-  for (const [y, title, note] of labels) {
-    const anchorX = ox + U.x - 6;
-    const anchorY = y + U.y;
+  for (const [anchor, title, note] of labels) {
     ctx.strokeStyle = GOLD;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(anchorX, anchorY);
-    ctx.lineTo(lx - 20, anchorY);
+    ctx.moveTo(anchor.x, anchor.y);
+    ctx.lineTo(lx - 20, anchor.y);
     ctx.stroke();
     ctx.fillStyle = GOLD;
     ctx.beginPath();
-    ctx.arc(anchorX, anchorY, 9, 0, Math.PI * 2);
+    ctx.arc(anchor.x, anchor.y, 9, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = INK;
-    ctx.font = '600 52px Georgia, "Times New Roman", serif';
-    ctx.fillText(title, lx, anchorY + 8);
-    ctx.font = '32px Arial, sans-serif';
+    ctx.font = '600 46px Georgia, "Times New Roman", serif';
+    ctx.fillText(title, lx, anchor.y + 8);
+    ctx.font = '30px Arial, sans-serif';
     ctx.fillStyle = 'rgba(43,33,26,0.72)';
-    wrap(ctx, note, lx, anchorY + 54, SIZE - lx - 40, 38);
+    wrap(ctx, note, lx, anchor.y + 50, SIZE - lx - 40, 36);
   }
 
   return canvas.toDataURL('image/jpeg', 0.9);

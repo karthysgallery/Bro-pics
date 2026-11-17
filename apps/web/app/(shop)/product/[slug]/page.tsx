@@ -15,6 +15,7 @@ import { Suspense } from 'react';
 import { ProductDetailClient } from '../../../../components/product/ProductDetailClient';
 import { ProductDetailWithUrlParams } from '../../../../components/product/ProductDetailWithUrlParams';
 import { ProductTabs } from '../../../../components/product/ProductTabs';
+import { ProductViewEvent } from '../../../../components/meta/MetaEvents';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
@@ -160,6 +161,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
+      <ProductViewEvent productId={product.id} productName={product.title} valuePaise={defaultVariant?.price ?? product.basePrice ?? 0} />
       <nav aria-label="Breadcrumb" className="text-xs text-ink/60 mb-5 flex items-center gap-1.5 font-sans">
         <Link href="/" className="hover:text-ink transition-colors">Home</Link>
         {category && (

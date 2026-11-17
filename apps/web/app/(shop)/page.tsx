@@ -20,6 +20,8 @@ import { getPublishedCombos } from '../../lib/firestore-combos';
 import { getSeoSettings, getShippingSettings } from '../../lib/firestore-settings';
 import { ComboOffersStrip } from '../../components/home/ComboOffersStrip';
 import { OfferBanner } from '../../components/home/OfferBanner';
+import { CampaignBanner } from '../../components/home/CampaignBanner';
+import { getActiveBanner } from '../../lib/firestore-campaigns';
 import { canonicalUrl, SITE_NAME } from '../../lib/seo/site';
 import { HeroSlider } from '../../components/home/HeroSlider';
 import { CategoryTiles } from '../../components/home/CategoryTiles';
@@ -80,11 +82,12 @@ function trustTitle(title: string): string | undefined {
 // Reordering the homepage is therefore an admin action, not a code change —
 // which is the whole point of the section architecture.
 export default async function HomePage() {
-  const [sections, categories, themeSettings, categorySlides] = await Promise.all([
+  const [sections, categories, themeSettings, categorySlides, campaignBanner] = await Promise.all([
     getActiveHomepageSections(),
     getActiveCategories(),
     getThemeSettings().catch(() => null),
     getCategorySlides(),
+    getActiveBanner().catch(() => null),
   ]);
   // The festival on show (if any) greets visitors at the top of the homepage.
   const theme = themeSettings ? shopTheme(themeSettings) : null;
@@ -185,12 +188,15 @@ export default async function HomePage() {
       {/* Keyed by position as well as id: the `id` field comes from seeded
           data and duplicates across documents have been seen in practice,
           which React would otherwise treat as the same node. */}
+      {firstHeroIndex < 0 && campaignBanner && <CampaignBanner banner={campaignBanner} />}
       {sections.map((section, index) => (
         <div
           key={`${section.id}-${index}`}
           id={section.type === 'best_sellers' ? 'best-sellers' : undefined}
         >
           {renderSection(section, index)}
+          {/* The owner's offer banner (Admin → Marketing → Offer banners) comes first after the hero. */}
+          {index === firstHeroIndex && campaignBanner && <CampaignBanner banner={campaignBanner} />}
           {/* One quiet offer band right after the hero. */}
           {index === firstHeroIndex && showOfferBanner && <OfferBanner offer={offer} note={homeState ? `Free delivery across ${homeState}` : null} />}
           {/* The festival's gift banners follow the hero. */}

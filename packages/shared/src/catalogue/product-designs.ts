@@ -87,18 +87,24 @@ export function buildReadyMadeTemplate(input: {
   });
 }
 
-export function buildSinglePhotoTemplate(input: { productId: string; name: string; size: SizeInches; version?: number }): PersonalizationTemplate {
+/**
+ * One photo filling the whole print. With `withText`, an optional line of text sits near the bottom edge (a name,
+ * a date, a wish) — left empty, nothing is printed there.
+ */
+export function buildSinglePhotoTemplate(input: { productId: string; name: string; size: SizeInches; version?: number; withText?: boolean }): PersonalizationTemplate {
   return PersonalizationTemplateSchema.parse({
     id: designId(input.productId, input.size),
     version: input.version ?? 1,
     status: 'published',
-    type: 'single_photo',
+    type: input.withText ? 'text_plus_photo' : 'single_photo',
     name: input.name,
     canvas: canvasFor(input.size),
     photoSlots: [{ id: 'photo_01', label: 'Your photo', required: true, x: 0, y: 0, width: 1, height: 1, shape: 'rect' }],
-    textSlots: [],
-    layers: [{ kind: 'photoSlot', slotId: 'photo_01' }],
-    tags: ['single-photo'],
+    textSlots: input.withText
+      ? [{ id: 'text_01', label: 'Your text (optional)', required: false, x: 0.08, y: 0.85, width: 0.84, height: 0.09, maxLength: 40, align: 'center', defaultValue: '', defaultColor: '#ffffff', allowedColors: ['#ffffff', '#1b1c20', '#d4af37'] }]
+      : [],
+    layers: input.withText ? [{ kind: 'photoSlot', slotId: 'photo_01' }, { kind: 'text', slotId: 'text_01' }] : [{ kind: 'photoSlot', slotId: 'photo_01' }],
+    tags: input.withText ? ['single-photo', 'optional-text'] : ['single-photo'],
   });
 }
 

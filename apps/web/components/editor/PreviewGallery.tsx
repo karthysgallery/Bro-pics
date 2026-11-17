@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { DEFAULT_PREVIEW_SCENES, type PreviewScene } from '../../lib/preview-scenes';
+import { DEFAULT_PREVIEW_SCENES, SHOP_GALLERY_SCENES, type PreviewScene } from '../../lib/preview-scenes';
 import type { FrameInches } from '../../lib/preview-scenes';
 import { SceneStage, useFrameCutout } from './LifestylePreview';
 import { ZoomPane } from '../ui/ZoomPane';
@@ -20,15 +20,18 @@ interface ViewDef {
 const VIEWS: ViewDef[] = [
   { id: 'plain', label: 'Frame' },
   { id: 'bedroom', label: 'Bedroom', sceneId: 'bedroom' },
-  { id: 'hall', label: 'Hall', sceneId: 'living-room' },
-  { id: 'table', label: 'Table', sceneId: 'table' },
+  { id: 'hall', label: 'Hall', sceneId: 'hall' },
+  { id: 'table', label: 'Table', sceneId: 'tabletop' },
 ];
+
+/** The owner's table and hall scenes first, then the older rooms. */
+const GALLERY_SCENES = [...SHOP_GALLERY_SCENES, ...DEFAULT_PREVIEW_SCENES];
 
 /** How much the side zoom magnifies the main view. */
 const ZOOM = 2;
 
-/** The scene photographs are 4:3 but the stage is square: show the middle of the photo, edge to edge. */
-const SCENE_WIDTH_PERCENT = (4 / 3) * 100;
+/** The stage is square: a wider scene photo (4:3) shows its middle, edge to edge; a square one fits exactly. */
+const sceneWidthPercent = (scene: PreviewScene) => Math.max(1, scene.backdrop.type === 'photo' ? scene.backdrop.aspect : 1) * 100;
 
 /**
  * Follows `value` once it has stopped changing for `ms`, except that appearing or
@@ -78,7 +81,7 @@ function ViewPicture({
   if (scene) {
     return (
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0" style={{ left: `${-(SCENE_WIDTH_PERCENT - 100) / 2}%`, width: `${SCENE_WIDTH_PERCENT}%` }}>
+        <div className="absolute top-0" style={{ left: `${-(sceneWidthPercent(scene) - 100) / 2}%`, width: `${sceneWidthPercent(scene)}%` }}>
           <SceneStage
             scene={scene}
             imageUrl={pictures.roomUrl}
@@ -301,7 +304,7 @@ export function PreviewGallery({
   view: controlledView,
   onViewChange,
   stageOverlay,
-  scenes = DEFAULT_PREVIEW_SCENES,
+  scenes = GALLERY_SCENES,
   showEditor = true,
   photos = [],
   views: shownViews,

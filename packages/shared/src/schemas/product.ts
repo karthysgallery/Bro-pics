@@ -19,6 +19,9 @@ export const ProductSchema = z.object({
   // 0 for a ready-made frame (nothing for the customer to add).
   photoSlots: z.number().int().nonnegative(),
   allowsTextPersonalization: z.boolean(),
+  // Discount codes do not apply to this product (an offer product already sold at its offer price). A coupon made
+  // for this exact product (appliesTo 'product' listing it) still applies. Absent = coupons apply as usual.
+  couponsExcluded: z.boolean().optional(),
   // [BE-22] GST invoices need each line item's HSN code — optional and
   // unset for now, since which HSN code(s) apply to printed photo frames
   // is a real compliance/classification decision the client hasn't made

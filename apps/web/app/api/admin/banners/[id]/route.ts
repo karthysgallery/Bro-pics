@@ -8,6 +8,7 @@ import { writeAuditLog } from '../../../../../lib/audit-log';
 import { findCouponByCode } from '../../../../../lib/coupon-lookup';
 import { UpdateBannerBodySchema } from '../banner-request-schema';
 import { logger, type Banner } from '@bro-pics/shared';
+import { revalidateHomepage } from '../../../../../lib/revalidate-catalogue';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -52,6 +53,7 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
 
   const update: Record<string, unknown> = { ...body };
   await ref.update(update);
+  revalidateHomepage();
 
   await writeAuditLog(db, {
     actorUid: permission.uid,
@@ -62,4 +64,21 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }).catch((error) => logger.error('Failed to write audit log', { bannerId: id, error: String(error) }));
 
   return NextResponse.json({ banner: { ...current, ...update } }, { status: 200 });
+}
+
+export async function DELETE(request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const permission = await requirePermission(request, 'content:write');
+  if (!permission.ok) {
+    return adminApiError(permission.status, permission.status === 401 ? 'unauthenticated' : 'forbidden', 'Content write access required');
+  }
+  const { id } = await params;
+  const db = getFirestore(getAdminApp());
+  const ref = db.collection('banners').doc(id);
+  if (!(await ref.get()).exists) return adminApiError(404, 'not_found', `Unknown banner id: ${id}`);
+  await ref.delete();
+  revalidateHomepage();
+  await writeAuditLog(db, { actorUid: permission.uid, action: 'banner.delete', resource: 'banner', resourceId: id, details: {} }).catch((error) =>
+    logger.error('Failed to write audit log', { bannerId: id, error: String(error) })
+  );
+  return NextResponse.json({ ok: true });
 }

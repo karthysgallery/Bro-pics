@@ -12,9 +12,10 @@ import { logger } from '@bro-pics/shared';
  * same "log, don't fail the request" treatment ABE-03's routes already
  * give `writeAuditLog`.
  */
-function safeRevalidate(path: string): void {
+export function safeRevalidate(path: string, type?: 'page' | 'layout'): void {
   try {
-    revalidatePath(path);
+    if (type) revalidatePath(path, type);
+    else revalidatePath(path);
   } catch (error) {
     logger.error('Failed to revalidate path', { path, error: String(error) });
   }
@@ -22,7 +23,7 @@ function safeRevalidate(path: string): void {
 
 /** The sitemaps are built from the catalogue: any publish/edit/archive makes them stale at once. */
 export function revalidateSitemaps(): void {
-  for (const path of ['/sitemap.xml', '/sitemap-products.xml', '/sitemap-categories.xml', '/sitemap-images.xml', '/sitemap-combos.xml', '/feeds/google-merchant.xml']) {
+  for (const path of ['/sitemap.xml', '/sitemap-products.xml', '/sitemap-categories.xml', '/sitemap-images.xml', '/sitemap-combos.xml', '/feeds/google-merchant.xml', '/feeds/meta-catalog.xml']) {
     safeRevalidate(path);
   }
 }

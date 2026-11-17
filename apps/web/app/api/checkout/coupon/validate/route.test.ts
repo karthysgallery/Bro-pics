@@ -45,6 +45,8 @@ vi.mock('firebase-admin/firestore', () => ({
     collection: vi.fn((name: string) => {
       if (name === 'carts') return { doc: vi.fn(() => ({ get: mockCartDocGet })) };
       if (name === 'orders') return { where: mockOrdersWhere };
+      // Products are read to see whether one opts out of discount codes (none do here).
+      if (name === 'products') return { doc: vi.fn(() => ({ get: vi.fn(async () => ({ exists: false, id: 'x', data: () => undefined })) })) };
       throw new Error(`unexpected collection: ${name}`);
     }),
   }),

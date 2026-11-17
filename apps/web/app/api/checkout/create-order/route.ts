@@ -12,7 +12,7 @@ import { checkRateLimit } from '../../../../lib/rate-limit';
 import { createHash } from 'node:crypto';
 import { retryOnContention, serialized } from '@bro-pics/shared/src/payments/contention-retry';
 import { reserveOrderStock, restoreReservation, type StockReservation } from '@bro-pics/shared/src/inventory/stock';
-import { BillingError, shippingFailureMessage } from '@bro-pics/shared';
+import { BillingError, shippingFailureMessage, OrderAttributionSchema, type OrderAttribution } from '@bro-pics/shared';
 import { stateFingerprint, CartComboSchema, COMBO_VARIANT_PREFIX, type OrderCombo } from '@bro-pics/shared';
 import {
   generateOrderNo,
@@ -124,6 +124,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     typeof body?.couponCode === 'string' && body.couponCode.trim().length > 0 ? body.couponCode.trim() : null;
   const idempotencyKey =
     typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim().length > 0 ? body.idempotencyKey.trim() : null;
+  // Where the customer came from (ad link). Best-effort: anything malformed is dropped, never an error.
+  const attribution = cleanAttribution(body?.attribution);
 
   // Absent entirely means 'standard' (backward-compatible with clients that
   // predate this field); an explicitly-supplied-but-invalid value is a real
@@ -473,6 +475,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     placedAt: new Date(),
     deliveryMethod,
     ...(idempotencyKey && { idempotencyKey, inputsHash }),
+    ...(attribution && { attribution }),
     paymentMode: 'prepaid',
     amountPaidOnline: total,
     amountDueOnDelivery: 0,
@@ -577,6 +580,27 @@ function claimedLine(cartItems: CartLineInput[], line: { variantId: string; pers
     return frame ? { personalization: frame.personalization as { templateId: string; templateVersion: number; state: unknown } | undefined } : undefined;
   }
   return cartItems.find((c) => c.variantId === line.variantId && c.personalizationId === line.personalizationId);
+}
+
+/** The browser's ad-attribution object, each field trimmed to its limit; null when there is nothing usable. */
+function cleanAttribution(raw: unknown): OrderAttribution | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const limits: Record<string, number> = { utmSource: 100, utmMedium: 100, utmCampaign: 150, utmContent: 150, utmTerm: 150, landingPath: 300, fbc: 300, fbp: 100, userAgent: 400 };
+  const out: Record<string, string | boolean> = {};
+  for (const [k, n] of Object.entries(limits)) {
+    const v = r[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, n);
+  }
+  if (typeof r.adConsent === 'boolean') out.adConsent = r.adConsent;
+  // Meta ids are only kept when the visitor allowed ad measurement.
+  if (out.adConsent !== true) {
+    delete out.fbc;
+    delete out.fbp;
+    delete out.userAgent;
+  }
+  const parsed = OrderAttributionSchema.safeParse(out);
+  return parsed.success && Object.keys(parsed.data).length > 0 ? parsed.data : null;
 }
 
 function deterministicOrderId(userId: string, idempotencyKey: string): string {

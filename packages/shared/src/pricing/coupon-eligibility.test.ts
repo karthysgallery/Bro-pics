@@ -50,4 +50,14 @@ describe('eligibleSubtotalForCoupon', () => {
     const linesWithoutCategory: CouponEligibleLine[] = [{ productId: 'p1', lineTotalPaise: 10000 }];
     expect(eligibleSubtotalForCoupon(linesWithoutCategory, makeCoupon({ appliesTo: 'category', categoryIds: ['c1'] }))).toBe(0);
   });
+
+  it('leaves out a product that opts out of discount codes', () => {
+    const lines = [...LINES, { productId: 'offer', lineTotalPaise: 49900, couponsExcluded: true }];
+    expect(eligibleSubtotalForCoupon(lines, makeCoupon({ appliesTo: 'all' }))).toBe(60000);
+  });
+
+  it('still discounts an opted-out product when the coupon names it', () => {
+    const lines = [...LINES, { productId: 'offer', lineTotalPaise: 49900, couponsExcluded: true }];
+    expect(eligibleSubtotalForCoupon(lines, makeCoupon({ appliesTo: 'product', productIds: ['offer'] }))).toBe(49900);
+  });
 });

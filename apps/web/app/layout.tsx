@@ -8,6 +8,8 @@ import { ToastProvider } from '../components/ui/Toast';
 import { WishlistSync } from '../components/account/WishlistSync';
 import { NotificationsSync } from '../components/account/NotificationsSync';
 import { LayoutChrome } from '../components/layout/LayoutChrome';
+import { MetaPixel } from '../components/meta/MetaPixel';
+import { getMarketingSettings } from '../lib/firestore-campaigns';
 import { getActiveCategories } from '../lib/firestore-categories';
 import { getLiveLegalSlugs } from '../lib/firestore-content';
 import { getBusinessDetails, getAnnouncementBarSettings, getHeaderSettings, getFooterSettings, getStoreSettings, getThemeSettings, getSeoSettings, getSiteText } from '../lib/firestore-settings';
@@ -226,6 +228,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     ...(whatsappDigits(businessDetails?.supportWhatsapp) && { whatsappDigits: whatsappDigits(businessDetails?.supportWhatsapp)! }),
     ...((businessDetails?.supportPhone) && { supportPhone: businessDetails.supportPhone }),
   };
+  // Meta Pixel: only when the owner switched it on with an id (Admin → Marketing → Offers & ads).
+  const marketing = await getMarketingSettings().catch(() => null);
+  const metaPixelId = marketing?.metaEnabled && marketing.metaPixelId ? marketing.metaPixelId : null;
   const organizationJsonLd = buildOrganizationJsonLd({ email: businessContact.supportEmail, whatsappDigits: businessContact.whatsappDigits });
 
   return (
@@ -241,6 +246,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <ToastProvider>
           <AuthProvider>
             <WishlistSync />
+            <MetaPixel pixelId={metaPixelId} />
             <NotificationsSync />
             <CartProvider>
               <SiteTextProvider value={siteText}>

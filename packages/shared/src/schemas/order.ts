@@ -52,6 +52,24 @@ export const OrderStatusSchema = z.enum([
   'replacement_issued',
 ]);
 
+/** Campaign source of an order: UTM parameters and the Meta click/browser ids, each length-limited. No personal data. */
+export const OrderAttributionSchema = z.object({
+  utmSource: z.string().max(100).optional(),
+  utmMedium: z.string().max(100).optional(),
+  utmCampaign: z.string().max(150).optional(),
+  utmContent: z.string().max(150).optional(),
+  utmTerm: z.string().max(150).optional(),
+  // The page the visitor first landed on in this visit (path only, no query string).
+  landingPath: z.string().max(300).optional(),
+  // Meta's click id cookie (_fbc) and browser id cookie (_fbp), sent with the server Purchase event for matching.
+  fbc: z.string().max(300).optional(),
+  fbp: z.string().max(100).optional(),
+  userAgent: z.string().max(400).optional(),
+  // The visitor allowed ad measurement in the cookie banner. Without it no Meta event is sent for this order.
+  adConsent: z.boolean().optional(),
+});
+export type OrderAttribution = z.infer<typeof OrderAttributionSchema>;
+
 export const OrderSchema = z
   .object({
     id: z.string(),
@@ -109,6 +127,8 @@ export const OrderSchema = z
     // order's payment — lets admin show a TEST badge, since no real money
     // moved. Optional so orders placed before this field existed still parse.
     paymentProvider: z.enum(['mock', 'razorpay']).optional(),
+    // Where the customer came from (ad campaign links), captured in the browser and frozen at order creation.
+    attribution: OrderAttributionSchema.optional(),
     razorpayOrderId: z.string().optional(),
     razorpayPaymentId: z.string().optional(),
     // [BE-22] Sequential GST invoice number, assigned once payment is

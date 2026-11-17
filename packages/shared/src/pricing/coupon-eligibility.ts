@@ -6,6 +6,8 @@ export interface CouponEligibleLine {
   // isn't category-scoped) — never treated as "matches everything".
   categoryId?: string;
   lineTotalPaise: number;
+  /** The product opts out of discount codes (see Product.couponsExcluded). */
+  couponsExcluded?: boolean;
 }
 
 /**
@@ -18,7 +20,10 @@ export interface CouponEligibleLine {
  * caller already knows how to turn "the right subtotal number" into a
  * discount; this only changes what that number is.
  */
-export function eligibleSubtotalForCoupon(lines: CouponEligibleLine[], coupon: Coupon): number {
+export function eligibleSubtotalForCoupon(allLines: CouponEligibleLine[], coupon: Coupon): number {
+  // An offer product keeps its offer price: only a coupon made for that exact product can discount it.
+  const named = new Set(coupon.appliesTo === 'product' ? (coupon.productIds ?? []) : []);
+  const lines = allLines.filter((line) => !line.couponsExcluded || named.has(line.productId));
   if (coupon.appliesTo === 'all') {
     return lines.reduce((sum, line) => sum + line.lineTotalPaise, 0);
   }

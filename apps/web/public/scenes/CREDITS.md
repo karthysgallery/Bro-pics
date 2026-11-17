@@ -10,3 +10,12 @@ Free to use under the [Unsplash License](https://unsplash.com/license) (commerci
 | `table.jpg` | https://unsplash.com/photos/MI3fQ8eibys | Suzanne Rushton |
 
 The frame's position, real-world scale (`stageWidthIn`), light direction and tone for each photo live in `apps/web/lib/preview-scenes.ts`. To replace a photo, keep the same 4:3 crop around the same wall/table area or update those numbers.
+
+## Shop owner's own scenes (square, 1254 × 1254)
+
+Supplied by the shop owner (KarthysGallery) on 2026-11-17 for the standard product gallery: picture 2 (tabletop) and picture 3 (wall above the sofa). Not Unsplash photos.
+
+| File | Used for |
+| --- | --- |
+| `tabletop.jpg` | "Table" view: the frame stands on the wooden table between the two vases |
+| `hall.jpg` | "Hall" view: the frame hangs on the wall above the sofa |

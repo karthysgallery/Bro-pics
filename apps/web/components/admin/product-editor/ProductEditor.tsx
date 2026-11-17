@@ -1,4 +1,5 @@
 'use client';
+import type { ProductMediaRole } from '@bro-pics/shared';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -47,7 +48,7 @@ interface GalleryItem {
   auto?: boolean;
   label?: string;
   /** The shop card's picture, or the one shown when the card is hovered. */
-  role?: 'listing' | 'listing-hover';
+  role?: ProductMediaRole;
 }
 
 interface State {
@@ -69,6 +70,7 @@ interface State {
   status: 'draft' | 'published' | 'archived';
   isFeatured: boolean;
   allowsTextPersonalization: boolean;
+  couponsExcluded: boolean;
   dispatchDaysMin: number;
   dispatchDaysMax: number;
   hsnCode: string;
@@ -106,6 +108,7 @@ const EMPTY: State = {
   status: 'draft',
   isFeatured: false,
   allowsTextPersonalization: false,
+  couponsExcluded: false,
   dispatchDaysMin: 2,
   dispatchDaysMax: 4,
   hsnCode: '',
@@ -594,6 +597,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         status,
         isFeatured: s.isFeatured,
         allowsTextPersonalization: s.allowsTextPersonalization,
+        couponsExcluded: s.couponsExcluded,
         dispatchDaysMin: s.dispatchDaysMin,
         dispatchDaysMax: Math.max(s.dispatchDaysMin, s.dispatchDaysMax),
         ...(s.hsnCode.trim() && { hsnCode: s.hsnCode.trim() }),
@@ -1060,6 +1064,22 @@ export function ProductEditor({ productId }: { productId: string | null }) {
                     ) : g.mediaId ? (
                       <>
                         <input aria-label="Photo description" className="h-8 w-full rounded-lg border border-line px-2 text-2xs" value={g.alt} onChange={(e) => set({ gallery: s.gallery.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)) })} placeholder="Describe the photo" />
+                        <select
+                          aria-label="Use this photo as"
+                          className="h-8 w-full rounded-lg border border-line bg-paper px-1.5 text-2xs"
+                          value={g.role && g.role.startsWith('gallery-') ? g.role : ''}
+                          onChange={(e) => {
+                            const role = (e.target.value || undefined) as ProductMediaRole | undefined;
+                            // One photo per standard picture: choosing it here clears it from any other photo.
+                            set({ gallery: s.gallery.map((x, j) => (j === i ? { ...x, role } : role && x.role === role ? { ...x, role: undefined } : x)) });
+                          }}
+                        >
+                          <option value="">Extra photo</option>
+                          <option value="gallery-table">Use as picture 2 — on a table</option>
+                          <option value="gallery-hall">Use as picture 3 — on the wall</option>
+                          <option value="gallery-size">Use as picture 4 — size guide</option>
+                          <option value="gallery-construction">Use as picture 5 — how it is made</option>
+                        </select>
                         <div className="flex justify-between text-2xs">
                           <span className="flex gap-1">
                             <button type="button" disabled={i === 0} onClick={() => moveGallery(i, -1)} className="rounded px-1.5 hover:bg-field disabled:opacity-30" aria-label="Move left">
@@ -1184,6 +1204,16 @@ export function ProductEditor({ productId }: { productId: string | null }) {
               <label className="flex items-center gap-2 text-sm text-ink md:col-span-3">
                 <input type="checkbox" checked={s.isFeatured} onChange={(e) => set({ isFeatured: e.target.checked })} />
                 Feature on the home page
+              </label>
+              {s.productType === 'single_photo' && (
+                <label className="flex items-center gap-2 text-sm text-ink md:col-span-3">
+                  <input type="checkbox" checked={s.allowsTextPersonalization} onChange={(e) => set({ allowsTextPersonalization: e.target.checked })} />
+                  Customer can add a line of text (optional, printed near the bottom)
+                </label>
+              )}
+              <label className="flex items-center gap-2 text-sm text-ink md:col-span-3">
+                <input type="checkbox" checked={s.couponsExcluded} onChange={(e) => set({ couponsExcluded: e.target.checked })} />
+                Discount codes don&apos;t apply (already sold at an offer price)
               </label>
             </div>
             {productId && (

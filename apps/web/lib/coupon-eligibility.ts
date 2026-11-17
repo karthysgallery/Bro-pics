@@ -12,21 +12,23 @@ import type { PricedCartLine } from './checkout-calc';
 export async function computeEligibleSubtotal(db: Firestore, priced: PricedCartLine[], coupon: Coupon): Promise<number> {
   const needsCategory = coupon.appliesTo === 'category';
   const categoryIdByProductId = new Map<string, string>();
+  const excluded = new Set<string>();
 
-  if (needsCategory) {
-    const uniqueProductIds = [...new Set(priced.map((line) => line.productId))];
-    const productDocs = await Promise.all(uniqueProductIds.map((productId) => db.collection('products').doc(productId).get()));
-    for (const doc of productDocs) {
-      if (!doc.exists) continue;
-      const categoryId = (doc.data() as { categoryId?: string }).categoryId;
-      if (typeof categoryId === 'string') categoryIdByProductId.set(doc.id, categoryId);
-    }
+  // Product docs are always read: an offer product can opt out of discount codes (couponsExcluded).
+  const uniqueProductIds = [...new Set(priced.map((line) => line.productId))];
+  const productDocs = await Promise.all(uniqueProductIds.map((productId) => db.collection('products').doc(productId).get()));
+  for (const doc of productDocs) {
+    if (!doc.exists) continue;
+    const data = doc.data() as { categoryId?: string; couponsExcluded?: boolean };
+    if (typeof data.categoryId === 'string') categoryIdByProductId.set(doc.id, data.categoryId);
+    if (data.couponsExcluded === true) excluded.add(doc.id);
   }
 
   const lines: CouponEligibleLine[] = priced.map((line) => ({
     productId: line.productId,
     ...(needsCategory && { categoryId: categoryIdByProductId.get(line.productId) }),
     lineTotalPaise: line.unitPrice * line.qty,
+    ...(excluded.has(line.productId) && { couponsExcluded: true }),
   }));
 
   return eligibleSubtotalForCoupon(lines, coupon);

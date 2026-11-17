@@ -112,9 +112,10 @@ export const ADMIN_MODULES: AdminModule[] = [
   {
     id: 'marketing',
     title: 'Marketing & Google',
-    description: 'Google search ranking, coupons, reviews and featured products.',
+    description: 'Offer banners and ads, Google search ranking, coupons, reviews and featured products.',
     icon: 'marketing',
     pages: [
+      { label: 'Offers & ads', href: '/admin/marketing/offers', permission: 'content:read', icon: 'coupons' },
       { label: 'Google & SEO', href: '/admin/seo', permission: 'catalogue:read', icon: 'analytics' },
       { label: 'Coupons', href: '/admin/coupons', permission: 'coupons:write', icon: 'coupons' },
       { label: 'Reviews', href: '/admin/reviews', permission: 'reviews:moderate', icon: 'reviews' },

@@ -93,6 +93,40 @@ export interface PreviewScene {
  * (or table), estimated from objects of known size in it (a door, a dresser, a
  * side table), so a 12x18 frame is drawn at 12x18 relative to the room.
  */
+/**
+ * The shop owner's own scenes (square photos), used by the standard product gallery: picture 2 (the frame standing
+ * on a table) and picture 3 (hanging above the sofa). Kept apart from DEFAULT_PREVIEW_SCENES so screens that list
+ * every room (the older lifestyle preview) are unchanged.
+ */
+export const SHOP_GALLERY_SCENES: PreviewScene[] = [
+  {
+    id: 'tabletop',
+    label: 'Table',
+    kind: 'table',
+    backdrop: { type: 'photo', src: '/scenes/tabletop.jpg', aspect: 1, credit: 'KarthysGallery' },
+    stageWidthIn: 60,
+    // Standing on the wooden table, between the plant on the left and the dried flowers on the right.
+    frame: { x: 0.565, y: 0.845, anchor: 'bottom', maxFraction: 0.6 },
+    showcaseFraction: 0.46,
+    light: { angleDeg: 140, strength: 0.55 },
+    tone: { brightness: 1, warmth: 0.1 },
+    minFraction: 0.3,
+  },
+  {
+    id: 'hall',
+    label: 'Hall',
+    kind: 'room',
+    backdrop: { type: 'photo', src: '/scenes/hall.jpg', aspect: 1, credit: 'KarthysGallery' },
+    stageWidthIn: 110,
+    // Large and centred on the wall above the sofa, as in the owner's reference picture.
+    frame: { x: 0.51, y: 0.345, anchor: 'center', maxFraction: 0.6 },
+    showcaseFraction: 0.46,
+    light: { angleDeg: 150, strength: 0.5 },
+    tone: { brightness: 1, warmth: 0.1 },
+    minFraction: 0.3,
+  },
+];
+
 export const DEFAULT_PREVIEW_SCENES: PreviewScene[] = [
   {
     id: 'living-room',

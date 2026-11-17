@@ -1,3 +1,4 @@
+import { SearchEvent } from '../../../components/meta/MetaEvents';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { searchProductsPage, searchCategoriesPage } from '../../../lib/firestore-products';
@@ -64,6 +65,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <div className="mx-auto w-full max-w-shell px-4 md:px-6 py-6 md:py-8">
+      <SearchEvent query={query} />
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="text-xs text-ink/50 mb-4">
         <a href="/" className="hover:text-ink">Home</a>
