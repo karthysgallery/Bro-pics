@@ -131,6 +131,8 @@ export async function generateMetadata(): Promise<Metadata> {
         ...(seo?.bingVerification && { other: { 'msvalidate.01': seo.bingVerification } }),
       },
     }),
+    // Proves karthysgallery.in belongs to the KarthysGallery Meta business (Business settings > Domains).
+    other: { 'facebook-domain-verification': 'hhm3ofae4jyag16asmgrqrfyhleyv4' },
   };
 }
 
