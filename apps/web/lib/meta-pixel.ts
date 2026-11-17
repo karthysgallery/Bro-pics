@@ -48,6 +48,9 @@ export function initMetaPixel(pixelId: string | null | undefined): boolean {
     s.src = 'https://connect.facebook.net/en_US/fbevents.js';
     document.head.appendChild(s);
   }
+  // Stop Meta guessing events from button clicks ("SubscribedButtonClick", "Buy Now" etc.): the shop sends its
+  // own exact events, and guessed ones would show up as false Subscribe/Lead counts in Ads Manager.
+  window.fbq!('set', 'autoConfig', false, pixelId);
   window.fbq!('init', pixelId);
   window.__kgMetaPixelId = pixelId;
   initialisedFor = pixelId;
