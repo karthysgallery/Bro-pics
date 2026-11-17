@@ -118,8 +118,22 @@ function TemplateEditorSession({
     return { table: byRole('gallery-table'), hall: byRole('gallery-hall'), size: byRole('gallery-size'), construction: byRole('gallery-construction') };
   }, [media]);
   const video = useMemo(() => media.find((m) => m.type === 'video') ?? null, [media]);
-  // The picture printed inside the drawn frames: a ready-made frame's own artwork, else a sample photo.
-  const printPicture = product.artwork?.url || product.samplePhotos?.[0] || product.primaryImageUrl || null;
+  // The picture printed inside the drawn frames: a ready-made frame's own artwork; for a photo or collage frame the
+  // automatic "The print" shop photo (the design filled with sample photos), else a sample photo, else the main photo.
+  const autoPrint = useMemo(() => {
+    type Shown = { auto?: boolean; role?: string };
+    const images = media.filter((m) => m.type === 'image' && m.variantId === null);
+    const styledSet = images.some((m) => (m as Shown).role === 'listing' || (m as Shown).role === 'listing-hover');
+    const AUTO = styledSet ? ['In the frame', '', '', 'Sizes', 'Frame details', 'The print'] : ['In the frame', 'Sizes', 'Frame details', 'On the wall', 'The print'];
+    let n = 0;
+    for (const m of images) {
+      const s = m as Shown;
+      const label = s.role === 'listing' || s.role === 'listing-hover' ? (n++, '') : s.auto ? (AUTO[n++] ?? '') : '';
+      if (label === 'The print') return m.url;
+    }
+    return null;
+  }, [media]);
+  const printPicture = product.artwork?.url || autoPrint || (template.photoSlots.length > 1 ? product.primaryImageUrl : null) || product.samplePhotos?.[0] || product.primaryImageUrl || null;
   const portraitDesign = template.canvas.height >= template.canvas.width;
   // "Premium Quality. Crafted Layer by Layer.": drawn with this product's own picture as the print.
   const [construction, setConstruction] = useState<string | null>(null);

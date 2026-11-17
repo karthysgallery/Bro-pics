@@ -106,8 +106,8 @@ export const SHOP_GALLERY_SCENES: PreviewScene[] = [
     backdrop: { type: 'photo', src: '/scenes/tabletop.jpg', aspect: 1, credit: 'KarthysGallery' },
     stageWidthIn: 60,
     // Standing on the wooden table, between the plant on the left and the dried flowers on the right.
-    frame: { x: 0.565, y: 0.845, anchor: 'bottom', maxFraction: 0.6 },
-    showcaseFraction: 0.46,
+    frame: { x: 0.565, y: 0.845, anchor: 'bottom', maxFraction: 0.62 },
+    showcaseFraction: 0.54,
     light: { angleDeg: 140, strength: 0.55 },
     tone: { brightness: 1, warmth: 0.1 },
     minFraction: 0.3,
@@ -119,8 +119,8 @@ export const SHOP_GALLERY_SCENES: PreviewScene[] = [
     backdrop: { type: 'photo', src: '/scenes/hall.jpg', aspect: 1, credit: 'KarthysGallery' },
     stageWidthIn: 110,
     // Large and centred on the wall above the sofa, as in the owner's reference picture.
-    frame: { x: 0.51, y: 0.345, anchor: 'center', maxFraction: 0.6 },
-    showcaseFraction: 0.46,
+    frame: { x: 0.51, y: 0.345, anchor: 'center', maxFraction: 0.62 },
+    showcaseFraction: 0.54,
     light: { angleDeg: 150, strength: 0.5 },
     tone: { brightness: 1, warmth: 0.1 },
     minFraction: 0.3,

@@ -177,7 +177,8 @@ export default function OffersAdminPage() {
   const saveBanner = async () => {
     setSaving('banner');
     try {
-      const { id, ...body } = banner;
+      const { id, title, subtitle, image, tabletImage, mobileImage, link, ctaLabel, isActive, sortOrder, startsAt, endsAt } = banner;
+      const body = { title, subtitle, image, tabletImage, mobileImage, link, ctaLabel, isActive, sortOrder, startsAt, endsAt };
       if (id) await call(`/api/admin/banners/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
       else await call('/api/admin/banners', { method: 'POST', body: JSON.stringify(body) });
       showToast('Banner saved. The home page updates within a minute.', 'success');
@@ -192,7 +193,10 @@ export default function OffersAdminPage() {
   const saveCampaign = async () => {
     setSaving('campaign');
     try {
-      await call(`/api/admin/offer-pages/${SLUG}`, { method: 'PUT', body: JSON.stringify({ ...campaign, faq: campaign.faq.filter((f) => f.question.trim() && f.answer.trim()) }) });
+      // Only the editable fields: the stored page also carries slug / updatedAt, which the server does not accept back.
+      const { isActive, title, subtitle, heroImage, productId, sizeLabels, ctaLabel, deliveryNote, startsAt, endsAt } = campaign;
+      const faq = campaign.faq.filter((f) => f.question.trim() && f.answer.trim()).map(({ question, answer }) => ({ question, answer }));
+      await call(`/api/admin/offer-pages/${SLUG}`, { method: 'PUT', body: JSON.stringify({ isActive, title, subtitle, heroImage, productId, sizeLabels, ctaLabel, deliveryNote, faq, startsAt, endsAt }) });
       showToast('Offer page saved.', 'success');
     } catch (e) {
       showToast(String((e as Error).message), 'error');
