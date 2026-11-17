@@ -253,7 +253,7 @@ export async function sizeGuideImage(opts: {
   ctx.roundRect(tx, ty, panelW, rowH, [18, 18, 0, 0]);
   ctx.fill();
   ctx.fillStyle = '#fff8ee';
-  ctx.font = '600 36px Arial, sans-serif';
+  ctx.font = '600 30px Arial, sans-serif';
   ctx.textBaseline = 'middle';
   ctx.fillText('Picture Size', tx + panelW / 4, ty + rowH / 2);
   ctx.fillText('With Frame (approx.)', tx + (3 * panelW) / 4, ty + rowH / 2);

@@ -25,13 +25,13 @@ const views = () => screen.getByRole('group', { name: /preview views/i });
 const mainPicture = () => screen.getByTestId('preview-main-picture');
 
 describe('PreviewGallery', () => {
-  it('opens on the product picture (never a blank frame) with four thumbnails: frame, bedroom, hall, table', () => {
+  it('opens on the product picture (never a blank frame) with four thumbnails: frame, table, hall, bedroom', () => {
     renderGallery();
     expect(within(views()).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
       'Frame view',
-      'Bedroom view',
-      'Hall view',
       'Table view',
+      'Hall view',
+      'Bedroom view',
     ]);
     expect(within(views()).getByRole('button', { name: 'Frame view' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(mainPicture()).getByRole('img')).toHaveAttribute('src', PRODUCT);

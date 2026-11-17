@@ -31,7 +31,7 @@ async function putMedia(file: string, alt: string, tag: string): Promise<string>
   const buf = readFileSync(file);
   const id = `ofr_${createHash('sha256').update(buf).digest('hex').slice(0, 20)}`;
   const sharp = requireFromWeb('sharp') as typeof import('sharp');
-  const jpg = await sharp(buf).rotate().jpeg({ quality: 88 }).toBuffer();
+  const jpg = file.endsWith('.jpg') ? buf : await sharp(buf).rotate().jpeg({ quality: 88 }).toBuffer();
   const meta = await sharp(jpg).metadata();
   const path = `public/media/${id}.jpg`;
   const [inBucket] = await bucket.file(path).exists();
@@ -106,9 +106,13 @@ const SIZES: Array<[number, number, number, number, number]> = [
   // Homepage banner: switched off until the owner uploads the three pictures (or approves the ones made for it).
   const bannerRef = db.collection('banners').doc('flat-50');
   const banner = (await bannerRef.get()).data() ?? {};
+  // Starting pictures made from the owner's poster (desktop 1920×720, tablet 1200×900, phone 1080×1350); a picture
+  // the owner already uploaded in Admin is kept.
+  const pic = async (v: string) => mediaImageUrl(await putMedia(join(__dirname, `banner-${v}.jpg`), `Flat 50% OFF banner (${v})`, 'banner'));
+  const pictures = { image: (banner.image as string) || (await pic('desktop')), tabletImage: (banner.tabletImage as string) || (await pic('tablet')), mobileImage: (banner.mobileImage as string) || (await pic('mobile')) };
   await bannerRef.set({
     id: 'flat-50', title: 'Flat 50% OFF', subtitle: 'Make your memories beautiful', image: '', tabletImage: '', mobileImage: '',
-    link: '/offers/flat-50', ctaLabel: 'Shop the offer', couponCode: null, startsAt: null, endsAt: null, isActive: false, sortOrder: 0, ...banner,
+    link: '/offers/flat-50', ctaLabel: 'Shop the offer', couponCode: null, startsAt: null, endsAt: null, isActive: false, sortOrder: 0, ...banner, ...pictures,
   });
 
   console.log(JSON.stringify({ productId: res.productId, slug, status: keepStatus, sizes: sizeLabels, warnings: res.warnings, offerPage: 'offerPages/flat-50 (off)', banner: 'banners/flat-50 (off)' }));

@@ -7,7 +7,7 @@ import type { FrameInches } from '../../lib/preview-scenes';
 import { SceneStage, useFrameCutout } from './LifestylePreview';
 import { ZoomPane } from '../ui/ZoomPane';
 
-/** The four views, in the order shoppers see them. */
+/** The views, in the order shoppers see them (the standard gallery uses the first three). */
 export type PreviewViewId = 'plain' | 'bedroom' | 'hall' | 'table';
 
 interface ViewDef {
@@ -19,9 +19,9 @@ interface ViewDef {
 
 const VIEWS: ViewDef[] = [
   { id: 'plain', label: 'Frame' },
-  { id: 'bedroom', label: 'Bedroom', sceneId: 'bedroom' },
-  { id: 'hall', label: 'Hall', sceneId: 'hall' },
   { id: 'table', label: 'Table', sceneId: 'tabletop' },
+  { id: 'hall', label: 'Hall', sceneId: 'hall' },
+  { id: 'bedroom', label: 'Bedroom', sceneId: 'bedroom' },
 ];
 
 /** The owner's table and hall scenes first, then the older rooms. */
