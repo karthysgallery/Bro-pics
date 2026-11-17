@@ -55,7 +55,7 @@ Every frame now shows the same order: **1 the frame · 2 on your table photo · 
 - One Purchase per paid order, sent by the server when the payment is verified (whichever path confirms it), with the **same event id** as the browser, so Meta counts it once.
 - Sent only if the customer accepted cookies. Email, phone, name, city, state and PIN are SHA-256 hashed before sending. Nothing about the payment itself (card/UPI/bank) is ever sent.
 - Never sends twice (one record per order in `metaEvents`); failures are retried every 30 minutes, up to 5 times, within Meta's 7-day limit.
-- The access token lives in Google Secret Manager (`meta-capi-token`), never in the website.
+- The access token lives in Google Secret Manager (`META_CAPI_TOKEN`), never in the website.
 - Checked with tests and on a real local order; not yet against Meta (needs your token).
 
 ### 8. Ad-link tracking (UTM) — Done
@@ -98,7 +98,7 @@ Every frame now shows the same order: **1 the frame · 2 on your table photo · 
 5. Paste it in **Admin → Marketing → Offers & ads → Pixel ID** and tick **Tracking on** → Save. (You don't need to send it to anyone.)
 6. **Conversions API token:** in Events Manager → your Pixel → **Settings → Conversions API → Generate access token**. Then, on your Mac, in the project folder run:
    ```
-   firebase functions:secrets:set meta-capi-token --project bropics-app
+   firebase functions:secrets:set META_CAPI_TOKEN --project bropics-app
    ```
    and paste the token when asked. Don't put the token in WhatsApp, email, or Admin. Tell me when it's done, and I'll deploy the server part with your OK.
 7. **Verify the domain:** Business settings → Brand safety → **Domains → Add** `karthysgallery.in` → choose **DNS TXT record** and add it at your domain provider (or send me the TXT value).

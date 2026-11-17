@@ -9,13 +9,13 @@ import { buildPurchaseEvent, capiSkipReason, sendCapiEvents, type CapiItem, type
  * Meta Conversions API: one server-side Purchase per paid order.
  *
  * Fail-closed. Nothing is sent unless the owner switched Meta tracking on with a Pixel ID (settings/marketing), the
- * access token is in Secret Manager (`meta-capi-token`, any value shorter than 20 characters counts as "not set"),
+ * access token is in Secret Manager (`META_CAPI_TOKEN`, any value shorter than 20 characters counts as "not set"),
  * the payment is verified (paymentStatus 'paid' — set only by the server's payment pipeline, never by a browser),
  * and the customer allowed ad measurement. Each order has one record at metaEvents/purchase_<orderId>, so retries
  * and repeated triggers never send it twice; failures are retried by `metaPurchaseRetry` (up to 5 attempts, within
  * Meta's 7-day window).
  */
-export const metaCapiToken = defineSecret('meta-capi-token');
+export const metaCapiToken = defineSecret('META_CAPI_TOKEN');
 
 const SITE_URL = 'https://karthysgallery.in';
 const MAX_ATTEMPTS = 5;
