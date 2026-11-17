@@ -124,8 +124,8 @@ export class UserStore {
     /** Null for a quick (WhatsApp code only) account: it signs in with a code, and can set a password later. */
     passwordHash: string | null;
     /**
-     * When the phone already has a Firebase Auth record (but no profile), the full sign-up links to it. A quick
-     * sign-up passes false: it must never take over an existing sign-in (it could be a staff account).
+     * When the phone already has a Firebase Auth record (but no profile): true links to it (trusted callers only);
+     * false refuses. Customer self-sign-up always passes false — it must never take over an existing sign-in.
      */
     reuseExistingAuth?: boolean;
   }): Promise<{ user: UserRecord; customToken?: string }> {

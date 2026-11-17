@@ -133,8 +133,8 @@ async function handlePost(request: Request): Promise<NextResponse> {
       customerResult = await UserStore.createCustomer({
         phone: normalizedPhone,
         fullName: quickNew ? '' : fullName!,
-        // A quick sign-up never takes over an existing sign-in record (e.g. a staff number without a profile).
-        reuseExistingAuth: !quickNew,
+        // Self-service sign-up never takes over an existing sign-in record (it could be a staff account).
+        reuseExistingAuth: false,
         email: !quickNew && email && email.trim() ? email.trim() : null,
         passwordHash,
       });
