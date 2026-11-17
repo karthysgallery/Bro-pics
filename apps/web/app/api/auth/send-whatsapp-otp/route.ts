@@ -19,7 +19,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
     );
   }
 
-  let body: { phone?: string; purpose?: 'login' | 'register' };
+  let body: { phone?: string; purpose?: 'login' | 'register' | 'quick' };
   try {
     body = await request.json();
   } catch {
@@ -42,6 +42,17 @@ async function handlePost(request: Request): Promise<NextResponse> {
   }
 
   const maskedPhone = maskPhoneNumber(normalizedPhone);
+
+  // Quick mode ("continue with WhatsApp"): any number gets a code. An existing account signs in, a new number gets an
+  // account created on verification — nothing else is asked.
+  let providerPurpose: 'login' | 'register' = purpose === 'register' ? 'register' : 'login';
+  if (purpose === 'quick') {
+    const existing = await UserStore.findByPhone(normalizedPhone);
+    if (existing?.status === 'disabled') {
+      return NextResponse.json({ error: 'This account has been disabled. Please contact customer support.' }, { status: 403 });
+    }
+    providerPurpose = existing ? 'login' : 'register';
+  }
 
   // 1. In login mode, check if the account exists
   if (purpose === 'login') {
@@ -83,7 +94,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
 
   // 3. Dispatch OTP via the centralized WhatsApp provider
   const provider = getWhatsAppOtpProvider();
-  const sendResult = await provider.sendOtp({ phoneNumber: normalizedPhone, purpose });
+  const sendResult = await provider.sendOtp({ phoneNumber: normalizedPhone, purpose: providerPurpose });
   logOtpSend(normalizedPhone, sendResult);
 
   if (!sendResult.success) {

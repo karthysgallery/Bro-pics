@@ -118,9 +118,11 @@ export class UserStore {
    */
   static async createCustomer(params: {
     phone: string;
+    /** May be empty: a quick sign-up asks only for the WhatsApp number; the name comes with the first address. */
     fullName: string;
     email?: string | null;
-    passwordHash: string;
+    /** Null for a quick (WhatsApp code only) account: it signs in with a code, and can set a password later. */
+    passwordHash: string | null;
   }): Promise<{ user: UserRecord; customToken?: string }> {
     const normalized = normalizeIndianPhoneNumber(params.phone);
     const existing = await this.findByPhone(normalized);
@@ -132,7 +134,7 @@ export class UserStore {
     const now = new Date().toISOString();
     const trimmedName = params.fullName.trim();
     const parts = trimmedName.split(' ');
-    const firstName = parts[0] || 'Customer';
+    const firstName = parts[0] || '';
     const lastName = parts.slice(1).join(' ') || null;
 
     const user: UserRecord = {
@@ -165,7 +167,7 @@ export class UserStore {
         await auth.createUser({
           uid,
           phoneNumber: normalized,
-          displayName: trimmedName,
+          ...(trimmedName && { displayName: trimmedName }),
           email: user.email || undefined,
         });
       } catch (authErr: any) {

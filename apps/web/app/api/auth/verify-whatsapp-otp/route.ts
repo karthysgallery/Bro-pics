@@ -30,7 +30,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
   let body: {
     phone?: string;
     otp?: string;
-    purpose?: 'login' | 'register';
+    purpose?: 'login' | 'register' | 'quick';
     fullName?: string;
     email?: string | null;
     password?: string;
@@ -85,10 +85,14 @@ async function handlePost(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: verifyResult.error, code: verifyResult.code }, { status: statusCode });
   }
 
+  // Quick mode: a number with no account yet gets one now, with nothing else asked (the name and address are taken
+  // at checkout). A number that has an account simply signs in (the login flow below).
+  const quickNew = purpose === 'quick' && !(await UserStore.findByPhone(normalizedPhone));
+
   // 2. Registration Flow
-  if (purpose === 'register') {
+  if (purpose === 'register' || quickNew) {
     // Validate required registration fields
-    if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
+    if (!quickNew && (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2)) {
       return NextResponse.json(
         { error: 'Please provide your full name (minimum 2 characters).' },
         { status: 400 }
@@ -105,15 +109,15 @@ async function handlePost(request: Request): Promise<NextResponse> {
       }
     }
 
-    // Password is REQUIRED for account setup
-    if (!password || typeof password !== 'string') {
+    // Password is REQUIRED for a full sign-up (not for a quick one)
+    if (!quickNew && (!password || typeof password !== 'string')) {
       return NextResponse.json(
         { error: 'Password is required to create your account.' },
         { status: 400 }
       );
     }
 
-    const passwordValidation = validatePasswordRequirements(password);
+    const passwordValidation = quickNew ? { valid: true, errors: [] as string[] } : validatePasswordRequirements(password!);
     if (!passwordValidation.valid) {
       return NextResponse.json(
         { error: passwordValidation.errors.join(' ') },
@@ -122,14 +126,14 @@ async function handlePost(request: Request): Promise<NextResponse> {
     }
 
     // Hash password securely (scrypt)
-    const passwordHash = hashPassword(password);
+    const passwordHash = quickNew ? null : hashPassword(password!);
 
     let customerResult;
     try {
       customerResult = await UserStore.createCustomer({
         phone: normalizedPhone,
-        fullName,
-        email: email && email.trim() ? email.trim() : null,
+        fullName: quickNew ? '' : fullName!,
+        email: !quickNew && email && email.trim() ? email.trim() : null,
         passwordHash,
       });
     } catch (createErr: any) {

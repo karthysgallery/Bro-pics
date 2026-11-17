@@ -116,7 +116,7 @@ function SignInContent() {
     }
 
     setIsLoading(true);
-    const res = await sendWhatsAppOtp(cleanDigits, 'login');
+    const res = await sendWhatsAppOtp(cleanDigits, 'quick');
     setIsLoading(false);
 
     if (!res.success) {
@@ -148,7 +148,7 @@ function SignInContent() {
     const res = await verifyWhatsAppOtp({
       phone: phone.replace(/\D/g, ''),
       otp: code,
-      purpose: 'login',
+      purpose: 'quick',
     });
     setIsLoading(false);
 
@@ -170,7 +170,7 @@ function SignInContent() {
     clearError();
     setIsLoading(true);
 
-    const res = await resendWhatsAppOtp(phone.replace(/\D/g, ''), 'login');
+    const res = await resendWhatsAppOtp(phone.replace(/\D/g, ''), 'quick');
     setIsLoading(false);
 
     if (!res.success) {
@@ -340,10 +340,10 @@ function SignInContent() {
             <>
               <div className="mb-7">
                 <h1 className="font-display text-[26px] sm:text-[28px] font-bold text-black leading-tight tracking-tight">
-                  Welcome back
+                  Sign in or sign up
                 </h1>
                 <p className="text-[13px] sm:text-sm text-black/60 mt-1.5 leading-relaxed">
-                  Sign in securely using WhatsApp.
+                  Just your WhatsApp number. New here? Your account is made automatically — no forms.
                 </p>
               </div>
 
@@ -634,13 +634,7 @@ function SignInContent() {
 
           {/* Footer */}
           <p className="mt-8 text-center text-[13px] text-black/55">
-            Don&rsquo;t have an account?{' '}
-            <Link
-              href={`/signup${phone || redirectQuery ? `?${[phone ? `phone=${encodeURIComponent(phone.replace(/\D/g, ''))}` : '', redirectQuery.replace(/^&/, '')].filter(Boolean).join('&')}` : ''}`}
-              className="font-semibold text-black hover:text-gold transition-colors underline underline-offset-4 decoration-black/20 hover:decoration-[#FCA311]"
-            >
-              Create an account
-            </Link>
+            New or returning, it&rsquo;s the same: enter your WhatsApp number and the code we send.
           </p>
         </div>
       </div>

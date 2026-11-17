@@ -18,7 +18,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
     );
   }
 
-  let body: { phone?: string; purpose?: 'login' | 'register' };
+  let body: { phone?: string; purpose?: 'login' | 'register' | 'quick' };
   try {
     body = await request.json();
   } catch {
@@ -42,7 +42,7 @@ async function handlePost(request: Request): Promise<NextResponse> {
 
   const maskedPhone = maskPhoneNumber(normalizedPhone);
   const provider = getWhatsAppOtpProvider();
-  const resendResult = await provider.resendOtp({ phoneNumber: normalizedPhone, purpose });
+  const resendResult = await provider.resendOtp({ phoneNumber: normalizedPhone, purpose: purpose === 'register' ? 'register' : 'login' });
   logOtpSend(normalizedPhone, resendResult);
 
   if (!resendResult.success) {

@@ -43,7 +43,7 @@ export async function syncFirebaseCustomToken(customToken?: string): Promise<voi
   }
 }
 
-export async function sendWhatsAppOtp(phone: string, purpose: 'login' | 'register'): Promise<AuthApiResponse> {
+export async function sendWhatsAppOtp(phone: string, purpose: 'login' | 'register' | 'quick'): Promise<AuthApiResponse> {
   try {
     const res = await fetch('/api/auth/send-whatsapp-otp', {
       method: 'POST',
@@ -60,7 +60,7 @@ export async function sendWhatsAppOtp(phone: string, purpose: 'login' | 'registe
   }
 }
 
-export async function resendWhatsAppOtp(phone: string, purpose: 'login' | 'register'): Promise<AuthApiResponse> {
+export async function resendWhatsAppOtp(phone: string, purpose: 'login' | 'register' | 'quick'): Promise<AuthApiResponse> {
   try {
     const res = await fetch('/api/auth/resend-whatsapp-otp', {
       method: 'POST',
@@ -80,7 +80,7 @@ export async function resendWhatsAppOtp(phone: string, purpose: 'login' | 'regis
 export async function verifyWhatsAppOtp(params: {
   phone: string;
   otp: string;
-  purpose: 'login' | 'register';
+  purpose: 'login' | 'register' | 'quick';
   fullName?: string;
   email?: string;
   password?: string;

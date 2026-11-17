@@ -63,8 +63,14 @@ export function LayoutChrome({
       if (document.body.dataset.comboFrame) return;
       setIsCartOpen(true);
     };
+    // "Buy now" goes straight to checkout instead of showing the cart.
+    const handleClose = () => setIsCartOpen(false);
     window.addEventListener('karthys:open-cart', handleOpen);
-    return () => window.removeEventListener('karthys:open-cart', handleOpen);
+    window.addEventListener('karthys:close-cart', handleClose);
+    return () => {
+      window.removeEventListener('karthys:open-cart', handleOpen);
+      window.removeEventListener('karthys:close-cart', handleClose);
+    };
   }, []);
 
   // Admin routes and dedicated full-screen auth routes skip storefront chrome entirely

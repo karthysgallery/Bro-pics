@@ -47,13 +47,13 @@ describe('SignInPage', () => {
 
   it('renders primary WhatsApp OTP login screen with Indian mobile input', () => {
     render(<SignInPage />);
-    expect(screen.getByRole('heading', { name: /Welcome back/i })).toBeInTheDocument();
-    expect(screen.getByText(/Sign in securely using WhatsApp/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Sign in or sign up/i })).toBeInTheDocument();
+    expect(screen.getByText(/Just your WhatsApp number/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Mobile number/i)).toBeInTheDocument();
     expect(screen.getByText('+91')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Continue with WhatsApp/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign in with password/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Create an account/i })).toBeInTheDocument();
+    expect(screen.getByText(/New or returning, it.s the same/i)).toBeInTheDocument();
   });
 
   it('toggles to secondary password sign in view when clicked', () => {
@@ -77,7 +77,7 @@ describe('SignInPage', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(sendWhatsAppOtp).toHaveBeenCalledWith('9876543210', 'login');
+      expect(sendWhatsAppOtp).toHaveBeenCalledWith('9876543210', 'quick');
     });
 
     await waitFor(() => {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { AuthContext } from '../../lib/auth-context';
 import { glitterOffer, paperSizeName, type Product, type PublicFrameModel, type Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
 import { useComboFrame } from '../../lib/combo-frame-context';
@@ -176,6 +177,36 @@ export function BuyBox({
   // With a way to explain what is missing, an unfinished design leaves the button pressable.
   const blockedByDesign = !personalizationReady && Boolean(onBlockedAddToCart);
   const cartDisabled = !inStock || !selectedVariant || !onAddToCart || (!personalizationReady && !onBlockedAddToCart) || submitting;
+
+  // "Buy now": the same add-to-cart step, then straight to checkout (through the WhatsApp sign-in when needed) instead
+  // of opening the cart. Works for both product layouts: each announces a finished add with 'karthys:open-cart'.
+  // Read softly: the buy box also renders where no sign-in provider exists (tests, previews).
+  const user = useContext(AuthContext)?.user ?? null;
+  const buyNowRef = useRef(false);
+  useEffect(() => {
+    const onAdded = () => {
+      if (!buyNowRef.current) return;
+      buyNowRef.current = false;
+      window.dispatchEvent(new CustomEvent('karthys:close-cart'));
+      window.location.assign(user ? '/checkout' : `/signin?redirect=${encodeURIComponent('/checkout')}`);
+    };
+    window.addEventListener('karthys:open-cart', onAdded);
+    return () => window.removeEventListener('karthys:open-cart', onAdded);
+  }, [user]);
+  const handleBuyNow = () => {
+    if (!personalizationReady) {
+      // Shows what is still missing; nothing is bought until the design is complete.
+      handleAddToCart();
+      return;
+    }
+    buyNowRef.current = true;
+    handleAddToCart();
+    // If the add did not happen (an error), forget the request.
+    setTimeout(() => {
+      buyNowRef.current = false;
+    }, 15000);
+  };
+  const showBuyNow = !comboFrame && !isEditingCartLine;
 
   const handleAddToCart = () => {
     if (!selectedVariant || !onAddToCart) return;
@@ -390,6 +421,15 @@ export function BuyBox({
               ? submitting ? 'Saving…' : 'Save changes'
               : submitting ? 'Adding…' : 'Add to cart'}
         </Button>
+        {showBuyNow && (
+          <Button
+            onClick={handleBuyNow}
+            disabled={cartDisabled}
+            className="w-full h-12 rounded-full bg-ink hover:bg-ink/90 text-paper text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            Buy now
+          </Button>
+        )}
       </div>
 
       {/* Accordions */}
@@ -422,13 +462,23 @@ export function BuyBox({
           <div className="text-xs font-bold text-ink truncate">{comboFrame ? comboFrame.label : `Total ${formatPaise(price * quantity)}`}</div>
           <div className="text-3xs text-ink/60 truncate">{selectedSize || 'Standard'} · {selectedColour || 'Default'}</div>
         </div>
+        {showBuyNow && (
+          <button
+            type="button"
+            onClick={handleBuyNow}
+            disabled={cartDisabled}
+            className="h-11 min-h-[44px] px-4 rounded-full bg-ink text-paper text-sm font-bold shrink-0 disabled:opacity-50"
+          >
+            Buy now
+          </button>
+        )}
         <button
           type="button"
           aria-label="Quick checkout"
           onClick={handleAddToCart}
           disabled={cartDisabled}
           aria-disabled={blockedByDesign || undefined}
-          className={`h-11 min-h-[44px] px-6 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs ${blockedByDesign ? 'opacity-70' : ''}`}
+          className={`h-11 min-h-[44px] px-4 rounded-full bg-gold hover:bg-gold-deep text-ink text-sm font-bold shrink-0 disabled:opacity-50 transition-colors shadow-xs ${blockedByDesign ? 'opacity-70' : ''}`}
         >
           {comboFrame
             ? submitting ? 'Saving…' : 'Save frame'

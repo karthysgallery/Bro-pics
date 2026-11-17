@@ -742,10 +742,31 @@ function SignUpContent() {
   );
 }
 
-export default function SignUpPage() {
+/** Sign-up is now the same one step as sign-in (WhatsApp number + code); this keeps old links working. */
+function RedirectToQuickSignIn() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const redirect = safeRedirectTarget(searchParams.get('redirect'));
+    router.replace(`/signin${redirect !== '/account' ? `?redirect=${encodeURIComponent(redirect)}` : ''}`);
+  }, [router, searchParams]);
+  return null;
+}
+
+// The earlier full form (name, email, password), kept for reference; no longer routed.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function LegacySignUpPage() {
   return (
     <Suspense fallback={<div className="min-h-[100dvh] bg-field" />}>
       <SignUpContent />
+    </Suspense>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <RedirectToQuickSignIn />
     </Suspense>
   );
 }

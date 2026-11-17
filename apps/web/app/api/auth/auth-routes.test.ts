@@ -168,6 +168,35 @@ describe('WhatsApp OTP Authentication API Routes', () => {
     });
   });
 
+  describe('Quick sign-in / sign-up (WhatsApp number only)', () => {
+    it('sends a code to a number that has no account yet', async () => {
+      const res = await sendOtpHandler(createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone: '9876500001', purpose: 'quick' }));
+      expect(res.status).toBe(200);
+    });
+
+    it('creates the account on verification with nothing else asked', async () => {
+      const sendData = await (await sendOtpHandler(createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone: '9876500002', purpose: 'quick' }))).json();
+      const res = await verifyOtpHandler(createJsonRequest('http://localhost:3000/api/auth/verify-whatsapp-otp', { phone: '9876500002', otp: sendData.devOtp, purpose: 'quick' }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('set-cookie')).toBeTruthy();
+      const user = await UserStore.findByPhone('+919876500002');
+      expect(user).not.toBeNull();
+      expect(user!.passwordHash ?? null).toBeNull();
+    });
+
+    it('signs an existing customer in without creating a second account', async () => {
+      const first = await (await sendOtpHandler(createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone: '9876500003', purpose: 'quick' }))).json();
+      await verifyOtpHandler(createJsonRequest('http://localhost:3000/api/auth/verify-whatsapp-otp', { phone: '9876500003', otp: first.devOtp, purpose: 'quick' }));
+      const id = (await UserStore.findByPhone('+919876500003'))!.id;
+      resetRateLimitState();
+      OtpStore.reset();
+      const again = await (await sendOtpHandler(createJsonRequest('http://localhost:3000/api/auth/send-whatsapp-otp', { phone: '9876500003', purpose: 'quick' }))).json();
+      const res = await verifyOtpHandler(createJsonRequest('http://localhost:3000/api/auth/verify-whatsapp-otp', { phone: '9876500003', otp: again.devOtp, purpose: 'quick' }));
+      expect(res.status).toBe(200);
+      expect((await UserStore.findByPhone('+919876500003'))!.id).toBe(id);
+    });
+  });
+
   describe('POST /api/auth/verify-whatsapp-otp (Login)', () => {
     beforeEach(async () => {
       // Seed a registered customer
