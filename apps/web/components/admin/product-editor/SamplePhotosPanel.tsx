@@ -20,6 +20,29 @@ interface StockPhoto {
 const thumb = (url: string) => url.replace(/w=\d+/, 'w=200');
 
 /**
+ * Sample photos only appear inside the shop pictures (about 2000 px), so a big camera original is shrunk in the
+ * browser first: smaller than 3000 px on the long side, as a JPG. This keeps uploads fast and well under the
+ * website's request size limit. Small files, or a browser that cannot read the picture, go up unchanged.
+ */
+export async function shrinkForSample(file: File, maxSide = 3000, overBytes = 4 * 1024 * 1024): Promise<File> {
+  if (file.size <= overBytes || typeof createImageBitmap !== 'function') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
+/**
  * The example pictures shown inside the frame in the shop photos of a photo or collage frame: one for each
  * photo space of the collage design. The owner uploads them, or types what the picture should show ("child",
  * "couple") and picks free stock photos. Chosen stock photos are copied into the media library like uploads.
@@ -47,7 +70,7 @@ export function SamplePhotosPanel({ slots, photos, onChange }: { slots: number; 
     try {
       const urls: string[] = [];
       for (const file of take) {
-        const img = await upload(file, { alt: 'Sample photo', tag: 'sample-photo' });
+        const img = await upload(await shrinkForSample(file), { alt: 'Sample photo', tag: 'sample-photo' });
         urls.push(img.url.replace(/w=\d+/, 'w=2000'));
       }
       // With every space already filled, a new photo replaces the first.

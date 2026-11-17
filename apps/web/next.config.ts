@@ -77,6 +77,10 @@ const nextConfig: NextConfig = {
   // modules in Next.js route handlers. Without this, POST /api/uploads
   // always fails with "Unable to process image" for every real file.
   serverExternalPackages: ['sharp'],
+  // The middleware (CSP etc.) runs on every request and by default reads only the first 10 MB of a body, so
+  // camera-original photos (12 MB+) arrived cut short and the upload routes refused them. The upload routes allow
+  // 30 MB; Firebase Hosting caps requests at 32 MB.
+  experimental: { middlewareClientMaxBodySize: '31mb' },
   images: {
     // Google's shared image-serving hostname for ALL public GCS buckets is
     // storage.googleapis.com — an unscoped remotePattern would let any
