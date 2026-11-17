@@ -123,6 +123,11 @@ export class UserStore {
     email?: string | null;
     /** Null for a quick (WhatsApp code only) account: it signs in with a code, and can set a password later. */
     passwordHash: string | null;
+    /**
+     * When the phone already has a Firebase Auth record (but no profile), the full sign-up links to it. A quick
+     * sign-up passes false: it must never take over an existing sign-in (it could be a staff account).
+     */
+    reuseExistingAuth?: boolean;
   }): Promise<{ user: UserRecord; customToken?: string }> {
     const normalized = normalizeIndianPhoneNumber(params.phone);
     const existing = await this.findByPhone(normalized);
@@ -173,6 +178,7 @@ export class UserStore {
       } catch (authErr: any) {
         // If phone already exists in Firebase Auth, reuse that uid
         if (authErr?.code === 'auth/phone-number-already-exists') {
+          if (params.reuseExistingAuth === false) throw new ExistingSignInError();
           const existingAuth = await auth.getUserByPhoneNumber(normalized);
           user.id = existingAuth.uid;
         }
@@ -201,7 +207,7 @@ export class UserStore {
         { merge: true }
       );
     } catch (err) {
-      if (isProduction()) throw err;
+      if (err instanceof ExistingSignInError || isProduction()) throw err;
       // Dev/test offline mode only: generate a mock custom token
       customToken = `mock_custom_token_${user.id}`;
     }
@@ -277,5 +283,13 @@ export class UserStore {
   static reset(): void {
     fallbackUsersByPhone.clear();
     fallbackUsersById.clear();
+  }
+}
+
+/** The phone already has a sign-in record; a quick sign-up refuses to take it over. */
+export class ExistingSignInError extends Error {
+  constructor() {
+    super('This number already has an account. Please sign in with your password, or contact us on WhatsApp.');
+    this.name = 'ExistingSignInError';
   }
 }
