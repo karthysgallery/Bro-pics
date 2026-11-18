@@ -34,7 +34,23 @@ export function isSignInBlockedInPreview(pathname: string): boolean {
   return pathname.startsWith('/api/staff/invite/accept');
 }
 
+/**
+ * Some browsers and in-app browsers (Facebook/Instagram) write the "(" ")" of route-group folders as %28 %29 in
+ * script addresses (/_next/static/chunks/app/%28shop%29/product/%5Bslug%5D/page-….js). Next finds the file only
+ * under "(shop)", so those visitors got a 404 for the page's script and then the error page. Serve the real file.
+ */
+export function fixEncodedRouteGroup(request: NextRequest): NextResponse | null {
+  const { pathname } = request.nextUrl;
+  if (!pathname.startsWith('/_next/static/')) return null;
+  if (!/%2[89]/i.test(pathname)) return NextResponse.next();
+  const url = request.nextUrl.clone();
+  url.pathname = pathname.replace(/%28/gi, '(').replace(/%29/gi, ')');
+  return NextResponse.rewrite(url);
+}
+
 export function middleware(request: NextRequest): NextResponse {
+  const routeGroupFix = fixEncodedRouteGroup(request);
+  if (routeGroupFix) return routeGroupFix;
   const preview = process.env.SITE_PREVIEW === '1';
   if (preview && isSignInBlockedInPreview(request.nextUrl.pathname)) {
     const blocked = NextResponse.json(
@@ -77,5 +93,7 @@ export const config = {
     // middleware invocations elsewhere (see rate-limit.ts's own per-route
     // scoping).
     '/((?!_next/static|_next/image|favicon.ico).*)',
+    // Only the page scripts of the route-group folders, for fixEncodedRouteGroup above.
+    '/_next/static/chunks/app/:path*',
   ],
 };
