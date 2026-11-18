@@ -87,6 +87,8 @@ interface BuyBoxProps {
   finish?: 'glitter';
   onFinishChange?: (finish: 'glitter' | undefined) => void;
   children?: React.ReactNode;
+  /** Show the short print-quality notice under the buy buttons (products the customer adds their own photos to). */
+  printQualityNotice?: boolean;
 }
 
 export function BuyBox({
@@ -110,6 +112,7 @@ export function BuyBox({
   finish: finishProp,
   onFinishChange,
   children,
+  printQualityNotice = false,
 }: BuyBoxProps) {
   const [quantity, setQuantity] = useState(1);
   const [ownFinish, setOwnFinish] = useState<'glitter' | undefined>(undefined);
@@ -430,6 +433,7 @@ export function BuyBox({
             Buy now
           </Button>
         )}
+        {printQualityNotice && <PrintQualityNotice />}
       </div>
 
       {/* Accordions */}
@@ -488,5 +492,25 @@ export function BuyBox({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Replaces the "photo may print soft" popup (switched off, see LOW_RES_CONFIRMATION_REQUIRED): one calm line under
+ * the buy buttons, so the customer knows the print is only as sharp as the photo, without being stopped.
+ */
+export function PrintQualityNotice() {
+  return (
+    <p role="note" className="flex items-start gap-2 rounded-xl bg-tint/70 px-3 py-2.5 text-[12px] leading-relaxed text-ink/70">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="mt-[1px] shrink-0 text-ink/55">
+        <circle cx="12" cy="12" r="9.5" />
+        <path d="M12 11v6" strokeLinecap="round" />
+        <circle cx="12" cy="7.5" r="0.6" fill="currentColor" />
+      </svg>
+      <span>
+        <strong className="font-semibold text-ink/85">Print Quality Notice:</strong> Your frame&apos;s print quality depends on the quality of the photo
+        you upload. High-resolution photos produce clearer prints, while blurry or low-quality photos may result in blurry prints.
+      </span>
+    </p>
   );
 }

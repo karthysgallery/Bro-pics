@@ -12,6 +12,7 @@ import {
   type PublicFrameModel,
   type Variant,
   glitterOffer,
+  LOW_RES_CONFIRMATION_REQUIRED,
 } from '@bro-pics/shared';
 import { AuthContext } from '../../lib/auth-context';
 import { useCart } from '../../lib/cart-context';
@@ -342,7 +343,8 @@ function TemplateEditorSession({
   const [pendingQuantity, setPendingQuantity] = useState<number | null>(null);
   const [highlightControls, setHighlightControls] = useState(false);
   const explainBlocked = (quantity: number) => {
-    if (unconfirmedLowRes(customizer).length > 0) {
+    // The low-resolution popup is switched off for now (LOW_RES_CONFIRMATION_REQUIRED); the notice by the buttons replaces it.
+    if (LOW_RES_CONFIRMATION_REQUIRED && unconfirmedLowRes(customizer).length > 0) {
       setPendingQuantity(quantity);
       setLowResOpen(true);
       return;
@@ -400,6 +402,7 @@ function TemplateEditorSession({
           frameModels={frameModels}
           finish={finish}
           onFinishChange={setChosenFinish}
+          printQualityNotice={!fixedDesign && template.photoSlots.length > 0}
         >
           {!fixedDesign && (
             <div ref={controlsRef} className={`scroll-mt-28 rounded-2xl transition-shadow duration-300 ${highlightControls ? 'shadow-[0_0_0_3px_rgb(var(--color-gold))]' : ''}`}>

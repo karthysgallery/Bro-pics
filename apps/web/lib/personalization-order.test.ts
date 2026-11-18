@@ -37,10 +37,16 @@ describe('buildLineSnapshot (server-side trust boundary for personalization)', (
     expect(snap.state.slots.photo_01).toMatchObject({ width: 6000, height: 4000 });
   });
 
-  it('a spoofed resolution cannot rescue a genuinely low-resolution photo', async () => {
+  it('a spoofed resolution cannot rescue a genuinely low-resolution photo (when the low-res confirmation is switched on)', async () => {
     const lie = setSlotPhoto(createEmptyState('single-8x12', 1), 'photo_01', { assetId: 'up_1', width: 9000, height: 9000 });
-    const err = await rejects(buildLineSnapshot(setup({ upload: { widthPx: 500, heightPx: 500 } }), 'user_1', claim(lie)), 'incomplete');
+    const err = await rejects(buildLineSnapshot(setup({ upload: { widthPx: 500, heightPx: 500 } }), 'user_1', claim(lie), { requireLowResConfirmation: true }), 'incomplete');
     expect(err.details?.join(' ')).toMatch(/too low-resolution/);
+  });
+
+  it('with the low-res confirmation switched off (the default), a low-resolution photo is accepted, sized from the upload record', async () => {
+    const lie = setSlotPhoto(createEmptyState('single-8x12', 1), 'photo_01', { assetId: 'up_1', width: 9000, height: 9000 });
+    const snap = await buildLineSnapshot(setup({ upload: { widthPx: 500, heightPx: 500 } }), 'user_1', claim(lie));
+    expect(snap.state.slots.photo_01).toMatchObject({ width: 500, height: 500 });
   });
 
   it('drops expiring signed URLs from the stored record', async () => {
@@ -101,7 +107,7 @@ describe('buildLineSnapshot (server-side trust boundary for personalization)', (
     const small = { upload: { widthPx: 1600, heightPx: 2400 } };
     const state = setSlotPhoto(createEmptyState('single-8x12', 1), 'photo_01', { assetId: 'up_1', width: 1600, height: 2400 });
     await expect(buildLineSnapshot(setup(small), 'user_1', claim(state), { printSizeIn: { width: 8, height: 12 } })).resolves.toBeTruthy();
-    const err = await rejects(buildLineSnapshot(setup(small), 'user_1', claim(state), { printSizeIn: { width: 40, height: 60 } }), 'incomplete');
+    const err = await rejects(buildLineSnapshot(setup(small), 'user_1', claim(state), { printSizeIn: { width: 40, height: 60 }, requireLowResConfirmation: true }), 'incomplete');
     expect(err.details?.join(' ')).toMatch(/too low-resolution/);
   });
 

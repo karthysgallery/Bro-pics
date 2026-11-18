@@ -3,7 +3,8 @@ import {
   clearSlot, confirmLowDpi, createEmptyState, deserializeState, resetSlotTransform, serializeState, setSlotPhoto,
   setSlotRotation, setSlotTransform, setText, stateFingerprint,
 } from './state';
-import { checkCompleteness } from './completeness';
+import { LOW_RES_CONFIRMATION_REQUIRED, checkCompleteness } from './completeness';
+import { ENGLISH_ONLY_MESSAGE } from './english-text';
 import { photoPlusTextTemplate, singlePhotoTemplate, sixPhotoTemplate } from './test-fixtures';
 import { slotAspectRatio } from './geometry';
 
@@ -127,17 +128,43 @@ describe('completeness (one rule for the editor, add-to-cart and the server)', (
     expect(result.complete).toBe(true);
   });
 
-  it('a low-resolution photo blocks until the customer accepts the warning for THAT photo, then only warns', () => {
+  it('with the confirmation switched on, a low-resolution photo blocks until the customer accepts the warning for THAT photo, then only warns', () => {
     const slot = singlePhotoTemplate.photoSlots[0];
+    const on = { requireLowResConfirmation: true };
     let s = setSlotPhoto(createEmptyState(singlePhotoTemplate.id, singlePhotoTemplate.version), slot.id, photo(1, 600, 800));
-    let result = checkCompleteness(singlePhotoTemplate, s);
+    let result = checkCompleteness(singlePhotoTemplate, s, on);
     expect(result.complete).toBe(false);
     expect(result.slots[0].tier).toBe('red');
     expect(result.slots[0].message).toMatch(/low quality/i);
     s = confirmLowDpi(s, slot.id, true);
-    result = checkCompleteness(singlePhotoTemplate, s);
+    result = checkCompleteness(singlePhotoTemplate, s, on);
     expect(result.complete).toBe(true);
     expect(result.warnings.join(' ')).toMatch(/low-resolution/);
+  });
+
+  it('by default (confirmation switched off) a low-resolution photo only warns: nothing blocks Buy Now or the server', () => {
+    expect(LOW_RES_CONFIRMATION_REQUIRED).toBe(false);
+    const slot = singlePhotoTemplate.photoSlots[0];
+    const s = setSlotPhoto(createEmptyState(singlePhotoTemplate.id, singlePhotoTemplate.version), slot.id, photo(1, 600, 800));
+    const result = checkCompleteness(singlePhotoTemplate, s);
+    expect(result.slots[0].tier).toBe('red');
+    expect(result.complete).toBe(true);
+    expect(result.blockers).toEqual([]);
+    expect(result.warnings.join(' ')).toMatch(/low-resolution/);
+  });
+
+  it('customer wording must be English: Tamil blocks (client and server share this check), the text is kept as typed', () => {
+    const text = photoPlusTextTemplate.textSlots[0];
+    const base = createEmptyState(photoPlusTextTemplate.id, photoPlusTextTemplate.version);
+    const tamil = setText(base, text.id, { value: 'அம்மா' });
+    const r = checkCompleteness(photoPlusTextTemplate, tamil);
+    expect(r.blockers.join(' ')).toContain(ENGLISH_ONLY_MESSAGE);
+    expect(tamil.texts[text.id]!.value).toBe('அம்மா');
+    const mixed = setText(base, text.id, { value: 'Happy அம்மா' });
+    expect(checkCompleteness(photoPlusTextTemplate, mixed).blockers.join(' ')).toContain(ENGLISH_ONLY_MESSAGE);
+    for (const ok of ['Priya & Arun', 'Mom’s 60th!', '“Forever” 2019–2024', 'Zoë, 12/05/2024 ₹', 'A.B. (Love) #1 - yes?']) {
+      expect(checkCompleteness(photoPlusTextTemplate, setText(base, text.id, { value: ok })).blockers.join(' ')).not.toContain(ENGLISH_ONLY_MESSAGE);
+    }
   });
 
   it('zooming a good photo in can drop it into the red band — completeness reacts to the crop, not just the upload', () => {

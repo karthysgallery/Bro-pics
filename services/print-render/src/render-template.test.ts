@@ -214,6 +214,29 @@ describe('renderTemplate: text and errors', () => {
     expect(darkOutside).toBe(0);
   });
 
+  it('prints text in the exact colour the customer picked with the colour picker (any hex, not only the preset swatches)', async () => {
+    const t = photoPlusTextTemplate;
+    let state = setSlotPhoto(createEmptyState(t.id, t.version), 'photo_01', { assetId: 'up', width: 200, height: 200 });
+    state = setText(state, 'name', { value: 'MMMMMMMM', color: '#1e88e5' });
+    const colors = { 'bg-names-8x10': [255, 255, 255] as [number, number, number], up: [255, 255, 255] as [number, number, number] };
+    const out = await renderTemplate({ template: t, state, assets: loaderFor(colors), scale: 0.3 });
+    const { data, info } = await sharp(out).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    // The most saturated pixel in the text zone should be the chosen blue (30, 136, 229), give or take antialiasing.
+    const zone = t.textSlots[0];
+    let best: [number, number, number] = [255, 255, 255];
+    let bestSat = -1;
+    for (let y = Math.floor(zone.y * info.height); y < (zone.y + zone.height) * info.height; y++) {
+      for (let x = Math.floor(zone.x * info.width); x < (zone.x + zone.width) * info.width; x++) {
+        const i = (y * info.width + x) * 4;
+        const sat = Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]);
+        if (sat > bestSat) { bestSat = sat; best = [data[i], data[i + 1], data[i + 2]]; }
+      }
+    }
+    expect(Math.abs(best[0] - 30)).toBeLessThan(12);
+    expect(Math.abs(best[1] - 136)).toBeLessThan(12);
+    expect(Math.abs(best[2] - 229)).toBeLessThan(12);
+  });
+
   it('fails with a clear MissingAssetError naming the asset when a photo cannot be loaded', async () => {
     const t = singlePhotoTemplate;
     const state = setSlotPhoto(createEmptyState(t.id, t.version), 'photo_01', { assetId: 'up_gone', width: 200, height: 200 });

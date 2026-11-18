@@ -358,13 +358,17 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
           const value = patch.value !== undefined ? patch.value.slice(0, slot.maxLength) : current.value;
           return setText(s, slotId, { ...current, ...patch, value });
         },
-        { coalesce: patch.value !== undefined ? `text:${slotId}` : undefined }
+        // Typing, and dragging in the colour picker, each make one undo step rather than one per letter or pixel.
+        { coalesce: patch.value !== undefined ? `text:${slotId}` : 'color' in patch ? `color:${slotId}` : undefined }
       );
     },
     [apply, template.textSlots]
   );
 
-  /** The customer's choice of language for their wording (Tamil prints in a Tamil font; English is the default). */
+  /**
+   * The customer's choice of language for their wording. No longer offered (customer wording is English only since
+   * 2026-11-18, see isEnglishText); kept so older saved designs and orders that carry `textLanguage: 'ta'` still load.
+   */
   /** How the customer gives their photos: upload here, or send them on WhatsApp after ordering. */
   const setPhotosVia = useCallback((via: 'upload' | 'whatsapp') => apply((s) => ({ ...s, photosVia: via === 'whatsapp' ? 'whatsapp' : undefined })), [apply]);
   const setTextLanguage = useCallback((language: 'en' | 'ta') => apply((s) => ({ ...s, textLanguage: language === 'ta' ? 'ta' : undefined })), [apply]);

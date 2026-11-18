@@ -48,6 +48,8 @@ export interface LineContext {
   offeredTemplateId?: string | null;
   /** The frame size bought, so photo sharpness is judged at that size. */
   printSizeIn?: PrintSizeIn;
+  /** Overrides LOW_RES_CONFIRMATION_REQUIRED (tests of the switched-on rule). */
+  requireLowResConfirmation?: boolean;
 }
 
 export async function buildLineSnapshot(
@@ -110,7 +112,7 @@ export async function buildLineSnapshot(
 
   const state: PersonalizationState = { ...claimedState, slots };
 
-  const completeness = checkCompleteness(template, state, { printSizeIn: context.printSizeIn });
+  const completeness = checkCompleteness(template, state, { printSizeIn: context.printSizeIn, requireLowResConfirmation: context.requireLowResConfirmation });
   if (!completeness.complete) {
     throw new PersonalizationRejectedError('incomplete', 'Your personalization is not complete.', completeness.blockers);
   }

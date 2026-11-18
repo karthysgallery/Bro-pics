@@ -3,6 +3,7 @@ export * from './validate-template';
 export * from './geometry';
 export * from './state';
 export * from './completeness';
+export * from './english-text';
 export * from './assets';
 export * from './versioning';
 export * from './mockup';

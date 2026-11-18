@@ -1,6 +1,8 @@
 'use client';
 
-import { FONT_MAP, formatCalendarDate, parseCalendarDate, parseSpotifyLink, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
+import { useState } from 'react';
+import { ENGLISH_ONLY_MESSAGE, FONT_MAP, LOW_RES_CONFIRMATION_REQUIRED, formatCalendarDate, isEnglishText, parseCalendarDate, parseSpotifyLink, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
+import { ColorPicker } from '../ui/ColorPicker';
 import { QUICK_TEXT_COLORS, toHexColor } from '../../lib/text-personalization-options';
 import { Icon } from './icons';
 import { fontKeyOf } from './render-template';
@@ -76,18 +78,21 @@ function SpotifyField({ customizer, slot }: { customizer: TemplateCustomizer; sl
 }
 
 function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot: TextSlot }) {
+  const [picking, setPicking] = useState<{ before: string | undefined } | null>(null);
   if (slot.spotifyCode) return <SpotifyField customizer={customizer} slot={slot} />;
   const value = customizer.state.texts[slot.id];
   const text = value?.value ?? slot.defaultValue;
   const fontKey = fontKeyOf(value?.fontFamily, slot.defaultFontFamily);
   const colour = value?.color ?? slot.defaultColor ?? '#000000';
   const fonts = slot.allowedFonts?.length ? FONT_MAP.filter((f) => slot.allowedFonts!.includes(f.key)) : FONT_MAP;
-  // The designer may limit a field to its own colours; otherwise four quick colours plus a picker for any colour.
-  const restricted = Boolean(slot.allowedColors?.length);
-  const colours = restricted ? slot.allowedColors!.map((c) => ({ key: c, label: c, value: c })) : QUICK_TEXT_COLORS;
-  const isQuick = colours.some((c) => c.value.toLowerCase() === colour.toLowerCase());
-  const pickerValue = toHexColor(colour) ?? '#111111';
+  // One-tap colours: the designer's own colours for this design when it has them, else four common ones. The full
+  // colour picker is always offered as well, so the customer can choose any colour.
+  const suggested = slot.allowedColors?.length ? slot.allowedColors.map((c) => ({ key: c, label: c.toUpperCase(), value: c })) : QUICK_TEXT_COLORS;
+  const isSuggested = suggested.some((c) => c.value.toLowerCase() === colour.toLowerCase());
+  const hex = toHexColor(colour) ?? '#111111';
   const inputId = `text-${slot.id}`;
+  const notEnglish = !isEnglishText(text);
+  const setColour = (color: string | undefined) => customizer.updateText(slot.id, { color });
 
   return (
     <div className="space-y-2">
@@ -104,10 +109,18 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
         id={inputId}
         value={text}
         maxLength={slot.maxLength}
+        lang="en"
         onChange={(e) => customizer.updateText(slot.id, { value: e.target.value })}
-        className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition-colors focus:border-ink"
+        aria-invalid={notEnglish || undefined}
+        aria-describedby={notEnglish ? `${inputId}-lang` : undefined}
+        className={`h-11 w-full rounded-xl border bg-white px-3 text-sm text-ink outline-none transition-colors focus:border-ink ${notEnglish ? 'border-alert' : 'border-line'}`}
         placeholder={slot.label}
       />
+      {notEnglish && (
+        <p id={`${inputId}-lang`} role="alert" className="text-xs text-alert">
+          {ENGLISH_ONLY_MESSAGE}
+        </p>
+      )}
       <div role="radiogroup" aria-label={`Font for ${slot.label}`} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {fonts.map((f) => (
           <button
@@ -124,44 +137,63 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
           </button>
         ))}
       </div>
-      <div role="radiogroup" aria-label={`Colour for ${slot.label}`} className="flex flex-wrap items-center gap-1">
-        {colours.map((c) => {
-          const on = colour.toLowerCase() === c.value.toLowerCase();
-          return (
-            <button
-              key={c.key}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={c.label}
-              title={c.label}
-              onClick={() => customizer.updateText(slot.id, { color: c.value })}
-              className="flex h-11 w-9 items-center justify-center"
-            >
-              <span
-                className={`h-7 w-7 rounded-full border-2 transition-transform ${on ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]'}`}
-                style={{ backgroundColor: c.value }}
-              />
-            </button>
-          );
-        })}
-        {!restricted && (
-          <label
-            title="Pick any colour"
-            className={`relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 transition-transform ${!isQuick ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]'}`}
-            style={!isQuick ? { backgroundColor: colour } : { background: 'conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935)' }}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-xs font-semibold text-ink/70">Text colour</span>
+          <div role="radiogroup" aria-label={`Colour for ${slot.label}`} className="flex flex-wrap items-center">
+            {suggested.map((c) => {
+              const on = colour.toLowerCase() === c.value.toLowerCase();
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  aria-label={c.label}
+                  title={c.label}
+                  onClick={() => {
+                    setPicking(null);
+                    setColour(c.value);
+                  }}
+                  className="flex h-11 w-9 items-center justify-center"
+                >
+                  <span
+                    className={`h-7 w-7 rounded-full border-2 transition-transform ${on ? 'scale-110 border-ink' : 'border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]'}`}
+                    style={{ backgroundColor: c.value }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            aria-expanded={Boolean(picking)}
+            onClick={() => (picking ? setPicking(null) : setPicking({ before: value?.color }))}
+            className={`flex h-9 items-center gap-2 rounded-full border pl-1 pr-3 text-xs font-semibold text-ink transition-colors ${!isSuggested || picking ? 'border-ink' : 'border-line hover:border-ink/50'}`}
           >
-            <span className={`flex h-4 w-4 items-center justify-center rounded-full ${!isQuick ? 'bg-paper/85' : 'bg-paper'}`}>
-              <Icon name="pen" className="h-3 w-3 text-ink" />
-            </span>
-            <input
-              type="color"
-              aria-label={`Pick any colour for ${slot.label}`}
-              value={pickerValue}
-              onChange={(e) => customizer.updateText(slot.id, { color: e.target.value })}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            <span
+              aria-hidden="true"
+              className="h-7 w-7 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(43,36,32,0.25)]"
+              style={isSuggested && !picking ? { background: 'conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935)' } : { backgroundColor: colour }}
             />
-          </label>
+            {!isSuggested ? hex.toUpperCase() : 'Choose colour'}
+          </button>
+        </div>
+        {picking && (
+          <ColorPicker
+            key={slot.id}
+            label={`${slot.label} colour`}
+            value={hex}
+            onChange={(next) => setColour(next)}
+            onDone={(next) => {
+              setColour(next);
+              setPicking(null);
+            }}
+            onCancel={() => {
+              setColour(picking.before);
+              setPicking(null);
+            }}
+          />
         )}
       </div>
     </div>
@@ -376,7 +408,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
               </span>
             </p>
             {activeStatus.message && <p className="text-xs text-ink/60">{activeStatus.message}</p>}
-            {activeStatus.tier === 'red' && (
+            {LOW_RES_CONFIRMATION_REQUIRED && activeStatus.tier === 'red' && (
               <label className="flex items-start gap-2 text-xs text-ink">
                 <input
                   type="checkbox"
@@ -397,36 +429,6 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           {(template.calendarSlots ?? []).map((slot) => (
             <CalendarField key={slot.id} customizer={customizer} slot={slot} />
           ))}
-        </div>
-      )}
-
-      {template.textSlots.some((t) => !t.spotifyCode) && (
-        <div className="space-y-2 border-t border-line pt-4">
-          <p id="text-language" className="text-[13px] font-semibold text-ink">
-            Would you prefer Tamil text?
-          </p>
-          <div role="radiogroup" aria-labelledby="text-language" className="grid grid-cols-2 gap-2">
-            {([['en', 'English (default)'], ['ta', 'Tamil / தமிழ்']] as const).map(([lang, label]) => {
-              const chosen = (state.textLanguage ?? 'en') === lang;
-              return (
-                <button
-                  key={lang}
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen}
-                  onClick={() => customizer.setTextLanguage(lang)}
-                  className={`h-10 rounded-xl border px-3 text-[13px] font-semibold transition-colors ${chosen ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:border-ink/50'}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          {state.textLanguage === 'ta' && (
-            <p className="rounded-xl bg-tint px-3 py-2 text-xs leading-relaxed text-ink/75">
-              Type your wording in Tamil in the boxes below. It prints in a clear Tamil font, and our team checks it before printing.
-            </p>
-          )}
         </div>
       )}
 

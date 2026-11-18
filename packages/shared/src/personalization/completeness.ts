@@ -1,6 +1,7 @@
 import { chosenCalendarDate, parseCalendarDate } from './calendar';
 import { parseSpotifyLink } from './spotify';
 import { dpiTier } from '../dpi/calculate';
+import { ENGLISH_ONLY_MESSAGE, isEnglishText } from './english-text';
 import { cropRectInOriginalPx, effectiveDpi, slotAspectRatio, type PrintSizeIn } from './geometry';
 import type { PersonalizationState } from './state';
 import type { PersonalizationTemplate } from './template-schema';
@@ -37,12 +38,23 @@ export interface Completeness {
 export interface CompletenessOptions {
   /** The frame size being bought; DPI is judged at that size (see canvasPrintWidthIn). */
   printSizeIn?: PrintSizeIn;
+  /** Whether a low-resolution photo must be accepted before buying. Defaults to LOW_RES_CONFIRMATION_REQUIRED. */
+  requireLowResConfirmation?: boolean;
 }
+
+/**
+ * Feature flag: must a customer accept each low-resolution photo ("Print anyway" popup at Add to cart) before
+ * buying? Switched OFF on 2026-11-18 at the owner's request: the product page shows a short print-quality notice
+ * by the buy buttons instead, and low-resolution photos only add a non-blocking warning. Set back to true to
+ * bring the popup (LowResDialog) and the "Print this photo anyway" tick back: the code is all still in place.
+ */
+export const LOW_RES_CONFIRMATION_REQUIRED = false;
 
 export function checkCompleteness(template: PersonalizationTemplate, state: PersonalizationState, options: CompletenessOptions = {}): Completeness {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const slots: SlotStatus[] = [];
+  const requireLowRes = options.requireLowResConfirmation ?? LOW_RES_CONFIRMATION_REQUIRED;
 
   const photosByWhatsApp = state.photosVia === 'whatsapp';
   for (const slot of template.photoSlots) {
@@ -66,6 +78,7 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     if (tier === 'red') {
       status.message = 'Your photo may appear low quality in the final print.';
       if (photo.confirmedLowDpi) warnings.push(`“${slot.label}”: low-resolution photo accepted.`);
+      else if (!requireLowRes) warnings.push(`“${slot.label}”: low-resolution photo; it may print soft.`);
       else blockers.push(`“${slot.label}”: this photo is too low-resolution for a sharp print. Use a larger photo, or confirm to continue anyway.`);
     } else if (tier === 'amber') {
       status.message = 'This photo is acceptable but not perfectly sharp at this size.';
@@ -78,6 +91,7 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     if (slot.required && !value) blockers.push(`Enter “${slot.label}”.`);
     if (value.length > slot.maxLength) blockers.push(`“${slot.label}” is too long (max ${slot.maxLength} characters).`);
     if (slot.spotifyCode && value && !parseSpotifyLink(value)) blockers.push(`“${slot.label}”: paste a Spotify link (open.spotify.com/…).`);
+    else if (!isEnglishText(value)) blockers.push(`“${slot.label}”: ${ENGLISH_ONLY_MESSAGE}`);
   }
 
   for (const slot of template.calendarSlots ?? []) {
