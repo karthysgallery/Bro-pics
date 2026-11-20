@@ -23,6 +23,34 @@ steps:
         pnpm --filter @bro-pics/web exec tsc --noEmit
         pnpm --filter @bro-pics/web exec vitest run
 
+  # Skew protection: a visitor whose page was opened before this deploy still asks for the previous build's
+  # scripts and styles (hashed names under /_next/static). Without them, the next click showed an unstyled page or
+  # the error page. So the files of the image that is live now are copied into this build (kept 14 days). Any
+  # failure here only means an empty folder: it never stops the deploy.
+  - id: live-image
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -cu
+      - |
+        gcloud run services describe ${_SERVICE} --region=${_REGION} --format='value(spec.template.spec.containers[0].image)' > /workspace/live-image.txt || true
+        echo "live image: $(cat /workspace/live-image.txt)"
+
+  - id: previous-static
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -cu
+      - |
+        mkdir -p apps/web/previous-static
+        img=$(cat /workspace/live-image.txt 2>/dev/null || true)
+        if [ -n "$img" ] && docker pull -q "$img" && cid=$(docker create "$img"); then
+          docker cp "$cid:/app/apps/web/.next/static/." apps/web/previous-static/ || true
+          docker rm "$cid" > /dev/null || true
+          find apps/web/previous-static -type f -mtime +14 -delete || true
+        fi
+        echo "previous static files kept: $(find apps/web/previous-static -type f | wc -l)"
+
   - id: build
     name: gcr.io/cloud-builders/docker
     args:

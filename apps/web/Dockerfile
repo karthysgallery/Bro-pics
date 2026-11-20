@@ -21,6 +21,7 @@ RUN pnpm install --frozen-lockfile --filter "@bro-pics/web..."
 COPY packages/shared packages/shared
 COPY services/print-render services/print-render
 COPY apps/web apps/web
+RUN mkdir -p apps/web/previous-static
 
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
@@ -45,6 +46,8 @@ FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=8080 HOSTNAME=0.0.0.0
 COPY --from=build /repo/apps/web/.next/standalone ./
+# Previous builds' scripts and styles first (see "previous-static" in cloudbuild-deploy.yaml), then this build's.
+COPY --from=build /repo/apps/web/previous-static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/public ./apps/web/public
 USER node
