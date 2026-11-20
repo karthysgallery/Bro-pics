@@ -25,16 +25,26 @@ steps:
 
   # Skew protection: a visitor whose page was opened before this deploy still asks for the previous build's
   # scripts and styles (hashed names under /_next/static). Without them, the next click showed an unstyled page or
-  # the error page. So the files of the image that is live now are copied into this build (kept 14 days). Any
-  # failure here only means an empty folder: it never stops the deploy.
+  # the error page. So the scripts, styles and fonts of the image that is live now are copied into this build and
+  # kept 3 days (pages are never cached longer than an hour: expireTime in next.config.ts).
+  # - Only an image from this project's own repository is used.
+  # - Off switch: set _KEEP_PREVIOUS_STATIC to "0" on the trigger (e.g. to drop old client code after a security fix).
+  # - Any failure only means an empty folder: it never stops the deploy.
   - id: live-image
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -cu
       - |
-        gcloud run services describe ${_SERVICE} --region=${_REGION} --format='value(spec.template.spec.containers[0].image)' > /workspace/live-image.txt || true
-        echo "live image: $(cat /workspace/live-image.txt)"
+        : > /workspace/live-image.txt
+        if [ "${_KEEP_PREVIOUS_STATIC}" = "1" ]; then
+          img=$$(gcloud run services describe ${_SERVICE} --region=${_REGION} --format='value(spec.template.spec.containers[0].image)' || true)
+          case "$$img" in
+            ${_IMAGE}:*|${_IMAGE}@sha256:*) echo "$$img" > /workspace/live-image.txt ;;
+            *) echo "live image '$$img' is not from ${_IMAGE}: not carried over" ;;
+          esac
+        fi
+        echo "live image: $$(cat /workspace/live-image.txt)"
 
   - id: previous-static
     name: gcr.io/cloud-builders/docker
@@ -43,13 +53,18 @@ steps:
       - -cu
       - |
         mkdir -p apps/web/previous-static
-        img=$(cat /workspace/live-image.txt 2>/dev/null || true)
-        if [ -n "$img" ] && docker pull -q "$img" && cid=$(docker create "$img"); then
-          docker cp "$cid:/app/apps/web/.next/static/." apps/web/previous-static/ || true
-          docker rm "$cid" > /dev/null || true
-          find apps/web/previous-static -type f -mtime +14 -delete || true
+        img=$$(cat /workspace/live-image.txt 2>/dev/null || true)
+        if [ -n "$$img" ] && docker pull -q "$$img" && cid=$$(docker create "$$img"); then
+          docker cp "$$cid:/app/apps/web/.next/static/." /workspace/prev-raw/ || true
+          docker rm "$$cid" > /dev/null || true
+          # Only scripts, styles and fonts, and only files from the last 3 days.
+          for d in chunks css media; do
+            [ -d "/workspace/prev-raw/$$d" ] && cp -a "/workspace/prev-raw/$$d" apps/web/previous-static/ || true
+          done
+          find apps/web/previous-static -type f ! \( -name '*.js' -o -name '*.css' -o -name '*.woff2' -o -name '*.woff' \) -delete || true
+          find apps/web/previous-static -type f -mtime +3 -delete || true
         fi
-        echo "previous static files kept: $(find apps/web/previous-static -type f | wc -l)"
+        echo "previous static files kept: $$(find apps/web/previous-static -type f | wc -l)"
 
   - id: build
     name: gcr.io/cloud-builders/docker
@@ -101,6 +116,8 @@ substitutions:
   _FIREBASE_MESSAGING_SENDER_ID: "991383044884"
   _FIREBASE_APP_ID: 1:991383044884:web:815e4f17eeba4e2201f801
   _WHATSAPP_NUMBER: "916369284351"
+  # "1": keep the live build's scripts and styles in the new image for 3 days (see previous-static above).
+  _KEEP_PREVIOUS_STATIC: "1"
 
 options:
   # COST: E2_HIGHCPU_8 is a paid machine (about $0.0156 per build-minute: roughly ₹14 per push with GST). E2_STANDARD_2

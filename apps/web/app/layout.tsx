@@ -136,6 +136,10 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// Pages with no refresh time of their own are rebuilt at most hourly, so the CDN in front of the site never keeps a
+// copy for a year (see expireTime in next.config.ts). Pages that set a shorter time keep it.
+export const revalidate = 3600;
+
 export const viewport = {
   width: 'device-width',
   initialScale: 1,

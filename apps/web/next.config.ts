@@ -69,6 +69,11 @@ const nextConfig: NextConfig = {
   }),
   transpilePackages: ['@bro-pics/shared'],
   headers: securityHeaders,
+  // How long the CDN in front of the site (Firebase Hosting) may keep serving an old copy of a page. Next's default
+  // is a year: after a deploy, visitors could get an old page whose scripts were gone (unstyled sign-in page, error
+  // page). One hour, together with the previous build's files kept in the image (cloudbuild-deploy.yaml), means an
+  // old copy always still works and is replaced soon.
+  expireTime: 3600,
   // sharp ships a native .node binary — webpacking it into the API route
   // bundle (Next's default for server code) breaks its native binding at
   // runtime, even though it works fine when required directly (e.g. a
