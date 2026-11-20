@@ -81,7 +81,7 @@ export function LayoutChrome({
 
   return (
     <FestiveOfferProvider offer={themeOffer !== undefined ? themeOffer : activeThemeOffer(themeDecor)}>
-      <div className="sticky top-0 z-40 w-full shadow-xs">
+      <div data-site-header className="sticky top-0 z-40 w-full shadow-xs">
         {themeDecor && <FestiveGarland garland={themeDecor.garland} />}
         <AnnouncementBar
           text={themeDecor?.bannerText || announcementBar?.text || defaultAnnouncement}

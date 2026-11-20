@@ -369,10 +369,21 @@ export function PreviewGallery({
   // Dragging a photo in the editor must not flip to the next picture.
   const swipe = useSwipe(step, !showLiveEditor);
 
-  // Keep the chosen thumbnail in sight, and fetch the photos either side so arrows feel instant.
+  // Keep the chosen thumbnail in sight by sliding the thumbnail strip sideways only. (scrollIntoView also moved the
+  // whole page up to the gallery whenever the picture list refreshed, pulling customers away from the description
+  // and reviews they were reading.) Runs only when the chosen picture changes.
   useEffect(() => {
-    const thumb = railRef.current?.querySelector<HTMLElement>(`[data-item="${active.id}"]`);
-    thumb?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    const rail = railRef.current;
+    const thumb = rail?.querySelector<HTMLElement>(`[data-item="${active.id}"]`);
+    if (!rail || !thumb) return;
+    const r = rail.getBoundingClientRect();
+    const t = thumb.getBoundingClientRect();
+    const left = rail.scrollLeft + (t.left - r.left) - (rail.clientWidth - t.width) / 2;
+    rail.scrollTo?.({ left: Math.max(0, left), behavior: 'smooth' });
+  }, [active.id]);
+
+  // Fetch the photos either side so the arrows feel instant.
+  useEffect(() => {
     for (const d of [-1, 1]) {
       const near = items[(index + d + items.length) % items.length];
       if (near?.photo) new Image().src = sizedUrl(near.photo.url, 1200);

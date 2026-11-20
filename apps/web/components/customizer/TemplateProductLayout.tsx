@@ -327,6 +327,20 @@ function TemplateEditorSession({
     }
   };
 
+  // After choosing photos, take the customer up to the frame preview so they see their photo in the frame at once
+  // (the photo buttons sit further down, especially on phones). Skipped when the preview is already in view.
+  const previewRef = useRef<HTMLDivElement>(null);
+  const showPreview = () => {
+    window.setTimeout(() => {
+      const el = previewRef.current;
+      if (!el) return;
+      const bar = document.querySelector<HTMLElement>('[data-site-header]')?.getBoundingClientRect().bottom ?? 0;
+      const top = el.getBoundingClientRect().top;
+      if (top >= bar && top < window.innerHeight * 0.4) return;
+      window.scrollTo({ top: Math.max(0, window.scrollY + top - bar - 8), behavior: 'smooth' });
+    }, 50);
+  };
+
   const { completeness, unavailableSlots } = customizer;
   const ready = completeness.complete && unavailableSlots.length === 0;
   const reason =
@@ -381,7 +395,9 @@ function TemplateEditorSession({
         </div>
       )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-8">
+        <div ref={previewRef} className="min-w-0 lg:self-stretch">
         <CustomizerPreview customizer={customizer} variant={selectedVariant} onRequestPhoto={requestPhoto} defaultImageUrl={product.primaryImageUrl || null} productTitle={product.title} frameLook={frameLook} photos={galleryPhotos} views={galleryViews} glitter={finish === 'glitter'} samples={product.samplePhotos} />
+        </div>
         <BuyBox
           product={product}
           variants={variants}
@@ -436,7 +452,10 @@ function TemplateEditorSession({
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = '';
-          if (files.length) customizer.addPhotos(files);
+          if (files.length) {
+            customizer.addPhotos(files);
+            showPreview();
+          }
         }}
       />
       <input
@@ -448,7 +467,10 @@ function TemplateEditorSession({
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
-          if (file) customizer.addPhotos([file], targetSlot.current);
+          if (file) {
+            customizer.addPhotos([file], targetSlot.current);
+            showPreview();
+          }
         }}
       />
     </div>
