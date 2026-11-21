@@ -743,3 +743,41 @@ describe('CartProvider — guest cart saved before leaving the page', () => {
     expect(result.current.ready).toBe(true);
   });
 });
+
+describe('CartProvider — switching accounts on one browser', () => {
+  it('shows nothing of the previous account\'s cart under the next sign-in', async () => {
+    vi.resetModules();
+    localStorage.removeItem('bropics_session_id');
+    localStorage.removeItem('bropics_guest_cart');
+    const callbacks: Array<(s: unknown) => void> = [];
+    vi.doMock('firebase/firestore', () => ({
+      getFirestore: vi.fn(() => ({})),
+      doc: vi.fn(() => ({})),
+      onSnapshot: vi.fn((_ref: unknown, cb: (s: unknown) => void) => {
+        callbacks.push(cb);
+        return () => {};
+      }),
+      runTransaction: vi.fn(),
+    }));
+    vi.doMock('firebase/functions', () => ({ getFunctions: vi.fn(() => ({})), httpsCallable: vi.fn(() => vi.fn().mockResolvedValue(undefined)) }));
+    const { CartProvider: P, useCart: use } = await import('./cart-context');
+    const { AuthContext: A } = await import('./auth-context');
+    let current: { uid: string } | null = { uid: 'user_a' };
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <A.Provider value={{ user: current as never, loading: false, signOut: vi.fn() }}>
+          <P>{children}</P>
+        </A.Provider>
+      );
+    }
+    const { result, rerender } = renderHook(() => use(), { wrapper: Wrapper });
+    act(() => callbacks[0]({ exists: () => true, data: () => ({ items: [{ variantId: 'v', personalizationId: 'a-line', title: 'A', unitPriceSnapshot: 1, qty: 1 }] }) }));
+    expect(result.current.items.map((i) => i.personalizationId)).toEqual(['a-line']);
+    current = { uid: 'user_b' };
+    rerender();
+    expect(result.current.items).toEqual([]);
+    expect(result.current.ready).toBe(false);
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+});

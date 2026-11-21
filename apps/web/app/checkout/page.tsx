@@ -57,7 +57,7 @@ const COUPON_REASON_MESSAGES: Record<string, string> = {
 export default function CheckoutPage() {
   const siteText = useSiteText();
   const { user, loading: authLoading } = useAuth();
-  const { items, totalPaise, clearCart, ready: cartReady, syncError: cartSyncError } = useCart();
+  const { items, totalPaise, clearCart, ready: cartReady, syncError: cartSyncError, retrySync } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const selectedAddressPincode = selectedAddress?.pincode ?? null;
@@ -457,9 +457,13 @@ export default function CheckoutPage() {
         <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Bag / Delivery / Payment</p>
       </div>
 
+      {/* The order is made from the account's saved cart, so it cannot be placed until these lines are in it. */}
       {cartSyncError && !isPaid && (
-        <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {cartSyncError}
+        <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>{cartSyncError}</span>
+          <button type="button" onClick={retrySync} className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-paper hover:bg-ink/85">
+            Try again
+          </button>
         </div>
       )}
 
@@ -713,7 +717,7 @@ export default function CheckoutPage() {
             {!isFailed && (
               <button
                 onClick={handlePlaceOrder}
-                disabled={placing || paymentConfirming || !addressId || hasUnavailableItems || shippingBlock !== null}
+                disabled={placing || paymentConfirming || !addressId || hasUnavailableItems || shippingBlock !== null || cartSyncError !== null}
                 className="mt-2 w-full min-h-[48px] py-3.5 rounded-full bg-gold hover:bg-gold-deep text-ink text-center font-semibold text-sm transition-all shadow-sm disabled:opacity-40"
               >
                 {placing ? 'Please wait…' : orderId ? 'Resume payment' : siteText.placeOrderButton}

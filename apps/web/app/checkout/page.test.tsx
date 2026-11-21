@@ -129,6 +129,7 @@ describe('CheckoutPage', () => {
       clearCart: vi.fn(),
       ready: true,
       syncError: null,
+      retrySync: vi.fn(),
     });
     try {
       render(<CheckoutPage />);
@@ -483,7 +484,7 @@ describe('CheckoutPage coupon UI', () => {
     const { useCart } = await import('../../lib/cart-context');
     const originalUseCart = vi.mocked(useCart).getMockImplementation()!;
     mockFetchQuote.mockClear();
-    const empty = { items: [], totalPaise: 0, totalCount: 0, addItem: vi.fn(), removeItem: vi.fn(), updateQuantity: vi.fn(), updateItem: vi.fn(), clearCart: vi.fn(), syncError: null };
+    const empty = { items: [], totalPaise: 0, totalCount: 0, addItem: vi.fn(), removeItem: vi.fn(), updateQuantity: vi.fn(), updateItem: vi.fn(), clearCart: vi.fn(), syncError: null, retrySync: vi.fn() };
     try {
       vi.mocked(useAuth).mockReturnValueOnce({ user: null, loading: true, signOut: vi.fn() });
       vi.mocked(useCart).mockReturnValue({ ...empty, ready: false });
@@ -501,13 +502,19 @@ describe('CheckoutPage coupon UI', () => {
     }
   });
 
-  it('says so when a guest cart could not be moved into the account', async () => {
+  it('says so when a guest cart could not be moved into the account, blocks the order and offers to try again', async () => {
     const { useCart } = await import('../../lib/cart-context');
     const originalUseCart = vi.mocked(useCart).getMockImplementation()!;
-    vi.mocked(useCart).mockReturnValue({ ...originalUseCart(), syncError: "We couldn't move your cart into your account." } as never);
+    const retrySync = vi.fn();
+    vi.mocked(useCart).mockReturnValue({ ...originalUseCart(), syncError: "We couldn't move your cart into your account.", retrySync } as never);
     try {
       render(<CheckoutPage />);
       expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't move your cart into your account.");
+      // The order is made from the account cart: it cannot be placed until the lines are in it.
+      const place = await screen.findByRole('button', { name: /Place order|Pay/ });
+      expect(place).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(retrySync).toHaveBeenCalled();
     } finally {
       vi.mocked(useCart).mockImplementation(originalUseCart);
     }

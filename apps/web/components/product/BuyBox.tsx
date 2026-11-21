@@ -94,6 +94,10 @@ interface BuyBoxProps {
   printQualityNotice?: boolean;
 }
 
+// Where Buy now goes: checkout, through the WhatsApp sign-in when signed out.
+const BUY_NOW_SIGNED_IN = '/checkout';
+const BUY_NOW_SIGNED_OUT = `/signin?redirect=${encodeURIComponent('/checkout')}`;
+
 export function BuyBox({
   product,
   variants,
@@ -201,8 +205,8 @@ export function BuyBox({
   const showsBuyNow = !comboFrame && !isEditingCartLine;
   useEffect(() => {
     if (!router || !showsBuyNow) return;
-    router.prefetch('/checkout');
-    router.prefetch('/signin');
+    router.prefetch(BUY_NOW_SIGNED_IN);
+    router.prefetch(BUY_NOW_SIGNED_OUT);
   }, [router, showsBuyNow]);
   const buyNowRef = useRef<'idle' | 'adding'>('idle');
   const [buyNowAdded, setBuyNowAdded] = useState(false);
@@ -222,7 +226,7 @@ export function BuyBox({
   useEffect(() => {
     if (!buyNowAdded || authLoading) return;
     setBuyNowAdded(false);
-    const href = user ? '/checkout' : `/signin?redirect=${encodeURIComponent('/checkout')}`;
+    const href = user ? BUY_NOW_SIGNED_IN : BUY_NOW_SIGNED_OUT;
     if (router) router.push(href);
     else window.location.assign(href);
   }, [buyNowAdded, authLoading, user, router]);

@@ -79,6 +79,7 @@ export function ComboFrameProvider({ info, children }: { info: ComboFrameInfo; c
       totalPaise: 0,
       ready: true,
       syncError: null,
+      retrySync: noop,
     };
   }, [info]);
 

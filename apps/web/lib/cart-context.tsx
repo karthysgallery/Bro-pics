@@ -36,8 +36,10 @@ function writeGuestCart(items: CartItem[]): void {
 
 /**
  * Every change resolves once it is saved where the cart lives (this browser for a guest, the account cart once
- * signed in) and rejects if it could not be saved. Callers that move on to another page (Buy now) must wait for it:
- * leaving while the save is still on its way loses the line.
+ * signed in). Callers that move on to another page (Buy now) must wait for it: leaving while the save is still on
+ * its way loses the line. addItem and updateItem reject when the save fails, so the product page can say so;
+ * removeItem, updateQuantity and clearCart never reject (a failed save puts the cart back as the server has it), so
+ * the cart drawer and checkout's after-payment clean-up can never turn into an error.
  */
 export interface CartContextValue {
   items: CartItem[];
@@ -60,6 +62,8 @@ export interface CartContextValue {
   ready: boolean;
   /** Set when a guest cart could not be carried into the account after sign-in; the lines are still shown. */
   syncError: string | null;
+  /** Tries carrying the guest cart into the account again (after syncError). */
+  retrySync: () => void;
 }
 
 /** Exported only so a combo frame can stand in for the cart around the existing editors (see combo-frame-context). */
@@ -142,11 +146,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [guestLoaded, setGuestLoaded] = useState(false);
   const [accountCartLoaded, setAccountCartLoaded] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncAttempt, setSyncAttempt] = useState(0);
   const hasReconciledRef = useRef(false);
   // Account-cart saves still on their way. While any is, the screen keeps the optimistic lines instead of a
   // snapshot that may predate the save; the last server copy is kept to roll back to if a save fails.
   const pendingOpsRef = useRef(0);
   const serverItemsRef = useRef<CartItem[]>([]);
+  const lastUidRef = useRef<string | null>(null);
 
   // Rehydrate a signed-out cart from localStorage — deliberately NOT a
   // useState lazy initializer, which would read localStorage during the
@@ -175,14 +181,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [localItems, user]);
 
   useEffect(() => {
-    if (!user) {
+    // A different account (or none): nothing of the previous account's cart may carry over, not even the copy kept
+    // for rolling back a failed save, or it could show on a shared phone under the next person's sign-in.
+    if (lastUidRef.current !== (user?.uid ?? null)) {
+      lastUidRef.current = user?.uid ?? null;
       hasReconciledRef.current = false;
+      serverItemsRef.current = [];
+      pendingOpsRef.current = 0;
       setFirestoreItems(null);
       setReconcileSucceeded(false);
       setAccountCartLoaded(false);
       setSyncError(null);
-      return;
     }
+    if (!user) return;
 
     const db = getFirestore(getFirebaseApp());
     const cartRef = doc(db, 'carts', user.uid);
@@ -227,7 +238,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           .catch((error) => {
             hasReconciledRef.current = false;
             console.warn('reconcileSessionOnLogin fallback:', error);
-            setSyncError("We couldn't move your cart into your account. Check your internet connection and refresh the page.");
+            setSyncError("We couldn't move your cart into your account. Check your internet connection and try again.");
           });
       }
     }
@@ -250,7 +261,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, syncAttempt]);
 
   const items = user
     ? reconcileSucceeded
@@ -279,22 +290,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // Saves to the account cart. The screen updates at once (a transaction has no instant local copy, so the cart
     // drawer used to stay empty until the server answered and customers pressed Add to cart again); the promise
     // settles when the server has it. A failed save puts the last server copy back and rejects.
-    const runFirestoreOp = async (mutate: (current: CartItem[]) => CartItem[]): Promise<void> => {
+    const runFirestoreOp = async (mutate: (current: CartItem[]) => CartItem[], reportFailure = false): Promise<void> => {
       if (!user) return;
       const db = getFirestore(getFirebaseApp());
       pendingOpsRef.current += 1;
       if (accountOwnsCart) setFirestoreItems((current) => mutate(current ?? serverItemsRef.current));
       try {
         const saved = await applyFirestoreCartOp(db, user.uid, mutate);
+        // Signed out or switched account while saving: this result belongs to the other account's cart.
+        if (lastUidRef.current !== user.uid) return;
         serverItemsRef.current = saved;
         pendingOpsRef.current -= 1;
         if (pendingOpsRef.current === 0) setFirestoreItems(saved);
       } catch (error) {
+        if (lastUidRef.current !== user.uid) return;
         pendingOpsRef.current -= 1;
         if (pendingOpsRef.current === 0) setFirestoreItems(serverItemsRef.current);
         console.warn('Firestore cart save failed:', error);
         // Before the guest cart is carried over, the line is still kept in this browser's copy.
-        if (accountOwnsCart) throw error;
+        if (accountOwnsCart && reportFailure) throw error;
       }
     };
 
@@ -309,7 +323,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         value: rupees(item.unitPriceSnapshot * item.qty),
         currency: 'INR',
       });
-      if (user) await runFirestoreOp((current) => mergeOne(current, item));
+      if (user) await runFirestoreOp((current) => mergeOne(current, item), true);
     };
 
     const removeItem = async (variantId: string, personalizationId: string) => {
@@ -348,7 +362,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return next;
         });
       applyLocal(applyUpdate);
-      if (user) await runFirestoreOp(applyUpdate);
+      if (user) await runFirestoreOp(applyUpdate, true);
     };
 
     const clearCart = async () => {
@@ -361,7 +375,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const totalCount = items.reduce((sum, i) => sum + i.qty, 0);
     const totalPaise = items.reduce((sum, i) => sum + i.qty * i.unitPriceSnapshot, 0);
 
-    return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise, ready, syncError };
+    const retrySync = () => {
+      setSyncError(null);
+      setSyncAttempt((n) => n + 1);
+    };
+
+    return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise, ready, syncError, retrySync };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, user, reconcileSucceeded, ready, syncError]);
 
