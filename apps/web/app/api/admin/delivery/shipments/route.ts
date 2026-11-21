@@ -7,6 +7,9 @@ import { adminApiError } from '../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../lib/audit-log';
 import { z } from 'zod';
 
+const READY_STATUSES = ['packed', 'printed_packed'] as const;
+const SHIPPED_STATUSES = ['shipped', 'delivered'] as const;
+
 const CreateShipmentSchema = z.object({
   orderId: z.string().min(1),
   courierId: z.string().min(1),
@@ -33,42 +36,54 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const db = getFirestore(getAdminApp());
-  const snap = await db.collection('shipments').orderBy('createdAt', 'desc').limit(100).get();
-  let shipments: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Real orders only (no sample rows): the ones packed and waiting for a courier, and the ones already handed over.
+  // Courier and AWB are saved on the order when staff mark it shipped on the order page.
+  const snap = await db
+    .collection('orders')
+    .where('status', 'in', [...READY_STATUSES, ...SHIPPED_STATUSES])
+    .limit(300)
+    .get();
 
-  // Fallback / seed sample shipments if empty
-  if (shipments.length === 0) {
-    shipments = [
-      {
-        id: 'shp_001',
-        orderId: 'BP-2026-9081',
-        courierId: 'delhivery',
-        courierName: 'Delhivery Surface',
-        awb: 'DEL9928172635',
-        trackingUrl: 'https://www.delhivery.com/track/package/DEL9928172635',
-        status: 'shipped',
-        weightGrams: 1450,
-        customerName: 'Aarav Sharma',
-        destinationCity: 'Bengaluru, KA',
-        createdAt: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-      },
-      {
-        id: 'shp_002',
-        orderId: 'BP-2026-9079',
-        courierId: 'bluedart',
-        courierName: 'Blue Dart Express',
-        awb: 'BD4491028374',
-        trackingUrl: 'https://www.bluedart.com/track?awb=BD4491028374',
-        status: 'manifested',
-        weightGrams: 2100,
-        customerName: 'Priya Iyer',
-        destinationCity: 'Mumbai, MH',
-        createdAt: new Date(Date.now() - 3600 * 1000 * 8).toISOString(),
-      },
-    ];
-  }
+  const rows = snap.docs.map((doc) => {
+    const o = doc.data() as {
+      orderNo?: string;
+      status: string;
+      total?: number;
+      customerName?: string;
+      placedAt?: FirebaseFirestore.Timestamp;
+      addressJson?: { recipientName?: string; phone?: string; city?: string; state?: string; pincode?: string };
+      courier?: string;
+      awbNumber?: string;
+      shipmentTracking?: { provider?: string; awbNumber?: string; trackingUrl?: string | null; shippedAt?: string; deliveredAt?: string | null };
+      hasGlitter?: boolean;
+    };
+    const a = o.addressJson ?? {};
+    return {
+      id: doc.id,
+      orderNo: o.orderNo ?? doc.id,
+      status: o.status,
+      total: o.total ?? 0,
+      customerName: a.recipientName || o.customerName || null,
+      phone: a.phone ?? null,
+      destination: [a.city, a.state].filter(Boolean).join(', ') || null,
+      pincode: a.pincode ?? null,
+      placedAt: o.placedAt?.toDate?.().toISOString() ?? null,
+      courier: o.shipmentTracking?.provider ?? o.courier ?? null,
+      awb: o.shipmentTracking?.awbNumber ?? o.awbNumber ?? null,
+      trackingUrl: o.shipmentTracking?.trackingUrl ?? null,
+      shippedAt: o.shipmentTracking?.shippedAt ?? null,
+      deliveredAt: o.shipmentTracking?.deliveredAt ?? null,
+      hasGlitter: Boolean(o.hasGlitter),
+    };
+  });
 
-  return NextResponse.json({ shipments });
+  const byNewest = (a: { placedAt: string | null }, b: { placedAt: string | null }) => (b.placedAt ?? '').localeCompare(a.placedAt ?? '');
+  const readyToShip = rows.filter((r) => (READY_STATUSES as readonly string[]).includes(r.status)).sort(byNewest).reverse();
+  const shipped = rows
+    .filter((r) => (SHIPPED_STATUSES as readonly string[]).includes(r.status))
+    .sort((a, b) => (b.shippedAt ?? b.placedAt ?? '').localeCompare(a.shippedAt ?? a.placedAt ?? ''));
+
+  return NextResponse.json({ readyToShip, shipped, truncated: snap.size >= 300 });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
