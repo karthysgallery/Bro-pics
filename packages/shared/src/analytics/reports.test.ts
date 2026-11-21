@@ -74,6 +74,15 @@ describe('analytics reports (ANL-06/07)', () => {
       expect(res.dailyTrend[0].date).toBe('2026-09-25');
       expect(res.dailyTrend[0].net).toBe(2500);
     });
+
+    it('puts each sale on its India calendar day, not the UTC one', () => {
+      // 20:00 UTC on 24 Sept is 01:30 IST on 25 Sept.
+      const res = computeSalesAnalytics(
+        [{ id: 'o', status: 'paid', paymentStatus: 'paid', paymentMode: 'prepaid', total: 49900, discount: 0, shipping: 0, taxLines: [], placedAt: new Date('2026-09-24T20:00:00Z') }],
+        []
+      );
+      expect(res.dailyTrend.map((d) => d.date)).toEqual(['2026-09-25']);
+    });
   });
 
   describe('computeProductsAnalytics', () => {

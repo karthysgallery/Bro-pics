@@ -106,7 +106,11 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     .where('placedAt', '<=', end)
     .get();
 
-  const ordersData = ordersSnap.docs.map((d) => {
+  // Test payments (the mock provider) moved no money: they never count towards revenue or order numbers.
+  const realOrderDocs = ordersSnap.docs.filter((d) => d.data().paymentProvider !== 'mock');
+  const testOrdersExcluded = ordersSnap.docs.length - realOrderDocs.length;
+
+  const ordersData = realOrderDocs.map((d) => {
     const data = d.data();
     return {
       id: d.id,
@@ -171,8 +175,9 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
             return {
               productId: iData.productId ?? '',
               title: iData.title ?? '',
-              quantity: iData.quantity ?? 1,
-              price: iData.unitPriceSnapshot ?? iData.price ?? 0,
+              // Order items store qty and unitPrice (paise); the older names are kept as a fallback.
+              quantity: iData.qty ?? iData.quantity ?? 1,
+              price: iData.unitPrice ?? iData.unitPriceSnapshot ?? iData.price ?? 0,
             };
           });
         } catch {
@@ -200,7 +205,17 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
         if (u) allPriorUserIds.add(u);
       }
 
-      domainData = computeCustomersAnalytics(ordersData as any, allPriorUserIds);
+      const customers = computeCustomersAnalytics(ordersData as any, allPriorUserIds);
+      // The name each customer gave on their latest order in this period (frozen on the order; no extra reads).
+      const nameByUser = new Map<string, string>();
+      for (const o of [...ordersData].sort((a, b) => a.placedAt.getTime() - b.placedAt.getTime())) {
+        const order = o as { userId?: string; customerName?: string };
+        if (order.userId && order.customerName) nameByUser.set(order.userId, order.customerName);
+      }
+      domainData = {
+        ...customers,
+        topCustomers: customers.topCustomers.map((c) => ({ ...c, name: nameByUser.get(c.userId) ?? null })),
+      };
       break;
     }
 
@@ -252,6 +267,7 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       domain,
       from: fromStr,
       to: toStr,
+      testOrdersExcluded,
       data: domainData,
     },
     { status: 200 }

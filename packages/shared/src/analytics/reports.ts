@@ -4,6 +4,12 @@ import { type Return, type ReturnReasonCategory } from '../schemas/return';
 import { type PrintJob } from '../schemas/print-job';
 import { type Customization } from '../schemas/customization';
 import { type OrderWithItemsForRollup } from './daily-rollup';
+import { IST_OFFSET_MS } from './dashboard';
+
+/** The India calendar day (YYYY-MM-DD) an instant falls on: the shop's days run on IST, not UTC. */
+function istDay(d: Date): string {
+  return new Date(d.getTime() + IST_OFFSET_MS).toISOString().split('T')[0];
+}
 
 // 1. Sales Analytics
 export interface SalesAnalytics {
@@ -69,7 +75,7 @@ export function computeSalesAnalytics(
   const byDate: Record<string, { gross: number; refunds: number; orders: number }> = {};
   for (const o of paidOrders) {
     const d = o.placedAt instanceof Date ? o.placedAt : new Date(o.placedAt);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = istDay(d);
     if (!byDate[dateStr]) byDate[dateStr] = { gross: 0, refunds: 0, orders: 0 };
     byDate[dateStr].gross += o.total;
     byDate[dateStr].orders += 1;
@@ -77,7 +83,7 @@ export function computeSalesAnalytics(
   for (const r of processedRefunds) {
     const d = r.processedAt ?? r.createdAt ?? new Date();
     const dateObj = d instanceof Date ? d : new Date(d);
-    const dateStr = dateObj.toISOString().split('T')[0];
+    const dateStr = istDay(dateObj);
     if (!byDate[dateStr]) byDate[dateStr] = { gross: 0, refunds: 0, orders: 0 };
     byDate[dateStr].refunds += r.amount;
   }
