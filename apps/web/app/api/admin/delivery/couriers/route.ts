@@ -33,51 +33,51 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const db = getFirestore(getAdminApp());
   const snap = await db.collection('couriers').get();
-  let couriers: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const couriers: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  // Seed default couriers if empty
-  if (couriers.length === 0) {
-    couriers = [
-      {
-        id: 'delhivery',
-        name: 'Delhivery Surface & Express',
-        code: 'DELHIVERY',
-        trackingUrlTemplate: 'https://www.delhivery.com/track/package/{awb}',
-        isActive: true,
-        defaultForZones: ['metro', 'standard'],
-        apiEnabled: false,
-      },
-      {
-        id: 'bluedart',
-        name: 'Blue Dart Express',
-        code: 'BLUEDART',
-        trackingUrlTemplate: 'https://www.bluedart.com/web/guest/trackdartresult?trackFor=0&trackNo={awb}',
-        isActive: true,
-        defaultForZones: ['metro'],
-        apiEnabled: false,
-      },
-      {
-        id: 'indiapost',
-        name: 'India Post Speed Post',
-        code: 'INDIAPOST',
-        trackingUrlTemplate: 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx?consignmentNo={awb}',
-        isActive: true,
-        defaultForZones: ['remote'],
-        apiEnabled: false,
-      },
-      {
-        id: 'xpressbees',
-        name: 'Xpressbees Logistics',
-        code: 'XPRESSBEES',
-        trackingUrlTemplate: 'https://www.xpressbees.com/track?awb={awb}',
-        isActive: true,
-        defaultForZones: ['standard'],
-        apiEnabled: false,
-      },
-    ];
-  }
+  // Common Indian couriers offered as one-click additions. They are NOT saved couriers until staff add one
+  // (earlier these were returned as if saved, so Edit/Delete on them failed).
+  const savedCodes = new Set(couriers.map((c) => String(c.code ?? '').toUpperCase()));
+  const suggestions = [
+    {
+      id: 'delhivery',
+      name: 'Delhivery Surface & Express',
+      code: 'DELHIVERY',
+      trackingUrlTemplate: 'https://www.delhivery.com/track/package/{awb}',
+      isActive: true,
+      defaultForZones: ['metro', 'standard'],
+      apiEnabled: false,
+    },
+    {
+      id: 'bluedart',
+      name: 'Blue Dart Express',
+      code: 'BLUEDART',
+      trackingUrlTemplate: 'https://www.bluedart.com/web/guest/trackdartresult?trackFor=0&trackNo={awb}',
+      isActive: true,
+      defaultForZones: ['metro'],
+      apiEnabled: false,
+    },
+    {
+      id: 'indiapost',
+      name: 'India Post Speed Post',
+      code: 'INDIAPOST',
+      trackingUrlTemplate: 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx?consignmentNo={awb}',
+      isActive: true,
+      defaultForZones: ['remote'],
+      apiEnabled: false,
+    },
+    {
+      id: 'xpressbees',
+      name: 'Xpressbees Logistics',
+      code: 'XPRESSBEES',
+      trackingUrlTemplate: 'https://www.xpressbees.com/track?awb={awb}',
+      isActive: true,
+      defaultForZones: ['standard'],
+      apiEnabled: false,
+    },
+  ];
 
-  return NextResponse.json({ couriers });
+  return NextResponse.json({ couriers, suggestions: suggestions.filter((c) => !savedCodes.has(c.code)) });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

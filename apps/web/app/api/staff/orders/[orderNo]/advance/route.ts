@@ -21,11 +21,22 @@ import {
 // server-only, never bundled for the client either way), so importing it
 // directly here is exactly the intended use.
 import { buildQueuedPrintJob } from '@bro-pics/shared/src/print-jobs/print-jobs';
+import { trackingUrlFromCouriers, type SavedCourier } from '../../../../../../lib/shipping/courier-tracking';
 
 // [BE-20] No real courier API integration exists yet — see
 // ManualShippingProvider's own doc comment. Module-scoped since it's
 // stateless; swapping in a real provider later is a one-line change here.
 const shippingProvider = new ManualShippingProvider();
+
+/** Tracking link from the couriers saved in Admin → Delivery; a failed lookup just means no link. */
+async function savedCourierTrackingUrl(db: FirebaseFirestore.Firestore, courier: string, awb: string): Promise<string | null> {
+  try {
+    const snap = await db.collection('couriers').get();
+    return trackingUrlFromCouriers(snap.docs.map((d) => d.data() as SavedCourier), courier, awb);
+  } catch {
+    return null;
+  }
+}
 
 interface RouteParams {
   params: Promise<{ orderNo: string }>;
@@ -96,7 +107,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     const shipmentTracking: ShipmentTracking = {
       provider: courier!,
       awbNumber: awbNumber!,
-      trackingUrl: shippingProvider.trackingUrlFor(courier!, awbNumber!),
+      trackingUrl: shippingProvider.trackingUrlFor(courier!, awbNumber!) ?? (await savedCourierTrackingUrl(db, courier!, awbNumber!)),
       status: 'shipped',
       shippedAt,
       deliveredAt: null,

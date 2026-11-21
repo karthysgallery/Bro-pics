@@ -1,7 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../../lib/auth-context';
+import { AdminModal } from '../../../../components/admin/AdminModal';
+import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
+import { useToast } from '../../../../components/ui/Toast';
+import { trackingUrlFromCouriers } from '../../../../lib/shipping/courier-tracking';
+
+/*
+ * Courier partners: the couriers the shop sends parcels with, and the address of each courier's tracking page.
+ * When staff mark an order Shipped and type one of these couriers, the customer's order page and message get a
+ * working tracking link built from that address.
+ */
 
 interface Courier {
   id: string;
@@ -9,328 +19,252 @@ interface Courier {
   code: string;
   trackingUrlTemplate: string;
   isActive: boolean;
-  defaultForZones: string[];
+  defaultForZones?: string[];
   contactPhone?: string;
 }
 
-export default function CouriersRegistryPage() {
+type Form = { name: string; code: string; trackingUrlTemplate: string; isActive: boolean; contactPhone: string };
+const EMPTY: Form = { name: '', code: '', trackingUrlTemplate: '', isActive: true, contactPhone: '' };
+const SAMPLE_AWB = '1234567890';
+
+const input = 'w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold focus:outline-none';
+
+export default function CourierPartnersPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [couriers, setCouriers] = useState<Courier[]>([]);
+  const [suggestions, setSuggestions] = useState<Courier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingCourier, setEditingCourier] = useState<Courier | null>(null);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    trackingUrlTemplate: 'https://example.com/track/{awb}',
-    isActive: true,
-    defaultForZones: ['metro', 'standard'],
-    contactPhone: '',
-  });
-
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Courier | null>(null);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [removing, setRemoving] = useState<Courier | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
-  const fetchCouriers = async () => {
+  const authed = useCallback(async (url: string, init: RequestInit = {}) => {
+    const token = await user!.getIdToken();
+    return fetch(url, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+  }, [user]);
+
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/admin/delivery/couriers', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setCouriers(json.couriers || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch couriers', err);
+      const res = await authed('/api/admin/delivery/couriers');
+      if (!res.ok) throw new Error(res.status === 403 ? 'Your role cannot manage couriers.' : 'Couriers could not be loaded.');
+      const body = (await res.json()) as { couriers?: Courier[]; suggestions?: Courier[] };
+      setCouriers((body.couriers ?? []).sort((a, b) => a.name.localeCompare(b.name)));
+      setSuggestions(body.suggestions ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Couriers could not be loaded.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, authed]);
 
   useEffect(() => {
-    fetchCouriers();
-  }, [user]);
+    void load();
+  }, [load]);
 
-  const handleOpenAdd = () => {
-    setEditingCourier(null);
-    setFormData({
-      name: '',
-      code: '',
-      trackingUrlTemplate: 'https://example.com/track/{awb}',
-      isActive: true,
-      defaultForZones: ['metro', 'standard'],
-      contactPhone: '',
-    });
-    setShowModal(true);
+  const openAdd = (from?: Courier) => {
+    setEditing(null);
+    setForm(from ? { name: from.name, code: from.code, trackingUrlTemplate: from.trackingUrlTemplate, isActive: true, contactPhone: '' } : EMPTY);
+    setOpen(true);
+  };
+  const openEdit = (c: Courier) => {
+    setEditing(c);
+    setForm({ name: c.name, code: c.code, trackingUrlTemplate: c.trackingUrlTemplate, isActive: c.isActive, contactPhone: c.contactPhone ?? '' });
+    setOpen(true);
   };
 
-  const handleOpenEdit = (c: Courier) => {
-    setEditingCourier(c);
-    setFormData({
-      name: c.name,
-      code: c.code,
-      trackingUrlTemplate: c.trackingUrlTemplate,
-      isActive: c.isActive,
-      defaultForZones: c.defaultForZones || [],
-      contactPhone: c.contactPhone || '',
-    });
-    setShowModal(true);
-  };
+  const preview = trackingUrlFromCouriers([{ ...form, isActive: true }], form.code || form.name, SAMPLE_AWB);
+  const templateProblem =
+    form.trackingUrlTemplate && !form.trackingUrlTemplate.includes('{awb}')
+      ? 'Put {awb} where the tracking number goes.'
+      : form.trackingUrlTemplate && !preview
+        ? 'Use the full https:// address of the tracking page.'
+        : null;
+  const canSave = form.name.trim() && form.code.trim() && form.trackingUrlTemplate.trim() && !templateProblem && !saving;
 
-  const handleSave = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!canSave) return;
     setSaving(true);
-    setMessage(null);
     try {
-      const token = await user.getIdToken();
-      const url = editingCourier
-        ? `/api/admin/delivery/couriers/${editingCourier.id}`
-        : '/api/admin/delivery/couriers';
-      const method = editingCourier ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+      const payload = {
+        name: form.name.trim(),
+        code: form.code.trim().toUpperCase().replace(/\s+/g, ''),
+        trackingUrlTemplate: form.trackingUrlTemplate.trim(),
+        isActive: form.isActive,
+        defaultForZones: editing?.defaultForZones ?? [],
+        ...(form.contactPhone.trim() && { contactPhone: form.contactPhone.trim() }),
+      };
+      const res = await authed(editing ? `/api/admin/delivery/couriers/${editing.id}` : '/api/admin/delivery/couriers', {
+        method: editing ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload),
       });
-
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || 'Failed to save courier');
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error?.message ?? body?.message ?? 'The courier could not be saved.');
       }
-
-      setMessage({
-        type: 'success',
-        text: `Courier ${editingCourier ? 'updated' : 'registered'} successfully!`,
-      });
-      setShowModal(false);
-      fetchCouriers();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Operation failed' });
+      showToast(editing ? 'Courier saved' : 'Courier added', 'success');
+      setOpen(false);
+      void load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'The courier could not be saved.', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this courier?') || !user) return;
+  const remove = async () => {
+    if (!removing) return;
+    setRemoveBusy(true);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/delivery/couriers/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Courier removed.' });
-        fetchCouriers();
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to delete' });
+      const res = await authed(`/api/admin/delivery/couriers/${removing.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('The courier could not be removed.');
+      showToast('Courier removed', 'success');
+      setRemoving(null);
+      void load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'The courier could not be removed.', 'error');
+    } finally {
+      setRemoveBusy(false);
     }
   };
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-cream">Courier Partners Registry</h1>
-          <p className="text-sm text-sand/70 mt-1">
-            Manage fulfillment carrier integrations, live package tracking templates, and zonal assignments.
+          <h1 className="font-display text-2xl font-bold text-ink">Courier partners</h1>
+          <p className="mt-1 max-w-2xl text-sm text-ink/60">
+            The couriers you send parcels with. When you mark an order <span className="font-medium text-ink">Shipped</span> and
+            type one of these names, the customer gets a tracking link that opens straight to their parcel.
           </p>
         </div>
-
-        <button
-          onClick={handleOpenAdd}
-          className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2"
-        >
-          Add Courier Partner
+        <button onClick={() => openAdd()} className="self-start rounded-full bg-gold px-4 py-2 text-sm font-semibold text-ink hover:bg-gold-deep sm:self-auto">
+          Add courier
         </button>
-      </div>
+      </header>
 
-      {message && (
-        <div
-          className={`p-4 rounded-xl border text-sm flex items-center justify-between ${
-            message.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
-          }`}
-        >
-          <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="text-xs opacity-70 hover:opacity-100">
-            Dismiss
-          </button>
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-alert/40 bg-paper p-4 text-sm text-ink">
+          <span>{error}</span>
+          <button onClick={() => void load()} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-field">Try again</button>
         </div>
+      ) : loading ? (
+        <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-20 animate-pulse rounded-card bg-tint" />)}</div>
+      ) : (
+        <>
+          <section className="rounded-card border border-line bg-paper">
+            <h2 className="border-b border-line px-4 py-3 text-sm font-semibold text-ink sm:px-5">Your couriers</h2>
+            {couriers.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink/60">No couriers saved yet. Add the ones you use, or pick from the list below.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {couriers.map((c) => (
+                  <li key={c.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink">{c.name}</p>
+                        <span className="rounded-md bg-tint px-1.5 py-0.5 font-mono text-[11px] text-ink/70">{c.code}</span>
+                        {c.isActive ? (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">In use</span>
+                        ) : (
+                          <span className="rounded-full border border-line bg-field px-2 py-0.5 text-xs text-ink/60">Paused</span>
+                        )}
+                      </div>
+                      <p className="mt-1 break-all text-xs text-ink/55">{c.trackingUrlTemplate}</p>
+                      {c.contactPhone && <p className="mt-0.5 text-xs text-ink/55">Pickup contact: {c.contactPhone}</p>}
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button onClick={() => openEdit(c)} className="rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Edit</button>
+                      <button onClick={() => setRemoving(c)} className="rounded-full px-3 py-1.5 text-sm font-medium text-alert hover:bg-alert/10">Remove</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {suggestions.length > 0 && (
+            <section className="rounded-card border border-dashed border-line bg-paper/60">
+              <div className="border-b border-line px-4 py-3 sm:px-5">
+                <h2 className="text-sm font-semibold text-ink">Common couriers</h2>
+                <p className="text-xs text-ink/55">Not saved yet. Add the ones you use; you can change the details first.</p>
+              </div>
+              <ul className="divide-y divide-line">
+                {suggestions.map((c) => (
+                  <li key={c.code} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink">{c.name}</p>
+                      <p className="truncate text-xs text-ink/50">{c.trackingUrlTemplate}</p>
+                    </div>
+                    <button onClick={() => openAdd(c)} className="shrink-0 rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Add</button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
 
-      {/* Courier Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {loading ? (
-          <div className="col-span-2 p-8 text-center text-sand/60">Loading courier partners...</div>
-        ) : couriers.length === 0 ? (
-          <div className="col-span-2 p-8 text-center text-sand/60">No couriers found.</div>
-        ) : (
-          couriers.map((c) => (
-            <div
-              key={c.id}
-              className="p-5 rounded-2xl bg-paper border border-line space-y-4 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg flex justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
-                    <h3 className="font-bold text-cream text-base">{c.name}</h3>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      c.isActive
-                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-                        : 'bg-zinc-800 text-sand border border-line'
-                    }`}
-                  >
-                    {c.isActive ? 'Active' : 'Disabled'}
-                  </span>
-                </div>
-
-                <div className="mt-3 space-y-1.5 text-xs text-sand/80">
-                  <div>
-                    <span className="text-sand/50">Code:</span>{' '}
-                    <span className="font-mono text-cream">{c.code}</span>
-                  </div>
-                  <div>
-                    <span className="text-sand/50">Tracking URL:</span>{' '}
-                    <span className="font-mono text-gold/90 break-all">{c.trackingUrlTemplate}</span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-2">
-                    <span className="text-sand/50">Assigned Zones:</span>
-                    {(c.defaultForZones || []).map((z) => (
-                      <span
-                        key={z}
-                        className="px-1.5 py-0.5 rounded bg-tint text-cream text-[10px] uppercase font-mono"
-                      >
-                        {z}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line/60">
-                <button
-                  onClick={() => handleOpenEdit(c)}
-                  className="px-3 py-1 text-xs rounded-lg bg-tint border border-line hover:border-gold text-cream transition"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="px-3 py-1 text-xs rounded-lg text-rose-400 hover:text-rose-300 transition"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Add / Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-paper border border-line rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <h3 className="text-base font-bold text-cream">
-                {editingCourier ? 'Edit Courier Partner' : 'Register New Courier Partner'}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-sand hover:text-cream text-lg"
-              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-sand uppercase tracking-wider mb-1.5">
-                  Courier Partner Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Delhivery Surface"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream focus:border-gold focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-sand uppercase tracking-wider mb-1.5">
-                  System Code
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. DELHIVERY"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream font-mono focus:border-gold focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-sand uppercase tracking-wider mb-1.5">
-                  Tracking URL Template (Include {'{awb}'} token)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={formData.trackingUrlTemplate}
-                  onChange={(e) => setFormData({ ...formData, trackingUrlTemplate: e.target.value })}
-                  className="w-full bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream font-mono focus:border-gold focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActiveToggle"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="w-4 h-4 rounded border-line text-gold focus:ring-gold bg-void"
-                />
-                <label htmlFor="isActiveToggle" className="text-xs text-cream select-none cursor-pointer">
-                  Active for automatic courier allocation
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-sand hover:text-cream"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-gold text-void hover:brightness-110 transition disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Courier'}
-                </button>
-              </div>
-            </form>
+      <AdminModal isOpen={open} onClose={() => setOpen(false)} title={editing ? `Edit ${editing.name}` : 'Add a courier'}>
+        <form onSubmit={save} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-ink">Name</span>
+              <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Delhivery" required />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-ink">Short code</span>
+              <input className={`${input} font-mono uppercase`} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="DELHIVERY" required />
+            </label>
           </div>
-        </div>
-      )}
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-ink">Tracking page address</span>
+            <input className={`${input} font-mono text-xs`} value={form.trackingUrlTemplate} onChange={(e) => setForm({ ...form, trackingUrlTemplate: e.target.value })} placeholder="https://www.delhivery.com/track/package/{awb}" required />
+            <span className={`block text-xs ${templateProblem ? 'text-alert' : 'text-ink/55'}`}>
+              {templateProblem ?? 'Write {awb} where the tracking (AWB) number goes.'}
+            </span>
+          </label>
+          {preview && (
+            <p className="rounded-xl bg-field px-3 py-2 text-xs text-ink/70">
+              Example for AWB {SAMPLE_AWB}:{' '}
+              <a href={preview} target="_blank" rel="noreferrer" className="break-all text-gold-deep underline">{preview}</a>
+            </p>
+          )}
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-ink">Pickup contact phone <span className="font-normal text-ink/50">(optional)</span></span>
+            <input className={input} value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+91 98xxx xxxxx" inputMode="tel" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="h-4 w-4 rounded border-line accent-[rgb(var(--color-gold))]" />
+            In use (pause it to stop offering this courier)
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-tint">Cancel</button>
+            <button type="submit" disabled={!canSave} className="rounded-full bg-gold px-4 py-2 text-sm font-semibold text-ink hover:bg-gold-deep disabled:opacity-40">
+              {saving ? 'Saving…' : editing ? 'Save courier' : 'Add courier'}
+            </button>
+          </div>
+        </form>
+      </AdminModal>
+
+      <ConfirmDialog
+        isOpen={removing !== null}
+        title={removing ? `Remove ${removing.name}?` : 'Remove courier?'}
+        message="Orders already shipped with this courier keep their tracking details. New orders won't get a link for it."
+        confirmLabel="Remove courier"
+        tone="danger"
+        isLoading={removeBusy}
+        onConfirm={remove}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   );
 }
