@@ -70,7 +70,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       placedAt: o.placedAt?.toDate?.().toISOString() ?? null,
       courier: o.shipmentTracking?.provider ?? o.courier ?? null,
       awb: o.shipmentTracking?.awbNumber ?? o.awbNumber ?? null,
-      trackingUrl: o.shipmentTracking?.trackingUrl ?? null,
+      // Staff can type this address, so only an https link is ever handed to the page as a link.
+      trackingUrl: /^https:\/\//i.test(o.shipmentTracking?.trackingUrl ?? '') ? o.shipmentTracking!.trackingUrl! : null,
       shippedAt: o.shipmentTracking?.shippedAt ?? null,
       deliveredAt: o.shipmentTracking?.deliveredAt ?? null,
       hasGlitter: Boolean(o.hasGlitter),
