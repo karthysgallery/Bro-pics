@@ -5,6 +5,7 @@ import { requirePermission } from '../../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../../lib/admin-api-error';
 import { writeAuditLog } from '../../../../../../lib/audit-log';
+import { normalizeStateName, plausibleStatesForPincode } from '@bro-pics/shared';
 import { z } from 'zod';
 
 const ImportItemSchema = z.object({
@@ -42,10 +43,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     return adminApiError(400, 'invalid_request', 'Invalid import data format', { issues: parsed.error.issues });
   }
 
+  // Checkout blocks an address whose state differs from this list, so a mistyped state would stop real orders.
+  // Every row's state must be a real state/UT name and fit the PIN's range; otherwise nothing is saved.
+  const rejected: Array<{ pincode: string; state: string; reason: string }> = [];
+  const items = parsed.data.items.map((item) => {
+    const state = normalizeStateName(item.state);
+    const plausible = plausibleStatesForPincode(item.pincode);
+    if (!state) rejected.push({ pincode: item.pincode, state: item.state, reason: 'not a state or union territory name' });
+    else if (plausible && !plausible.includes(state)) rejected.push({ pincode: item.pincode, state: item.state, reason: `this PIN belongs to ${plausible.join(' / ')}` });
+    return { ...item, state: state ?? item.state };
+  });
+  if (rejected.length > 0) {
+    return adminApiError(400, 'invalid_request', `${rejected.length} row(s) have a wrong state. Nothing was saved.`, { rejected: rejected.slice(0, 50) });
+  }
+
   const db = getFirestore(getAdminApp());
   const batch = db.batch();
 
-  for (const item of parsed.data.items) {
+  for (const item of items) {
     const docRef = db.collection('shippingServiceability').doc(item.pincode);
     batch.set(docRef, {
       ...item,
@@ -60,8 +75,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     action: 'shipping.import_serviceability',
     resource: 'shipping_serviceability',
     resourceId: 'batch',
-    details: { count: parsed.data.items.length },
+    details: { count: items.length },
   });
 
-  return NextResponse.json({ success: true, count: parsed.data.items.length });
+  return NextResponse.json({ success: true, count: items.length });
 }

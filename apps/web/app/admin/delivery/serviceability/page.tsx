@@ -1,307 +1,295 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../../lib/auth-context';
-import { StatusChip } from '../../../../components/admin/StatusChip';
+import { AdminModal } from '../../../../components/admin/AdminModal';
+import { useToast } from '../../../../components/ui/Toast';
 
-interface ServiceabilityItem {
+/*
+ * PIN code list (Firestore `shippingServiceability`, one document per PIN). Optional. At checkout, when the
+ * customer's PIN is in this list, the state they chose must match the state saved here (so the right delivery
+ * charge and the free-delivery-in-home-state rule apply). PINs not in the list are checked against the built-in
+ * India Post PIN ranges instead. Zone, delivery days and COD are kept for reference; checkout does not use them.
+ */
+
+interface PinRow {
   id: string;
   pincode: string;
   state: string;
+  zone?: 'metro' | 'standard' | 'remote';
+  etaMinDays?: number;
+  etaMaxDays?: number;
+  codAvailable?: boolean;
+  updatedAt?: string;
+}
+
+interface ParsedRow {
+  pincode: string;
+  state: string;
   zone: 'metro' | 'standard' | 'remote';
-  isServiceable: boolean;
+  isServiceable: true;
   etaMinDays: number;
   etaMaxDays: number;
   codAvailable: boolean;
-  preferredCourierId?: string;
 }
 
-export default function DeliveryServiceabilityPage() {
-  const { user } = useAuth();
-  const [items, setItems] = useState<ServiceabilityItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [zoneFilter, setZoneFilter] = useState('');
-  const [csvText, setCsvText] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+/** Reads "pincode,state[,zone,minDays,maxDays,cod]" lines; a header line is skipped. */
+function parseCsv(text: string): { rows: ParsedRow[]; problems: string[] } {
+  const rows: ParsedRow[] = [];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) return;
+    if (i === 0 && /pin/i.test(line)) return;
+    const [pincode = '', state = '', zone = '', min = '', max = '', cod = ''] = line.split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
+    if (!/^[1-8]\d{5}$/.test(pincode)) return void problems.push(`Line ${i + 1}: "${pincode}" is not a 6-digit PIN`);
+    if (!state) return void problems.push(`Line ${i + 1}: state is missing`);
+    if (seen.has(pincode)) return void problems.push(`Line ${i + 1}: ${pincode} appears twice`);
+    seen.add(pincode);
+    const etaMinDays = Math.min(30, Math.max(1, parseInt(min, 10) || 3));
+    rows.push({
+      pincode,
+      state,
+      zone: zone === 'metro' || zone === 'remote' ? zone : 'standard',
+      isServiceable: true,
+      etaMinDays,
+      etaMaxDays: Math.min(30, Math.max(etaMinDays, parseInt(max, 10) || 5)),
+      codAvailable: /^(true|yes|1|y)$/i.test(cod),
+    });
+  });
+  return { rows, problems };
+}
 
-  const fetchServiceability = async () => {
+export default function PinCodeListPage() {
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const [rows, setRows] = useState<PinRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [applied, setApplied] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  const [csv, setCsv] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [rejected, setRejected] = useState<Array<{ pincode: string; state: string; reason: string }>>([]);
+
+  const load = useCallback(async (q: string) => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const token = await user.getIdToken();
-      const params = new URLSearchParams();
-      if (search) params.set('search', search);
-      if (zoneFilter) params.set('zone', zoneFilter);
-
-      const res = await fetch(`/api/admin/delivery/serviceability?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setItems(json.serviceability || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch serviceability', err);
+      const res = await fetch(`/api/admin/delivery/serviceability?search=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Your role cannot see the PIN code list.' : 'The PIN code list could not be loaded.');
+      const body = (await res.json()) as { serviceability?: PinRow[]; total?: number };
+      setRows(body.serviceability ?? []);
+      setTotal(body.total ?? 0);
+      setApplied(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The PIN code list could not be loaded.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchServiceability();
-  }, [user, zoneFilter]);
+    void load('');
+  }, [load]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchServiceability();
-  };
+  const parsed = useMemo(() => parseCsv(csv), [csv]);
 
-  const handleCsvImport = async () => {
-    if (!csvText.trim() || !user) return;
+  const runImport = async () => {
+    if (!user || parsed.rows.length === 0 || parsed.problems.length > 0) return;
     setImporting(true);
-    setMessage(null);
+    setRejected([]);
     try {
-      // Parse CSV (pincode,state,zone,etaMinDays,etaMaxDays,codAvailable)
-      const lines = csvText.trim().split('\n');
-      const parsedItems: any[] = [];
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line || (i === 0 && line.toLowerCase().includes('pincode'))) continue;
-        const [pincode, state, zone, etaMin, etaMax, cod] = line.split(',').map((s) => s.trim());
-        if (pincode && state) {
-          parsedItems.push({
-            pincode,
-            state,
-            zone: ['metro', 'standard', 'remote'].includes(zone) ? zone : 'standard',
-            isServiceable: true,
-            etaMinDays: parseInt(etaMin, 10) || 3,
-            etaMaxDays: parseInt(etaMax, 10) || 5,
-            codAvailable: cod?.toLowerCase() === 'true' || cod === '1',
-          });
+      const token = await user.getIdToken();
+      for (let i = 0; i < parsed.rows.length; i += 1000) {
+        const res = await fetch('/api/admin/delivery/serviceability/import', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: parsed.rows.slice(i, i + 1000) }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          const bad = body?.error?.details?.rejected;
+          if (Array.isArray(bad)) setRejected(bad);
+          throw new Error(body?.error?.message ?? 'The list could not be saved.');
         }
       }
-
-      if (parsedItems.length === 0) {
-        throw new Error('No valid pincode rows found in CSV data.');
-      }
-
-      const token = await user.getIdToken();
-      const res = await fetch('/api/admin/delivery/serviceability/import', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items: parsedItems }),
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || 'Import failed');
-      }
-
-      setMessage({
-        type: 'success',
-        text: `Successfully imported ${parsedItems.length} pincodes!`,
-      });
-      setShowImportModal(false);
-      setCsvText('');
-      fetchServiceability();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Import failed' });
+      showToast(`${parsed.rows.length} PIN code${parsed.rows.length === 1 ? '' : 's'} saved`, 'success');
+      setImportOpen(false);
+      setCsv('');
+      void load('');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The list could not be saved.', 'error');
     } finally {
       setImporting(false);
     }
   };
 
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setCsv(await file.text());
+  };
+
+  const isPinSearch = /^\d{6}$/.test(applied);
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-cream">Pincode Serviceability</h1>
-          <p className="text-sm text-sand/70 mt-1">
-            Configure delivery coverage, ETA promises, and COD availability across 19,000+ Indian postal codes.
-          </p>
+          <h1 className="font-display text-2xl font-bold text-ink">PIN code list</h1>
+          <p className="mt-1 max-w-2xl text-sm text-ink/60">Which state each PIN code belongs to, for checking addresses at checkout.</p>
         </div>
+        <button onClick={() => { setRejected([]); setImportOpen(true); }} className="self-start rounded-full bg-gold px-4 py-2 text-sm font-semibold text-ink hover:bg-gold-deep sm:self-auto">
+          Import PIN codes
+        </button>
+      </header>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 rounded-xl text-sm font-semibold bg-gold text-void hover:brightness-110 transition shadow-lg shadow-gold/10 flex items-center gap-2"
-          >
-            Bulk CSV Import
-          </button>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-card border border-line bg-paper p-4 sm:col-span-1">
+          <p className="text-xs text-ink/60">PIN codes in your list</p>
+          <p className="mt-1 font-display text-2xl font-bold text-ink tabular-nums">{loading && !rows.length ? '…' : total.toLocaleString('en-IN')}</p>
         </div>
-      </div>
-
-      {message && (
-        <div
-          className={`p-4 rounded-xl border text-sm flex items-center justify-between ${
-            message.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
-          }`}
-        >
-          <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="text-xs opacity-70 hover:opacity-100">
-            Dismiss
-          </button>
+        <div className="rounded-card border border-line bg-paper p-4 text-sm text-ink/75 sm:col-span-2">
+          <p className="font-semibold text-ink">How checkout uses it</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4">
+            <li>If the customer&apos;s PIN is in this list, the state on their address must match it. If it doesn&apos;t, they are asked to correct the address.</li>
+            <li>PINs that are not in the list are checked against India Post&apos;s PIN ranges, so the list is optional.</li>
+            <li>Zone, delivery days and COD are saved for your reference only.</li>
+          </ul>
         </div>
-      )}
+      </section>
 
-      {/* Filters & Search */}
-      <div className="p-4 rounded-2xl bg-paper border border-line flex flex-col sm:flex-row items-center gap-4">
-        <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2 w-full">
+      <form
+        onSubmit={(e) => { e.preventDefault(); void load(search.trim()); }}
+        className="flex gap-2"
+      >
+        <label className="relative flex-1">
+          <span className="sr-only">Find a PIN code or state</span>
+          <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input
-            type="text"
-            placeholder="Search by 6-digit Pincode or State (e.g. 560001, Karnataka)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream focus:border-gold focus:outline-none"
+            inputMode="search"
+            placeholder="Check a PIN code (e.g. 600028) or type a state"
+            className="w-full rounded-full border border-line bg-paper py-2 pl-9 pr-3 text-sm text-ink placeholder:text-ink/40 focus:border-gold focus:outline-none"
           />
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-xl text-sm font-medium bg-charcoal hover:bg-tint border border-line text-cream transition"
-          >
-            Search
-          </button>
-        </form>
+        </label>
+        <button type="submit" className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink hover:bg-tint">Find</button>
+        {applied && (
+          <button type="button" onClick={() => { setSearch(''); void load(''); }} className="rounded-full px-3 py-2 text-sm text-ink/60 hover:text-ink">Clear</button>
+        )}
+      </form>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <select
-            value={zoneFilter}
-            onChange={(e) => setZoneFilter(e.target.value)}
-            className="bg-void border border-line rounded-xl px-3 py-2 text-sm text-cream focus:border-gold focus:outline-none"
-          >
-            <option value="">All Zones</option>
-            <option value="metro">Metro (Tier 1)</option>
-            <option value="standard">Standard (Tier 2/3)</option>
-            <option value="remote">Remote / Special</option>
-          </select>
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-alert/40 bg-paper p-4 text-sm text-ink">
+          <span>{error}</span>
+          <button onClick={() => void load(applied)} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-field">Try again</button>
         </div>
-      </div>
-
-      {/* Serviceability Table */}
-      <div className="rounded-2xl bg-paper border border-line overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-void/50 text-[11px] font-semibold text-sand uppercase tracking-wider border-b border-line">
-              <tr>
-                <th className="px-5 py-3">Pincode</th>
-                <th className="px-5 py-3">State</th>
-                <th className="px-5 py-3">Zone Tier</th>
-                <th className="px-5 py-3">ETA Delivery</th>
-                <th className="px-5 py-3">COD Allowed</th>
-                <th className="px-5 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line/60 font-mono text-xs">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sand/60">
-                    Loading pincode serviceability records...
-                  </td>
+      ) : loading ? (
+        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-card bg-tint" />)}</div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-card border border-dashed border-line bg-paper px-6 py-10 text-center">
+          {isPinSearch ? (
+            <>
+              <p className="font-semibold text-ink">{applied} is not in your list.</p>
+              <p className="mt-1 text-sm text-ink/60">Checkout will check it against India Post&apos;s PIN ranges, so customers can still order.</p>
+            </>
+          ) : applied ? (
+            <p className="font-semibold text-ink">No PIN codes match &ldquo;{applied}&rdquo;.</p>
+          ) : (
+            <>
+              <p className="font-semibold text-ink">Your list is empty, and that&apos;s fine.</p>
+              <p className="mt-1 text-sm text-ink/60">Checkout uses India Post&apos;s PIN ranges for every address. Import a list only if you want exact PIN-to-state checks.</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-card border border-line bg-paper">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-line bg-field/60 text-xs text-ink/55">
+                  <th className="px-4 py-3 font-medium">PIN code</th>
+                  <th className="px-4 py-3 font-medium">State</th>
+                  <th className="px-4 py-3 font-medium">Zone</th>
+                  <th className="px-4 py-3 font-medium">Delivery days</th>
+                  <th className="px-4 py-3 font-medium">COD</th>
                 </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sand/60 font-sans">
-                    No pincodes match your search filters.
-                  </td>
-                </tr>
-              ) : (
-                items.map((row) => (
-                  <tr key={row.id} className="hover:bg-tint/30 transition">
-                    <td className="px-5 py-3.5 font-bold text-cream">{row.pincode}</td>
-                    <td className="px-5 py-3.5 font-sans text-cream/90">{row.state}</td>
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          row.zone === 'metro'
-                            ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-                            : row.zone === 'standard'
-                            ? 'bg-sky-950/60 text-sky-400 border border-sky-800/40'
-                            : 'bg-amber-950/60 text-amber-400 border border-amber-800/40'
-                        }`}
-                      >
-                        {row.zone}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 font-sans text-sand">
-                      {row.etaMinDays} - {row.etaMaxDays} Days
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {row.codAvailable ? (
-                        <span className="text-emerald-400 font-semibold">Enabled</span>
-                      ) : (
-                        <span className="text-sand/50">Prepaid Only</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="px-2 py-0.5 rounded bg-emerald-900/20 text-emerald-400 text-[10px] font-semibold border border-emerald-800/30">
-                        Serviceable
-                      </span>
-                    </td>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {rows.map((r) => (
+                  <tr key={r.id} className="hover:bg-field/40">
+                    <td className="px-4 py-2.5 font-mono font-semibold text-ink">{r.pincode}</td>
+                    <td className="px-4 py-2.5 text-ink">{r.state}</td>
+                    <td className="px-4 py-2.5 capitalize text-ink/75">{r.zone ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-ink/75 tabular-nums">{r.etaMinDays && r.etaMaxDays ? `${r.etaMinDays}–${r.etaMaxDays}` : '—'}</td>
+                    <td className="px-4 py-2.5 text-ink/75">{r.codAvailable ? 'Yes' : 'No'}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* CSV Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-xl bg-paper border border-line rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <h3 className="text-base font-bold text-cream">Import Pincodes via CSV</h3>
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="text-sand hover:text-cream text-lg"
-              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-
-            <p className="text-xs text-sand/80 leading-relaxed">
-              Paste comma-separated rows in the following format:
-              <br />
-              <code className="bg-void px-2 py-1 rounded text-gold block mt-1">
-                pincode, state, zone (metro|standard|remote), etaMinDays, etaMaxDays, codAvailable
-                (true|false)
-              </code>
-            </p>
-
-            <textarea
-              rows={8}
-              placeholder="560001, Karnataka, metro, 2, 4, true&#10;110001, Delhi, metro, 2, 4, true&#10;795001, Manipur, remote, 6, 10, false"
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-              className="w-full bg-void border border-line rounded-xl p-3 text-xs font-mono text-cream focus:border-gold focus:outline-none"
-            />
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 text-xs font-medium text-sand hover:text-cream"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCsvImport}
-                disabled={importing || !csvText.trim()}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-gold text-void hover:brightness-110 transition disabled:opacity-50 flex items-center gap-2"
-              >
-                {importing && <span className="animate-spin inline-block w-3 h-3 border border-void border-t-transparent rounded-full" />}
-                Upload & Process Batch
-              </button>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
+          {!applied && total > rows.length && (
+            <p className="border-t border-line px-4 py-2.5 text-xs text-ink/55">Showing the first {rows.length.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')}. Search to find any PIN.</p>
+          )}
         </div>
       )}
+
+      <AdminModal isOpen={importOpen} onClose={() => setImportOpen(false)} title="Import PIN codes">
+        <div className="space-y-4 text-sm">
+          <p className="text-ink/70">
+            One PIN per line: <span className="font-mono text-ink">pincode,state</span>. You can add zone, minimum days, maximum days and COD after it.
+            A PIN that is already in the list is updated.
+          </p>
+          <pre className="overflow-x-auto rounded-xl bg-field px-3 py-2 font-mono text-xs text-ink/80">pincode,state,zone,minDays,maxDays,cod{'\n'}600028,Tamil Nadu,metro,2,4,yes{'\n'}625001,Tamil Nadu,standard,3,5,yes</pre>
+          <label className="block">
+            <span className="mb-1 block font-medium text-ink">Choose a CSV file</span>
+            <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void onFile(e.target.files?.[0])} className="block w-full text-sm text-ink file:mr-3 file:rounded-full file:border file:border-line file:bg-paper file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block font-medium text-ink">or paste the lines</span>
+            <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={6} className="w-full rounded-xl border border-line bg-paper px-3 py-2 font-mono text-xs text-ink focus:border-gold focus:outline-none" placeholder="600028,Tamil Nadu" />
+          </label>
+
+          {csv.trim() && (
+            <div className={`rounded-xl px-3 py-2 text-xs ${parsed.problems.length ? 'bg-alert/10 text-ink' : 'bg-emerald-50 text-emerald-900'}`}>
+              {parsed.problems.length ? (
+                <>
+                  <p className="font-semibold">Fix these lines first:</p>
+                  <ul className="mt-1 list-disc pl-4">{parsed.problems.slice(0, 8).map((p) => <li key={p}>{p}</li>)}</ul>
+                  {parsed.problems.length > 8 && <p className="mt-1">…and {parsed.problems.length - 8} more.</p>}
+                </>
+              ) : (
+                <p>{parsed.rows.length} PIN code{parsed.rows.length === 1 ? '' : 's'} ready to save.</p>
+              )}
+            </div>
+          )}
+
+          {rejected.length > 0 && (
+            <div className="rounded-xl bg-alert/10 px-3 py-2 text-xs text-ink">
+              <p className="font-semibold">Nothing was saved. These rows have the wrong state:</p>
+              <ul className="mt-1 list-disc pl-4">{rejected.slice(0, 10).map((r) => <li key={r.pincode}>{r.pincode} &ldquo;{r.state}&rdquo;: {r.reason}</li>)}</ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={() => setImportOpen(false)} className="rounded-full border border-line px-4 py-2 font-medium text-ink hover:bg-tint">Cancel</button>
+            <button
+              type="button"
+              onClick={() => void runImport()}
+              disabled={importing || parsed.rows.length === 0 || parsed.problems.length > 0}
+              className="rounded-full bg-gold px-4 py-2 font-semibold text-ink hover:bg-gold-deep disabled:opacity-40"
+            >
+              {importing ? 'Saving…' : `Save ${parsed.rows.length || ''} PIN code${parsed.rows.length === 1 ? '' : 's'}`.replace('  ', ' ')}
+            </button>
+          </div>
+        </div>
+      </AdminModal>
     </div>
   );
 }

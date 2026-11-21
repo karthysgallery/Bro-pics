@@ -91,7 +91,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     pages: [
       { label: 'Shipments', href: '/admin/delivery/shipments', permission: 'shipping:write', icon: 'shipments' },
       { label: 'Courier partners', href: '/admin/delivery/couriers', permission: 'shipping:write', icon: 'couriers' },
-      { label: 'PIN code coverage', href: '/admin/delivery/serviceability', permission: 'settings:read', icon: 'pincode' },
+      { label: 'PIN code list', href: '/admin/delivery/serviceability', permission: 'settings:read', icon: 'pincode' },
     ],
   },
   {

@@ -25,8 +25,11 @@ const mockBatchCommit = vi.fn();
 const mockBatchSet = vi.fn();
 const mockBatch = vi.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
 
+const mockCount = vi.fn(() => ({ get: async () => ({ data: () => ({ count: 1 }) }) }));
 const mockCollection = vi.fn(() => ({
   limit: vi.fn(() => ({ get: mockGet })),
+  orderBy: vi.fn(() => ({ limit: vi.fn(() => ({ get: mockGet })) })),
+  count: mockCount,
   get: mockGet,
   doc: vi.fn((id) => ({ id, set: mockSet })),
 }));
@@ -73,6 +76,31 @@ describe('Delivery Serviceability API Routes', () => {
     const json = await res.json();
     expect(json.serviceability).toHaveLength(1);
     expect(json.serviceability[0].pincode).toBe('560001');
+    expect(json.total).toBe(1);
+  });
+
+  it('GET shows an empty list as empty, never sample rows', async () => {
+    mockGet.mockResolvedValueOnce({ docs: [] });
+    const res = await GET(new Request('http://localhost:3000/api/admin/delivery/serviceability'));
+    expect((await res.json()).serviceability).toEqual([]);
+  });
+
+  it('import saves nothing when a row has a wrong or misspelt state', async () => {
+    const req = new Request('http://localhost:3000/api/admin/delivery/serviceability/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        items: [
+          { pincode: '600028', state: 'Tamil Nadu', zone: 'metro', etaMinDays: 2, etaMaxDays: 4 },
+          { pincode: '560034', state: 'Tamilnadu', zone: 'metro', etaMinDays: 2, etaMaxDays: 4 },
+          { pincode: '560001', state: 'Kerala', zone: 'metro', etaMinDays: 2, etaMaxDays: 4 },
+        ],
+      }),
+    });
+    const res = await importPost(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.details.rejected.map((r: { pincode: string }) => r.pincode)).toContain('560001');
+    expect(mockBatchCommit).not.toHaveBeenCalled();
   });
 
   it('POST /api/admin/delivery/serviceability/import imports valid pincode batch', async () => {
