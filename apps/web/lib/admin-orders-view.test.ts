@@ -16,7 +16,8 @@ describe('paymentState', () => {
     expect(paymentState(row({ status: 'pending_payment', paymentStatus: 'pending' }))).toBe('pending');
     expect(paymentState(row({ status: 'cancelled', paymentStatus: 'pending' }))).toBe('pending');
     expect(paymentState(row({ status: 'refunded' }))).toBe('refunded');
-    expect(paymentState(row({ status: 'delivered', refundedAmount: 10000 }))).toBe('refunded');
+    expect(paymentState(row({ status: 'delivered', refundedAmount: 10000 }))).toBe('paid');
+    expect(paymentState(row({ status: 'delivered', refundedAmount: 49900 }))).toBe('refunded');
   });
 });
 

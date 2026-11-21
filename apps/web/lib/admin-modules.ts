@@ -31,6 +31,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     icon: 'orders',
     pages: [
       { label: 'Orders', href: '/admin/orders', permission: 'orders:read', icon: 'orders' },
+      { label: 'Payments', href: '/admin/orders/payments', permission: 'orders:read', icon: 'billing' },
       { label: 'Photo checks', href: '/admin/orders/photo-validation', permission: 'orders:read', icon: 'validation' },
       { label: 'Production board', href: '/admin/production', permission: 'orders:read', icon: 'production' },
       { label: 'Quality check', href: '/admin/production/qc', permission: 'production:write', icon: 'qc' },

@@ -37,12 +37,13 @@ export interface OrderRow {
 }
 
 /**
- * The payment side alone. "Refunded" means money went back (the order was refunded, or a refund was processed);
+ * The payment side alone. "Refunded" means the money went back (the order was refunded, or refunds cover the total);
  * "failed" means Razorpay reported a failed attempt and nothing has been paid since; "pending" is any order still
  * waiting for its money (including a checkout the customer left).
  */
-export function paymentState(o: Pick<OrderRow, 'status' | 'paymentStatus' | 'refundedAmount'>): PaymentState {
-  if (o.status === 'refunded' || o.paymentStatus === 'refunded' || o.refundedAmount > 0) return 'refunded';
+export function paymentState(o: Pick<OrderRow, 'status' | 'paymentStatus' | 'refundedAmount' | 'total'>): PaymentState {
+  // A part refund leaves the order paid (the list shows how much went back); a full one makes it refunded.
+  if (o.status === 'refunded' || o.paymentStatus === 'refunded' || (o.refundedAmount > 0 && o.refundedAmount >= o.total)) return 'refunded';
   if (o.paymentStatus === 'paid') return 'paid';
   if (o.paymentStatus === 'failed') return 'failed';
   return 'pending';

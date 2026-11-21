@@ -113,3 +113,29 @@ export async function captureRazorpayPayment(paymentId: string, amount: number):
   }
   return (await response.json()) as RazorpayPayment;
 }
+
+/** One payment attempt on a Razorpay order, with the fields staff need to understand it. */
+export interface RazorpayOrderPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  /** created | authorized | captured | refunded | failed */
+  status: string;
+  method: string | null;
+  created_at: number;
+  error_code: string | null;
+  error_description: string | null;
+  error_reason: string | null;
+}
+
+/** Every payment attempt on a Razorpay order, read from Razorpay itself (read-only). */
+export async function fetchRazorpayOrderPayments(razorpayOrderId: string): Promise<RazorpayOrderPayment[]> {
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}/payments`, {
+    headers: { Authorization: getAuthHeader() },
+  });
+  if (!response.ok) {
+    throw new Error(`Razorpay order payments lookup failed (${response.status})`);
+  }
+  const body = (await response.json()) as { items?: RazorpayOrderPayment[] };
+  return body.items ?? [];
+}

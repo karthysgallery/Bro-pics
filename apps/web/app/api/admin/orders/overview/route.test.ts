@@ -31,7 +31,7 @@ const db = {
     doc: (id: string) => ({ id, path: `${name}/${id}` }),
   }),
   collectionGroup: () => ({
-    get: async () => ({ docs: [{ data: () => ({ status: 'processed', amount: 1000, orderId: 'o1' }), ref: { parent: { parent: { id: 'o1' } } } }] }),
+    limit: () => ({ get: async () => ({ size: 1, docs: [{ data: () => ({ status: 'processed', amount: 1000, orderId: 'o1' }), ref: { parent: { parent: { id: 'o1' } } } }] }) }),
   }),
   getAll,
 };
@@ -49,6 +49,7 @@ describe('GET /api/admin/orders/overview', () => {
     mockContext.mockResolvedValue({ authenticated: true, uid: 'a', role: 'admin' });
     const body = await (await GET(new Request('http://x/api/admin/orders/overview'))).json();
     expect(body.canSeeCustomers).toBe(true);
+    expect(body.refundsUnavailable).toBe(false);
     expect(body.orders[0]).toMatchObject({
       orderNo: 'BP-2026-00020', status: 'pending_payment', paymentStatus: 'failed', customerName: 'Arun K', phone: '+919000000012',
       email: 'arun@example.com', productTitle: 'Your Photo Frame', productImage: 'https://img/p1.jpg', productCount: 2, refundedAmount: 1000,

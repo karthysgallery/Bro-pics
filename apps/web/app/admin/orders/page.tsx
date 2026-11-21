@@ -68,6 +68,7 @@ function OrdersScreen() {
   const [rows, setRows] = useState<OrderRow[]>([]);
   const [truncated, setTruncated] = useState<{ on: boolean; limit: number }>({ on: false, limit: 500 });
   const [canSeeCustomers, setCanSeeCustomers] = useState(false);
+  const [refundsUnknown, setRefundsUnknown] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -110,10 +111,11 @@ function OrdersScreen() {
       const token = await user.getIdToken();
       const res = await fetch('/api/admin/orders/overview', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(res.status === 403 ? 'Your role cannot see orders.' : 'Orders could not be loaded.');
-      const body = (await res.json()) as { orders: OrderRow[]; truncated: boolean; limit: number; canSeeCustomers: boolean };
+      const body = (await res.json()) as { orders: OrderRow[]; truncated: boolean; limit: number; canSeeCustomers: boolean; refundsUnavailable?: boolean };
       setRows(body.orders ?? []);
       setTruncated({ on: body.truncated, limit: body.limit });
       setCanSeeCustomers(body.canSeeCustomers);
+      setRefundsUnknown(Boolean(body.refundsUnavailable));
       setSelected(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Orders could not be loaded.');
@@ -197,7 +199,7 @@ function OrdersScreen() {
   const paymentNote = (o: OrderRow) => {
     const state = paymentState(o);
     if (state === 'paid' && o.paymentMode === 'partial_cod') return `${formatPaise(o.amountPaidOnline)} paid · ${formatPaise(o.amountDueOnDelivery)} on delivery`;
-    if (state === 'refunded' && o.refundedAmount > 0 && o.refundedAmount < o.total) return `${formatPaise(o.refundedAmount)} refunded`;
+    if (state === 'paid' && o.refundedAmount > 0) return `${formatPaise(o.refundedAmount)} refunded`;
     if (o.paymentProvider === 'mock') return 'Test payment';
     return null;
   };
@@ -225,6 +227,9 @@ function OrdersScreen() {
         <SummaryCard label="Ready to ship" value={counts.readyToShip} note="Packed, waiting for the courier" tone="bg-teal-50 text-teal-700" active={cardIs('all', 'ready')} onClick={() => applyCard('all', 'ready')} icon={<><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7" /></>} />
       </section>
 
+      {refundsUnknown && (
+        <p role="status" className="rounded-xl border border-alert/30 bg-paper px-3 py-2 text-xs text-ink">Refund amounts could not be loaded just now, so a refunded order may show as Paid. Open the order to see its refunds, or reload.</p>
+      )}
       {truncated.on && (
         <p className="rounded-xl bg-tint px-3 py-2 text-xs text-ink/70">Counts and search cover your latest {truncated.limit} orders. Use Export CSV for older ones.</p>
       )}

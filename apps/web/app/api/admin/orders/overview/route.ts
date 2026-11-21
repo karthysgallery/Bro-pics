@@ -9,6 +9,7 @@ import type { OrderRow } from '../../../../../lib/admin-orders-view';
 
 /** The newest orders the overview loads; filters, counts and search then run in the browser. */
 const OVERVIEW_LIMIT = 500;
+const REFUNDS_LIMIT = 2000;
 
 const toIso = (v: unknown): string | null => {
   if (!v) return null;
@@ -50,8 +51,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const [productDocs, userDocs, refundDocs] = await Promise.all([
     productIds.length ? db.getAll(...productIds.map((id) => db.collection('products').doc(id))) : Promise.resolve([]),
     userIds.length ? db.getAll(...userIds.map((id) => db.collection('users').doc(id))) : Promise.resolve([]),
-    // Small collection; read whole (no index needed) and keep processed refunds only.
-    db.collectionGroup('refunds').get().catch(() => null),
+    // Refunds are few; read them (capped, no index needed) and keep processed ones. A failed or capped read is
+    // reported to the screen rather than silently showing refunded orders as paid.
+    db.collectionGroup('refunds').limit(REFUNDS_LIMIT).get().catch(() => null),
   ]);
 
   const products = new Map<string, { title: string | null; image: string | null }>();
@@ -106,5 +108,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     };
   });
 
-  return NextResponse.json({ orders: rows, truncated: snap.size >= OVERVIEW_LIMIT, limit: OVERVIEW_LIMIT, canSeeCustomers }, { status: 200 });
+  const refundsUnavailable = refundDocs === null || refundDocs.size >= REFUNDS_LIMIT;
+  return NextResponse.json({ orders: rows, truncated: snap.size >= OVERVIEW_LIMIT, limit: OVERVIEW_LIMIT, canSeeCustomers, refundsUnavailable }, { status: 200 });
 }
