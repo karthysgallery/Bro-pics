@@ -1,395 +1,406 @@
 'use client';
 
-import { formatPaise } from '../../../lib/format-price';
-import { useEffect, useState, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
+import { formatPaise } from '../../../lib/format-price';
 import { StatusChip } from '../../../components/admin/StatusChip';
 import { AdminModal } from '../../../components/admin/AdminModal';
 import { FormField } from '../../../components/admin/AdminForm';
+import { PaymentBadge, ProductThumb } from '../../../components/admin/OrderBadges';
 import { useToast } from '../../../components/ui/Toast';
-import type { Order, OrderStatus } from '@bro-pics/shared';
+import {
+  countOrders,
+  filterOrders,
+  filtersFromParams,
+  filtersToParams,
+  paymentState,
+  STAGE_FILTERS,
+  DEFAULT_FILTERS,
+  type OrderFilters,
+  type OrderRow,
+} from '../../../lib/admin-orders-view';
+import type { OrderStatus } from '@bro-pics/shared';
 
-const STATUS_TABS: { key: string; label: string; status?: OrderStatus }[] = [
-  { key: 'all', label: 'All Orders' },
-  { key: 'paid', label: 'Paid / Confirmed', status: 'paid' },
-  { key: 'photo_validation', label: 'Photo Validation', status: 'photo_validation' },
-  { key: 'print_rendering', label: 'Rendering', status: 'print_rendering' },
-  { key: 'print_ready', label: 'Print Ready', status: 'print_ready' },
-  { key: 'in_production', label: 'In Production', status: 'in_production' },
-  { key: 'quality_check', label: 'QC Pending', status: 'quality_check' },
-  { key: 'packed', label: 'Packed', status: 'packed' },
-  { key: 'shipped', label: 'Shipped', status: 'shipped' },
-  { key: 'delivered', label: 'Delivered', status: 'delivered' },
-  { key: 'cancelled', label: 'Cancelled', status: 'cancelled' },
-  { key: 'refunded', label: 'Refunded', status: 'refunded' },
-];
+const PAGE_SIZE = 25;
 
-function formatISTDate(dateVal: unknown): string {
-  if (!dateVal) return '—';
-  if (typeof dateVal === 'object' && '_seconds' in (dateVal as { _seconds: number })) {
-    return new Date((dateVal as { _seconds: number })._seconds * 1000).toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-  const d = new Date(dateVal as string | number | Date);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function formatPlaced(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: '—', time: '' };
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' }),
+  };
 }
 
-export default function AdminOrdersPage() {
+const select = 'rounded-full border border-line bg-paper py-1.5 pl-3 pr-8 text-sm text-ink focus:border-gold focus:outline-none';
+
+function SummaryCard({ label, value, note, tone, active, onClick, icon }: {
+  label: string; value: number; note: string; tone: string; active: boolean; onClick: () => void; icon: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={note}
+      className={`group flex min-w-0 flex-col rounded-card border bg-paper p-3.5 text-left transition-colors sm:p-4 ${active ? 'border-ink ring-1 ring-ink' : 'border-line hover:border-ink/30'}`}
+    >
+      <span className="flex items-center gap-2 text-xs text-ink/65">
+        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${tone}`} aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{icon}</svg>
+        </span>
+        <span className="truncate">{label}</span>
+      </span>
+      <span className="mt-2 font-display text-2xl font-bold text-ink tabular-nums">{value}</span>
+    </button>
+  );
+}
+
+function OrdersScreen() {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [rows, setRows] = useState<OrderRow[]>([]);
+  const [truncated, setTruncated] = useState<{ on: boolean; limit: number }>({ on: false, limit: 500 });
+  const [canSeeCustomers, setCanSeeCustomers] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const filters = useMemo(() => filtersFromParams(new URLSearchParams(params.toString())), [params]);
+  const [searchText, setSearchText] = useState(filters.q);
 
-  // Bulk Selection & Transition State
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showBulkTransitionModal, setShowBulkTransitionModal] = useState(false);
-  const [bulkTargetStatus, setBulkTargetStatus] = useState<OrderStatus>('in_production');
+  // Bulk status change (kept from the earlier screen)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkTarget, setBulkTarget] = useState<OrderStatus>('in_production');
   const [bulkNote, setBulkNote] = useState('');
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  // Fetch Orders
-  const fetchOrders = async () => {
+  const setFilters = useCallback((next: Partial<OrderFilters>) => {
+    const merged = { ...filters, ...next };
+    router.replace(`${pathname}${filtersToParams(merged)}`, { scroll: false });
+    setPage(0);
+  }, [filters, pathname, router]);
+
+  // The search box filters as you type (after a short pause), and the address bar keeps it. A search that
+  // arrives from the address bar (back button, a shared link) is copied into the box instead of being undone.
+  const typedRef = useRef(false);
+  useEffect(() => {
+    if (!typedRef.current) setSearchText(filters.q);
+  }, [filters.q]);
+  useEffect(() => {
+    if (!typedRef.current || searchText === filters.q) return;
+    const t = setTimeout(() => {
+      typedRef.current = false;
+      setFilters({ q: searchText });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchText, filters.q, setFilters]);
+
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const token = await user.getIdToken();
-      const currentTab = STATUS_TABS.find((t) => t.key === activeTab);
-      let url = '/api/admin/orders';
-      const params = new URLSearchParams();
-
-      if (currentTab?.status) {
-        params.append('status', currentTab.status);
-      }
-      if (searchQuery.trim()) {
-        params.append('q', searchQuery.trim());
-      }
-
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) throw new Error('Failed to fetch orders');
-      const data = await res.json();
-      setOrders(data.orders || []);
-      setSelectedIds(new Set());
-    } catch {
-      showToast('Error loading orders', 'error');
+      const res = await fetch('/api/admin/orders/overview', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Your role cannot see orders.' : 'Orders could not be loaded.');
+      const body = (await res.json()) as { orders: OrderRow[]; truncated: boolean; limit: number; canSeeCustomers: boolean };
+      setRows(body.orders ?? []);
+      setTruncated({ on: body.truncated, limit: body.limit });
+      setCanSeeCustomers(body.canSeeCustomers);
+      setSelected(new Set());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Orders could not be loaded.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [user, activeTab]);
+    void load();
+  }, [load]);
 
-  // Handle Search Submit
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchOrders();
+  const counts = useMemo(() => countOrders(rows), [rows]);
+  const visible = useMemo(() => filterOrders(rows, filters), [rows, filters]);
+  const pageRows = visible.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const anyFilter = filtersToParams({ ...filters, sort: 'newest' }) !== '';
+
+  const cardIs = (payment: OrderFilters['payment'], stage: string) =>
+    filters.payment === payment && filters.stage === stage && !filters.q && filters.date === 'all' && filters.method === 'all';
+  const applyCard = (payment: OrderFilters['payment'], stage: string) => {
+    setSearchText('');
+    router.replace(`${pathname}${filtersToParams({ ...DEFAULT_FILTERS, payment, stage, sort: filters.sort })}`, { scroll: false });
+    setPage(0);
   };
 
-  // Toggle selection
-  const handleToggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const allOnPage = pageRows.length > 0 && pageRows.every((o) => selected.has(o.id));
+  const toggle = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(orders.map((o) => o.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  const isAllSelected = orders.length > 0 && orders.every((o) => selectedIds.has(o.id));
-
-  // Bulk Status Transition
-  const handleBulkTransition = async () => {
-    if (!user || selectedIds.size === 0) return;
-    setIsBulkProcessing(true);
-
+  const runBulk = async () => {
+    if (!user || selected.size === 0) return;
+    setBulkBusy(true);
     try {
       const token = await user.getIdToken();
       const res = await fetch('/api/admin/orders/bulk-transition', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderIds: Array.from(selectedIds),
-          toStatus: bulkTargetStatus,
-          note: bulkNote.trim() || undefined,
-        }),
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [...selected], toStatus: bulkTarget, note: bulkNote.trim() || undefined }),
       });
-
-      if (!res.ok) throw new Error('Bulk transition failed');
-      const data = await res.json();
-      const succeededCount = data.results?.filter((r: { ok: boolean }) => r.ok).length || 0;
-
-      showToast(`Advanced ${succeededCount} of ${selectedIds.size} orders to ${bulkTargetStatus}`, 'success');
-      setShowBulkTransitionModal(false);
+      if (!res.ok) throw new Error('The orders could not be moved.');
+      const data = (await res.json()) as { results?: { ok: boolean }[] };
+      const ok = data.results?.filter((r) => r.ok).length ?? 0;
+      const skipped = selected.size - ok;
+      showToast(`${ok} order${ok === 1 ? '' : 's'} moved${skipped ? `; ${skipped} could not move to that step from where they are` : ''}`, skipped ? 'error' : 'success');
+      setBulkOpen(false);
       setBulkNote('');
-      fetchOrders();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to advance orders';
-      showToast(msg, 'error');
+      void load();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The orders could not be moved.', 'error');
     } finally {
-      setIsBulkProcessing(false);
+      setBulkBusy(false);
     }
   };
 
-  // Download CSV Export
-  const handleExportCSV = async () => {
+  const exportCsv = async () => {
     if (!user) return;
     try {
       const token = await user.getIdToken();
-      const res = await fetch('/api/admin/orders/export', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('CSV Export failed');
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      const res = await fetch('/api/admin/orders/export', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
-      a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
-      showToast('CSV export downloaded!', 'success');
+      URL.revokeObjectURL(url);
     } catch {
-      showToast('Failed to download CSV export', 'error');
+      showToast('The CSV could not be downloaded.', 'error');
     }
   };
 
+  const customerCell = (o: OrderRow) => {
+    const name = o.customerName ?? 'Customer';
+    return canSeeCustomers && o.userId ? (
+      <Link href={`/admin/customers/${o.userId}`} className="font-medium text-ink hover:text-gold-deep hover:underline">{name}</Link>
+    ) : (
+      <span className="font-medium text-ink">{name}</span>
+    );
+  };
+
+  const paymentNote = (o: OrderRow) => {
+    const state = paymentState(o);
+    if (state === 'paid' && o.paymentMode === 'partial_cod') return `${formatPaise(o.amountPaidOnline)} paid · ${formatPaise(o.amountDueOnDelivery)} on delivery`;
+    if (state === 'refunded' && o.refundedAmount > 0 && o.refundedAmount < o.total) return `${formatPaise(o.refundedAmount)} refunded`;
+    if (o.paymentProvider === 'mock') return 'Test payment';
+    return null;
+  };
+
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-display font-bold text-ink">
-            Order Management & Fulfilment
-          </h1>
-          <p className="text-xs text-ink/60">
-            Track order life-cycles from payment confirmation to print rendering, quality inspection, and courier shipment.
-          </p>
+          <h1 className="font-display text-2xl font-bold text-ink">Orders</h1>
+          <p className="mt-1 text-sm text-ink/60">Payment and production are shown separately: one tells you about the money, the other where the frame is.</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/production"
-            className="px-3.5 py-2 rounded-xl border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors"
-          >
-            Production Queue ↗
-          </Link>
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="px-3.5 py-2 rounded-xl border border-line bg-paper hover:bg-field text-ink text-xs font-semibold transition-colors flex items-center gap-1.5"
-          >
-            <span>Export CSV</span>
-          </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link href="/admin/orders/payments" className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Payments</Link>
+          <Link href="/admin/production" className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Production board</Link>
+          <button onClick={() => void exportCsv()} className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Export CSV</button>
         </div>
-      </div>
+      </header>
 
-      {/* Tabs */}
-      <div className="border-b border-line overflow-x-auto pb-px flex items-center gap-1">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 ${
-              activeTab === tab.key
-                ? 'border-gold text-ink font-bold'
-                : 'border-transparent text-ink/50 hover:text-ink hover:border-line'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <section aria-label="Order summary" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard label="All orders" value={counts.total} note="Every order, paid or not" tone="bg-tint text-ink" active={cardIs('all', '')} onClick={() => applyCard('all', '')} icon={<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>} />
+        <SummaryCard label="Paid" value={counts.paid} note="Payment received" tone="bg-emerald-50 text-emerald-700" active={cardIs('paid', '')} onClick={() => applyCard('paid', '')} icon={<path d="M5 12.5l4.5 4.5L19 7.5" />} />
+        <SummaryCard label="Payment failed" value={counts.failed} note="Razorpay reported a failed payment and nothing has been paid since" tone="bg-red-50 text-red-700" active={cardIs('failed', '')} onClick={() => applyCard('failed', '')} icon={<path d="M7 7l10 10M17 7L7 17" />} />
+        <SummaryCard label="Awaiting payment" value={counts.pending} note="Order placed, no payment received yet" tone="bg-amber-50 text-amber-700" active={cardIs('pending', '')} onClick={() => applyCard('pending', '')} icon={<><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2.5 2" /></>} />
+        <SummaryCard label="Being made" value={counts.processing} note="Paid, from photo check to quality check" tone="bg-blue-50 text-blue-700" active={cardIs('all', 'processing')} onClick={() => applyCard('all', 'processing')} icon={<path d="M4 20h16M6 16l4-8 4 5 2-3 2 6" />} />
+        <SummaryCard label="Ready to ship" value={counts.readyToShip} note="Packed, waiting for the courier" tone="bg-teal-50 text-teal-700" active={cardIs('all', 'ready')} onClick={() => applyCard('all', 'ready')} icon={<><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7" /></>} />
+      </section>
 
-      {/* Search & Bulk Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </span>
+      {truncated.on && (
+        <p className="rounded-xl bg-tint px-3 py-2 text-xs text-ink/70">Counts and search cover your latest {truncated.limit} orders. Use Export CSV for older ones.</p>
+      )}
+
+      <section className="space-y-3 rounded-card border border-line bg-paper p-3 sm:p-4" aria-label="Find orders">
+        <label className="relative block">
+          <span className="sr-only">Search orders</span>
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/40" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by customer phone or email..."
-            className="w-full pl-8 pr-16 py-2 text-xs rounded-xl border border-line bg-paper text-ink placeholder:text-ink/40 focus:outline-none focus:border-gold"
+            value={searchText}
+            onChange={(e) => { typedRef.current = true; setSearchText(e.target.value); }}
+            placeholder="Search order number, customer name, phone, email or product"
+            className="w-full rounded-full border border-line bg-field/50 py-2.5 pl-10 pr-4 text-sm text-ink placeholder:text-ink/40 focus:border-gold focus:bg-paper focus:outline-none"
           />
-          <button
-            type="submit"
-            className="absolute right-1 top-1 bottom-1 px-3 bg-field hover:bg-tint rounded-lg text-2xs font-semibold text-ink transition-colors"
-          >
-            Search
-          </button>
-        </form>
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex max-w-full gap-0.5 overflow-x-auto rounded-full border border-line bg-field/50 p-0.5" role="group" aria-label="Payment">
+            {([['all', 'All payments'], ['paid', 'Paid'], ['failed', 'Failed'], ['pending', 'Awaiting'], ['refunded', 'Refunded']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setFilters({ payment: v })}
+                aria-pressed={filters.payment === v}
+                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm transition-colors ${filters.payment === v ? 'bg-ink font-medium text-paper' : 'text-ink/65 hover:text-ink'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="sr-only" htmlFor="f-stage">Order status</label>
+          <select id="f-stage" value={filters.stage} onChange={(e) => setFilters({ stage: e.target.value })} className={select}>
+            <option value="">Any order status</option>
+            <option value="processing">Being made (all steps)</option>
+            <option value="ready">Ready to ship</option>
+            <optgroup label="Step">
+              {STAGE_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </optgroup>
+          </select>
+          <label className="sr-only" htmlFor="f-date">Order date</label>
+          <select id="f-date" value={filters.date} onChange={(e) => setFilters({ date: e.target.value as OrderFilters['date'] })} className={select}>
+            <option value="all">Any date</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+          <label className="sr-only" htmlFor="f-method">Payment method</label>
+          <select id="f-method" value={filters.method} onChange={(e) => setFilters({ method: e.target.value as OrderFilters['method'] })} className={select}>
+            <option value="all">Any payment method</option>
+            <option value="prepaid">Paid in full online</option>
+            <option value="partial_cod">Advance + cash on delivery</option>
+          </select>
+          <label className="sr-only" htmlFor="f-sort">Sort</label>
+          <select id="f-sort" value={filters.sort} onChange={(e) => setFilters({ sort: e.target.value as OrderFilters['sort'] })} className={select}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="amount_high">Highest amount</option>
+            <option value="amount_low">Lowest amount</option>
+          </select>
+          {anyFilter && (
+            <button onClick={() => { setSearchText(''); router.replace(pathname, { scroll: false }); setPage(0); }} className="rounded-full px-3 py-1.5 text-sm font-medium text-gold-deep hover:underline">
+              Clear filters
+            </button>
+          )}
+        </div>
+      </section>
 
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 bg-ink text-paper px-3 py-1.5 rounded-xl shadow-md animate-fadeIn text-xs">
-            <span className="font-semibold">{selectedIds.size} selected</span>
-            <button
-              type="button"
-              onClick={() => setShowBulkTransitionModal(true)}
-              className="px-3 py-1 bg-gold hover:bg-gold-deep text-ink font-bold rounded-lg text-2xs transition-colors ml-2"
-            >
-              Advance Status
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="text-paper/60 hover:text-paper text-2xs ml-1"
-            >
-              Clear
-            </button>
+      <div className="flex min-h-[2rem] flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-ink/60" aria-live="polite">
+          {loading ? 'Loading orders…' : `${visible.length} order${visible.length === 1 ? '' : 's'}`}
+        </p>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2 rounded-full bg-ink px-3 py-1 text-sm text-paper">
+            <span>{selected.size} selected</span>
+            <button onClick={() => setBulkOpen(true)} className="rounded-full bg-gold px-3 py-0.5 text-xs font-semibold text-ink">Change status</button>
+            <button onClick={() => setSelected(new Set())} className="text-xs text-paper/70 hover:text-paper">Clear</button>
           </div>
         )}
       </div>
 
-      {/* Orders Table */}
-      <div className="rounded-2xl border border-line bg-paper shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-8 space-y-3 animate-pulse">
-            <div className="h-10 bg-field rounded-xl" />
-            <div className="h-10 bg-field rounded-xl" />
-            <div className="h-10 bg-field rounded-xl" />
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
-            <p>No orders found matching the criteria.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-alert/40 bg-paper p-4 text-sm text-ink">
+          <span>{error}</span>
+          <button onClick={() => void load()} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-field">Try again</button>
+        </div>
+      ) : loading ? (
+        <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-card bg-tint" />)}</div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-card border border-dashed border-line bg-paper px-6 py-12 text-center">
+          <p className="font-semibold text-ink">{rows.length === 0 ? 'No orders yet.' : 'No orders match these filters.'}</p>
+          {anyFilter && <button onClick={() => { setSearchText(''); router.replace(pathname, { scroll: false }); }} className="mt-2 text-sm font-medium text-gold-deep hover:underline">Clear filters</button>}
+        </div>
+      ) : (
+        <>
+          {/* Phone and small tablet: one card per order */}
+          <ul className="space-y-2 lg:hidden">
+            {pageRows.map((o) => {
+              const when = formatPlaced(o.placedAt);
+              return (
+                <li key={o.id} className="rounded-card border border-line bg-paper p-3.5">
+                  <div className="flex items-start gap-3">
+                    <ProductThumb src={o.productImage} alt="" size={48} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <Link href={`/admin/orders/${o.id}`} className="font-semibold text-ink">#{o.orderNo}</Link>
+                        <span className="font-semibold text-ink tabular-nums">{formatPaise(o.total)}</span>
+                      </div>
+                      <p className="truncate text-sm text-ink/75">{o.customerName ?? 'Customer'}{o.city ? ` · ${o.city}` : ''}</p>
+                      <p className="text-xs text-ink/50">{when.date}, {when.time}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <PaymentBadge state={paymentState(o)} size="sm" />
+                    {o.status !== 'pending_payment' && <StatusChip status={o.status} size="sm" className="whitespace-nowrap" />}
+                    {o.hasGlitter && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">Glitter</span>}
+                    <Link href={`/admin/orders/${o.id}`} className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold text-ink hover:bg-tint">View order</Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Laptop and up: a table */}
+          <div className="hidden overflow-x-auto rounded-card border border-line bg-paper lg:block">
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
-                <tr className="bg-field/70 border-b border-line text-2xs uppercase tracking-wider text-ink/60 font-semibold">
-                  <th className="p-3 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      onChange={handleSelectAll}
-                      className="rounded text-gold focus:ring-gold"
-                    />
+                <tr className="border-b border-line bg-field/60 text-xs text-ink/55">
+                  <th className="w-10 px-3 py-3">
+                    <input type="checkbox" aria-label="Select all on this page" checked={allOnPage} onChange={(e) => setSelected(e.target.checked ? new Set([...selected, ...pageRows.map((o) => o.id)]) : new Set([...selected].filter((id) => !pageRows.some((o) => o.id === id))))} className="h-4 w-4 rounded border-line accent-[rgb(var(--color-ink))]" />
                   </th>
-                  <th className="p-3">Order Number</th>
-                  <th className="p-3">Placed At (IST)</th>
-                  <th className="p-3">Destination</th>
-                  <th className="p-3">Amount</th>
-                  <th className="p-3">Payment</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Actions</th>
+                  <th className="px-3 py-3 font-medium">Order</th>
+                  <th className="px-3 py-3 font-medium">Customer</th>
+                  <th className="px-3 py-3 font-medium">Date</th>
+                  <th className="px-3 py-3 font-medium">Product</th>
+                  <th className="px-3 py-3 text-right font-medium">Amount</th>
+                  <th className="px-3 py-3 font-medium">Payment</th>
+                  <th className="px-3 py-3 font-medium">Order status</th>
+                  <th className="px-3 py-3"><span className="sr-only">Action</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {orders.map((o) => {
-                  const isSelected = selectedIds.has(o.id);
-                  const address = o.addressJson as { city?: string; state?: string } | undefined;
-
+                {pageRows.map((o) => {
+                  const when = formatPlaced(o.placedAt);
+                  const note = paymentNote(o);
                   return (
-                    <tr
-                      key={o.id}
-                      className={`hover:bg-field/30 transition-colors ${
-                        isSelected ? 'bg-gold/10' : ''
-                      }`}
-                    >
-                      <td className="p-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(o.id)}
-                          className="rounded text-gold focus:ring-gold"
-                        />
+                    <tr key={o.id} className={`align-middle hover:bg-field/40 ${selected.has(o.id) ? 'bg-gold/10' : ''}`}>
+                      <td className="px-3 py-3">
+                        <input type="checkbox" aria-label={`Select order ${o.orderNo}`} checked={selected.has(o.id)} onChange={() => toggle(o.id)} className="h-4 w-4 rounded border-line accent-[rgb(var(--color-ink))]" />
                       </td>
-
-                      <td className="p-3 font-mono font-bold text-ink">
-                        <Link
-                          href={`/admin/orders/${o.id}`}
-                          className="hover:text-gold hover:underline transition-colors"
-                        >
-                          #{o.orderNo}
-                        </Link>
-                        {o.hasGlitter && (
-                          <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase text-amber-800">✨ Glitter</span>
-                        )}
+                      <td className="px-3 py-3">
+                        <Link href={`/admin/orders/${o.id}`} className="whitespace-nowrap font-semibold text-ink hover:text-gold-deep">#{o.orderNo}</Link>
+                        {o.hasGlitter && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">Glitter</span>}
                       </td>
-
-                      <td className="p-3 text-ink/70 font-mono text-2xs">
-                        {formatISTDate(o.placedAt)}
+                      <td className="max-w-[11rem] px-3 py-3">
+                        <div className="truncate">{customerCell(o)}</div>
+                        <p className="truncate text-xs text-ink/55">{o.phone ?? ''}{o.city ? ` · ${o.city}` : ''}</p>
                       </td>
-
-                      <td className="p-3 text-ink">
-                        {address?.city ? `${address.city}, ${address.state || ''}` : '—'}
-                      </td>
-
-                      <td className="p-3 font-bold text-ink">
-                        {formatPaise(o.total)}
-                      </td>
-
-                      <td className="p-3">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              o.paymentStatus === 'paid'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : o.paymentStatus === 'pending'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {o.paymentStatus}
-                          </span>
-                          <span className="text-2xs text-ink/50 capitalize font-mono">
-                            {o.paymentMode === 'partial_cod' ? 'COD' : 'Online'}
-                          </span>
+                      <td className="whitespace-nowrap px-3 py-3 text-ink/80">{when.date}<p className="text-xs text-ink/50">{when.time}</p></td>
+                      <td className="max-w-[13rem] px-3 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <ProductThumb src={o.productImage} alt="" />
+                          <div className="min-w-0">
+                            <p className="truncate text-ink">{o.productTitle ?? 'Product'}</p>
+                            {o.productCount > 1 && <p className="text-xs text-ink/50">+{o.productCount - 1} more</p>}
+                          </div>
                         </div>
                       </td>
-
-                      <td className="p-3">
-                        <StatusChip status={o.status} />
+                      <td className="whitespace-nowrap px-3 py-3 text-right font-semibold text-ink tabular-nums">{formatPaise(o.total)}</td>
+                      <td className="px-3 py-3">
+                        <PaymentBadge state={paymentState(o)} />
+                        {note && <p className="mt-1 text-[11px] text-ink/55">{note}</p>}
                       </td>
-
-                      <td className="p-3 text-right">
-                        <Link
-                          href={`/admin/orders/${o.id}`}
-                          className="px-3 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-gold-deep text-2xs font-bold transition-colors inline-block"
-                        >
-                          View Details ↗
-                        </Link>
+                      <td className="px-3 py-3">
+                        {o.status === 'pending_payment' ? <span className="text-xs text-ink/45">Starts after payment</span> : <StatusChip status={o.status} size="sm" className="whitespace-nowrap" />}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <Link href={`/admin/orders/${o.id}`} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-tint">View order</Link>
                       </td>
                     </tr>
                   );
@@ -397,63 +408,49 @@ export default function AdminOrdersPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </div>
 
-      {/* Bulk Transition Modal */}
-      <AdminModal
-        isOpen={showBulkTransitionModal}
-        onClose={() => setShowBulkTransitionModal(false)}
-        title={`Advance ${selectedIds.size} Orders`}
-      >
+          {pages > 1 && (
+            <nav className="flex items-center justify-between gap-2 text-sm" aria-label="Pages">
+              <button disabled={page === 0} onClick={() => setPage(page - 1)} className="rounded-full border border-line bg-paper px-3.5 py-1.5 font-medium text-ink hover:bg-tint disabled:opacity-40">Previous</button>
+              <span className="text-ink/60">Page {page + 1} of {pages}</span>
+              <button disabled={page >= pages - 1} onClick={() => setPage(page + 1)} className="rounded-full border border-line bg-paper px-3.5 py-1.5 font-medium text-ink hover:bg-tint disabled:opacity-40">Next</button>
+            </nav>
+          )}
+        </>
+      )}
+
+      <AdminModal isOpen={bulkOpen} onClose={() => setBulkOpen(false)} title={`Change status of ${selected.size} order${selected.size === 1 ? '' : 's'}`}>
         <div className="space-y-4">
-          <FormField label="Move to Status" required>
-            <select
-              value={bulkTargetStatus}
-              onChange={(e) => setBulkTargetStatus(e.target.value as OrderStatus)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
-            >
-              <option value="photo_validation">Photo Validation</option>
-              <option value="print_rendering">Print Rendering</option>
-              <option value="print_ready">Print Ready</option>
-              <option value="in_production">In Production</option>
-              <option value="quality_check">Quality Check</option>
+          <FormField label="Move to" required>
+            <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value as OrderStatus)} className="w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none">
+              <option value="print_rendering">Rendering</option>
+              <option value="in_production">In production</option>
+              <option value="quality_check">Quality check</option>
               <option value="packed">Packed</option>
-              <option value="shipped">Shipped</option>
               <option value="delivered">Delivered</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </FormField>
-
-          <FormField label="Internal Note / Reason">
-            <input
-              type="text"
-              value={bulkNote}
-              onChange={(e) => setBulkNote(e.target.value)}
-              placeholder="e.g. Batch print job dispatched to Station 4"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink focus:outline-none focus:border-gold"
-            />
+          <p className="text-xs text-ink/60">Only orders that can move to this step from where they are will move; the rest stay as they are. To mark orders shipped, open each order and add the courier and AWB.</p>
+          <FormField label="Note (optional)">
+            <input value={bulkNote} onChange={(e) => setBulkNote(e.target.value)} placeholder="Shown in each order's history" className="w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none" />
           </FormField>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowBulkTransitionModal(false)}
-              className="px-3.5 py-2 rounded-xl border border-line text-xs font-semibold hover:bg-field"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleBulkTransition}
-              disabled={isBulkProcessing}
-              className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors disabled:opacity-50"
-            >
-              {isBulkProcessing ? 'Advancing Orders...' : 'Apply Transition'}
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={() => setBulkOpen(false)} className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-tint">Cancel</button>
+            <button onClick={() => void runBulk()} disabled={bulkBusy} className="rounded-full bg-gold px-4 py-2 text-sm font-semibold text-ink hover:bg-gold-deep disabled:opacity-40">
+              {bulkBusy ? 'Moving…' : 'Move orders'}
             </button>
           </div>
         </div>
       </AdminModal>
     </div>
+  );
+}
+
+export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-8 text-sm text-ink/60">Loading orders…</div>}>
+      <OrdersScreen />
+    </Suspense>
   );
 }
