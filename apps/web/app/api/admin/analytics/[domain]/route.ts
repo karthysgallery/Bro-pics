@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '../../../../../lib/firebase-admin';
-import { requirePermission } from '../../../../../lib/require-permission';
+import { requirePermission, getPermissionContext } from '../../../../../lib/require-permission';
 import { checkRateLimit } from '../../../../../lib/rate-limit';
 import { adminApiError } from '../../../../../lib/admin-api-error';
 import {
@@ -13,6 +13,7 @@ import {
   computeFunnelAnalytics,
   computeOperationsAnalytics,
   IST_OFFSET_MS,
+  roleHasPermission,
   type OrderWithItemsForRollup,
   type Return,
   type PrintJob,
@@ -206,6 +207,9 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       }
 
       const customers = computeCustomersAnalytics(ordersData as any, allPriorUserIds);
+      // Names and profile ids only for roles that may see customers; others get the figures alone.
+      const ctx = await getPermissionContext(request);
+      const canSeeCustomers = ctx.authenticated && !!ctx.role && roleHasPermission(ctx.role, 'customers:read');
       // The name each customer gave on their latest order in this period (frozen on the order; no extra reads).
       const nameByUser = new Map<string, string>();
       for (const o of [...ordersData].sort((a, b) => a.placedAt.getTime() - b.placedAt.getTime())) {
@@ -214,7 +218,9 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       }
       domainData = {
         ...customers,
-        topCustomers: customers.topCustomers.map((c) => ({ ...c, name: nameByUser.get(c.userId) ?? null })),
+        topCustomers: customers.topCustomers.map((c, i) =>
+          canSeeCustomers ? { ...c, name: nameByUser.get(c.userId) ?? null } : { ...c, userId: `customer-${i + 1}`, name: null, hidden: true }
+        ),
       };
       break;
     }

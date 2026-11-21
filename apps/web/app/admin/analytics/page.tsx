@@ -61,7 +61,7 @@ interface CustomersData {
   newCustomers: number;
   repeatCustomers: number;
   repeatCustomerRate: number;
-  topCustomers: { userId: string; name: string | null; orderCount: number; totalSpent: number }[];
+  topCustomers: { userId: string; name: string | null; orderCount: number; totalSpent: number; hidden?: boolean }[];
 }
 interface CouponsData {
   totalOrdersWithCoupon: number;
@@ -495,7 +495,7 @@ function CustomersView({ c }: { c: CustomersData }) {
             {c.topCustomers.map((x) => (
               <ShareRow
                 key={x.userId}
-                href={`/admin/customers/${x.userId}`}
+                href={x.hidden ? undefined : `/admin/customers/${x.userId}`}
                 label={`${x.name || 'Customer'} · ${x.orderCount} order${x.orderCount === 1 ? '' : 's'}`}
                 value={formatPaise(x.totalSpent)}
                 share={x.totalSpent / top}

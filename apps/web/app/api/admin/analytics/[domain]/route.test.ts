@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
 
 const mockRequirePermission = vi.fn();
+const mockPermissionContext = vi.fn();
 vi.mock('../../../../../lib/require-permission', () => ({
   requirePermission: (...args: unknown[]) => mockRequirePermission(...args),
+  getPermissionContext: (...args: unknown[]) => mockPermissionContext(...args),
 }));
 
 const mockOrders = [
@@ -187,6 +189,7 @@ describe('GET /api/admin/analytics/[domain] (ABE-30 / ANL-06/07)', () => {
 
   it('returns customers analytics with unique and top customers', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockPermissionContext.mockResolvedValueOnce({ authenticated: true, uid: 'admin_1', role: 'admin' });
     const [req, params] = makeRequest('customers');
     const res = await GET(req, params);
 
@@ -195,6 +198,14 @@ describe('GET /api/admin/analytics/[domain] (ABE-30 / ANL-06/07)', () => {
     expect(body.domain).toBe('customers');
     expect(body.data.uniqueCustomers).toBe(1);
     expect(body.data.topCustomers[0].userId).toBe('user_1');
+  });
+
+  it('hides who the top customers are from a role that cannot see customers', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'm_1' });
+    mockPermissionContext.mockResolvedValueOnce({ authenticated: true, uid: 'm_1', role: 'marketing_manager' });
+    const [req, params] = makeRequest('customers');
+    const body = await (await GET(req, params)).json();
+    expect(body.data.topCustomers[0]).toMatchObject({ userId: 'customer-1', name: null, hidden: true });
   });
 
   it('returns marketing analytics with coupon performance', async () => {
