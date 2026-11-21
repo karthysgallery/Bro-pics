@@ -184,6 +184,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // A different account (or none): nothing of the previous account's cart may carry over, not even the copy kept
     // for rolling back a failed save, or it could show on a shared phone under the next person's sign-in.
     if (lastUidRef.current !== (user?.uid ?? null)) {
+      // Leaving a signed-in account (sign-out or another account): lines kept in this browser while it was signed
+      // in (a carry-over that failed) belong to that account, not to the next guest or account. A guest signing in
+      // keeps the guest cart: that is the carry-over.
+      if (lastUidRef.current !== null) {
+        setLocalItems([]);
+        writeGuestCart([]);
+      }
       lastUidRef.current = user?.uid ?? null;
       hasReconciledRef.current = false;
       serverItemsRef.current = [];

@@ -781,3 +781,37 @@ describe('CartProvider — switching accounts on one browser', () => {
     vi.doUnmock('firebase/functions');
   });
 });
+
+describe('CartProvider — leaving a signed-in account', () => {
+  it('does not hand lines kept during a failed carry-over to the next guest', async () => {
+    vi.resetModules();
+    localStorage.removeItem('bropics_guest_cart');
+    localStorage.setItem('bropics_session_id', 'sess_x');
+    vi.doMock('firebase/firestore', () => ({
+      getFirestore: vi.fn(() => ({})),
+      doc: vi.fn(() => ({})),
+      onSnapshot: vi.fn((_r: unknown, cb: (s: unknown) => void) => { cb({ exists: () => false, data: () => undefined }); return () => {}; }),
+      runTransaction: vi.fn().mockRejectedValue(new Error('offline')),
+    }));
+    vi.doMock('firebase/functions', () => ({ getFunctions: vi.fn(() => ({})), httpsCallable: vi.fn(() => vi.fn().mockRejectedValue(new Error('down'))) }));
+    const { CartProvider: P, useCart: use } = await import('./cart-context');
+    const { AuthContext: A } = await import('./auth-context');
+    let current: { uid: string } | null = { uid: 'user_a' };
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return <A.Provider value={{ user: current as never, loading: false, signOut: vi.fn() }}><P>{children}</P></A.Provider>;
+    }
+    const { result, rerender } = renderHook(() => use(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.syncError).not.toBeNull());
+    await act(async () => {
+      await result.current.addItem({ variantId: 'v', personalizationId: 'a-line', title: 'A', unitPriceSnapshot: 1, qty: 1 });
+    });
+    expect(result.current.items.map((i) => i.personalizationId)).toEqual(['a-line']);
+    current = null;
+    rerender();
+    expect(result.current.items).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]')).toEqual([]);
+    localStorage.removeItem('bropics_session_id');
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+});
