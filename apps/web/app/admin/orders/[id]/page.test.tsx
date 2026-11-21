@@ -85,15 +85,15 @@ describe('admin order detail', () => {
 
   it('only offers status moves the state machine allows from print_rendering', async () => {
     await renderPage();
-    const select = screen.getByLabelText(/Target Status/);
+    const select = screen.getByLabelText(/Move to/);
     const offered = within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value).filter(Boolean);
     expect(offered).toEqual(['print_ready', 'cancelled']);
   });
 
   it('asks for confirmation before cancelling and only then calls the advance API', async () => {
     await renderPage();
-    fireEvent.change(screen.getByLabelText(/Target Status/), { target: { value: 'cancelled' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Advance Order' }));
+    fireEvent.change(screen.getByLabelText(/Move to/), { target: { value: 'cancelled' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as cancelled' }));
 
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/advance'))).toBe(false);
@@ -105,22 +105,22 @@ describe('admin order detail', () => {
 
   it('does not ask for confirmation for an ordinary forward move', async () => {
     await renderPage();
-    fireEvent.change(screen.getByLabelText(/Target Status/), { target: { value: 'print_ready' } });
+    fireEvent.change(screen.getByLabelText(/Move to/), { target: { value: 'print_ready' } });
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(orderPayload({ status: 'print_ready' })) });
-    fireEvent.click(screen.getByRole('button', { name: 'Advance Order' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as ready to print' }));
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/advance'))).toBe(true));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('keeps "Advance Order" disabled for shipped until the courier and AWB are entered', async () => {
+  it('keeps the shipped button disabled until the courier and AWB are entered', async () => {
     await renderPage(orderPayload({ status: 'packed' }));
-    fireEvent.change(screen.getByLabelText(/Target Status/), { target: { value: 'shipped' } });
-    const advance = screen.getByRole('button', { name: 'Advance Order' });
+    fireEvent.change(screen.getByLabelText(/Move to/), { target: { value: 'shipped' } });
+    const advance = screen.getByRole('button', { name: 'Mark as shipped' });
     expect(advance).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/Courier Partner/), { target: { value: 'Delhivery' } });
+    fireEvent.change(screen.getByLabelText(/^Courier/), { target: { value: 'Delhivery' } });
     expect(advance).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/AWB Tracking Number/), { target: { value: 'AWB123' } });
+    fireEvent.change(screen.getByLabelText(/AWB number/), { target: { value: 'AWB123' } });
     expect(advance).not.toBeDisabled();
 
     // Irreversible and customer-visible, so it still asks first.
@@ -146,6 +146,6 @@ describe('admin order detail', () => {
   it('offers no status changes for a closed order', async () => {
     await renderPage(orderPayload({ status: 'cancelled' }));
     expect(screen.getByText(/no further status changes are available/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Target Status/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Move to/)).not.toBeInTheDocument();
   });
 });

@@ -45,6 +45,9 @@ export function ItemFilesBox({ orderId, itemId }: { orderId: string; itemId: str
   const [files, setFiles] = useState<ItemFiles | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // Viewing in the page: short-lived signed links for the preview and each original photo, fetched on request.
+  const [shown, setShown] = useState<Record<string, string> | null>(null);
+  const [showing, setShowing] = useState(false);
 
   const base = `/api/admin/orders/${orderId}/items/${itemId}`;
 
@@ -92,6 +95,32 @@ export function ItemFilesBox({ orderId, itemId }: { orderId: string; itemId: str
     }
   };
 
+  const signedUrl = async (type: DownloadType, uploadId?: string): Promise<string | null> => {
+    const token = await user!.getIdToken();
+    const query = new URLSearchParams({ type, ...(uploadId && { upload: uploadId }) });
+    const res = await fetch(`${base}/download?${query}`, { headers: { Authorization: `Bearer ${token}` } });
+    const body = await res.json().catch(() => null);
+    return res.ok && typeof body?.url === 'string' ? body.url : null;
+  };
+
+  const showPhotos = async () => {
+    if (!user || !files) return;
+    if (shown) return setShown(null);
+    setShowing(true);
+    try {
+      const out: Record<string, string> = {};
+      const jobs: Promise<void>[] = [];
+      if (files.preview) jobs.push(signedUrl('preview').then((u) => { if (u) out.preview = u; }));
+      for (const o of files.originals) if (o.available) jobs.push(signedUrl('original', o.uploadId).then((u) => { if (u) out[o.uploadId] = u; }));
+      await Promise.all(jobs);
+      setShown(out);
+    } catch {
+      showToast('Could not open the photos.', 'error');
+    } finally {
+      setShowing(false);
+    }
+  };
+
   const renderAgain = async () => {
     if (!user) return;
     setBusy('render');
@@ -121,7 +150,33 @@ export function ItemFilesBox({ orderId, itemId }: { orderId: string; itemId: str
 
   return (
     <div className="mt-2 rounded-xl border border-line bg-field/50 p-3 text-2xs" data-testid="item-files">
-      <p className="font-bold uppercase tracking-wider text-ink">Files</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-bold uppercase tracking-wider text-ink">Files</p>
+        {(files.preview || files.originals.some((o) => o.available)) && (
+          <button type="button" className={btn} disabled={showing} onClick={() => void showPhotos()} aria-expanded={shown !== null}>
+            {showing ? 'Opening…' : shown ? 'Hide photos' : 'View photos here'}
+          </button>
+        )}
+      </div>
+      {shown && (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="item-photos">
+          {shown.preview && (
+            <a href={shown.preview} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-lg border border-line bg-paper">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={shown.preview} alt="What the customer saw" className="aspect-square w-full object-contain bg-tint" />
+              <span className="block px-2 py-1 text-ink/70">Customer preview</span>
+            </a>
+          )}
+          {files.originals.filter((o) => shown[o.uploadId]).map((o) => (
+            <a key={o.uploadId} href={shown[o.uploadId]} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-lg border border-line bg-paper">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={shown[o.uploadId]} alt={o.label} className="aspect-square w-full object-contain bg-tint" />
+              <span className="block px-2 py-1 text-ink/70">{o.label}{o.widthPx && o.heightPx ? ` · ${o.widthPx}×${o.heightPx}` : ''}</span>
+            </a>
+          ))}
+          <p className="col-span-full text-ink/50">Tap a photo to open it full size. These links work for a short time.</p>
+        </div>
+      )}
       <div className="mt-2 grid gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-ink/80"><strong className="text-ink">Preview</strong> — exactly what the customer saw</span>

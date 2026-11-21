@@ -55,4 +55,17 @@ describe('ItemFilesBox', () => {
       expect(calls.some((u) => u.includes('/download?type=original&upload=up_1'))).toBe(true);
     });
   });
+
+  it('shows the customer preview and each available original photo in the page on request', async () => {
+    render(<ItemFilesBox orderId="order_1" itemId="item_1" />);
+    fireEvent.click(await screen.findByText('View photos here'));
+    const gallery = await screen.findByTestId('item-photos');
+    expect(gallery.querySelectorAll('img')).toHaveLength(2); // preview + Photo 1 (Photo 2's file is missing)
+    expect(screen.getByAltText('What the customer saw')).toBeTruthy();
+    expect(screen.getByText('Photo 1 · 4000×3000')).toBeTruthy();
+    const calls = (fetch as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]);
+    expect(calls.some((u) => u.includes('upload=up_2'))).toBe(false);
+    fireEvent.click(screen.getByText('Hide photos'));
+    expect(screen.queryByTestId('item-photos')).toBeNull();
+  });
 });
