@@ -65,7 +65,7 @@ function PaymentsScreen() {
   }, [load]);
 
   const byState = useMemo(() => {
-    const m: Record<PaymentState, OrderRow[]> = { failed: [], pending: [], paid: [], refunded: [] };
+    const m: Record<PaymentState, OrderRow[]> = { failed: [], pending: [], paid: [], refunded: [], unpaid: [] };
     for (const o of rows) m[paymentState(o)].push(o);
     return m;
   }, [rows]);
@@ -93,7 +93,7 @@ function PaymentsScreen() {
         return (
           <>
             <p className="text-ink/80">{recent ? 'May still be paying' : 'Checkout not completed'}</p>
-            <p className="text-xs text-ink/50">Placed {ageText(o.placedAt)}{o.status === 'cancelled' ? ' · order cancelled' : ''}</p>
+            <p className="text-xs text-ink/50">Placed {ageText(o.placedAt)}</p>
           </>
         );
       }
@@ -119,7 +119,7 @@ function PaymentsScreen() {
     }
   };
 
-  const detailHeading = { failed: 'Why it failed', pending: 'What it means', paid: 'Transaction', refunded: 'Refund' }[tab];
+  const detailHeading = { failed: 'Why it failed', pending: 'What it means', paid: 'Transaction', refunded: 'Refund', unpaid: '' }[tab];
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 md:px-8 md:py-8">

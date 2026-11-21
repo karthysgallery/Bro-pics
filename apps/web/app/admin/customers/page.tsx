@@ -1,188 +1,114 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
-import { StatusChip } from '../../../components/admin/StatusChip';
-import { useToast } from '../../../components/ui/Toast';
+import { formatPaise } from '../../../lib/format-price';
 
 interface CustomerSummary {
   id: string;
-  displayName?: string;
-  email?: string;
-  phone?: string;
-  role?: string;
-  createdAt?: unknown;
-  orderCount?: number;
-  totalSpent?: number;
+  displayName: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  createdAt: string | null;
+  orderCount: number;
+  totalSpent: number;
+  lastOrderAt: string | null;
+  disabled: boolean;
 }
 
-function formatISTDate(dateVal: unknown): string {
-  if (!dateVal) return '—';
-  if (typeof dateVal === 'object' && '_seconds' in (dateVal as { _seconds: number })) {
-    return new Date((dateVal as { _seconds: number })._seconds * 1000).toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
-  const d = new Date(dateVal as string | number | Date);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+function day(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function AdminCustomersDirectoryPage() {
+export default function AdminCustomersPage() {
   const { user } = useAuth();
-  const { showToast } = useToast();
-
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [applied, setApplied] = useState('');
 
-  // Fetch customers
-  const fetchCustomers = async (query = '') => {
+  const load = useCallback(async (q: string) => {
     if (!user) return;
-    const effectiveQuery = query.trim() || '+91';
     setLoading(true);
+    setError(null);
     try {
       const token = await user.getIdToken();
-      const url = `/api/admin/customers?q=${encodeURIComponent(effectiveQuery)}`;
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to load customers');
-      const data = await res.json();
-      setCustomers(data.customers || []);
-    } catch {
-      showToast('Error searching customers', 'error');
+      const res = await fetch(`/api/admin/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Your role cannot see customers.' : 'Customers could not be loaded.');
+      const body = (await res.json()) as { customers?: CustomerSummary[] };
+      setCustomers(body.customers ?? []);
+      setApplied(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Customers could not be loaded.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCustomers();
   }, [user]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchCustomers(searchQuery);
-  };
+  useEffect(() => {
+    void load('');
+  }, [load]);
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-display font-bold text-ink">
-            Customer Directory
-          </h1>
-          <p className="text-xs text-ink/60">
-            Search customer profiles by name, phone number, or email address. View order histories, saved addresses, and active coupons.
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+      <header>
+        <h1 className="font-display text-2xl font-bold text-ink">Customers</h1>
+        <p className="mt-1 text-sm text-ink/60">Find a customer by name, phone number or email, then open their profile to see every order.</p>
+      </header>
 
-      {/* Search Bar */}
-      <form onSubmit={handleSearchSubmit} className="flex gap-2 max-w-md">
-        <div className="relative flex-1">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink/40 text-xs">
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, phone (+91...), or email..."
-            className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-line bg-paper text-ink placeholder:text-ink/40 focus:outline-none focus:border-gold"
-          />
-        </div>
-        <button
-          type="submit"
-          className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-deep text-ink text-xs font-bold transition-colors shrink-0 shadow-xs"
-        >
-          Search
-        </button>
+      <form onSubmit={(e) => { e.preventDefault(); void load(query.trim()); }} className="flex gap-2">
+        <label className="relative flex-1">
+          <span className="sr-only">Search customers</span>
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/40" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, 10-digit phone or email" className="w-full rounded-full border border-line bg-paper py-2.5 pl-10 pr-4 text-sm text-ink placeholder:text-ink/40 focus:border-gold focus:outline-none" />
+        </label>
+        <button type="submit" className="rounded-full bg-gold px-5 py-2 text-sm font-semibold text-ink hover:bg-gold-deep">Search</button>
+        {applied && <button type="button" onClick={() => { setQuery(''); void load(''); }} className="rounded-full px-3 py-2 text-sm text-ink/60 hover:text-ink">Clear</button>}
       </form>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-line bg-paper shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-8 space-y-3 animate-pulse">
-            <div className="h-10 bg-field rounded-xl" />
-            <div className="h-10 bg-field rounded-xl" />
-            <div className="h-10 bg-field rounded-xl" />
-          </div>
-        ) : customers.length === 0 ? (
-          <div className="p-16 text-center text-xs text-ink/50 space-y-2">
-            <span className="text-3xl block flex justify-center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <p>No customers found matching your search.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-field/70 border-b border-line text-2xs uppercase tracking-wider text-ink/60 font-semibold">
-                  <th className="p-3">Customer Name</th>
-                  <th className="p-3">Phone Number</th>
-                  <th className="p-3">Email Address</th>
-                  <th className="p-3">Joined Date</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-field/30 transition-colors">
-                    <td className="p-3 font-semibold text-ink">
-                      <Link
-                        href={`/admin/customers/${c.id}`}
-                        className="hover:text-gold hover:underline"
-                      >
-                        {c.displayName || 'Anonymous User'}
-                      </Link>
-                    </td>
+      <p className="text-sm text-ink/60" aria-live="polite">
+        {loading ? 'Loading…' : applied ? `${customers.length} match${customers.length === 1 ? '' : 'es'} for “${applied}”` : 'Newest accounts'}
+      </p>
 
-                    <td className="p-3 font-mono text-ink/80">
-                      {c.phone || '—'}
-                    </td>
-
-                    <td className="p-3 text-ink/80">
-                      {c.email || '—'}
-                    </td>
-
-                    <td className="p-3 text-ink/60 font-mono text-2xs">
-                      {formatISTDate(c.createdAt)}
-                    </td>
-
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-field border border-line">
-                        {c.role || 'customer'}
-                      </span>
-                    </td>
-
-                    <td className="p-3 text-right">
-                      <Link
-                        href={`/admin/customers/${c.id}`}
-                        className="px-3 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-gold-deep text-2xs font-bold transition-colors inline-block"
-                      >
-                        View Profile ↗
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-alert/40 bg-paper p-4 text-sm text-ink">
+          <span>{error}</span>
+          <button onClick={() => void load(applied)} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-field">Try again</button>
+        </div>
+      ) : loading ? (
+        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-14 animate-pulse rounded-card bg-tint" />)}</div>
+      ) : customers.length === 0 ? (
+        <div className="rounded-card border border-dashed border-line bg-paper px-6 py-12 text-center">
+          <p className="font-semibold text-ink">{applied ? 'No customer matches that search.' : 'No customers yet.'}</p>
+          {applied && <p className="mt-1 text-sm text-ink/60">Names match from the start (e.g. “Pri” finds Priya). Phone and email must be complete.</p>}
+        </div>
+      ) : (
+        <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-paper">
+          <li className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_6rem_7rem_7rem] gap-4 bg-field/60 px-4 py-2.5 text-xs text-ink/55 md:grid">
+            <span>Customer</span><span>Contact</span><span className="text-right">Orders</span><span className="text-right">Spent</span><span>Joined</span>
+          </li>
+          {customers.map((c) => (
+            <li key={c.id}>
+              <Link href={`/admin/customers/${c.id}`} className="grid gap-1 px-4 py-3 hover:bg-field/40 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_6rem_7rem_7rem] md:items-center md:gap-4">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium text-ink">{c.displayName || 'No name yet'}</span>
+                  {c.role && c.role !== 'customer' && <span className="shrink-0 rounded-full bg-tint px-2 py-0.5 text-[11px] text-ink/70">{c.role.replace(/_/g, ' ')}</span>}
+                  {c.disabled && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-700">Blocked</span>}
+                </span>
+                <span className="min-w-0 truncate text-sm text-ink/70">{c.phone ?? ''}{c.email ? ` · ${c.email}` : ''}</span>
+                <span className="text-sm text-ink tabular-nums md:text-right"><span className="text-ink/50 md:hidden">Orders: </span>{c.orderCount}</span>
+                <span className="text-sm text-ink tabular-nums md:text-right"><span className="text-ink/50 md:hidden">Spent: </span>{formatPaise(c.totalSpent)}</span>
+                <span className="text-sm text-ink/60"><span className="md:hidden">Joined </span>{day(c.createdAt)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

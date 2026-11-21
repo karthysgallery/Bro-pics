@@ -51,9 +51,31 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
   ]);
 
   const addresses = addressesSnap.docs.map((doc) => doc.data());
+  // Product names for the order history (one read per distinct product, first product of each order).
+  const firstProduct = (d: FirebaseFirestore.DocumentData) => (Array.isArray(d.productIds) && typeof d.productIds[0] === 'string' ? (d.productIds[0] as string) : null);
+  const productIds = [...new Set(ordersSnap.docs.map((d) => firstProduct(d.data())).filter((x): x is string => !!x))];
+  const titles = new Map<string, string>();
+  if (productIds.length) {
+    try {
+      for (const p of await db.getAll(...productIds.map((id) => db.collection('products').doc(id)))) {
+        const t = p.exists ? (p.data() as { title?: unknown }).title : null;
+        if (typeof t === 'string') titles.set(p.id, t);
+      }
+    } catch {
+      /* names are optional */
+    }
+  }
+  const iso = (v: unknown) => (v && typeof (v as { toDate?: () => Date }).toDate === 'function' ? (v as { toDate: () => Date }).toDate().toISOString() : v ?? null);
   const orders = ordersSnap.docs.map((doc) => {
     const { razorpayOrderId: _razorpayOrderId, razorpayPaymentId: _razorpayPaymentId, amountPaidOnline: _amountPaidOnline, amountDueOnDelivery: _amountDueOnDelivery, ...safe } = doc.data();
-    return safe;
+    const pid = firstProduct(safe);
+    return {
+      ...safe,
+      id: doc.id ?? safe.id,
+      placedAt: iso(safe.placedAt),
+      productTitle: pid ? titles.get(pid) ?? null : null,
+      productCount: Array.isArray(safe.productIds) ? safe.productIds.length : 0,
+    };
   });
   const reviews = reviewsSnap.docs.map((doc) => doc.data());
   const coupons = couponsSnap.docs.map((doc) => doc.data());

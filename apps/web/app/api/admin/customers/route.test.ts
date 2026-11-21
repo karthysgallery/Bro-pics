@@ -8,8 +8,9 @@ vi.mock('../../../../lib/require-permission', () => ({
 
 const mockQueryGet = vi.fn();
 const mockWhere = vi.fn(() => ({ where: mockWhere, limit: vi.fn(() => ({ get: mockQueryGet })) }));
+const mockOrderBy = vi.fn(() => ({ limit: vi.fn(() => ({ get: mockQueryGet })) }));
 const mockDb = {
-  collection: vi.fn(() => ({ where: mockWhere })),
+  collection: vi.fn(() => ({ where: mockWhere, orderBy: mockOrderBy })),
 };
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => mockDb }));
 vi.mock('../../../../lib/firebase-admin', () => ({ getAdminApp: vi.fn(() => ({})) }));
@@ -38,10 +39,18 @@ describe('GET /api/admin/customers', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns 400 when q is missing', async () => {
+  it('lists the newest customers when there is no search (it used to show nothing)', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     const response = await GET(makeRequest(''));
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
+    expect(mockOrderBy).toHaveBeenCalledWith('createdAt', 'desc');
+    expect((await response.json()).customers[0].displayName).toBe('Priya');
+  });
+
+  it('finds a phone typed as 10 digits with spaces', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    await GET(makeRequest('?q=98765%2043210'));
+    expect(mockWhere).toHaveBeenCalledWith('phone', '==', '+919876543210');
   });
 
   it('searches by email when q contains @', async () => {

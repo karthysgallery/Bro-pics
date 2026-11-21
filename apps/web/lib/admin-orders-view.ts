@@ -4,7 +4,8 @@
  * the screens and the tests share one definition.
  */
 
-export type PaymentState = 'paid' | 'failed' | 'pending' | 'refunded';
+/** 'unpaid' = the order was cancelled before any payment arrived (nothing is awaited any more). */
+export type PaymentState = 'paid' | 'failed' | 'pending' | 'refunded' | 'unpaid';
 
 /** One row of GET /api/admin/orders/overview. Money in paise; dates as ISO strings. */
 export interface OrderRow {
@@ -45,6 +46,7 @@ export function paymentState(o: Pick<OrderRow, 'status' | 'paymentStatus' | 'ref
   // A part refund leaves the order paid (the list shows how much went back); a full one makes it refunded.
   if (o.status === 'refunded' || o.paymentStatus === 'refunded' || (o.refundedAmount > 0 && o.refundedAmount >= o.total)) return 'refunded';
   if (o.paymentStatus === 'paid') return 'paid';
+  if (o.status === 'cancelled') return 'unpaid';
   if (o.paymentStatus === 'failed') return 'failed';
   return 'pending';
 }
@@ -54,6 +56,7 @@ export const PAYMENT_LABELS: Record<PaymentState, string> = {
   failed: 'Payment failed',
   pending: 'Awaiting payment',
   refunded: 'Refunded',
+  unpaid: 'Not paid',
 };
 
 /** Paid orders that are being made (from payment through quality check, including rework). */
@@ -157,6 +160,7 @@ export interface OrderCounts {
   failed: number;
   pending: number;
   refunded: number;
+  unpaid: number;
   processing: number;
   readyToShip: number;
   photoCheck: number;
@@ -164,7 +168,7 @@ export interface OrderCounts {
 
 /** The summary cards. Processing and ready-to-ship count only orders that have been paid. */
 export function countOrders(rows: OrderRow[]): OrderCounts {
-  const c: OrderCounts = { total: rows.length, paid: 0, failed: 0, pending: 0, refunded: 0, processing: 0, readyToShip: 0, photoCheck: 0 };
+  const c: OrderCounts = { total: rows.length, paid: 0, failed: 0, pending: 0, refunded: 0, unpaid: 0, processing: 0, readyToShip: 0, photoCheck: 0 };
   for (const o of rows) {
     c[paymentState(o)] += 1;
     if ((PROCESSING_STATUSES as readonly string[]).includes(o.status)) c.processing += 1;
@@ -183,7 +187,7 @@ export function filtersFromParams(params: URLSearchParams): OrderFilters {
   const stage = params.get('stage') ?? '';
   return {
     q: params.get('q') ?? '',
-    payment: pick('payment', ['all', 'paid', 'failed', 'pending', 'refunded'] as const, 'all'),
+    payment: pick('payment', ['all', 'paid', 'failed', 'pending', 'refunded', 'unpaid'] as const, 'all'),
     stage: stage === 'processing' || stage === 'ready' || STAGE_FILTERS.some((s) => s.value === stage) ? stage : '',
     date: pick('date', ['all', 'today', 'yesterday', '7d', '30d'] as const, 'all'),
     method: pick('method', ['all', 'prepaid', 'partial_cod'] as const, 'all'),

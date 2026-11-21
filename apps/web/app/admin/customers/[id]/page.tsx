@@ -1,333 +1,308 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useCallback, useEffect, useState, use } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../../../lib/auth-context';
 import { formatPaise } from '../../../../lib/format-price';
 import { StatusChip } from '../../../../components/admin/StatusChip';
-import Link from 'next/link';
+import { PaymentBadge } from '../../../../components/admin/OrderBadges';
+import { ConfirmDialog } from '../../../../components/ui/ConfirmDialog';
+import { useToast } from '../../../../components/ui/Toast';
+import { paymentState } from '../../../../lib/admin-orders-view';
 
-interface CustomerDetail {
-  user: {
-    uid: string;
-    phoneNumber?: string;
-    email?: string;
-    displayName?: string;
-    disabled?: boolean;
-    createdAt?: string;
-    lastLoginAt?: string;
-  };
-  addresses: Array<{
-    id: string;
-    name: string;
-    phone: string;
-    line1: string;
-    line2?: string;
-    city: string;
-    state: string;
-    pincode: string;
-    isDefault?: boolean;
-  }>;
-  orders: Array<{
-    id: string;
-    orderNo: string;
-    status: string;
-    paymentStatus: string;
-    total: number;
-    placedAt: string;
-    items?: any[];
-  }>;
-  reviews: Array<{
-    id: string;
-    rating: number;
-    title?: string;
-    body: string;
-    status: string;
-    createdAt: string;
-  }>;
-  coupons: Array<{
-    code: string;
-    discountType: string;
-    discountValue: number;
-    usedAt?: string;
-  }>;
+/*
+ * One customer: who they are, where they get parcels, every order with its payment and production status, and
+ * what the shop has on record (refunds, reviews, coupons given to them). Built only from saved records.
+ */
+
+interface Profile {
+  id?: string;
+  displayName?: string | null;
+  firstName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  role?: string | null;
+  disabled?: boolean;
+  createdAt?: string | null;
+  lastLoginAt?: string | null;
+  orderCount?: number;
+  totalSpent?: number;
+  lastOrderAt?: string | null;
+}
+interface Address {
+  id?: string;
+  recipientName?: string | null;
+  label?: string | null;
+  phone?: string | null;
+  line1?: string;
+  line2?: string | null;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  isDefault?: boolean;
+}
+interface CustomerOrder {
+  id: string;
+  orderNo: string;
+  status: string;
+  paymentStatus: string;
+  total: number;
+  placedAt: string | null;
+  productTitle: string | null;
+  productCount: number;
+  notes?: string;
+}
+interface Review {
+  id?: string;
+  rating?: number;
+  title?: string;
+  body?: string;
+  status?: string;
+  createdAt?: string;
+}
+interface Coupon {
+  code?: string;
+  type?: 'percent' | 'flat' | 'free_ship';
+  value?: number;
+  usedCount?: number;
+  isActive?: boolean;
 }
 
-export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+function day(iso: unknown, withTime = false): string {
+  if (!iso) return '—';
+  const d = new Date(iso as string);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', ...(withTime && { hour: 'numeric', minute: '2-digit' }) });
+}
+
+const card = 'rounded-card border border-line bg-paper p-4 sm:p-5';
+
+export default function CustomerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
-  const [data, setData] = useState<CustomerDetail | null>(null);
+  const { showToast } = useToast();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
-  const [togglingStatus, setTogglingStatus] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
 
-  const fetchCustomer = async () => {
-    if (!user || !id) return;
+  const load = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/customers/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      } else {
-        throw new Error('Customer not found');
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to load customer profile' });
+      const res = await fetch(`/api/admin/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(res.status === 404 ? 'No customer with this ID.' : res.status === 403 ? 'Your role cannot see customers.' : 'This customer could not be loaded.');
+      const body = await res.json();
+      setProfile(body.user ?? {});
+      setAddresses(body.addresses ?? []);
+      setOrders(body.orders ?? []);
+      setReviews(body.reviews ?? []);
+      setCoupons(body.coupons ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'This customer could not be loaded.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCustomer();
   }, [user, id]);
 
-  const handleToggleDisabled = async () => {
-    if (!data || !user) return;
-    const nextDisabled = !data.user.disabled;
-    const confirmText = nextDisabled
-      ? 'Disable this customer? They will be signed out and unable to place new orders.'
-      : 'Re-enable this customer account?';
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-    if (!confirm(confirmText)) return;
-
-    setTogglingStatus(true);
-    setMessage(null);
+  const toggleBlock = async () => {
+    if (!user || !profile) return;
+    setBlockBusy(true);
     try {
       const token = await user.getIdToken();
       const res = await fetch(`/api/admin/customers/${id}/disable`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ disabled: nextDisabled }),
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disabled: !profile.disabled }),
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to update customer status');
-      }
-
-      setMessage({
-        type: 'success',
-        text: `Customer successfully ${nextDisabled ? 'disabled' : 'enabled'}!`,
-      });
-      fetchCustomer();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Status update failed' });
+      if (!res.ok) throw new Error();
+      showToast(profile.disabled ? 'Customer can sign in again' : 'Customer blocked from signing in', 'success');
+      setConfirmBlock(false);
+      void load();
+    } catch {
+      showToast('The account could not be changed.', 'error');
     } finally {
-      setTogglingStatus(false);
+      setBlockBusy(false);
     }
   };
 
-  if (loading && !data) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-sand/60">
-        Loading customer profile...
+      <div className="mx-auto max-w-6xl space-y-4 px-4 py-8 sm:px-6 md:px-8">
+        <div className="h-8 w-56 animate-pulse rounded-lg bg-tint" />
+        <div className="h-48 animate-pulse rounded-card bg-tint" />
+      </div>
+    );
+  }
+  if (error || !profile) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12 text-center">
+        <p className="font-semibold text-ink">{error ?? 'This customer could not be loaded.'}</p>
+        <Link href="/admin/customers" className="mt-3 inline-block rounded-full border border-line px-4 py-1.5 text-sm font-medium text-ink hover:bg-tint">Back to customers</Link>
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div className="p-8 text-center text-rose-400 bg-paper rounded-2xl border border-line">
-        Customer profile not found or could not be loaded.
-      </div>
-    );
-  }
-
-  const orders = data.orders || [];
-  const totalSpend = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const aov = orders.length > 0 ? Math.round(totalSpend / orders.length) : 0;
+  // Figures from the orders themselves (the saved totals only count paid orders, so they agree).
+  const paidOrders = orders.filter((o) => o.paymentStatus === 'paid');
+  const spent = paidOrders.reduce((s, o) => s + o.total, 0);
+  const latest = orders[0]?.placedAt ?? null;
+  const refunded = orders.filter((o) => o.status === 'refunded');
+  const failed = orders.filter((o) => paymentState({ ...o, refundedAmount: 0 }) === 'failed');
+  const name = profile.displayName || [profile.firstName].filter(Boolean).join(' ') || 'Customer';
 
   return (
-    <div className="space-y-6 max-w-6xl pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+      <nav className="flex items-center gap-1.5 text-xs text-ink/55" aria-label="Breadcrumb">
+        <Link href="/admin/customers" className="hover:text-gold-deep">Customers</Link>
+        <span aria-hidden="true">/</span>
+        <span className="text-ink">{name}</span>
+      </nav>
+
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <Link href="/admin/customers" className="text-sand hover:text-cream text-sm">
-              ← Back to Customers
-            </Link>
-          </div>
-          <div className="flex items-center gap-3 mt-2">
-            <h1 className="text-2xl font-bold tracking-tight text-cream">
-              {data.user.displayName || data.user.phoneNumber || 'Customer Profile'}
-            </h1>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                data.user.disabled
-                  ? 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
-                  : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-              }`}
-            >
-              {data.user.disabled ? 'Account Disabled' : 'Active'}
-            </span>
-          </div>
+          <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">{name}</h1>
+          <p className="mt-1 text-sm text-ink/60">
+            Customer since {day(profile.createdAt)}
+            {profile.role && profile.role !== 'customer' && ` · ${profile.role.replace(/_/g, ' ')}`}
+            {profile.disabled && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Blocked from signing in</span>}
+          </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleToggleDisabled}
-            disabled={togglingStatus}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border ${
-              data.user.disabled
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-cream border-emerald-500'
-                : 'bg-charcoal hover:bg-tint text-rose-400 border-line hover:border-rose-400'
-            }`}
-          >
-            {togglingStatus
-              ? 'Updating...'
-              : data.user.disabled
-              ? 'Re-enable Account'
-              : 'Disable Account'}
+        <div className="flex flex-wrap gap-2">
+          {profile.phone && <a href={`tel:${profile.phone}`} className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">Call</a>}
+          {profile.phone && <a href={`https://wa.me/${profile.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-tint">WhatsApp</a>}
+          <button onClick={() => setConfirmBlock(true)} className={`rounded-full border px-3.5 py-1.5 text-sm font-medium ${profile.disabled ? 'border-line text-ink hover:bg-tint' : 'border-red-200 text-red-700 hover:bg-red-50'}`}>
+            {profile.disabled ? 'Allow sign-in' : 'Block sign-in'}
           </button>
         </div>
-      </div>
+      </header>
 
-      {message && (
-        <div
-          className={`p-4 rounded-xl border text-sm flex items-center justify-between ${
-            message.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
-          }`}
-        >
-          <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="text-xs opacity-70 hover:opacity-100">
-            Dismiss
-          </button>
-        </div>
-      )}
+      <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-label="Overview">
+        {[
+          ['Orders', String(orders.length), `${paidOrders.length} paid`],
+          ['Total spent', formatPaise(spent), 'Paid orders'],
+          ['Latest order', day(latest), orders[0] ? `#${orders[0].orderNo}` : ''],
+          ['Last sign-in', day(profile.lastLoginAt), ''],
+        ].map(([label, value, note]) => (
+          <div key={label} className="rounded-card border border-line bg-paper p-4">
+            <p className="text-xs text-ink/60">{label}</p>
+            <p className="mt-1 font-display text-xl font-bold text-ink tabular-nums">{value}</p>
+            {note && <p className="text-xs text-ink/50">{note}</p>}
+          </div>
+        ))}
+      </section>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-2xl bg-paper border border-line">
-          <div className="text-xs font-semibold text-sand uppercase tracking-wider">
-            Lifetime Value (LTV)
-          </div>
-          <div className="text-2xl font-bold font-mono text-gold mt-1">
-            {formatPaise(totalSpend)}
-          </div>
-        </div>
-        <div className="p-5 rounded-2xl bg-paper border border-line">
-          <div className="text-xs font-semibold text-sand uppercase tracking-wider">
-            Total Orders Placed
-          </div>
-          <div className="text-2xl font-bold font-mono text-cream mt-1">{orders.length}</div>
-        </div>
-        <div className="p-5 rounded-2xl bg-paper border border-line">
-          <div className="text-xs font-semibold text-sand uppercase tracking-wider">
-            Average Order Value (AOV)
-          </div>
-          <div className="text-2xl font-bold font-mono text-cream mt-1">
-            {formatPaise(aov)}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid: Details + Addresses (Left 4 cols) & Orders Timeline (Right 8 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Account Info & Saved Addresses */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="p-5 rounded-2xl bg-paper border border-line space-y-3">
-            <h3 className="text-sm font-semibold text-cream border-b border-line pb-2">
-              Customer Identity
-            </h3>
-            <div className="text-xs space-y-2 text-sand/80">
-              <div>
-                <span className="text-sand/50">UID:</span>{' '}
-                <span className="font-mono text-cream">{data.user.uid}</span>
-              </div>
-              <div>
-                <span className="text-sand/50">Phone:</span>{' '}
-                <span className="font-mono text-cream">{data.user.phoneNumber || '—'}</span>
-              </div>
-              <div>
-                <span className="text-sand/50">Email:</span>{' '}
-                <span className="text-cream">{data.user.email || '—'}</span>
-              </div>
-              <div>
-                <span className="text-sand/50">Joined:</span>{' '}
-                <span className="text-cream">
-                  {data.user.createdAt ? new Date(data.user.createdAt).toLocaleDateString() : '—'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-paper border border-line space-y-3">
-            <h3 className="text-sm font-semibold text-cream border-b border-line pb-2">
-              Saved Delivery Addresses ({data.addresses?.length || 0})
-            </h3>
-            {data.addresses && data.addresses.length > 0 ? (
-              <div className="space-y-3">
-                {data.addresses.map((addr, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-void/60 border border-line text-xs space-y-1">
-                    <div className="font-bold text-cream">{addr.name} ({addr.phone})</div>
-                    <div className="text-sand/80">{addr.line1}</div>
-                    {addr.line2 && <div className="text-sand/80">{addr.line2}</div>}
-                    <div className="text-sand/60">
-                      {addr.city}, {addr.state} — {addr.pincode}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-sand/60">No saved addresses on file.</div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Order History */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="p-5 rounded-2xl bg-paper border border-line">
-            <h3 className="text-base font-semibold text-cream border-b border-line pb-3">
-              Order History
-            </h3>
-
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          <section className={card} aria-labelledby="orders-h">
+            <h2 id="orders-h" className="text-sm font-semibold text-ink">Orders</h2>
             {orders.length === 0 ? (
-              <div className="py-8 text-center text-xs text-sand/60">
-                No orders placed by this customer yet.
-              </div>
+              <p className="mt-3 rounded-xl bg-field px-4 py-6 text-center text-sm text-ink/60">No orders yet.</p>
             ) : (
-              <div className="divide-y divide-line/60">
+              <ul className="mt-2 divide-y divide-line">
                 {orders.map((o) => (
-                  <div key={o.id} className="py-4 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <Link
-                          href={`/admin/orders/${o.id}`}
-                          className="font-mono font-bold text-sm text-cream hover:text-gold transition"
-                        >
-                          #{o.orderNo || o.id.slice(0, 8)}
-                        </Link>
-                        <StatusChip status={o.status as any} />
-                      </div>
-                      <div className="text-xs text-sand/60 mt-1">
-                        Placed on {new Date(o.placedAt).toLocaleDateString()}
-                      </div>
+                  <li key={o.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <Link href={`/admin/orders/${o.id}`} className="font-semibold text-ink hover:text-gold-deep">#{o.orderNo}</Link>
+                      <p className="truncate text-sm text-ink/65">
+                        {o.productTitle ?? 'Product'}{o.productCount > 1 ? ` +${o.productCount - 1} more` : ''} · {day(o.placedAt, true)}
+                      </p>
                     </div>
-
-                    <div className="text-right font-mono">
-                      <div className="font-bold text-sm text-cream">{formatPaise(o.total)}</div>
-                      <Link
-                        href={`/admin/orders/${o.id}`}
-                        className="text-xs text-gold hover:underline font-sans"
-                      >
-                        View Order Details →
-                      </Link>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                      <span className="mr-1 font-semibold text-ink tabular-nums">{formatPaise(o.total)}</span>
+                      <PaymentBadge state={paymentState({ ...o, refundedAmount: 0 })} size="sm" />
+                      {o.status !== 'pending_payment' && <StatusChip status={o.status} size="sm" className="whitespace-nowrap" />}
+                      <Link href={`/admin/orders/${o.id}`} className="rounded-full border border-line px-3 py-1 text-xs font-semibold text-ink hover:bg-tint">View order</Link>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </div>
+          </section>
+
+          {(refunded.length > 0 || failed.length > 0 || reviews.length > 0 || orders.some((o) => o.notes)) && (
+            <section className={card} aria-labelledby="act-h">
+              <h2 id="act-h" className="text-sm font-semibold text-ink">On record</h2>
+              <ul className="mt-2 space-y-2 text-sm text-ink/80">
+                {failed.map((o) => <li key={`f${o.id}`}>Payment failed on <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link> ({formatPaise(o.total)}, {day(o.placedAt)})</li>)}
+                {refunded.map((o) => <li key={`r${o.id}`}>Refunded <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link> ({formatPaise(o.total)})</li>)}
+                {orders.filter((o) => o.notes).map((o) => <li key={`n${o.id}`}>Staff note on <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link>: {o.notes}</li>)}
+                {reviews.map((r, i) => (
+                  <li key={r.id ?? i}>
+                    Review {r.rating ? `${r.rating}★` : ''}{r.title ? ` “${r.title}”` : ''} · {r.status ?? ''} · {day(r.createdAt)}
+                    {r.body && <span className="block text-ink/60">{r.body}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
+
+        <aside className="space-y-5">
+          <section className={card} aria-labelledby="contact-h">
+            <h2 id="contact-h" className="text-sm font-semibold text-ink">Contact</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              <div><dt className="text-xs text-ink/55">Phone</dt><dd className="font-mono text-ink">{profile.phone ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink/55">Email</dt><dd className="break-all text-ink">{profile.email ?? '—'}</dd></div>
+            </dl>
+          </section>
+
+          <section className={card} aria-labelledby="addr-h">
+            <h2 id="addr-h" className="text-sm font-semibold text-ink">Saved addresses</h2>
+            {addresses.length === 0 ? (
+              <p className="mt-2 text-sm text-ink/60">None saved. Each order keeps the address it was sent to.</p>
+            ) : (
+              <ul className="mt-3 space-y-3 text-sm">
+                {addresses.map((a, i) => (
+                  <li key={a.id ?? i} className="rounded-xl bg-field px-3 py-2.5">
+                    <p className="font-medium text-ink">{a.recipientName || name}{a.label ? ` · ${a.label}` : ''}{a.isDefault && <span className="ml-1.5 text-xs font-normal text-ink/55">(default)</span>}</p>
+                    <p className="text-ink/75">{a.line1}{a.line2 ? `, ${a.line2}` : ''}</p>
+                    <p className="text-ink/75">{a.city}, {a.state} - {a.pincode}</p>
+                    {a.phone && <p className="font-mono text-xs text-ink/60">{a.phone}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {coupons.length > 0 && (
+            <section className={card} aria-labelledby="coup-h">
+              <h2 id="coup-h" className="text-sm font-semibold text-ink">Coupons given to this customer</h2>
+              <ul className="mt-2 space-y-1 text-sm text-ink/80">
+                {coupons.map((c, i) => (
+                  <li key={c.code ?? i}>
+                    <span className="font-mono font-semibold text-ink">{c.code}</span>
+                    {c.type === 'percent' ? ` · ${c.value}% off` : c.type === 'free_ship' ? ' · free delivery' : c.value ? ` · ${formatPaise(c.value)} off` : ''}
+                    {c.isActive === false ? ' · inactive' : ''}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </aside>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmBlock}
+        title={profile.disabled ? `Let ${name} sign in again?` : `Block ${name} from signing in?`}
+        message={profile.disabled ? 'They will be able to sign in and order again.' : 'They will be signed out and cannot sign in until you allow it again. Their orders are not changed.'}
+        confirmLabel={profile.disabled ? 'Allow sign-in' : 'Block sign-in'}
+        tone={profile.disabled ? 'default' : 'danger'}
+        isLoading={blockBusy}
+        onConfirm={toggleBlock}
+        onCancel={() => setConfirmBlock(false)}
+      />
     </div>
   );
 }

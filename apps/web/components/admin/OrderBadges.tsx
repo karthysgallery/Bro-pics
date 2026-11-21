@@ -5,6 +5,7 @@ const PAYMENT_STYLE: Record<PaymentState, string> = {
   failed: 'bg-red-50 text-red-700 border-red-200',
   pending: 'bg-amber-50 text-amber-800 border-amber-200',
   refunded: 'bg-stone-100 text-stone-700 border-stone-200',
+  unpaid: 'bg-stone-100 text-stone-600 border-stone-200',
 };
 
 const PAYMENT_ICON: Record<PaymentState, React.ReactNode> = {
@@ -12,6 +13,7 @@ const PAYMENT_ICON: Record<PaymentState, React.ReactNode> = {
   failed: <path d="M7 7l10 10M17 7L7 17" />,
   pending: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2.5 2" /></>,
   refunded: <path d="M9 7L5 11l4 4M5 11h9a5 5 0 010 10h-2" />,
+  unpaid: <path d="M6 12h12" />,
 };
 
 /** Payment state as a compact pill: colour plus an icon and words, never colour alone. */
