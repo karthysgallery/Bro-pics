@@ -190,6 +190,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (lastUidRef.current !== null) {
         setLocalItems([]);
         writeGuestCart([]);
+        // Its photo session too: the next sign-in would otherwise claim that session's uploads and designs.
+        try {
+          resetSessionId();
+        } catch {
+          // Storage blocked: nothing was stored to claim.
+        }
       }
       lastUidRef.current = user?.uid ?? null;
       hasReconciledRef.current = false;

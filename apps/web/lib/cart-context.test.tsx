@@ -810,7 +810,8 @@ describe('CartProvider — leaving a signed-in account', () => {
     rerender();
     expect(result.current.items).toEqual([]);
     expect(JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]')).toEqual([]);
-    localStorage.removeItem('bropics_session_id');
+    // Nor its photo session, which the next sign-in would claim.
+    expect(localStorage.getItem('bropics_session_id')).toBeNull();
     vi.doUnmock('firebase/firestore');
     vi.doUnmock('firebase/functions');
   });
