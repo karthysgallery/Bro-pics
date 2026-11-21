@@ -57,8 +57,10 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   let docs: FirebaseFirestore.QueryDocumentSnapshot[];
   if (!q) {
-    // No search: the newest accounts first.
-    docs = (await users.orderBy('createdAt', 'desc').limit(SEARCH_LIMIT * 2).get()).docs;
+    // No search: the newest customer accounts first (staff accounts are found by searching, not listed).
+    docs = (await users.orderBy('createdAt', 'desc').limit(SEARCH_LIMIT * 3).get()).docs
+      .filter((d) => { const role = (d.data() as { role?: unknown }).role; return !role || role === 'customer'; })
+      .slice(0, SEARCH_LIMIT * 2);
   } else if (q.includes('@')) {
     docs = (await users.where('email', '==', q.toLowerCase()).limit(SEARCH_LIMIT).get()).docs;
     if (docs.length === 0 && q !== q.toLowerCase()) docs = (await users.where('email', '==', q).limit(SEARCH_LIMIT).get()).docs;

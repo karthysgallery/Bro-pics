@@ -50,6 +50,7 @@ interface CustomerOrder {
   placedAt: string | null;
   productTitle: string | null;
   productCount: number;
+  refundedAmount?: number;
   notes?: string;
 }
 interface Review {
@@ -156,10 +157,11 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
 
   // Figures from the orders themselves (the saved totals only count paid orders, so they agree).
   const paidOrders = orders.filter((o) => o.paymentStatus === 'paid');
-  const spent = paidOrders.reduce((s, o) => s + o.total, 0);
+  const spent = paidOrders.reduce((s, o) => s + o.total - (o.refundedAmount ?? 0), 0);
   const latest = orders[0]?.placedAt ?? null;
-  const refunded = orders.filter((o) => o.status === 'refunded');
-  const failed = orders.filter((o) => paymentState({ ...o, refundedAmount: 0 }) === 'failed');
+  const pstate = (o: CustomerOrder) => paymentState({ ...o, refundedAmount: o.refundedAmount ?? 0 });
+  const refunded = orders.filter((o) => o.status === 'refunded' || (o.refundedAmount ?? 0) > 0);
+  const failed = orders.filter((o) => pstate(o) === 'failed');
   const name = profile.displayName || [profile.firstName].filter(Boolean).join(' ') || 'Customer';
 
   return (
@@ -191,7 +193,7 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
       <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-label="Overview">
         {[
           ['Orders', String(orders.length), `${paidOrders.length} paid`],
-          ['Total spent', formatPaise(spent), 'Paid orders'],
+          ['Total spent', formatPaise(spent), 'Paid orders, after refunds'],
           ['Latest order', day(latest), orders[0] ? `#${orders[0].orderNo}` : ''],
           ['Last sign-in', day(profile.lastLoginAt), ''],
         ].map(([label, value, note]) => (
@@ -221,7 +223,7 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                       <span className="mr-1 font-semibold text-ink tabular-nums">{formatPaise(o.total)}</span>
-                      <PaymentBadge state={paymentState({ ...o, refundedAmount: 0 })} size="sm" />
+                      <PaymentBadge state={pstate(o)} size="sm" />
                       {o.status !== 'pending_payment' && <StatusChip status={o.status} size="sm" className="whitespace-nowrap" />}
                       <Link href={`/admin/orders/${o.id}`} className="rounded-full border border-line px-3 py-1 text-xs font-semibold text-ink hover:bg-tint">View order</Link>
                     </div>
@@ -236,7 +238,7 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
               <h2 id="act-h" className="text-sm font-semibold text-ink">On record</h2>
               <ul className="mt-2 space-y-2 text-sm text-ink/80">
                 {failed.map((o) => <li key={`f${o.id}`}>Payment failed on <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link> ({formatPaise(o.total)}, {day(o.placedAt)})</li>)}
-                {refunded.map((o) => <li key={`r${o.id}`}>Refunded <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link> ({formatPaise(o.total)})</li>)}
+                {refunded.map((o) => <li key={`r${o.id}`}>Refunded {formatPaise(o.refundedAmount || o.total)}{o.refundedAmount && o.refundedAmount < o.total ? ` of ${formatPaise(o.total)}` : ''} on <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link></li>)}
                 {orders.filter((o) => o.notes).map((o) => <li key={`n${o.id}`}>Staff note on <Link className="text-gold-deep hover:underline" href={`/admin/orders/${o.id}`}>#{o.orderNo}</Link>: {o.notes}</li>)}
                 {reviews.map((r, i) => (
                   <li key={r.id ?? i}>

@@ -95,7 +95,7 @@ describe('GET /api/admin/customers/[uid]', () => {
     const response = await GET(makeRequest(), makeParams());
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.orders).toEqual([{ id: 'order_1', orderNo: 'BP-2026-00001', total: 105000, placedAt: null, productTitle: null, productCount: 0 }]);
+    expect(body.orders).toEqual([{ id: 'order_1', orderNo: 'BP-2026-00001', total: 105000, placedAt: null, productTitle: null, productCount: 0, refundedAmount: 0 }]);
     expect(body.orders[0]).not.toHaveProperty('razorpayOrderId');
     expect(body.orders[0]).not.toHaveProperty('razorpayPaymentId');
     expect(body.orders[0]).not.toHaveProperty('amountPaidOnline');

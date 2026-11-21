@@ -65,6 +65,21 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       /* names are optional */
     }
   }
+  // Money refunded per order (processed refunds), so the profile shows part and full refunds correctly.
+  const refundedByOrder = new Map<string, number>();
+  await Promise.all(
+    ordersSnap.docs
+      .filter((d) => d.data().paymentStatus === 'paid')
+      .map(async (d) => {
+        try {
+          const rs = await d.ref.collection('refunds').where('status', '==', 'processed').get();
+          const sum = rs.docs.reduce((t, r) => t + (typeof r.data().amount === 'number' ? (r.data().amount as number) : 0), 0);
+          if (sum > 0) refundedByOrder.set(d.id, sum);
+        } catch {
+          /* refunds are optional */
+        }
+      })
+  );
   const iso = (v: unknown) => (v && typeof (v as { toDate?: () => Date }).toDate === 'function' ? (v as { toDate: () => Date }).toDate().toISOString() : v ?? null);
   const orders = ordersSnap.docs.map((doc) => {
     const { razorpayOrderId: _razorpayOrderId, razorpayPaymentId: _razorpayPaymentId, amountPaidOnline: _amountPaidOnline, amountDueOnDelivery: _amountDueOnDelivery, ...safe } = doc.data();
@@ -75,6 +90,7 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       placedAt: iso(safe.placedAt),
       productTitle: pid ? titles.get(pid) ?? null : null,
       productCount: Array.isArray(safe.productIds) ? safe.productIds.length : 0,
+      refundedAmount: refundedByOrder.get(doc.id) ?? 0,
     };
   });
   const reviews = reviewsSnap.docs.map((doc) => doc.data());

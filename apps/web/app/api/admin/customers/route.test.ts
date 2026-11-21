@@ -47,6 +47,17 @@ describe('GET /api/admin/customers', () => {
     expect((await response.json()).customers[0].displayName).toBe('Priya');
   });
 
+  it('leaves staff accounts out of the unsearched list', async () => {
+    mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
+    mockQueryGet.mockResolvedValueOnce({ docs: [
+      { id: 'c1', data: () => ({ displayName: 'Priya', role: 'customer' }) },
+      { id: 's1', data: () => ({ displayName: 'Shop Admin', role: 'admin' }) },
+      { id: 'c2', data: () => ({ displayName: 'New User' }) },
+    ] });
+    const body = await (await GET(makeRequest(''))).json();
+    expect(body.customers.map((c: { id: string }) => c.id)).toEqual(['c1', 'c2']);
+  });
+
   it('finds a phone typed as 10 digits with spaces', async () => {
     mockRequirePermission.mockResolvedValueOnce({ ok: true, uid: 'admin_1' });
     await GET(makeRequest('?q=98765%2043210'));
