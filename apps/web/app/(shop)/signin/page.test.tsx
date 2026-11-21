@@ -2,10 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import SignInPage from './page';
+import { AuthContext } from '../../../lib/auth-context';
 
+const replace = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
+    replace,
     refresh: vi.fn(),
   }),
   useSearchParams: () => ({
@@ -86,5 +89,18 @@ describe('SignInPage', () => {
       expect(screen.getByText(/Your verification code:/i)).toBeInTheDocument();
       expect(screen.getByText('654321')).toBeInTheDocument();
     });
+  });
+
+  it('sends a customer who is already signed in straight on to where they were going, once the sign-in is restored', () => {
+    const ui = (loading: boolean, user: { uid: string } | null) => (
+      <AuthContext.Provider value={{ user: user as never, loading, signOut: vi.fn() }}>
+        <SignInPage />
+      </AuthContext.Provider>
+    );
+    const view = render(ui(true, null));
+    expect(replace).not.toHaveBeenCalled();
+    view.rerender(ui(false, { uid: 'u1' }));
+    expect(replace).toHaveBeenCalledWith('/account');
+    expect(replace).toHaveBeenCalledTimes(1);
   });
 });

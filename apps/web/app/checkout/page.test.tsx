@@ -9,6 +9,8 @@ vi.mock('../../lib/cart-context', () => ({
   useCart: vi.fn(() => ({
     items: [{ variantId: 'v1', personalizationId: 'p1', title: 'Frame', unitPriceSnapshot: 1000, qty: 1 }],
     totalPaise: 1000,
+    ready: true,
+    syncError: null,
   })),
 }));
 const TN_ADDRESS = { id: 'addr_1', line1: '12 MG Road', city: 'Srivilliputhur', state: 'Tamil Nadu', pincode: '626125', phone: '+919999900000' };
@@ -125,6 +127,8 @@ describe('CheckoutPage', () => {
       updateQuantity: vi.fn(),
       updateItem: vi.fn(),
       clearCart: vi.fn(),
+      ready: true,
+      syncError: null,
     });
     try {
       render(<CheckoutPage />);
@@ -472,5 +476,40 @@ describe('CheckoutPage coupon UI', () => {
       expect(screen.queryByText(/NEW10.*applied/)).not.toBeInTheDocument();
       expect(screen.getByPlaceholderText('Enter code')).toBeInTheDocument(); // coupon removed, can re-enter
     });
+  });
+
+  it('waits (loader, no "Sign in" and no "Your cart is empty") while the sign-in is restored or the cart is still being read', async () => {
+    const { useAuth } = await import('../../lib/auth-context');
+    const { useCart } = await import('../../lib/cart-context');
+    const originalUseCart = vi.mocked(useCart).getMockImplementation()!;
+    mockFetchQuote.mockClear();
+    const empty = { items: [], totalPaise: 0, totalCount: 0, addItem: vi.fn(), removeItem: vi.fn(), updateQuantity: vi.fn(), updateItem: vi.fn(), clearCart: vi.fn(), syncError: null };
+    try {
+      vi.mocked(useAuth).mockReturnValueOnce({ user: null, loading: true, signOut: vi.fn() });
+      vi.mocked(useCart).mockReturnValue({ ...empty, ready: false });
+      const first = render(<CheckoutPage />);
+      expect(screen.getByTestId('loader-panel')).toBeInTheDocument();
+      expect(screen.queryByText(/Sign in to check out/)).not.toBeInTheDocument();
+      first.unmount();
+
+      render(<CheckoutPage />);
+      expect(screen.getByTestId('loader-panel')).toBeInTheDocument();
+      expect(screen.queryByText('Your cart is empty')).not.toBeInTheDocument();
+      expect(mockFetchQuote).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(useCart).mockImplementation(originalUseCart);
+    }
+  });
+
+  it('says so when a guest cart could not be moved into the account', async () => {
+    const { useCart } = await import('../../lib/cart-context');
+    const originalUseCart = vi.mocked(useCart).getMockImplementation()!;
+    vi.mocked(useCart).mockReturnValue({ ...originalUseCart(), syncError: "We couldn't move your cart into your account." } as never);
+    try {
+      render(<CheckoutPage />);
+      expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't move your cart into your account.");
+    } finally {
+      vi.mocked(useCart).mockImplementation(originalUseCart);
+    }
   });
 });

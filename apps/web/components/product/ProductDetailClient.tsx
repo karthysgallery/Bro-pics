@@ -213,6 +213,7 @@ export function ProductDetailClient({
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [textFields, setTextFields] = useState<TextFieldValueMap>(new Map());
   const [selectedClipartId, setSelectedClipartId] = useState<string | null>(null);
@@ -895,8 +896,10 @@ export function ProductDetailClient({
     });
   };
 
-  const handleAddToCart = async (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => {
-    if (submitting || !selectedVariant || !template) return;
+  const handleAddToCart = async (quantity: number, onDone: (personalizationId: string, previewPath?: string) => Promise<void>) => {
+    // A ref, not just `submitting`: state only changes after the next render, so quick double taps got through.
+    if (submittingRef.current || !selectedVariant || !template) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
 
@@ -999,7 +1002,7 @@ export function ProductDetailClient({
         if (!res.ok) throw new Error(`Failed to save slot ${slotIndex + 1}`);
       }
 
-      onDone(personalizationId, sharedPreviewPath);
+      await onDone(personalizationId, sharedPreviewPath);
       // [FE-11] Cart now owns this personalization — the draft would
       // otherwise dangle and, worse, offer to "restore" a design the
       // customer already added, on a return visit before checkout.
@@ -1016,6 +1019,7 @@ export function ProductDetailClient({
     } catch {
       setSubmitError("We couldn't save your personalization — please try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

@@ -258,10 +258,8 @@ function SignUpContent() {
     }
 
     setSuccessMessage('Account created! Welcome to KarthysGallery.');
-    setTimeout(() => {
-      router.push(redirectTarget);
-      router.refresh();
-    }, 700);
+    // Signed in already (verify waits for the browser sign-in): straight on, in-site, so the cart stays in memory.
+    router.replace(redirectTarget);
   };
 
   // 3. Resend OTP

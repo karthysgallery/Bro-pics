@@ -23,24 +23,35 @@ export interface AuthApiResponse<T = any> {
   devOtp?: string;
 }
 
+/** Shown when the code was right but this browser could not finish signing in. */
+export const BROWSER_SIGN_IN_FAILED =
+  "Your code was correct, but this browser couldn't finish signing you in. Check your internet connection and try again. If it keeps happening, open karthysgallery.in in Chrome.";
+
 /**
- * Attempts to sign the client into Firebase Auth using the server-issued custom token.
- * This bridges the custom WhatsApp OTP backend with existing Firebase client context (Cart, Wishlist).
+ * Signs this browser into Firebase Auth with the server-issued custom token. This browser session IS the sign-in:
+ * checkout, the cart and orders all read it, so a failure here must not be reported as "signed in". It used to be
+ * swallowed, and on phones where the call failed (a dropped connection, a privacy/ad blocker on Google's sign-in
+ * address, storage switched off) the page said "Signed in successfully", then checkout asked to sign in again.
+ * Returns whether the browser is now signed in; one retry covers a dropped connection.
  */
-export async function syncFirebaseCustomToken(customToken?: string): Promise<void> {
-  if (!customToken || typeof window === 'undefined') return;
+export async function syncFirebaseCustomToken(customToken?: string): Promise<boolean> {
+  if (!customToken || typeof window === 'undefined') return false;
 
   // Don't attempt actual Firebase sign in for mock tokens in offline/development test harness
   if (customToken.startsWith('mock_custom_token_')) {
-    return;
+    return true;
   }
 
-  try {
-    const auth = getAuth(getFirebaseApp());
-    await signInWithCustomToken(auth, customToken);
-  } catch (err) {
-    console.warn('[auth-client] Firebase custom token sync warning:', err);
+  const auth = getAuth(getFirebaseApp());
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await signInWithCustomToken(auth, customToken);
+      return true;
+    } catch (err) {
+      console.warn('[auth-client] Firebase custom token sign-in failed:', err);
+    }
   }
+  return false;
 }
 
 export async function sendWhatsAppOtp(phone: string, purpose: 'login' | 'register' | 'quick'): Promise<AuthApiResponse> {
@@ -96,8 +107,8 @@ export async function verifyWhatsAppOtp(params: {
       return { success: false, error: data.error || 'Verification failed. Please try again.', code: data.code, notRegistered: data.notRegistered };
     }
 
-    if (data.customToken) {
-      await syncFirebaseCustomToken(data.customToken);
+    if (!(await syncFirebaseCustomToken(data.customToken))) {
+      return { success: false, error: BROWSER_SIGN_IN_FAILED, code: 'browser_sign_in_failed' };
     }
 
     return { success: true, ...data };
@@ -118,8 +129,8 @@ export async function loginWithPassword(phone: string, password: string): Promis
       return { success: false, error: data.error || 'Invalid credentials.', notRegistered: data.notRegistered };
     }
 
-    if (data.customToken) {
-      await syncFirebaseCustomToken(data.customToken);
+    if (!(await syncFirebaseCustomToken(data.customToken))) {
+      return { success: false, error: BROWSER_SIGN_IN_FAILED, code: 'browser_sign_in_failed' };
     }
 
     return { success: true, ...data };

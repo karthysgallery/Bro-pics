@@ -37,11 +37,23 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
   const remaining = progress.total - progress.doneCount;
   const canAdd = loaded && progress.ready && unavailable.length === 0 && draft !== null;
 
-  const handleAdd = () => {
-    if (!canAdd || !draft) return;
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const handleAdd = async () => {
+    if (!canAdd || !draft || adding) return;
     const line = buildComboCartLine(combo, draft);
     if (!line) return;
-    addItem(line);
+    setAdding(true);
+    setAddError(null);
+    try {
+      // Saved before the cart opens, so it is really there (and not added twice by a second press).
+      await addItem(line);
+    } catch {
+      setAddError("This couldn't be added to your cart. Check your internet connection and try again.");
+      return;
+    } finally {
+      setAdding(false);
+    }
     clearComboDraft(combo.id);
     setDraft(null);
     setAdded(true);
@@ -190,9 +202,10 @@ export function ComboBuilder({ combo, cards }: ComboBuilderProps) {
         </dl>
         {reason && <p className="mt-3 text-xs text-ink/65">{reason}</p>}
         {added && <p className="mt-3 text-xs font-semibold text-accent">Added to your cart.</p>}
+        {addError && <p role="alert" className="mt-3 text-xs font-semibold text-red-700">{addError}</p>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button onClick={handleAdd} disabled={!canAdd} className="h-12 w-full sm:w-auto sm:min-w-64">
-            Add complete combo to cart
+          <Button onClick={() => void handleAdd()} disabled={!canAdd || adding} className="h-12 w-full sm:w-auto sm:min-w-64">
+            {adding ? 'Adding…' : 'Add complete combo to cart'}
           </Button>
           {draft && progress.doneCount > 0 && (
             <button type="button" onClick={startOver} className="text-sm text-ink/60 underline underline-offset-2 hover:text-ink">

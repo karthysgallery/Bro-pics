@@ -30,7 +30,7 @@ export function useComboFrame(): ComboFrameInfo | null {
   return useContext(ComboFrameContext);
 }
 
-const noop = () => undefined;
+const noop = async () => undefined;
 
 export function ComboFrameProvider({ info, children }: { info: ComboFrameInfo; children: ReactNode }) {
   // The editors announce "added" with a window event that opens the cart drawer; inside a frame
@@ -66,14 +66,19 @@ export function ComboFrameProvider({ info, children }: { info: ComboFrameInfo; c
     return {
       items: savedLine ? [savedLine] : [],
       // A frame is always one piece; quantity belongs to the combo, not the frame.
-      addItem: (item) => onSave(fromLine(item)),
-      updateItem: (_variantId, personalizationId, updates) =>
-        onSave(fromLine({ title: saved?.title ?? '', ...saved, ...updates, personalizationId })),
+      addItem: async (item) => {
+        onSave(fromLine(item));
+      },
+      updateItem: async (_variantId, personalizationId, updates) => {
+        onSave(fromLine({ title: saved?.title ?? '', ...saved, ...updates, personalizationId }));
+      },
       removeItem: noop,
       updateQuantity: noop,
       clearCart: noop,
       totalCount: savedLine ? 1 : 0,
       totalPaise: 0,
+      ready: true,
+      syncError: null,
     };
   }, [info]);
 

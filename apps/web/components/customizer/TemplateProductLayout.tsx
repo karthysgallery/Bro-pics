@@ -282,8 +282,12 @@ function TemplateEditorSession({
     }
   };
 
+  // Blocks a second press at once; `submitting` (state) only takes effect after the next render, so quick double
+  // taps used to add the frame twice.
+  const submittingRef = useRef(false);
   const handleAddToCart = async (quantity: number) => {
-    if (submitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -308,21 +312,24 @@ function TemplateEditorSession({
         ...(finish && { finish, finishExtra }),
         personalization: { templateId: template.id, templateVersion: template.version, state: cleanState },
       };
+      // Waits until the cart has saved the line: the button stays on "Adding…" (no second press), and Buy now only
+      // leaves for checkout once the line is really in the cart.
       if (editing && editingLine) {
         if (editingLine.variantId === selectedVariant.id) {
-          updateItem(selectedVariant.id, personalizationId, { ...line, finish, finishExtra: finish ? finishExtra : undefined });
+          await updateItem(selectedVariant.id, personalizationId, { ...line, finish, finishExtra: finish ? finishExtra : undefined });
         } else {
-          removeItem(editingLine.variantId, personalizationId);
-          addItem({ ...line, variantId: selectedVariant.id, personalizationId, qty: editingLine.qty, productSlug: product.slug });
+          await removeItem(editingLine.variantId, personalizationId);
+          await addItem({ ...line, variantId: selectedVariant.id, personalizationId, qty: editingLine.qty, productSlug: product.slug });
         }
       } else {
-        addItem({ ...line, variantId: selectedVariant.id, personalizationId, qty: quantity, productSlug: product.slug });
+        await addItem({ ...line, variantId: selectedVariant.id, personalizationId, qty: quantity, productSlug: product.slug });
         customizer.resetDesign();
       }
       window.dispatchEvent(new CustomEvent('karthys:open-cart'));
     } catch {
-      setSubmitError("This couldn't be added to your cart. Please try again.");
+      setSubmitError("This couldn't be added to your cart. Check your internet connection and try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -330,15 +337,17 @@ function TemplateEditorSession({
   // After choosing photos, take the customer up to the frame preview so they see their photo in the frame at once
   // (the photo buttons sit further down, especially on phones). Skipped when the preview is already in view.
   const previewRef = useRef<HTMLDivElement>(null);
+  // Runs on the frame after the photo is placed (the layout then includes it). A direct jump, not a smooth scroll:
+  // phones returning from the gallery picker resize and re-lay out the page, which cancels a smooth scroll halfway.
   const showPreview = () => {
-    window.setTimeout(() => {
+    window.requestAnimationFrame(() => {
       const el = previewRef.current;
       if (!el) return;
       const bar = document.querySelector<HTMLElement>('[data-site-header]')?.getBoundingClientRect().bottom ?? 0;
       const top = el.getBoundingClientRect().top;
       if (top >= bar && top < window.innerHeight * 0.4) return;
-      window.scrollTo({ top: Math.max(0, window.scrollY + top - bar - 8), behavior: 'smooth' });
-    }, 50);
+      window.scrollTo({ top: Math.max(0, window.scrollY + top - bar - 8) });
+    });
   };
 
   const { completeness, unavailableSlots } = customizer;

@@ -185,7 +185,7 @@ describe('CartProvider / useCart', () => {
       });
     });
     expect(result.current.items[0].previewPath).toBe('preview.png');
-    act(() => result.current.updateQuantity('v1', 'p1', 2));
+    act(() => { void result.current.updateQuantity('v1', 'p1', 2); });
     expect(result.current.items[0].previewPath).toBe('preview.png');
   });
 
@@ -246,7 +246,8 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
     const server: { items: Array<Record<string, unknown>> } = { items: [] };
     let queue: Promise<unknown> = Promise.resolve();
 
-    const runTransaction = vi.fn((_db: unknown, updateFn: (tx: unknown) => Promise<void>) => {
+    // Like Firestore's, resolves with whatever the update function returns.
+    const runTransaction = vi.fn((_db: unknown, updateFn: (tx: unknown) => Promise<unknown>) => {
       const run = queue.then(async () => {
         const snapshot = {
           exists: () => true,
@@ -258,7 +259,7 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
             server.items = data.items;
           },
         };
-        await updateFn(tx);
+        return updateFn(tx);
       });
       queue = run.catch(() => undefined);
       return run;
@@ -631,5 +632,114 @@ describe('CartProvider — signed in (Firestore-backed)', () => {
 
     vi.doUnmock('firebase/firestore');
     vi.doUnmock('firebase/functions');
+  });
+
+  // Buy now leaves for checkout as soon as addItem settles, so it must settle only once the line is saved; and the
+  // cart drawer must show the line at once rather than waiting for the server (customers pressed Add to cart again).
+  async function signedInCart(options: { holdSaves?: boolean; failSaves?: boolean; emptyDoc?: boolean } = {}) {
+    vi.resetModules();
+    localStorage.removeItem('bropics_session_id');
+    localStorage.removeItem('bropics_guest_cart');
+    const firestoreMock = makeFirestoreMock();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const realTransaction = firestoreMock.runTransaction.getMockImplementation()!;
+    firestoreMock.runTransaction.mockImplementation(async (db: unknown, fn: (tx: unknown) => Promise<unknown>) => {
+      if (options.holdSaves) await gate;
+      if (options.failSaves) throw new Error('offline');
+      return realTransaction(db, fn);
+    });
+    let snapshotCallback: ((s: unknown) => void) | null = null;
+    firestoreMock.onSnapshot.mockImplementation((_ref: unknown, cb: (s: unknown) => void) => {
+      snapshotCallback = cb;
+      return () => {};
+    });
+    vi.doMock('firebase/firestore', () => firestoreMock);
+    vi.doMock('firebase/functions', () => ({
+      getFunctions: vi.fn(() => ({})),
+      httpsCallable: vi.fn(() => vi.fn().mockResolvedValue(undefined)),
+    }));
+    const { CartProvider: P, useCart: use } = await import('./cart-context');
+    const { AuthContext: A } = await import('./auth-context');
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <A.Provider value={{ user: { uid: 'user_1' } as never, loading: false, signOut: vi.fn() }}>
+          <P>{children}</P>
+        </A.Provider>
+      );
+    }
+    const hook = renderHook(() => use(), { wrapper: Wrapper });
+    const sendSnapshot = (items: unknown[] | null) =>
+      act(() => {
+        snapshotCallback!({ exists: () => items !== null, data: () => (items === null ? undefined : { items }) });
+      });
+    return { ...hook, firestoreMock, release, sendSnapshot };
+  }
+
+  it('is not ready until the account cart has been read; a missing cart document counts as an empty cart', async () => {
+    const { result, sendSnapshot } = await signedInCart();
+    expect(result.current.ready).toBe(false);
+    sendSnapshot(null);
+    expect(result.current.ready).toBe(true);
+    expect(result.current.items).toEqual([]);
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+
+  it('shows an added line at once, and addItem settles only when the account cart has saved it', async () => {
+    const { result, firestoreMock, release, sendSnapshot } = await signedInCart({ holdSaves: true });
+    sendSnapshot([]);
+    let settled = false;
+    let done: Promise<void> = Promise.resolve();
+    act(() => {
+      done = result.current.addItem({ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 }).then(() => {
+        settled = true;
+      });
+    });
+    expect(result.current.items).toEqual([expect.objectContaining({ personalizationId: 'p1' })]);
+    // A snapshot from before the save must not wipe the line off the screen.
+    sendSnapshot([]);
+    expect(result.current.items).toHaveLength(1);
+    await act(async () => Promise.resolve());
+    expect(settled).toBe(false);
+    await act(async () => {
+      release();
+      await done;
+    });
+    expect(settled).toBe(true);
+    expect(firestoreMock._server.items).toEqual([expect.objectContaining({ personalizationId: 'p1', qty: 1 })]);
+    expect(result.current.items).toHaveLength(1);
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+
+  it('rejects when the account cart cannot save, and takes the unsaved line back off the screen', async () => {
+    const { result, sendSnapshot } = await signedInCart({ failSaves: true });
+    sendSnapshot([{ variantId: 'v0', personalizationId: 'p0', title: 'Old', unitPriceSnapshot: 100, qty: 1 }]);
+    let error: unknown = null;
+    await act(async () => {
+      await result.current.addItem({ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 }).catch((e) => {
+        error = e;
+      });
+    });
+    expect(error).toBeInstanceOf(Error);
+    expect(result.current.items.map((i) => i.personalizationId)).toEqual(['p0']);
+    vi.doUnmock('firebase/firestore');
+    vi.doUnmock('firebase/functions');
+  });
+});
+
+describe('CartProvider — guest cart saved before leaving the page', () => {
+  it('writes the guest cart to this browser inside addItem itself (Buy now navigates right after)', async () => {
+    localStorage.removeItem('bropics_guest_cart');
+    const { result } = renderHook(() => useCart(), { wrapper: CartProvider });
+    let stored: unknown = null;
+    act(() => {
+      void result.current.addItem({ variantId: 'v1', personalizationId: 'p1', title: 'A', unitPriceSnapshot: 100, qty: 1 });
+      // Read before React has re-rendered or run any effect.
+      stored = JSON.parse(localStorage.getItem('bropics_guest_cart') ?? '[]');
+    });
+    expect(stored).toEqual([expect.objectContaining({ personalizationId: 'p1' })]);
+    expect(result.current.ready).toBe(true);
   });
 });

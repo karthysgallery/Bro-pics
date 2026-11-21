@@ -34,19 +34,32 @@ function writeGuestCart(items: CartItem[]): void {
   }
 }
 
+/**
+ * Every change resolves once it is saved where the cart lives (this browser for a guest, the account cart once
+ * signed in) and rejects if it could not be saved. Callers that move on to another page (Buy now) must wait for it:
+ * leaving while the save is still on its way loses the line.
+ */
 export interface CartContextValue {
   items: CartItem[];
-  addItem: (item: CartItem) => void;
-  removeItem: (variantId: string, personalizationId: string) => void;
-  updateQuantity: (variantId: string, personalizationId: string, qty: number) => void;
+  addItem: (item: CartItem) => Promise<void>;
+  removeItem: (variantId: string, personalizationId: string) => Promise<void>;
+  updateQuantity: (variantId: string, personalizationId: string, qty: number) => Promise<void>;
   updateItem: (
     variantId: string,
     personalizationId: string,
     updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization' | 'finish' | 'finishExtra'>>
-  ) => void;
-  clearCart: () => void;
+  ) => Promise<void>;
+  clearCart: () => Promise<void>;
   totalCount: number;
   totalPaise: number;
+  /**
+   * False until the cart's real contents are known: sign-in restored, the guest cart read from this browser, the
+   * account cart's first read done and a guest cart carried into the account. Pages that act on an empty cart
+   * (checkout's "Your cart is empty") wait for this instead of flashing the empty state.
+   */
+  ready: boolean;
+  /** Set when a guest cart could not be carried into the account after sign-in; the lines are still shown. */
+  syncError: string | null;
 }
 
 /** Exported only so a combo frame can stand in for the cart around the existing editors (see combo-frame-context). */
@@ -86,13 +99,14 @@ async function applyFirestoreCartOp(
   db: Firestore,
   userId: string,
   mutate: (current: CartItem[]) => CartItem[]
-): Promise<void> {
+): Promise<CartItem[]> {
   const cartRef = doc(db, 'carts', userId);
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(cartRef);
     const current = snapshot.exists() ? ((snapshot.data() as { items: CartItem[] }).items ?? []) : [];
     const next = mutate(current);
     transaction.set(cartRef, { items: next });
+    return next;
   });
 }
 
@@ -112,10 +126,27 @@ async function applyFirestoreCartOp(
 export function CartProvider({ children }: { children: ReactNode }) {
   const auth = useContext(AuthContext);
   const user = auth?.user ?? null;
-  const [localItems, setLocalItems] = useState<CartItem[]>([]);
+  const authLoading = auth?.loading ?? false;
+  const [localItems, setLocalItemsState] = useState<CartItem[]>([]);
+  // The guest cart as of the latest change, readable synchronously: Buy now leaves the page right after adding,
+  // so the line must reach localStorage before that, not in an effect one render later.
+  const localRef = useRef<CartItem[]>([]);
+  const setLocalItems = (next: CartItem[] | ((current: CartItem[]) => CartItem[])) => {
+    const value = typeof next === 'function' ? next(localRef.current) : next;
+    localRef.current = value;
+    setLocalItemsState(value);
+    return value;
+  };
   const [firestoreItems, setFirestoreItems] = useState<CartItem[] | null>(null);
   const [reconcileSucceeded, setReconcileSucceeded] = useState(false);
+  const [guestLoaded, setGuestLoaded] = useState(false);
+  const [accountCartLoaded, setAccountCartLoaded] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const hasReconciledRef = useRef(false);
+  // Account-cart saves still on their way. While any is, the screen keeps the optimistic lines instead of a
+  // snapshot that may predate the save; the last server copy is kept to roll back to if a save fails.
+  const pendingOpsRef = useRef(0);
+  const serverItemsRef = useRef<CartItem[]>([]);
 
   // Rehydrate a signed-out cart from localStorage — deliberately NOT a
   // useState lazy initializer, which would read localStorage during the
@@ -130,6 +161,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (stored.length > 0) {
       setLocalItems((current) => (current.length === 0 ? stored : current));
     }
+    setGuestLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mirrors the guest cart to localStorage on every change so it survives
@@ -146,6 +179,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       hasReconciledRef.current = false;
       setFirestoreItems(null);
       setReconcileSucceeded(false);
+      setAccountCartLoaded(false);
+      setSyncError(null);
       return;
     }
 
@@ -154,28 +189,45 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     if (!hasReconciledRef.current) {
       hasReconciledRef.current = true;
-      const sessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY);
-      if (!sessionId && localItems.length === 0) {
+      let sessionId: string | null = null;
+      try {
+        sessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY);
+      } catch {
+        // Storage blocked (some in-app browsers): carry the cart over with a fresh key.
+      }
+      // The latest guest lines, including one added a moment before signing in.
+      const guestItems = localRef.current.length > 0 ? localRef.current : readGuestCart();
+      if (!sessionId && guestItems.length === 0) {
         setReconcileSucceeded(true);
       } else {
         const reconciliationKey = sessionId ?? (() => {
           const fresh = crypto.randomUUID();
-          localStorage.setItem(SESSION_ID_STORAGE_KEY, fresh);
+          try {
+            localStorage.setItem(SESSION_ID_STORAGE_KEY, fresh);
+          } catch {
+            // See above: storage may be blocked.
+          }
           return fresh;
         })();
+        if (guestItems.length > 0 && localRef.current.length === 0) setLocalItems(guestItems);
         const reconcile = httpsCallable(getFirebaseFunctions(), 'reconcileSessionOnLogin');
-        reconcile({ sessionId: reconciliationKey, cartItems: localItems, reconciliationId: reconciliationKey })
+        const payload = { sessionId: reconciliationKey, cartItems: guestItems, reconciliationId: reconciliationKey };
+        // One retry for a dropped connection; the call is idempotent on reconciliationId.
+        reconcile(payload)
+          .catch(() => reconcile(payload))
           .then(() => {
             setLocalItems([]);
             // The guest copy now lives in the account cart; leaving it in
             // storage would merge it in again on the next page load.
             writeGuestCart([]);
+            setSyncError(null);
             setReconcileSucceeded(true);
             resetSessionId();
           })
           .catch((error) => {
             hasReconciledRef.current = false;
             console.warn('reconcileSessionOnLogin fallback:', error);
+            setSyncError("We couldn't move your cart into your account. Check your internet connection and refresh the page.");
           });
       }
     }
@@ -183,14 +235,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onSnapshot(
       cartRef,
       (snapshot) => {
-        const data = snapshot.exists() ? (snapshot.data() as { items: CartItem[] }) : undefined;
-        if (data?.items) {
-          setFirestoreItems(data.items);
-        }
+        const data = snapshot.exists() ? (snapshot.data() as { items?: CartItem[] }) : undefined;
+        // No cart document yet is an empty cart, not "still loading".
+        const next = data?.items ?? [];
+        serverItemsRef.current = next;
+        if (pendingOpsRef.current === 0) setFirestoreItems(next);
+        setAccountCartLoaded(true);
       },
       (error) => {
         // Dropped listener or permission denied -> seamlessly fall back to localItems
         console.warn('Cart listener fallback to local state:', error);
+        setAccountCartLoaded(true);
       }
     );
     return unsubscribe;
@@ -205,24 +260,45 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : localItems
     : localItems;
 
+  // Known contents: signed out -> the guest cart has been read; signed in -> the account cart has been read and any
+  // guest lines carried over (or the carry-over failed, which syncError explains while the lines stay visible).
+  const ready = !authLoading && (user ? accountCartLoaded && (reconcileSucceeded || syncError !== null) : guestLoaded);
+
   const value = useMemo<CartContextValue>(() => {
     // Once signed in and reconciled, Firestore is the only copy of the
     // cart. Mutating the local buffer too would keep a shadow cart that
     // survives sign-out on a shared browser.
     const accountOwnsCart = Boolean(user) && reconcileSucceeded;
     const applyLocal = (mutate: (current: CartItem[]) => CartItem[]) => {
-      if (!accountOwnsCart) setLocalItems(mutate);
+      if (accountOwnsCart) return;
+      const next = setLocalItems(mutate);
+      // Saved now, before the caller can leave the page.
+      if (!user) writeGuestCart(next);
     };
 
-    const runFirestoreOp = (mutate: (current: CartItem[]) => CartItem[]) => {
+    // Saves to the account cart. The screen updates at once (a transaction has no instant local copy, so the cart
+    // drawer used to stay empty until the server answered and customers pressed Add to cart again); the promise
+    // settles when the server has it. A failed save puts the last server copy back and rejects.
+    const runFirestoreOp = async (mutate: (current: CartItem[]) => CartItem[]): Promise<void> => {
       if (!user) return;
       const db = getFirestore(getFirebaseApp());
-      applyFirestoreCartOp(db, user.uid, mutate).catch((error) => {
-        console.warn('Firestore cart sync fallback to local:', error);
-      });
+      pendingOpsRef.current += 1;
+      if (accountOwnsCart) setFirestoreItems((current) => mutate(current ?? serverItemsRef.current));
+      try {
+        const saved = await applyFirestoreCartOp(db, user.uid, mutate);
+        serverItemsRef.current = saved;
+        pendingOpsRef.current -= 1;
+        if (pendingOpsRef.current === 0) setFirestoreItems(saved);
+      } catch (error) {
+        pendingOpsRef.current -= 1;
+        if (pendingOpsRef.current === 0) setFirestoreItems(serverItemsRef.current);
+        console.warn('Firestore cart save failed:', error);
+        // Before the guest cart is carried over, the line is still kept in this browser's copy.
+        if (accountOwnsCart) throw error;
+      }
     };
 
-    const addItem = (item: CartItem) => {
+    const addItem = async (item: CartItem) => {
       applyLocal((prev) => mergeOne(prev, item));
       const metaId = productIdOfVariant(item.variantId);
       trackMeta('AddToCart', {
@@ -233,29 +309,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
         value: rupees(item.unitPriceSnapshot * item.qty),
         currency: 'INR',
       });
-      if (user) {
-        runFirestoreOp((current) => mergeOne(current, item));
-      }
+      if (user) await runFirestoreOp((current) => mergeOne(current, item));
     };
 
-    const removeItem = (variantId: string, personalizationId: string) => {
+    const removeItem = async (variantId: string, personalizationId: string) => {
       const filterOut = (current: CartItem[]) =>
         current.filter((i) => !(i.variantId === variantId && i.personalizationId === personalizationId));
       applyLocal(filterOut);
-      if (user) {
-        runFirestoreOp(filterOut);
-      }
+      if (user) await runFirestoreOp(filterOut);
     };
 
-    const updateQuantity = (variantId: string, personalizationId: string, qty: number) => {
+    const updateQuantity = async (variantId: string, personalizationId: string, qty: number) => {
       const applyQty = (current: CartItem[]) =>
         current.map((i) =>
           i.variantId === variantId && i.personalizationId === personalizationId ? { ...i, qty } : i
         );
       applyLocal(applyQty);
-      if (user) {
-        runFirestoreOp(applyQty);
-      }
+      if (user) await runFirestoreOp(applyQty);
     };
 
     // [FE-16] Re-editing a cart line's personalization changes its price
@@ -263,7 +333,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // — unlike addItem's merge, which is for a genuinely new/matching
     // line and adds quantities together, this replaces exactly the
     // fields that could have changed on one already-identified line.
-    const updateItem = (
+    const updateItem = async (
       variantId: string,
       personalizationId: string,
       updates: Partial<Pick<CartItem, 'title' | 'unitPriceSnapshot' | 'previewPath' | 'personalization' | 'finish' | 'finishExtra'>>
@@ -278,26 +348,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return next;
         });
       applyLocal(applyUpdate);
-      if (user) {
-        runFirestoreOp(applyUpdate);
-      }
+      if (user) await runFirestoreOp(applyUpdate);
     };
 
-    const clearCart = () => {
+    const clearCart = async () => {
       setLocalItems([]);
       setFirestoreItems([]);
       writeGuestCart([]);
-      if (user) {
-        runFirestoreOp(() => []);
-      }
+      if (user) await runFirestoreOp(() => []);
     };
 
     const totalCount = items.reduce((sum, i) => sum + i.qty, 0);
     const totalPaise = items.reduce((sum, i) => sum + i.qty * i.unitPriceSnapshot, 0);
 
-    return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise };
+    return { items, addItem, removeItem, updateQuantity, updateItem, clearCart, totalCount, totalPaise, ready, syncError };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, user, reconcileSucceeded]);
+  }, [items, user, reconcileSucceeded, ready, syncError]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { formatPaise } from '../../lib/format-price';
 import { SignedOutNotice } from '../../components/account/SignedOutNotice';
+import { LoaderPanel } from '../../components/brand/Preloader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import Link from 'next/link';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
@@ -55,8 +56,8 @@ const COUPON_REASON_MESSAGES: Record<string, string> = {
 
 export default function CheckoutPage() {
   const siteText = useSiteText();
-  const { user } = useAuth();
-  const { items, totalPaise, clearCart } = useCart();
+  const { user, loading: authLoading } = useAuth();
+  const { items, totalPaise, clearCart, ready: cartReady, syncError: cartSyncError } = useCart();
   const [addressId, setAddressId] = useState<string | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const selectedAddressPincode = selectedAddress?.pincode ?? null;
@@ -98,7 +99,8 @@ export default function CheckoutPage() {
   // so flipping options quickly doesn't fire a request per click.
   const quoteKey = `${items.map((i) => `${i.variantId}:${i.personalizationId}:${i.qty}:${i.finish ?? ''}`).join(',')}|${appliedCoupon?.code ?? ''}|${deliveryMethod}|${addressId ?? ''}`;
   useEffect(() => {
-    if (!user || items.length === 0 || orderId) return;
+    // The server prices the saved account cart: wait until it is known (a guest cart carried over, a Buy now save done).
+    if (!user || !cartReady || items.length === 0 || orderId) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       fetchCheckoutQuote(user, { couponCode: appliedCoupon?.code ?? null, deliveryMethod, addressId }, controller.signal).then((result) => {
@@ -116,7 +118,7 @@ export default function CheckoutPage() {
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteKey, user?.uid, orderId]);
+  }, [quoteKey, user?.uid, orderId, cartReady]);
 
   // Subscribe to orders/{orderId} once an order has been created, so the
   // page can detect the webhook flipping status to 'paid' and show a real
@@ -160,6 +162,12 @@ export default function CheckoutPage() {
     );
     return unsubscribe;
   }, [orderId, user?.uid]);
+
+  // Still restoring the saved sign-in, or still reading the cart: neither "sign in" nor "your cart is empty" is true
+  // yet, and showing them sent customers who were signed in, with a frame in the cart, back to sign in or shopping.
+  if (authLoading || (user && !cartReady && !orderId)) {
+    return <LoaderPanel />;
+  }
 
   if (!user) {
     return <SignedOutNotice action="check out" />;
@@ -448,6 +456,12 @@ export default function CheckoutPage() {
         <h1 className="font-display text-3xl md:text-4xl font-bold text-ink mb-2">{siteText.checkoutHeadline}</h1>
         <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Bag / Delivery / Payment</p>
       </div>
+
+      {cartSyncError && !isPaid && (
+        <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {cartSyncError}
+        </div>
+      )}
 
       {isPaid ? (
         <div className="rounded-3xl bg-field border border-line p-8 text-center max-w-lg mx-auto my-12">

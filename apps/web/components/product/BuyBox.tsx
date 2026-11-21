@@ -1,6 +1,9 @@
 'use client';
 
 import { useContext, useEffect, useRef, useState } from 'react';
+// The app router, read softly: the buy box also renders without one (tests, previews), where Buy now falls back to
+// a normal page load.
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { AuthContext } from '../../lib/auth-context';
 import { glitterOffer, paperSizeName, type Product, type PublicFrameModel, type Variant } from '@bro-pics/shared';
 import { useCart } from '../../lib/cart-context';
@@ -76,7 +79,7 @@ interface BuyBoxProps {
   onBlockedAddToCart?: (quantity: number) => void;
   submitting: boolean;
   submitError: string | null;
-  onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewPath?: string) => void) => void;
+  onAddToCart?: (quantity: number, onDone: (personalizationId: string, previewPath?: string) => Promise<void>) => void;
   // [FE-16] Re-editing an existing cart line's personalization updates
   // that SAME line's price/preview (via updateItem) instead of adding a
   // new one, and changes the button's own label to match the action.
@@ -182,32 +185,64 @@ export function BuyBox({
   const cartDisabled = !inStock || !selectedVariant || !onAddToCart || (!personalizationReady && !onBlockedAddToCart) || submitting;
 
   // "Buy now": the same add-to-cart step, then straight to checkout (through the WhatsApp sign-in when needed) instead
-  // of opening the cart. Works for both product layouts: each announces a finished add with 'karthys:open-cart'.
+  // of opening the cart. Works for both product layouts: each announces a finished, SAVED add with
+  // 'karthys:open-cart' (they wait for the cart's save before announcing it).
+  // - In-site navigation (router.push), never a full page load: a reload used to cut off a cart save still on its
+  //   way (the line vanished and checkout said "Your cart is empty"), and on browsers that cannot keep the sign-in
+  //   in storage it signed the customer out.
+  // - While the saved sign-in is still being restored (`loading`), the customer is neither signed in nor out yet;
+  //   deciding then sent signed-in customers to the sign-in page. The choice waits for the answer.
   // Read softly: the buy box also renders where no sign-in provider exists (tests, previews).
-  const user = useContext(AuthContext)?.user ?? null;
-  const buyNowRef = useRef(false);
+  const router = useContext(AppRouterContext);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user ?? null;
+  const authLoading = authContext?.loading ?? false;
+  // Load checkout and sign-in ahead (as a link in view would), so Buy now opens them without waiting.
+  const showsBuyNow = !comboFrame && !isEditingCartLine;
+  useEffect(() => {
+    if (!router || !showsBuyNow) return;
+    router.prefetch('/checkout');
+    router.prefetch('/signin');
+  }, [router, showsBuyNow]);
+  const buyNowRef = useRef<'idle' | 'adding'>('idle');
+  const [buyNowAdded, setBuyNowAdded] = useState(false);
+  // Pressed and on its way (saving, then opening checkout): the button says so and ignores further presses.
+  const [buyNowBusy, setBuyNowBusy] = useState(false);
   useEffect(() => {
     const onAdded = () => {
-      if (!buyNowRef.current) return;
-      buyNowRef.current = false;
-      window.dispatchEvent(new CustomEvent('karthys:close-cart'));
-      window.location.assign(user ? '/checkout' : `/signin?redirect=${encodeURIComponent('/checkout')}`);
+      if (buyNowRef.current !== 'adding') return;
+      buyNowRef.current = 'idle';
+      setBuyNowAdded(true);
+      // After every 'open-cart' listener has run (the cart drawer's included), so the drawer ends up closed.
+      queueMicrotask(() => window.dispatchEvent(new CustomEvent('karthys:close-cart')));
     };
     window.addEventListener('karthys:open-cart', onAdded);
     return () => window.removeEventListener('karthys:open-cart', onAdded);
-  }, [user]);
+  }, []);
+  useEffect(() => {
+    if (!buyNowAdded || authLoading) return;
+    setBuyNowAdded(false);
+    const href = user ? '/checkout' : `/signin?redirect=${encodeURIComponent('/checkout')}`;
+    if (router) router.push(href);
+    else window.location.assign(href);
+  }, [buyNowAdded, authLoading, user, router]);
+  // An add that ended without being announced (a failed upload or save) cancels the pending Buy now.
+  useEffect(() => {
+    if (!submitting && buyNowRef.current === 'adding' && !buyNowAdded) {
+      buyNowRef.current = 'idle';
+      setBuyNowBusy(false);
+    }
+  }, [submitting, buyNowAdded]);
   const handleBuyNow = () => {
     if (!personalizationReady) {
       // Shows what is still missing; nothing is bought until the design is complete.
       handleAddToCart();
       return;
     }
-    buyNowRef.current = true;
+    if (submitting || buyNowBusy || buyNowRef.current === 'adding') return;
+    buyNowRef.current = 'adding';
+    setBuyNowBusy(true);
     handleAddToCart();
-    // If the add did not happen (an error), forget the request.
-    setTimeout(() => {
-      buyNowRef.current = false;
-    }, 15000);
   };
   const showBuyNow = !comboFrame && !isEditingCartLine;
 
@@ -217,12 +252,12 @@ export function BuyBox({
       onBlockedAddToCart?.(quantity);
       return;
     }
-    onAddToCart(quantity, (personalizationId, previewPath) => {
+    onAddToCart(quantity, async (personalizationId, previewPath) => {
       if (isEditingCartLine) {
         // Same personalizationId, same line — only the fields a re-edit
         // could actually have changed (price, if the variant changed;
         // the preview thumbnail, always). qty is deliberately untouched.
-        updateItem(selectedVariant.id, personalizationId, {
+        await updateItem(selectedVariant.id, personalizationId, {
           title: `${product.title} — ${selectedVariant.sizeLabel}`,
           unitPriceSnapshot: selectedVariant.price + finishExtra,
           previewPath,
@@ -234,7 +269,7 @@ export function BuyBox({
         }
         return;
       }
-      addItem({
+      await addItem({
         variantId: selectedVariant.id,
         personalizationId,
         title: `${product.title} — ${selectedVariant.sizeLabel}`,
@@ -427,10 +462,10 @@ export function BuyBox({
         {showBuyNow && (
           <Button
             onClick={handleBuyNow}
-            disabled={cartDisabled}
+            disabled={cartDisabled || buyNowBusy}
             className="w-full h-12 rounded-full bg-ink hover:bg-ink/90 text-paper text-sm font-semibold transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            Buy now
+            {buyNowBusy ? 'Opening checkout…' : 'Buy now'}
           </Button>
         )}
         {printQualityNotice && <PrintQualityNotice />}
@@ -470,10 +505,10 @@ export function BuyBox({
           <button
             type="button"
             onClick={handleBuyNow}
-            disabled={cartDisabled}
+            disabled={cartDisabled || buyNowBusy}
             className="h-11 min-h-[44px] px-4 rounded-full bg-ink text-paper text-sm font-bold shrink-0 disabled:opacity-50"
           >
-            Buy now
+            {buyNowBusy ? 'Opening…' : 'Buy now'}
           </button>
         )}
         <button

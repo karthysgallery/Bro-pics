@@ -1,7 +1,7 @@
 'use client';
 
 import { safeRedirectTarget } from '../../../lib/safe-redirect';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, useContext, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -12,6 +12,7 @@ import {
   resendWhatsAppOtp,
   loginWithPassword,
 } from '../../../lib/services/auth-client';
+import { AuthContext } from '../../../lib/auth-context';
 
 /* ─────────────────────────────────────────────
    Outline SVG Icons (1.5px stroke, no emojis)
@@ -89,6 +90,19 @@ function SignInContent() {
   const [isNotRegistered, setIsNotRegistered] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Already signed in (the sign-in was restored, or the code was just verified): go on to where the customer was
+  // heading (checkout after Buy now) instead of asking for the number again. In-site navigation keeps the cart
+  // and the sign-in in memory; replace() keeps the sign-in page out of the Back button's way.
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user ?? null;
+  const authLoading = authContext?.loading ?? false;
+  const leftRef = useRef(false);
+  useEffect(() => {
+    if (authLoading || !user || leftRef.current) return;
+    leftRef.current = true;
+    router.replace(redirectTarget);
+  }, [authLoading, user, redirectTarget, router]);
+
   // Resend countdown timer
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -157,11 +171,9 @@ function SignInContent() {
       return;
     }
 
+    // The browser is signed in at this point (verify waits for it); the effect above moves on as soon as the
+    // sign-in reaches the page.
     setSuccessMessage('Signed in successfully! Redirecting...');
-    setTimeout(() => {
-      router.push(redirectTarget);
-      router.refresh();
-    }, 700);
   };
 
   // 3. Resend OTP
@@ -211,11 +223,9 @@ function SignInContent() {
       return;
     }
 
+    // The browser is signed in at this point (verify waits for it); the effect above moves on as soon as the
+    // sign-in reaches the page.
     setSuccessMessage('Signed in successfully! Redirecting...');
-    setTimeout(() => {
-      router.push(redirectTarget);
-      router.refresh();
-    }, 700);
   };
 
   return (
