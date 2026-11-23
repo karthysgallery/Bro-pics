@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Lightbox } from '../ui/Lightbox';
-import { CUSTOMER_FRAME_PHOTOS, allCommentsOrdered, monthLabel } from '../../lib/customer-frames';
+import { CUSTOMER_FRAME_PHOTOS, allCommentsOrdered, displayName, monthLabel } from '../../lib/customer-frames';
 
 const COMMENTS = allCommentsOrdered();
 const PHOTO_STEP = 18;
-const COMMENT_STEP = 9;
 
 /**
  * Lower on the product page: real photos of frames KarthysGallery delivered (a masonry grid that keeps each photo's
@@ -15,7 +14,7 @@ const COMMENT_STEP = 9;
  */
 export function CustomerStories() {
   const [photos, setPhotos] = useState(PHOTO_STEP);
-  const [comments, setComments] = useState(COMMENT_STEP);
+  const rowRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState<number | null>(null);
 
   if (CUSTOMER_FRAME_PHOTOS.length === 0 && COMMENTS.length === 0) return null;
@@ -23,14 +22,45 @@ export function CustomerStories() {
   return (
     <section id="customer-stories" aria-labelledby="customer-stories-h" className="scroll-mt-28 border-t border-line py-10 sm:py-14">
       <div className="mb-6 max-w-2xl">
-        <h2 id="customer-stories-h" className="font-display text-3xl font-semibold text-ink sm:text-4xl">Real frames, real homes</h2>
-        <p className="mt-2 text-sm text-ink/65">
-          Photos of frames we made and delivered, and what customers wrote to us on Instagram.
-        </p>
+        <h2 id="customer-stories-h" className="font-display text-3xl font-semibold text-ink sm:text-4xl">Real frames, real customers</h2>
+        <p className="mt-2 text-sm text-ink/65">What customers wrote to us, and photos of frames we made and delivered.</p>
       </div>
+
+      {COMMENTS.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Customers say</h3>
+              <p className="mt-1 text-xs text-ink/55">{COMMENTS.length} customers wrote to us on Instagram. Swipe to read them all.</p>
+            </div>
+            <div className="hidden gap-2 sm:flex">
+              <button type="button" aria-label="Previous reviews" onClick={() => rowRef.current?.scrollBy({ left: -rowRef.current.clientWidth * 0.9, behavior: 'smooth' })} className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-paper text-ink hover:bg-tint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
+              <button type="button" aria-label="Next reviews" onClick={() => rowRef.current?.scrollBy({ left: rowRef.current.clientWidth * 0.9, behavior: 'smooth' })} className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-paper text-ink hover:bg-tint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
+            </div>
+          </div>
+          <ul ref={rowRef} className="-mx-4 mt-4 flex items-start snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:px-0" aria-label="Customer reviews">
+            {COMMENTS.map((c) => (
+              <li key={c.handle} className="flex w-[78%] shrink-0 snap-start flex-col rounded-2xl border border-line bg-paper p-4 sm:w-[300px]">
+                <p className="font-semibold text-ink">{displayName(c)}</p>
+                <p className="text-[11px] text-ink/50">{monthLabel(c.month)} · via Instagram</p>
+                <p className="mt-2.5 text-[15px] leading-relaxed text-ink/90">{c.text}</p>
+                {c.photo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.photo} alt={`${displayName(c)}'s frame`} loading="lazy" className="mt-3 aspect-square w-full rounded-xl object-cover" />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {CUSTOMER_FRAME_PHOTOS.length > 0 && (
         <>
+          <h3 className="mb-4 font-display text-2xl font-semibold text-ink">Frames we delivered</h3>
           <ul className="columns-2 gap-2.5 sm:columns-3 lg:columns-4" aria-label="Photos of delivered frames">
             {CUSTOMER_FRAME_PHOTOS.slice(0, photos).map((p, k) => (
               <li key={p.id} className="mb-2.5 break-inside-avoid">
@@ -63,31 +93,6 @@ export function CustomerStories() {
             </div>
           )}
         </>
-      )}
-
-      {COMMENTS.length > 0 && (
-        <div className="mt-10">
-          <h3 className="font-display text-2xl font-semibold text-ink">What customers say</h3>
-          <p className="mt-1 text-xs text-ink/55">Comments on our Instagram, as written. {COMMENTS.length} customers so far.</p>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {COMMENTS.slice(0, comments).map((c) => (
-              <li key={c.handle} className="rounded-2xl border border-line bg-paper p-4">
-                <p className="text-sm leading-relaxed text-ink/90">{c.text}</p>
-                <p className="mt-3 flex items-center justify-between gap-2 text-xs text-ink/55">
-                  <span className="truncate font-semibold text-ink/80">{c.handle}</span>
-                  <span className="shrink-0">Instagram · {monthLabel(c.month)}</span>
-                </p>
-              </li>
-            ))}
-          </ul>
-          {comments < COMMENTS.length && (
-            <div className="mt-4 flex justify-center">
-              <button type="button" onClick={() => setComments((v) => v + COMMENT_STEP)} className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink hover:bg-tint">
-                Load more reviews
-              </button>
-            </div>
-          )}
-        </div>
       )}
 
       {open !== null && (

@@ -32,3 +32,8 @@ export function monthLabel(ym: string): string {
   const [y, m] = ym.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
+
+/** What a review card shows as the person's name: their name from their username, else the username. */
+export function displayName(c: CustomerComment): string {
+  return c.name ?? c.handle;
+}

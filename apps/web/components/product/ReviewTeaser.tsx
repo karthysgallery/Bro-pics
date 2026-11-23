@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CUSTOMER_FRAME_PHOTOS, featuredComments, monthLabel } from '../../lib/customer-frames';
+import { CUSTOMER_FRAME_PHOTOS, displayName, featuredComments, monthLabel } from '../../lib/customer-frames';
 import { INSTAGRAM_COMMENTS } from '../../lib/customer-comments';
 
 const COMMENTS = featuredComments();
@@ -54,10 +54,15 @@ export function ReviewTeaser() {
         }}
       >
         <div className="flex items-start gap-3" aria-live="polite">
-          <Avatar handle={c.handle} />
+          {c.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={c.photo} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+          ) : (
+            <Avatar handle={displayName(c)} />
+          )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">{c.handle}</p>
-            <p className="text-[11px] text-ink/50">Instagram comment · {monthLabel(c.month)}</p>
+            <p className="truncate text-sm font-semibold text-ink">{displayName(c)}</p>
+            <p className="text-[11px] text-ink/50">{monthLabel(c.month)} · via Instagram</p>
             <p className="mt-1 line-clamp-3 text-[13px] leading-snug text-ink/85">{c.text}</p>
           </div>
         </div>
