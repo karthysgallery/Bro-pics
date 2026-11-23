@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ENGLISH_ONLY_MESSAGE, FONT_MAP, LOW_RES_CONFIRMATION_REQUIRED, formatCalendarDate, isEnglishText, parseCalendarDate, parseSpotifyLink, type CalendarSlot, type TextSlot } from '@bro-pics/shared';
 import { ColorPicker } from '../ui/ColorPicker';
 import { QUICK_TEXT_COLORS, toHexColor } from '../../lib/text-personalization-options';
@@ -200,6 +200,34 @@ function TextField({ customizer, slot }: { customizer: TemplateCustomizer; slot:
   );
 }
 
+/** Photos picked beyond the free spaces: shown, never dropped. Tap one to put it in the selected space. */
+function ExtraPhotos({ customizer }: { customizer: TemplateCustomizer }) {
+  const urls = useMemo(() => customizer.extras.map((f) => URL.createObjectURL(f)), [customizer.extras]);
+  useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
+  const target = customizer.activeSlotId ?? customizer.template.photoSlots[0]?.id ?? null;
+  const targetLabel = customizer.template.photoSlots.find((s) => s.id === target)?.label ?? 'the selected space';
+  return (
+    <div className="space-y-2 rounded-xl border border-dashed border-ink/30 p-3" data-testid="extra-photos">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <p className="font-semibold text-ink">Not placed yet ({customizer.extras.length})</p>
+        <button type="button" onClick={customizer.clearExtras} className="font-medium text-ink/60 underline hover:text-ink">Remove all</button>
+      </div>
+      <p className="text-xs text-ink/60">Tap a photo to put it in {targetLabel}. Select another space above first to place it there.</p>
+      <ul className="flex gap-2 overflow-x-auto pb-1">
+        {customizer.extras.map((f, i) => (
+          <li key={`${f.name}-${i}`} className="relative shrink-0">
+            <button type="button" onClick={() => target && customizer.placeExtra(i, target)} aria-label={`Put ${f.name} in ${targetLabel}`} className="block h-16 w-16 overflow-hidden rounded-lg border border-line">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={urls[i]} alt="" className="h-full w-full object-cover" />
+            </button>
+            <button type="button" onClick={() => customizer.removeExtra(i)} aria-label={`Remove ${f.name}`} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] text-paper">×</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Right column of a template product page (inside the buy box): every photo
  * space at a glance, a bulk "Add photos", photo quality, and the text fields.
@@ -219,6 +247,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
   const errors = Object.entries(activity).filter(([, a]) => a.error);
   const unavailable = new Set(customizer.unavailableSlots);
   const byWhatsApp = state.photosVia === 'whatsapp';
+  const uploadingCount = Object.values(activity).filter((a) => a.uploading).length;
 
   return (
     <section aria-labelledby="your-photos" className="my-4 space-y-4 rounded-2xl border border-line bg-paper p-4">
@@ -243,26 +272,57 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
       </header>
 
       {total > 0 && (
-        <div role="radiogroup" aria-label="How you will give us your photos" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {([
-            ['upload', 'Add photos now', 'Upload them here and see your frame before you order.'],
-            ['whatsapp', 'Send photos on WhatsApp', 'Order now without photos, then send them on WhatsApp after paying.'],
-          ] as const).map(([via, title, note]) => {
-            const chosen = (state.photosVia ?? 'upload') === via;
-            return (
-              <button
-                key={via}
-                type="button"
-                role="radio"
-                aria-checked={chosen}
-                onClick={() => customizer.setPhotosVia(via)}
-                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${chosen ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:border-ink/50'}`}
-              >
-                <span className="block text-[13px] font-semibold">{title}</span>
-                <span className={`mt-0.5 block text-xs leading-snug ${chosen ? 'text-paper/75' : 'text-ink/60'}`}>{note}</span>
-              </button>
-            );
-          })}
+        <div role="radiogroup" aria-label="How you will give us your photos" className="space-y-2.5">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!byWhatsApp}
+            onClick={() => {
+              customizer.setPhotosVia('upload');
+              if (filled === 0) onAddPhotos();
+            }}
+            className={`group relative flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition-all active:scale-[0.99] ${
+              !byWhatsApp ? 'border-ink bg-ink text-paper shadow-md' : 'border-ink/25 bg-paper text-ink hover:border-ink'
+            }`}
+          >
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${!byWhatsApp ? 'bg-gold text-ink' : 'bg-tint text-ink'}`} aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold uppercase tracking-wide">Add photos now</span>
+              <span className={`mt-0.5 block text-xs leading-snug ${!byWhatsApp ? 'text-paper/80' : 'text-ink/65'}`}>
+                {total > 1 ? `Pick all ${total} photos at once. Upload them and personalise your frame.` : 'Upload your photo and personalise your frame.'}
+              </span>
+            </span>
+            {!byWhatsApp && filled > 0 && (
+              <svg className="ml-auto shrink-0 text-gold" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            )}
+          </button>
+
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-widest text-ink/40" aria-hidden="true">
+            <span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" />
+          </div>
+
+          <button
+            type="button"
+            role="radio"
+            aria-checked={byWhatsApp}
+            onClick={() => customizer.setPhotosVia('whatsapp')}
+            className={`flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all active:scale-[0.99] ${
+              byWhatsApp ? 'border-[#1f9d55] bg-[#1f9d55] text-white shadow-md' : 'border-[#1f9d55]/60 bg-paper text-ink hover:border-[#1f9d55]'
+            }`}
+          >
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${byWhatsApp ? 'bg-white text-[#1f9d55]' : 'bg-[#1f9d55] text-white'}`} aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 001.8-1.2 2.2 2.2 0 00.2-1.2c-.1-.1-.3-.2-.6-.3z" /></svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold uppercase tracking-wide">Send photos on WhatsApp</span>
+              <span className={`mt-0.5 block text-xs leading-snug ${byWhatsApp ? 'text-white/85' : 'text-ink/65'}`}>Prefer WhatsApp? Order now and send your photos to us after paying.</span>
+            </span>
+            {byWhatsApp && (
+              <svg className="ml-auto shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            )}
+          </button>
         </div>
       )}
 
@@ -279,28 +339,56 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
         </div>
       ) : (
         <>
-      <button
+      {filled > 0 && empty > 0 && (
+        <button
           type="button"
           onClick={onAddPhotos}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/85"
         >
           <Icon name="photos" />
-          {filled === 0 ? (total === 1 ? 'Add your photo' : 'Add photos') : empty > 0 ? `Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}` : 'Replace photos'}
+          {`Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}`}
         </button>
+      )}
+
+        {total > 1 && (filled > 0 || uploadingCount > 0) && (
+          <div className="space-y-1.5" aria-live="polite">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-ink">
+                {uploadingCount > 0
+                  ? `Uploading ${uploadingCount} photo${uploadingCount === 1 ? '' : 's'}… you can keep going.`
+                  : empty > 0
+                    ? `${empty} more photo${empty === 1 ? '' : 's'} needed`
+                    : 'All photos added'}
+              </span>
+              <span className="tabular-nums text-ink/60">{filled}/{total}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-tint">
+              <div className={`h-full rounded-full transition-all ${empty === 0 && uploadingCount === 0 ? 'bg-emerald-600' : 'bg-gold'}`} style={{ width: `${Math.round((filled / total) * 100)}%` }} />
+            </div>
+          </div>
+        )}
   
         {customizer.notice && (
           <p role="status" className="rounded-xl bg-tint px-3 py-2 text-xs text-ink/80">
             {customizer.notice}
           </p>
         )}
+        {customizer.extras.length > 0 && (
+          <ExtraPhotos customizer={customizer} />
+        )}
         {errors.length > 0 && (
           <ul role="alert" className="space-y-1">
             {errors.map(([slotId, a]) => (
               <li key={slotId} className="flex items-start gap-2 text-xs text-alert">
                 <Icon name="alert" className="mt-px h-4 w-4 shrink-0" />
-                <span>
+                <span className="flex-1">
                   {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.error}
                 </span>
+                {customizer.canRetry(slotId) && (
+                  <button type="button" onClick={() => customizer.retryPhoto(slotId)} className="shrink-0 rounded-full border border-alert/50 px-2.5 py-0.5 font-semibold text-alert hover:bg-alert/10">
+                    Try again
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -398,6 +486,22 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
             </p>
           ))}
   
+        {active && activePhoto && total > 1 && (
+          <label className="flex items-center justify-between gap-2 rounded-xl border border-line/80 px-3 py-2 text-xs text-ink">
+            <span>Move {active.label} to</span>
+            <select
+              value=""
+              onChange={(e) => e.target.value && customizer.swapPhotos(active.id, e.target.value)}
+              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-gold focus:outline-none"
+            >
+              <option value="">Choose a space…</option>
+              {template.photoSlots.filter((s) => s.id !== active.id).map((s) => (
+                <option key={s.id} value={s.id}>{s.label}{state.slots[s.id] ? ' (swap)' : ' (empty)'}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {active && activePhoto && activeStatus?.tier && (
           <div className="space-y-2 rounded-xl border border-line/80 px-3 py-2.5">
             <p className="flex items-center gap-2 text-xs text-ink/75">

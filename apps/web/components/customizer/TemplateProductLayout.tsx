@@ -228,13 +228,22 @@ function TemplateEditorSession({
   const bulkInput = useRef<HTMLInputElement>(null);
   const singleInput = useRef<HTMLInputElement>(null);
   const targetSlot = useRef<string | null>(null);
+  // An empty space opens the multi-photo picker (the photos fill from that space onward); a space that already has
+  // a photo opens the single picker to replace just that one.
+  const bulkPreferred = useRef<string | null>(null);
   const requestPhoto = useCallback(
     (slotId: string) => {
       targetSlot.current = slotId;
       customizer.setActiveSlotId(slotId);
-      singleInput.current?.click();
+      const emptyCount = template.photoSlots.filter((s) => !customizer.stateRef.current.slots[s.id]).length;
+      if (!customizer.stateRef.current.slots[slotId] && emptyCount > 1) {
+        bulkPreferred.current = slotId;
+        bulkInput.current?.click();
+      } else {
+        singleInput.current?.click();
+      }
     },
-    [customizer]
+    [customizer, template.photoSlots]
   );
   // "Edit Image" under a space: select its photo and bring the editor (the big preview) into view.
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -249,7 +258,10 @@ function TemplateEditorSession({
   );
   const addPhotos = useCallback(() => {
     if (template.photoSlots.length === 1) requestPhoto(template.photoSlots[0].id);
-    else bulkInput.current?.click();
+    else {
+      bulkPreferred.current = null;
+      bulkInput.current?.click();
+    }
   }, [requestPhoto, template.photoSlots]);
 
   const [submitting, setSubmitting] = useState(false);
@@ -461,8 +473,10 @@ function TemplateEditorSession({
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = '';
+          const preferred = bulkPreferred.current;
+          bulkPreferred.current = null;
           if (files.length) {
-            customizer.addPhotos(files);
+            customizer.addPhotos(files, preferred);
             showPreview();
           }
         }}

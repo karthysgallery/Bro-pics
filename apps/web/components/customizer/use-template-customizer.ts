@@ -85,6 +85,12 @@ function setTransform(state: PersonalizationState, slotId: string, transform: Ph
  * its undo/redo history, photos added in bulk to the empty slots, uploads in
  * the background, drafts, completeness and the finished-design export.
  */
+
+/** Same file picked again: same name, size and last-modified time. */
+function fileSignature(f: File): string {
+  return `${f.name}|${f.size}|${f.lastModified}`;
+}
+
 export function useTemplateCustomizer(options: CustomizerOptions) {
   const { template, productId, variantId, printSizeIn } = options;
   const optionsRef = useRef(options);
@@ -174,14 +180,24 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     });
   }, []);
 
+  /** The file last chosen for each space, kept until it has uploaded (so a failed upload can be retried). */
+  const fileBySlot = useRef(new Map<string, File>());
+  /** Which picked file sits in which space, to spot the same photo chosen twice. */
+  const placedSig = useRef(new Map<string, string>());
+  /** Photos picked beyond the free spaces: kept, never silently dropped, until the customer uses or removes them. */
+  const [extras, setExtras] = useState<File[]>([]);
+
   const placeFile = useCallback(
     async (file: File, slotId: string, batchKey: string) => {
       const localId = `local:${crypto.randomUUID()}`;
+      fileBySlot.current.set(slotId, file);
+      placedSig.current.set(slotId, fileSignature(file));
       setSlotActivity(slotId, { uploading: true });
       let local;
       try {
         local = await prepareLocalPhoto(file);
       } catch (err) {
+        if (placedSig.current.get(slotId) === fileSignature(file)) placedSig.current.delete(slotId);
         setSlotActivity(slotId, { uploading: false, error: err instanceof PhotoError ? err.message : "This photo couldn't be read." });
         return;
       }
@@ -196,10 +212,12 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
           photos.register(uploaded.id, local.src);
           rewriteEverywhere((p) => (p.assetId === localId ? { ...p, assetId: uploaded.id, width: uploaded.width, height: uploaded.height } : p));
           setSlotActivity(slotId, null);
+          if (fileBySlot.current.get(slotId) === file) fileBySlot.current.delete(slotId);
           return true;
         })
         .catch((err: unknown) => {
           rewriteEverywhere((p) => (p.assetId === localId ? null : p));
+          if (placedSig.current.get(slotId) === fileSignature(file)) placedSig.current.delete(slotId);
           setSlotActivity(slotId, { uploading: false, error: err instanceof PhotoError ? err.message : "This photo couldn't be uploaded." });
           return false;
         })
@@ -257,17 +275,39 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     }
   }, [template.photoSlots, template.canvas, state.slots, photos, rewriteEverywhere, setSlotActivity]);
 
-  /** Adds photos: the chosen slot first, then every empty slot in order. */
+  /**
+   * Adds photos: the chosen space first, then every empty space in order. Files that are not photos and the same
+   * photo picked twice are skipped (and said so); photos beyond the free spaces are kept as extras.
+   */
   const addPhotos = useCallback(
     (files: File[], preferredSlotId?: string | null) => {
-      const images = files.filter((f) => !f.type || f.type.startsWith('image/'));
-      if (images.length === 0) return;
+      const notPhotos = files.filter((f) => f.type && !f.type.startsWith('image/'));
+      const seen = new Set<string>();
+      const alreadyIn = new Set([...placedSig.current.entries()].filter(([slot]) => slot !== preferredSlotId).map(([, sig]) => sig));
+      let duplicates = 0;
+      const images: File[] = [];
+      for (const f of files) {
+        if (f.type && !f.type.startsWith('image/')) continue;
+        const sig = fileSignature(f);
+        if (seen.has(sig) || alreadyIn.has(sig)) {
+          duplicates += 1;
+          continue;
+        }
+        seen.add(sig);
+        images.push(f);
+      }
       const { targets, overflow } = planPhotoTargets(template, stateRef.current, images.length, preferredSlotId);
-      setNotice(
-        overflow > 0
-          ? `${overflow} photo${overflow === 1 ? '' : 's'} didn't fit: this design has ${template.photoSlots.length} photo space${template.photoSlots.length === 1 ? '' : 's'}.`
-          : null
-      );
+      const parts: string[] = [];
+      if (overflow > 0) {
+        parts.push(
+          `${overflow} photo${overflow === 1 ? '' : 's'} didn't fit: this design has ${template.photoSlots.length} photo space${template.photoSlots.length === 1 ? '' : 's'}. ${overflow === 1 ? 'It is' : 'They are'} kept below: tap one to swap it into the selected space.`
+        );
+        setExtras((prev) => [...prev, ...images.slice(targets.length)].slice(0, 60));
+      }
+      if (duplicates > 0) parts.push(`${duplicates} photo${duplicates === 1 ? ' was' : 's were'} already added, so ${duplicates === 1 ? 'it was' : 'they were'} skipped.`);
+      if (notPhotos.length > 0) parts.push(`Skipped ${notPhotos.length === 1 ? `"${notPhotos[0].name}"` : `${notPhotos.length} files`}: only photos (JPG, PNG, HEIC, WebP) can be used.`);
+      setNotice(parts.length ? parts.join(' ') : null);
+      if (images.length === 0) return;
       const batchKey = `batch:${crypto.randomUUID()}`;
       targets.forEach((slotId, i) => void placeFile(images[i], slotId, batchKey));
       if (targets[0]) setActiveSlotId(targets[0]);
@@ -275,7 +315,59 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     [placeFile, template]
   );
 
-  const removePhoto = useCallback((slotId: string) => apply((s) => clearSlot(s, slotId)), [apply]);
+  /** Puts a kept extra photo into a space (replacing what is there). */
+  const placeExtra = useCallback(
+    (index: number, slotId: string) => {
+      const file = extras[index];
+      if (!file) return;
+      setExtras((prev) => prev.filter((_, i) => i !== index));
+      setNotice(null);
+      void placeFile(file, slotId, `extra:${crypto.randomUUID()}`);
+      setActiveSlotId(slotId);
+    },
+    [extras, placeFile]
+  );
+  const removeExtra = useCallback((index: number) => setExtras((prev) => prev.filter((_, i) => i !== index)), []);
+  const clearExtras = useCallback(() => setExtras([]), []);
+
+  /** Tries a failed upload again with the same file. */
+  const retryPhoto = useCallback(
+    (slotId: string) => {
+      const file = fileBySlot.current.get(slotId);
+      if (file) void placeFile(file, slotId, `retry:${crypto.randomUUID()}`);
+    },
+    [placeFile]
+  );
+  const canRetry = useCallback((slotId: string) => fileBySlot.current.has(slotId), []);
+
+  /** Swaps the photos of two spaces (each is re-fitted to its new space). */
+  const swapPhotos = useCallback(
+    (a: string, b: string) => {
+      if (a === b) return;
+      apply((s) => {
+        const pa = s.slots[a];
+        const pb = s.slots[b];
+        let next = s;
+        next = pb ? setSlotPhoto(next, a, { assetId: pb.assetId, width: pb.width, height: pb.height }) : clearSlot(next, a);
+        next = pa ? setSlotPhoto(next, b, { assetId: pa.assetId, width: pa.width, height: pa.height }) : clearSlot(next, b);
+        return next;
+      });
+      for (const m of [placedSig.current, fileBySlot.current] as Map<string, unknown>[]) {
+        const va = m.get(a);
+        const vb = m.get(b);
+        if (vb === undefined) m.delete(a); else m.set(a, vb);
+        if (va === undefined) m.delete(b); else m.set(b, va);
+      }
+      setActiveSlotId(b);
+    },
+    [apply]
+  );
+
+  const removePhoto = useCallback((slotId: string) => {
+    placedSig.current.delete(slotId);
+    fileBySlot.current.delete(slotId);
+    apply((s) => clearSlot(s, slotId));
+  }, [apply]);
   /** Fills empty spaces by repeating the photos already in the design. Returns how many were filled. */
   const repeatPhotos = useCallback(() => {
     const { state: next, filled } = repeatPhotosIntoEmpty(template, stateRef.current);
@@ -517,6 +609,13 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
     undo,
     redo,
     addPhotos,
+    extras,
+    placeExtra,
+    removeExtra,
+    clearExtras,
+    retryPhoto,
+    canRetry,
+    swapPhotos,
     removePhoto,
     repeatPhotos,
     rotatePhoto,
