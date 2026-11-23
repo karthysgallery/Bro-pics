@@ -228,6 +228,47 @@ function ExtraPhotos({ customizer }: { customizer: TemplateCustomizer }) {
   );
 }
 
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** The optional add-on: what it is, why it is worth adding (the space's hint), and one button to add it. */
+function AddOnHeader({ customizer, filled, onAdd }: { customizer: TemplateCustomizer; filled: number; onAdd: () => void }) {
+  const slots = customizer.template.photoSlots;
+  const title = slots.length === 1 ? slots[0]!.label : 'Your photos';
+  const hint = slots.length === 1 ? slots[0]!.hint : undefined;
+  const done = filled === slots.length;
+  return (
+    <header className="space-y-3">
+      <div className="space-y-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="your-photos" className="font-display text-lg font-semibold text-ink">
+            {title}
+          </h2>
+          <span className="rounded-full bg-tint px-2 py-0.5 text-2xs font-semibold text-ink/70">Optional</span>
+        </div>
+        {hint && <p className="text-[13px] leading-relaxed text-ink/75">{hint}</p>}
+      </div>
+      {!done && (
+        <button
+          type="button"
+          onClick={() => {
+            customizer.setPhotosVia('upload');
+            onAdd();
+          }}
+          className="flex w-full items-center gap-3 rounded-2xl border-2 border-ink bg-ink px-4 py-3.5 text-left text-paper shadow-md transition-all hover:bg-ink/90 active:scale-[0.99]"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold text-ink" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          </span>
+          <span className="min-w-0 text-[15px] font-bold">{slots.length === 1 ? `Add ${lowerFirst(title)}` : 'Add your photos'}</span>
+        </button>
+      )}
+      <p className="text-xs text-ink/60">
+        {done ? 'Added. It is printed in its place on your frame.' : 'You can skip this: the frame then comes exactly as shown.'}
+      </p>
+    </header>
+  );
+}
+
 /**
  * Right column of a template product page (inside the buy box): every photo
  * space at a glance, a bulk "Add photos", photo quality, and the text fields.
@@ -246,11 +287,22 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
   const activePhoto = active ? state.slots[active.id] : undefined;
   const errors = Object.entries(activity).filter(([, a]) => a.error);
   const unavailable = new Set(customizer.unavailableSlots);
-  const byWhatsApp = state.photosVia === 'whatsapp';
+  // Every photo space optional (e.g. "Your last movie ticket" on a ready-made poster): an add-on the customer may skip,
+  // so the page offers it as such instead of asking how they will send their photos.
+  const addOn = total > 0 && template.photoSlots.every((s) => !s.required);
+  const byWhatsApp = !addOn && state.photosVia === 'whatsapp';
+  const firstEmpty = template.photoSlots.find((s) => !state.slots[s.id]);
   const uploadingCount = Object.values(activity).filter((a) => a.uploading).length;
 
   return (
     <section aria-labelledby="your-photos" className="my-4 space-y-4 rounded-2xl border border-line bg-paper p-4">
+      {addOn ? (
+        <AddOnHeader
+          customizer={customizer}
+          filled={filled}
+          onAdd={() => (total > 1 && empty > 1 ? onAddPhotos() : firstEmpty && onRequestPhoto(firstEmpty.id))}
+        />
+      ) : (
       <header className="space-y-1">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="your-photos" className="font-display text-lg font-semibold text-ink">
@@ -270,8 +322,9 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           </p>
         )}
       </header>
+      )}
 
-      {total > 0 && (
+      {total > 0 && !addOn && (
         <div role="radiogroup" aria-label="How you will give us your photos" className="space-y-2.5">
           <button
             type="button"
@@ -404,7 +457,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           </button>
         )}
   
-        {total >= 1 && (
+        {total >= 1 && (!addOn || filled > 0) && (
           <ul className="grid grid-cols-3 gap-x-2.5 gap-y-3 sm:grid-cols-4">
             {template.photoSlots.map((slot, i) => {
               const photo = state.slots[slot.id];

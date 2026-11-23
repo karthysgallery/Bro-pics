@@ -551,7 +551,10 @@ export function fitTemplateSize(template: Pick<PersonalizationTemplate, 'canvas'
  * picture when any image it needs is not loaded, or the canvas can't be exported.
  */
 export function renderToDataUrl(
-  input: Omit<RenderInput, 'width' | 'height' | 'mode' | 'activeSlotId' | 'slotCache'>,
+  input: Omit<RenderInput, 'width' | 'height' | 'mode' | 'activeSlotId' | 'slotCache'> & {
+    /** Draw empty photo spaces as "+ label" boxes (a shop preview of an optional space); never for print or cart. */
+    showEmptySpaces?: boolean;
+  },
   maxSide: number,
   type: 'image/jpeg' | 'image/png' = 'image/jpeg',
   quality = 0.9
@@ -560,7 +563,7 @@ export function renderToDataUrl(
   const canvas = (input.createCanvas ?? defaultCreateCanvas)(width, height);
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  const { missing } = renderTemplate(ctx, { ...input, width, height, mode: 'export' });
+  const { missing } = renderTemplate(ctx, { ...input, width, height, mode: input.showEmptySpaces ? 'editor' : 'export' });
   if (missing.length > 0) return null;
   try {
     return canvas.toDataURL(type, quality);

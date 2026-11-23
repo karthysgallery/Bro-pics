@@ -73,16 +73,21 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
   const photoCount = Object.keys(state.slots).length;
   // A ready-made frame: nothing to add, the design is complete as it is and is shown framed straight away.
   const fixedDesign = template.photoSlots.length === 0 && template.textSlots.length === 0 && !(template.calendarSlots?.length);
+  // Only optional photo spaces (a ready-made poster with "Add your ticket"): shown framed straight away too, with each
+  // empty space drawn as a "+" box so the customer sees where their picture would go.
+  const addOn = template.photoSlots.length > 0 && template.photoSlots.every((s) => !s.required);
+  // No example photos in an optional space: a stranger's photo where the customer's ticket would go only confuses.
+  const shownSamples = addOn ? [] : samples;
 
   // The rooms (and their thumbnails) show the finished design, framed, rebuilt as the design changes.
   useEffect(() => {
-    if (photoCount === 0 && !fixedDesign) {
+    if (photoCount === 0 && !fixedDesign && !addOn) {
       setRoomImage(null);
       return;
     }
     let alive = true;
     const timer = setTimeout(async () => {
-      const design = customizer.exportDesign(1000, true);
+      const design = customizer.exportDesign(1000, true, addOn);
       if (!design) return; // a photo is still loading; this runs again once it has
       const framed = await frameDesign(design, printWidthIn, look, { glitter });
       if (alive) setRoomImage(framed ?? design);
@@ -92,7 +97,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, customizer.render.version, printWidthIn, photoCount, fixedDesign, look.src, look.borderPx, look.mouldingWidthIn, glitter]);
+  }, [state, customizer.render.version, printWidthIn, photoCount, fixedDesign, addOn, look.src, look.borderPx, look.mouldingWidthIn, glitter]);
 
   const activeSlot = template.photoSlots.find((s) => s.id === activeSlotId) ?? null;
   const activePhoto = activeSlotId ? state.slots[activeSlotId] : undefined;
@@ -113,7 +118,7 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       <PreviewGallery
         defaultImageUrl={defaultImageUrl}
         personalizedImageUrl={roomImage}
-        hasPersonalization={photoCount > 0 || (fixedDesign && roomImage !== null)}
+        hasPersonalization={photoCount > 0 || ((fixedDesign || addOn) && roomImage !== null)}
         frameInches={frameInches}
         cutOut={false}
         alt={productTitle}
@@ -125,11 +130,11 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
         photosAfterFirst={photosAfterFirst}
       >
         <div className="flex h-full max-h-full w-full items-center justify-center rounded-xl bg-tint/60 p-1 md:p-2">
-          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={samples} fitParentHeight frame={{ look, printWidthIn }} />
+          <TemplateCanvas customizer={customizer} onRequestPhoto={onRequestPhoto} samples={shownSamples} fitParentHeight frame={{ look, printWidthIn }} />
         </div>
       </PreviewGallery>
 
-      {samples.length > 0 && !fixedDesign && photoCount < template.photoSlots.length && (
+      {shownSamples.length > 0 && !fixedDesign && photoCount < template.photoSlots.length && (
         <p className="px-1 text-center text-2xs text-ink/55">Example photos. Tap a space to add your own. Frame finish may vary slightly.</p>
       )}
 

@@ -551,8 +551,8 @@ export function useTemplateCustomizer(options: CustomizerOptions) {
   }, [state, productId, options.useDrafts]);
 
   const exportDesign = useCallback(
-    (maxSide: number, includeUnprinted = true): string | null =>
-      renderToDataUrl({ template, state: stateRef.current, getImage: images.get, assetSrc, photoSrc, fontFamily, includeUnprinted }, maxSide),
+    (maxSide: number, includeUnprinted = true, showEmptySpaces = false): string | null =>
+      renderToDataUrl({ template, state: stateRef.current, getImage: images.get, assetSrc, photoSrc, fontFamily, includeUnprinted, showEmptySpaces }, maxSide),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [template, images.version, assetSrc, photoSrc, fontFamily]
   );

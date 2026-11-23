@@ -147,6 +147,19 @@ describe('renderTemplate', () => {
     expect(renderToDataUrl({ ...base, getImage: images(['/art.png', 'blob:up_a', 'blob:up_b']), createCanvas: create }, 800)).toMatch(/^data:image\/jpeg/);
   });
 
+  it('draws empty spaces as boxes only when asked (a shop preview), never in a plain export', () => {
+    const empty = { ...state, slots: {} };
+    const run = (showEmptySpaces: boolean) => {
+      const log: Call[] = [];
+      let made = 0;
+      const url = renderToDataUrl({ ...base, state: empty, showEmptySpaces, getImage: images(['/art.png']), createCanvas: (w, h) => fakeCanvas(w, h, log, made++ === 0 ? 'main' : 'slot') }, 800);
+      return { url, slots: log.filter((c) => c.op === 'drawImage' && c.args[0] === 'slot').length };
+    };
+    expect(run(false)).toMatchObject({ slots: 0 });
+    expect(run(true).slots).toBe(2);
+    expect(run(true).url).toMatch(/^data:image\/jpeg/);
+  });
+
   it('draws a calendar on top, its chosen day marked, and leaves it out of an export before a date is picked', () => {
     const calendarTemplate: PersonalizationTemplate = {
       ...template,
