@@ -18,6 +18,7 @@ import { ProductTabs } from '../../../../components/product/ProductTabs';
 import { ProductViewEvent } from '../../../../components/meta/MetaEvents';
 import { ReviewsSection } from '../../../../components/product/ReviewsSection';
 import { RelatedProducts } from '../../../../components/product/RelatedProducts';
+import { CustomerStories } from '../../../../components/product/CustomerStories';
 import { RecentlyViewedRail } from '../../../../components/product/RecentlyViewedRail';
 import { buildBreadcrumbList, buildProductJsonLd, resolveOgImage } from '../../../../lib/structured-data';
 import { getAppearanceSettings, getSeoSettings, getShippingSettings, getSiteText } from '../../../../lib/firestore-settings';
@@ -240,6 +241,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       ) : (
         show.showReviews && <ReviewsSection product={product} reviews={reviews} />
       )}
+      <CustomerStories />
       {show.showFrequentlyBought && frequentlyBoughtTogether.length > 0 && (
         <RelatedProducts products={frequentlyBoughtTogether} title="Frequently Bought Together" />
       )}

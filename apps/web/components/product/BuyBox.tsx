@@ -1,6 +1,7 @@
 'use client';
 
 import { SizeOptions } from './SizeOptions';
+import { ReviewTeaser } from './ReviewTeaser';
 import { useContext, useEffect, useRef, useState } from 'react';
 // The app router, read softly: the buy box also renders without one (tests, previews), where Buy now falls back to
 // a normal page load.
@@ -376,6 +377,7 @@ export function BuyBox({
           onSelect={onSelectSize}
           showPrices={!comboFrame}
         />
+        {!comboFrame && <ReviewTeaser />}
         <VariantSelector
           label={frameModels.length ? 'Frame' : 'Finish'}
           options={colours}
