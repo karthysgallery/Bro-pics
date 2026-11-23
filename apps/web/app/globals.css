@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Numbers everywhere: upright lining figures (no old-style digits dipping below the line). Amount columns add
+   Tailwind's tabular-nums. The digit glyphs themselves come from --font-digits (see app/layout.tsx). */
+body { font-variant-numeric: lining-nums; }
+
 /* Storefront colour roles (the Everyday theme). A festival theme overrides
    these from the root layout; the admin always keeps the Everyday colours.
    Ivory and champagne-peach with espresso ink and a champagne gold: warm, quiet, premium.

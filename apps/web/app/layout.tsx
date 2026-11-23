@@ -24,6 +24,7 @@ import { withComboNavLink } from '../lib/combo-nav';
 import { BusinessContactProvider, type BusinessContact } from '../lib/business-contact';
 import { whatsappDigits } from '@bro-pics/shared';
 import { buildOrganizationJsonLd, resolveOgImage } from '../lib/structured-data';
+import localFont from 'next/font/local';
 import { Inter, DM_Sans, Poppins, Nunito_Sans, Montserrat, Playfair_Display, Lora, Fraunces, Manrope, Outfit, Dancing_Script, Great_Vibes, Pacifico, Sacramento, Cormorant_Garamond, Cinzel, Caveat, Josefin_Sans, Allura, Alex_Brush, Parisienne, Satisfy, Kaushan_Script, Lobster, Pinyon_Script } from 'next/font/google';
 import { shopTheme } from '../lib/shop-theme';
 
@@ -31,6 +32,19 @@ import { shopTheme } from '../lib/shop-theme';
 // sizes a dense catalogue runs on, and its open, slightly geometric figures
 // keep price-heavy rows legible. The previous Playfair/Inter pairing (serif
 // display + sans body) belonged to the older boutique design.
+// Numbers only: Inter's digits (and ₹ , . ×) placed in front of every font stack, so prices, phone numbers, OTPs
+// and sizes are crisp lining figures while words keep the shop's own fonts. unicode-range limits it to these
+// characters; no fallback font, so nothing else changes.
+const digitsFont = localFont({
+  src: '../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2',
+  variable: '--font-digits',
+  weight: '100 900',
+  display: 'swap',
+  adjustFontFallback: false,
+  fallback: [],
+  declarations: [{ prop: 'unicode-range', value: 'U+0030-0039, U+20B9, U+002C, U+002E, U+00D7' }],
+});
+
 const sansFont = Manrope({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
@@ -240,7 +254,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const organizationJsonLd = buildOrganizationJsonLd({ email: businessContact.supportEmail, whatsappDigits: businessContact.whatsappDigits });
 
   return (
-    <html lang="en" className={`${sansFont.variable} ${displayFont.variable} ${optionalFonts} ${textFieldFontVariables}`}>
+    <html lang="en" className={`${digitsFont.variable} ${sansFont.variable} ${displayFont.variable} ${optionalFonts} ${textFieldFontVariables}`}>
       <body className="bg-field text-ink font-sans antialiased">
         {appearanceStyles && <style data-appearance dangerouslySetInnerHTML={{ __html: appearanceStyles }} />}
         {themeCss && <style data-theme={festive!.id} dangerouslySetInnerHTML={{ __html: themeCss }} />}

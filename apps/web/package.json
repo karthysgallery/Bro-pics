@@ -14,6 +14,7 @@
   "dependencies": {
     "@bro-pics/print-render": "workspace:*",
     "@bro-pics/shared": "workspace:*",
+    "@fontsource-variable/inter": "5.1.1",
     "@simplewebauthn/browser": "14.0.0",
     "@simplewebauthn/server": "14.0.3",
     "firebase": "^10.14.0",

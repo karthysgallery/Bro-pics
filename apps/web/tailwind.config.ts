@@ -29,8 +29,8 @@ const config: Config = {
         'brown-dark': '#000000',
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'var(--font-sans)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-digits)', 'var(--font-sans)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-digits)', 'var(--font-display)', 'var(--font-sans)', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
