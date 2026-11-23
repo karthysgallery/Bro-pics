@@ -34,33 +34,38 @@ const media: ProductMedia[] = [
 ];
 
 describe('ProductDetailClient', () => {
-  it('shows the default variant (first in stock, 8x12/Black) with its dedicated media and price', () => {
+  it('opens on 12x18 (the shop default size) when nothing else is asked for', () => {
     render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
-    expect(screen.getByText('₹799')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /12 × 18/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('shows the requested variant (8x12/Black) with its dedicated media and price', () => {
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} initialVariantId="v_black" /></Providers>);
+    expect(screen.getAllByText('₹799').length).toBeGreaterThan(0);
     expect(screen.getByRole('img')).toHaveAttribute('src', '/black.svg');
   });
 
   it('falls back to variant-agnostic media when transitioning into a colour with no dedicated photos', () => {
-    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} initialVariantId="v_black" /></Providers>);
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
-    expect(screen.getByText('₹849')).toBeInTheDocument();
+    expect(screen.getAllByText('₹849').length).toBeGreaterThan(0);
     expect(screen.getByRole('img')).toHaveAttribute('src', '/generic.svg');
   });
 
   it('lists every size, and a click on a size the chosen frame does not come in moves to a frame that has it', () => {
-    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} /></Providers>);
+    render(<Providers><ProductDetailClient product={product} variants={variants} media={media} initialTemplatesByVariant={{}} initialVariantId="v_black" /></Providers>);
 
     // Default: 8x12 / Black.
-    expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /12 × 18/ })).toBeInTheDocument();
 
     // White only comes in 8x12, but 12x18 stays on the list: a size sold in one frame must not vanish.
     fireEvent.click(screen.getByRole('button', { name: 'White' }));
-    expect(screen.getByText('₹849')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '12x18 in' })).toBeInTheDocument();
+    expect(screen.getAllByText('₹849').length).toBeGreaterThan(0);
+    expect(screen.getByRole('radio', { name: /12 × 18/ })).toBeInTheDocument();
 
     // Choosing it moves to the frame that has it (Black); price reflects that exact variant and White is no longer offered.
-    fireEvent.click(screen.getByRole('button', { name: '12x18 in' }));
-    expect(screen.getByText('₹999')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /12 × 18/ }));
+    expect(screen.getAllByText('₹999').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'White' })).not.toBeInTheDocument();
   });
 

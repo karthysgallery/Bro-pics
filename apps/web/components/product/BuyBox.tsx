@@ -1,5 +1,6 @@
 'use client';
 
+import { SizeOptions } from './SizeOptions';
 import { useContext, useEffect, useRef, useState } from 'react';
 // The app router, read softly: the buy box also renders without one (tests, previews), where Buy now falls back to
 // a normal page load.
@@ -367,12 +368,13 @@ export function BuyBox({
             onSelectOrientation(orientation);
           }}
         />
-        <VariantSelector
-          label="Size"
-          options={sizes}
-          selected={selectedSize}
+        <SizeOptions
+          variants={variants.filter((v) => orientationFromDimensions(v.widthIn, v.heightIn) === selectedOrientation)}
+          sizes={sizes}
+          selectedSize={selectedSize}
+          selectedColour={selectedColour}
           onSelect={onSelectSize}
-          hints={Object.fromEntries(variants.flatMap((v) => { const a = paperSizeName(v); return a ? [[v.sizeLabel, a] as const] : []; }))}
+          showPrices={!comboFrame}
         />
         <VariantSelector
           label={frameModels.length ? 'Frame' : 'Finish'}

@@ -1,5 +1,6 @@
 'use client';
 
+import { defaultVariant } from '../../lib/size-merchandising';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { FrameTemplate, PersonalizationTemplate, Product, ProductMedia, Upload, Variant } from '@bro-pics/shared';
@@ -123,11 +124,8 @@ export function ProductDetailClient({
   initialVariantId,
 }: ProductDetailClientProps) {
   const { showToast } = useToast();
-  const firstInStock =
-    (initialVariantId ? variants.find((v) => v.id === initialVariantId) : undefined) ??
-    variants.find((v) => v.stockStatus === 'in_stock') ??
-    variants[0] ??
-    null;
+  // Opens on the requested variant, else 12x18 (the shop's default size), else the first in stock.
+  const firstInStock = defaultVariant(variants, initialVariantId);
   const [selectedSize, setSelectedSize] = useState(firstInStock?.sizeLabel ?? '');
   const [selectedColour, setSelectedColour] = useState(firstInStock?.frameColour ?? '');
   const [selectedOrientation, setSelectedOrientation] = useState<Orientation | ''>(

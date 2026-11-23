@@ -84,10 +84,11 @@ describe('BuyBox sizes', () => {
         onSelectSize={vi.fn()} onSelectColour={vi.fn()} onSelectOrientation={vi.fn()} personalizationReady submitting={false} submitError={null}
       />
     );
-    expect(screen.getByRole('button', { name: /16x24/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /12x18/ })).toBeTruthy();
-    // The paper name sits beside the size, so a customer thinking "A3" finds it.
-    expect(screen.getByRole('button', { name: '12x18 in' }).textContent).toContain('A3');
-    expect(screen.getByRole('button', { name: '16x24 in' }).textContent).toContain('A2');
+    expect(screen.getByRole('radio', { name: /16 × 24/ })).toBeTruthy();
+    // The paper name sits beside the size, so a customer thinking "A3" finds it; A3 wears the badge.
+    expect(screen.getByRole('radio', { name: /12 × 18/ }).textContent).toContain('A3');
+    expect(screen.getByRole('radio', { name: /12 × 18/ }).textContent).toContain('Most loved size');
+    expect(screen.getByRole('radio', { name: /16 × 24/ }).textContent).toContain('A2');
+    expect(screen.getByRole('radio', { name: /8 × 12/ })).toHaveAttribute('aria-checked', 'true');
   });
 });
