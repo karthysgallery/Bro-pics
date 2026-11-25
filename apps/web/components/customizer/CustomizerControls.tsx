@@ -409,7 +409,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
             aria-checked={!byWhatsApp}
             onClick={() => {
               customizer.setPhotosVia('upload');
-              if (filled === 0) onAddPhotos();
+              if ((count ? count.filled : filled) === 0) onAddPhotos();
             }}
             className={`group relative flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition-all active:scale-[0.99] ${
               !byWhatsApp ? 'border-ink bg-ink text-paper shadow-md' : 'border-ink/25 bg-paper text-ink hover:border-ink'
@@ -477,7 +477,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
         <MainPhotoCard key={slot.id} customizer={customizer} slot={slot} onRequestPhoto={onRequestPhoto} onEditPhoto={onEditPhoto} />
       ))}
 
-      {(count ? count.filled > 0 : filled > 0) && emptyCells > 0 && (
+      {(count ? true : filled > 0) && emptyCells > 0 && (
         <button
           type="button"
           onClick={onAddPhotos}
@@ -485,7 +485,9 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
         >
           <Icon name="photos" />
           {count
-            ? `Add more photos (${emptyCells} space${emptyCells === 1 ? '' : 's'} left)`
+            ? count.filled === 0
+              ? `Add collage photos (pick ${count.min} to ${count.max})`
+              : `Add more photos (${emptyCells} space${emptyCells === 1 ? '' : 's'} left)`
             : `Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}`}
         </button>
       )}
