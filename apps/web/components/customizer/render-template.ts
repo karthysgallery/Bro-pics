@@ -160,6 +160,38 @@ function desaturate(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.putImageData(data, 0, 0);
 }
 
+/** How many directions the outline is stamped in: enough that a thick edge stays round, not polygonal. */
+const OUTLINE_STEPS = 32;
+
+/**
+ * Puts a solid border round whatever is drawn on `canvas`, following its transparency (a sticker's white edge round
+ * a cut-out person). The photo's silhouette is filled with the colour and stamped all round at the border width (and
+ * at half of it, so a thick border has no gaps), then laid UNDER the photo. No canvas blur filter: Safari ignores it.
+ * The print renderer draws the same border from the same alpha (services/print-render/src/render-slot.ts).
+ */
+function drawOutline(ctx: CanvasRenderingContext2D, create: (w: number, h: number) => HTMLCanvasElement, cw: number, ch: number, color: string, widthPx: number): void {
+  if (widthPx < 0.5) return;
+  const silhouette = create(cw, ch);
+  const sctx = silhouette.getContext('2d');
+  const ring = create(cw, ch);
+  const rctx = ring.getContext('2d');
+  if (!sctx || !rctx) return;
+  sctx.drawImage(ctx.canvas, 0, 0);
+  sctx.globalCompositeOperation = 'source-in';
+  sctx.fillStyle = color;
+  sctx.fillRect(0, 0, cw, ch);
+  for (const r of [widthPx, widthPx / 2]) {
+    for (let i = 0; i < OUTLINE_STEPS; i++) {
+      const a = (i / OUTLINE_STEPS) * Math.PI * 2;
+      rctx.drawImage(silhouette, Math.cos(a) * r, Math.sin(a) * r);
+    }
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.drawImage(ring, 0, 0);
+  ctx.restore();
+}
+
 function applyShapeMask(ctx: CanvasRenderingContext2D, slot: PhotoSlot, w: number, h: number, maskImg: CanvasImageSource | undefined): void {
   if (slot.shape === 'rect' || (slot.shape === 'mask' && !maskImg)) return;
   ctx.save();
@@ -280,7 +312,7 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
   }
 
   const t = photo.transform;
-  const key = [cw, ch, src, photo.width, photo.height, photo.rotation, t.scale, t.offsetX, t.offsetY, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), maskImg ? maskSrc : '', slot.grayscale ? 'bw' : ''].join('|');
+  const key = [cw, ch, src, photo.width, photo.height, photo.rotation, t.scale, t.offsetX, t.offsetY, slot.shape, slot.cornerRadius ?? '', JSON.stringify(slot.polygon ?? ''), maskImg ? maskSrc : '', slot.grayscale ? 'bw' : '', slot.outline ? `${slot.outline.color}:${slot.outline.width}:${input.width}` : ''].join('|');
   const cached = input.slotCache?.get(slot.id);
   if (cached && cached.key === key) return cached.canvas;
   const canvas = cached && cached.canvas.width === cw && cached.canvas.height === ch ? cached.canvas : create(cw, ch);
@@ -295,6 +327,7 @@ function slotContent(input: RenderInput, slot: PhotoSlot, w: number, h: number, 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (slot.grayscale) desaturate(ctx, cw, ch);
   applyShapeMask(ctx, slot, cw, ch, maskImg);
+  if (slot.outline) drawOutline(ctx, create, cw, ch, slot.outline.color, slot.outline.width * input.width);
   input.slotCache?.set(slot.id, { key, canvas });
   return canvas;
 }

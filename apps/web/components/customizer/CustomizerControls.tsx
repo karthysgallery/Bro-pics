@@ -270,6 +270,74 @@ function AddOnHeader({ customizer, filled, onAdd }: { customizer: TemplateCustom
 }
 
 /**
+ * The main (cut-out) photo of an "at least N photos" collage, asked for on its own so a bulk pick never lands in it.
+ */
+function MainPhotoCard({
+  customizer,
+  slot,
+  onRequestPhoto,
+  onEditPhoto,
+}: {
+  customizer: TemplateCustomizer;
+  slot: TemplateCustomizer['template']['photoSlots'][number];
+  onRequestPhoto: (slotId: string) => void;
+  onEditPhoto?: (slotId: string) => void;
+}) {
+  const photo = customizer.state.slots[slot.id];
+  const src = photo ? customizer.render.photoSrc(slot.id, photo) : null;
+  const busy = customizer.activity[slot.id]?.uploading;
+  return (
+    <div className={`flex items-center gap-3 rounded-2xl border-2 p-3 ${photo ? 'border-emerald-600/50 bg-paper' : 'border-dashed border-ink/40 bg-tint/60'}`}>
+      <button
+        type="button"
+        onClick={() => {
+          customizer.setPhotosVia('upload');
+          customizer.setActiveSlotId(slot.id);
+          if (!photo) onRequestPhoto(slot.id);
+          else onEditPhoto?.(slot.id);
+        }}
+        aria-label={`${slot.label}: ${photo ? 'photo added, edit it' : 'empty, upload it'}`}
+        className="relative flex h-20 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-tint"
+      >
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Icon name="plus" className="h-6 w-6 text-ink/50" />
+        )}
+        {busy && <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-gold" aria-hidden="true" />}
+      </button>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+          {slot.label}
+          <span className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${photo ? 'bg-emerald-600/10 text-emerald-700' : 'bg-ink/10 text-ink/70'}`}>
+            {photo ? 'Added' : 'Required'}
+          </span>
+        </p>
+        {slot.hint && <p className="text-xs leading-snug text-ink/65">{slot.hint}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              customizer.setPhotosVia('upload');
+              onRequestPhoto(slot.id);
+            }}
+            className={`h-9 rounded-lg px-3 text-xs font-semibold transition-colors ${photo ? 'border border-line bg-paper text-ink hover:border-ink/50' : 'bg-ink text-paper hover:bg-ink/85'}`}
+          >
+            {photo ? 'Change main photo' : 'Upload main photo'}
+          </button>
+          {photo && onEditPhoto && (
+            <button type="button" onClick={() => onEditPhoto(slot.id)} className="h-9 rounded-lg border border-ink bg-ink px-3 text-xs font-semibold text-paper hover:bg-ink/85">
+              Edit
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Right column of a template product page (inside the buy box): every photo
  * space at a glance, a bulk "Add photos", photo quality, and the text fields.
  */
@@ -293,6 +361,11 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
   const byWhatsApp = !addOn && state.photosVia === 'whatsapp';
   const firstEmpty = template.photoSlots.find((s) => !state.slots[s.id]);
   const uploadingCount = Object.values(activity).filter((a) => a.uploading).length;
+  // An "at least N photos" collage: the main photo is asked for on its own, the count is of the collage cells.
+  const count = completeness.photoCount;
+  const mainSlots = count ? template.photoSlots.filter((s) => s.required) : [];
+  const gridSlots = count ? template.photoSlots.filter((s) => !s.required) : template.photoSlots;
+  const emptyCells = count ? count.max - count.filled : empty;
 
   return (
     <section aria-labelledby="your-photos" className="my-4 space-y-4 rounded-2xl border border-line bg-paper p-4">
@@ -310,11 +383,15 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           </h2>
           {!byWhatsApp && (
             <span className="text-xs font-medium text-ink/60" aria-live="polite">
-              {filled} of {total} added
+              {count ? `${count.filled} of ${count.max} added` : `${filled} of ${total} added`}
             </span>
           )}
         </div>
-        {total > 1 && !byWhatsApp && (
+        {count && !byWhatsApp ? (
+          <p className="text-xs leading-relaxed text-ink/60">
+            Add your main photo, then at least {count.min} and up to {count.max} photos for the collage. Pick them all at once: they fill the collage in order. Tap any space to swap or adjust it.
+          </p>
+        ) : total > 1 && !byWhatsApp && (
           <p className="text-xs leading-relaxed text-ink/60">
             {empty > 0
               ? `Pick up to ${empty} photo${empty === 1 ? '' : 's'} at once: they fill the empty spaces in order. Tap any space to swap or adjust it.`
@@ -344,7 +421,9 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
             <span className="min-w-0">
               <span className="block text-[15px] font-bold uppercase tracking-wide">Add photos now</span>
               <span className={`mt-0.5 block text-xs leading-snug ${!byWhatsApp ? 'text-paper/80' : 'text-ink/65'}`}>
-                {total > 1 ? `Pick all ${total} photos at once. Upload them and personalise your frame.` : 'Upload your photo and personalise your frame.'}
+                {count
+                  ? `Pick ${count.min} to ${count.max} photos at once, then add your main photo.`
+                  : total > 1 ? `Pick all ${total} photos at once. Upload them and personalise your frame.` : 'Upload your photo and personalise your frame.'}
               </span>
             </span>
             {!byWhatsApp && filled > 0 && (
@@ -386,24 +465,53 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
             <li>Choose your size{template.textSlots.length > 0 ? ' and fill in the text below' : ''}, then add to cart and pay.</li>
             <li>On your order page, tap “Send photos on WhatsApp”. Your order number is filled in for you.</li>
             <li>
-              Send your {total} photo{total === 1 ? '' : 's'}. Our team places them in the design and prints your frame.
+              {count
+                ? `Send your main photo and ${count.min} to ${count.max} photos for the collage. Our team places them in the design and prints your frame.`
+                : `Send your ${total} photo${total === 1 ? '' : 's'}. Our team places them in the design and prints your frame.`}
             </li>
           </ol>
         </div>
       ) : (
         <>
-      {filled > 0 && empty > 0 && (
+      {mainSlots.map((slot) => (
+        <MainPhotoCard key={slot.id} customizer={customizer} slot={slot} onRequestPhoto={onRequestPhoto} onEditPhoto={onEditPhoto} />
+      ))}
+
+      {(count ? count.filled > 0 : filled > 0) && emptyCells > 0 && (
         <button
           type="button"
           onClick={onAddPhotos}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink bg-ink text-sm font-semibold text-paper transition-colors hover:bg-ink/85"
         >
           <Icon name="photos" />
-          {`Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}`}
+          {count
+            ? `Add more photos (${emptyCells} space${emptyCells === 1 ? '' : 's'} left)`
+            : `Add ${empty === 1 ? 'the last photo' : `${empty} more photos`}`}
         </button>
       )}
 
-        {total > 1 && (filled > 0 || uploadingCount > 0) && (
+        {count && (count.filled > 0 || uploadingCount > 0) && (
+          <div className="space-y-1.5" aria-live="polite">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-ink">
+                {uploadingCount > 0
+                  ? `Uploading ${uploadingCount} photo${uploadingCount === 1 ? '' : 's'}… you can keep going.`
+                  : count.filled < count.min
+                    ? `${count.min - count.filled} more photo${count.min - count.filled === 1 ? '' : 's'} needed (at least ${count.min})`
+                    : count.filled < count.max
+                      ? `Enough photos. Add up to ${count.max - count.filled} more, or leave the rest empty.`
+                      : 'All photos added'}
+              </span>
+              <span className="shrink-0 tabular-nums text-ink/60">{count.filled}/{count.max}</span>
+            </div>
+            <div className="relative h-1.5 overflow-hidden rounded-full bg-tint">
+              <div className={`h-full rounded-full transition-all ${count.filled >= count.min && uploadingCount === 0 ? 'bg-emerald-600' : 'bg-gold'}`} style={{ width: `${Math.round((count.filled / count.max) * 100)}%` }} />
+              <span className="absolute inset-y-0 w-0.5 bg-ink/40" style={{ left: `${(count.min / count.max) * 100}%` }} aria-hidden="true" />
+            </div>
+          </div>
+        )}
+
+        {!count && total > 1 && (filled > 0 || uploadingCount > 0) && (
           <div className="space-y-1.5" aria-live="polite">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-ink">
@@ -459,7 +567,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
   
         {total >= 1 && (!addOn || filled > 0) && (
           <ul className="grid grid-cols-3 gap-x-2.5 gap-y-3 sm:grid-cols-4">
-            {template.photoSlots.map((slot, i) => {
+            {gridSlots.map((slot, i) => {
               const photo = state.slots[slot.id];
               const src = photo ? customizer.render.photoSrc(slot.id, photo) : null;
               const status = statusBySlot.get(slot.id);

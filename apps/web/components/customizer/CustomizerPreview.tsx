@@ -77,7 +77,10 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
   // empty space drawn as a "+" box so the customer sees where their picture would go.
   const addOn = template.photoSlots.length > 0 && template.photoSlots.every((s) => !s.required);
   // No example photos in an optional space: a stranger's photo where the customer's ticket would go only confuses.
-  const shownSamples = addOn ? [] : samples;
+  // An "at least N photos" collage: once the customer has started, empty cells show as they will print (no example
+  // photo), so the design they approve with 6 photos is the frame they receive.
+  const atLeast = template.minPhotos !== undefined && photoCount > 0;
+  const shownSamples = addOn || atLeast ? [] : samples;
 
   // The rooms (and their thumbnails) show the finished design, framed, rebuilt as the design changes.
   useEffect(() => {
@@ -136,6 +139,10 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
 
       {shownSamples.length > 0 && !fixedDesign && photoCount < template.photoSlots.length && (
         <p className="px-1 text-center text-2xs text-ink/55">Example photos. Tap a space to add your own. Frame finish may vary slightly.</p>
+      )}
+
+      {atLeast && photoCount < template.photoSlots.length && (
+        <p className="px-1 text-center text-2xs text-ink/55">Spaces marked + are empty. Any you leave empty print as plain grey tiles, as in the room views.</p>
       )}
 
       {glitter && roomImage && (

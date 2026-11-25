@@ -153,6 +153,19 @@ export function PhotoSlotInspector({
           <span className="block text-ink/60">The customer&apos;s photo shows and prints in black and white in this space.</span>
         </span>
       </label>
+      <label className="flex items-start gap-2 rounded-lg bg-tint px-2.5 py-2 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={slot.outline !== undefined}
+          onChange={(e) => onChange({ outline: e.target.checked ? { color: '#ffffff', width: 0.006 } : undefined })}
+          disabled={disabled}
+          className="mt-0.5 h-4 w-4 accent-[#c9861a]"
+        />
+        <span>
+          <span className="font-semibold">White outline round the cut-out</span>
+          <span className="block text-ink/60">A sticker-style edge that follows the person. Use it with &quot;Remove the photo&apos;s background&quot;.</span>
+        </span>
+      </label>
       <label className="block space-y-1">
         <span className="text-2xs font-semibold uppercase tracking-wide text-ink/55">Hint (optional)</span>
         <input value={slot.hint ?? ''} placeholder="e.g. Bride, Main photo" onChange={(e) => onChange({ hint: e.target.value || undefined })} disabled={disabled} className={inputClass} />

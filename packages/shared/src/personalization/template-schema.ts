@@ -84,6 +84,17 @@ export const PhotoSlotSchema = z
     removeBackground: z.boolean().optional(),
     /** Show and print the customer's photo in black & white (a design whose photos are monochrome strips). */
     grayscale: z.boolean().optional(),
+    /**
+     * A solid border hugging the photo's own shape, like a sticker's white edge round a cut-out. Drawn from the
+     * photo's transparency, so it follows the person, not the box. `width` is a fraction of the CANVAS width, so it
+     * looks the same in the preview and in the print file.
+     */
+    outline: z
+      .object({
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        width: z.number().positive().max(0.05),
+      })
+      .optional(),
   })
   .refine((slot) => slot.width > 0 && slot.height > 0, { message: 'slot width/height must be > 0' });
 export type PhotoSlot = z.infer<typeof PhotoSlotSchema>;
@@ -210,6 +221,12 @@ export const PersonalizationTemplateSchema = z.object({
   canvas: CanvasSchema,
   background: BackgroundSchema.optional(),
   photoSlots: z.array(PhotoSlotSchema),
+  /**
+   * A collage that takes "at least N" photos: the customer must fill at least this many of the OPTIONAL photo spaces
+   * (the collage cells; required spaces such as a main photo are asked for on their own). Absent = every required
+   * space must be filled and optional ones may stay empty, as before.
+   */
+  minPhotos: z.number().int().positive().optional(),
   textSlots: z.array(TextSlotSchema).default([]),
   /** Month calendars with a customer-chosen date. Absent on templates made before calendars existed. */
   calendarSlots: z.array(CalendarSlotSchema).optional(),

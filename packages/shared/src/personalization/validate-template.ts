@@ -72,6 +72,12 @@ export function validateTemplate(input: unknown, options: ValidateOptions = {}):
     seen.add(id);
   }
 
+  // --- "at least N photos" fits the collage cells it counts -----------------
+  if (t.minPhotos !== undefined) {
+    const optional = t.photoSlots.filter((s) => !s.required).length;
+    if (t.minPhotos > optional) error('min_photos_too_high', `At least ${t.minPhotos} photos are asked for, but the design has only ${optional} optional photo spaces.`);
+  }
+
   // --- geometry stays inside the canvas -------------------------------------
   const inCanvas = (s: { id: string; x: number; y: number; width: number; height: number }, what: string) => {
     if (s.x + s.width > 1 + EPS || s.y + s.height > 1 + EPS) {

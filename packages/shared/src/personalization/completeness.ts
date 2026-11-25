@@ -25,6 +25,8 @@ export interface Completeness {
   /** Non-blocking notes (optional slot empty, accepted low-res photo). */
   warnings: string[];
   slots: SlotStatus[];
+  /** Present when the template sets minPhotos: how many collage photos are in, the least needed and the most allowed. */
+  photoCount?: { filled: number; min: number; max: number };
 }
 
 /**
@@ -86,6 +88,21 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     slots.push(status);
   }
 
+  let photoCount: Completeness['photoCount'];
+  if (template.minPhotos !== undefined) {
+    const counted = template.photoSlots.filter((s) => !s.required);
+    const filled = counted.filter((s) => state.slots[s.id]).length;
+    const min = Math.min(template.minPhotos, counted.length);
+    photoCount = { filled, min, max: counted.length };
+    // Photos sent on WhatsApp after ordering are not missing, just not here yet.
+    if (!photosByWhatsApp && filled < min) {
+      const more = min - filled;
+      blockers.push(`Add at least ${min} photos to the collage (${more} more needed).`);
+    }
+    // "Optional space empty" notes are noise once the minimum is met: empty cells are part of the design.
+    for (let i = warnings.length - 1; i >= 0; i--) if (warnings[i].endsWith('is empty (optional).')) warnings.splice(i, 1);
+  }
+
   for (const slot of template.textSlots) {
     const value = (state.texts[slot.id]?.value ?? slot.defaultValue).trim();
     if (slot.required && !value) blockers.push(`Enter “${slot.label}”.`);
@@ -100,5 +117,5 @@ export function checkCompleteness(template: PersonalizationTemplate, state: Pers
     else if (slot.required && !chosenCalendarDate(slot, state)) blockers.push(`Pick a date for “${slot.label}”.`);
   }
 
-  return { complete: blockers.length === 0, blockers, warnings, slots };
+  return { complete: blockers.length === 0, blockers, warnings, slots, ...(photoCount ? { photoCount } : {}) };
 }

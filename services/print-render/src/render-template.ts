@@ -145,6 +145,8 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
         targetHeightPx: rect.height,
         maskBuffer,
         grayscale: slot.grayscale,
+        // The border width is a fraction of the canvas width: the same look at preview and print size.
+        outline: slot.outline ? { color: slot.outline.color, widthPx: slot.outline.width * width } : null,
       });
 
       let left = rect.x;

@@ -115,6 +115,15 @@ describe('planPhotoTargets', () => {
   it('reports photos that do not fit', () => {
     expect(planPhotoTargets(t, createEmptyState('grid', 1), 6)).toEqual({ targets: ['s1', 's2', 's3', 's4'], overflow: 2 });
   });
+
+  it('an "at least N photos" collage keeps a bulk pick out of its main cut-out photo, unless that space was chosen', () => {
+    const withMain = { ...t, minPhotos: 2, photoSlots: t.photoSlots.map((s, i) => (i === 0 ? { ...s, removeBackground: true } : s)) };
+    expect(planPhotoTargets(withMain, createEmptyState('grid', 1), 3)).toEqual({ targets: ['s2', 's3', 's4'], overflow: 0 });
+    expect(planPhotoTargets(withMain, createEmptyState('grid', 1), 1, 's1')).toEqual({ targets: ['s1'], overflow: 0 });
+    // Without minPhotos, older cut-out designs fill in order as before.
+    const older = { ...withMain, minPhotos: undefined };
+    expect(planPhotoTargets(older, createEmptyState('grid', 1), 1)).toEqual({ targets: ['s1'], overflow: 0 });
+  });
 });
 
 describe('template drafts', () => {

@@ -588,6 +588,42 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
           </div>
 
           <div className={card}>
+            <h2 className="text-sm font-semibold text-ink">How many photos</h2>
+            {(() => {
+              const optional = draft.photoSlots.filter((s) => !s.required).length;
+              const required = draft.photoSlots.length - optional;
+              return (
+                <div className="space-y-2 text-xs text-ink">
+                  <p className="text-ink/65">
+                    Required: {required}. Optional: {optional}.
+                  </p>
+                  {optional > 0 && (
+                    <label className="flex items-center gap-2">
+                      <span>Customer must add at least</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={optional}
+                        value={draft.minPhotos ?? 0}
+                        disabled={!editable}
+                        onChange={(e) => {
+                          const n = Math.max(0, Math.min(optional, Math.round(Number(e.target.value) || 0)));
+                          change((t) => ({ ...t, minPhotos: n > 0 ? n : undefined }));
+                        }}
+                        className="w-16 rounded-lg border border-line px-2 py-1"
+                      />
+                      <span>of the {optional} optional spaces (0 = no minimum)</span>
+                    </label>
+                  )}
+                  {draft.minPhotos !== undefined && (
+                    <p className="text-ink/65">Customers add their required photos (e.g. the main photo) on their own, then {draft.minPhotos} to {optional} collage photos.</p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className={card}>
             <ProductLinks templateId={draft.id} live={live} />
           </div>
         </div>

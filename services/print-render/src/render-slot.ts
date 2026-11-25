@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type OverlayOptions } from 'sharp';
 import type { Rect, RotationDeg } from '@bro-pics/shared';
 
 export interface RenderSlotInput {
@@ -23,6 +23,8 @@ export interface RenderSlotInput {
   maskBuffer?: Buffer | null;
   /** The slot is black & white: the photo is printed without colour. */
   grayscale?: boolean;
+  /** A solid border hugging the photo's transparency (a cut-out's white sticker edge), its width in print pixels. */
+  outline?: { color: string; widthPx: number } | null;
 }
 
 /**
@@ -42,6 +44,52 @@ export interface RenderSlotInput {
  * placed in the slot).
  */
 export async function renderSlotPhoto(input: RenderSlotInput): Promise<Buffer> {
+  const shaped = await renderShapedPhoto(input);
+  return input.outline ? addOutline(shaped, input.outline.color, input.outline.widthPx) : shaped;
+}
+
+/** How many directions the outline is stamped in: the browser preview uses the same 32 (render-template.ts). */
+const OUTLINE_STEPS = 32;
+
+/**
+ * Lays a solid border UNDER an RGBA image, following its transparency: the image's silhouette, filled with the
+ * colour, is stamped all round at the border width and at half of it, then the image goes back on top. The same
+ * construction as the browser preview's drawOutline (apps/web/components/customizer/render-template.ts), so the
+ * printed edge matches what the customer approved. The result keeps the input's size.
+ */
+export async function addOutline(png: Buffer, color: string, widthPx: number): Promise<Buffer> {
+  if (widthPx < 0.5) return png;
+  const meta = await sharp(png).metadata();
+  const width = meta.width ?? 0;
+  const height = meta.height ?? 0;
+  const hex = /^#([0-9a-fA-F]{6})$/.exec(color)?.[1] ?? 'ffffff';
+  const fill = { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16) };
+  const alpha = await sharp(png).ensureAlpha().extractChannel(3).raw().toBuffer();
+  const silhouette = await sharp({ create: { width, height, channels: 3, background: fill } })
+    .joinChannel(alpha, { raw: { width, height, channels: 1 } })
+    .png()
+    .toBuffer();
+  // Stamped onto a canvas padded by the border width, so no offset is negative, then cut back to size.
+  const pad = Math.ceil(widthPx);
+  const stamps: OverlayOptions[] = [];
+  for (const r of [widthPx, widthPx / 2]) {
+    for (let i = 0; i < OUTLINE_STEPS; i++) {
+      const a = (i / OUTLINE_STEPS) * Math.PI * 2;
+      stamps.push({ input: silhouette, left: pad + Math.round(Math.cos(a) * r), top: pad + Math.round(Math.sin(a) * r) });
+    }
+  }
+  const ring = await sharp({ create: { width: width + 2 * pad, height: height + 2 * pad, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(stamps)
+    .png()
+    .toBuffer();
+  return sharp(ring)
+    .extract({ left: pad, top: pad, width, height })
+    .png()
+    .toBuffer()
+    .then((cut) => sharp(cut).composite([{ input: png }]).png().toBuffer());
+}
+
+async function renderShapedPhoto(input: RenderSlotInput): Promise<Buffer> {
   const { photoBuffer, cropRect, rotationDeg, targetWidthPx, targetHeightPx, maskBuffer, grayscale } = input;
 
   const photo = sharp(photoBuffer, { limitInputPixels: false });
