@@ -54,8 +54,8 @@ export function planPhotoTargets(
   if (preferredSlotId && template.photoSlots.some((s) => s.id === preferredSlotId)) targets.push(preferredSlotId);
   for (const slot of template.photoSlots) {
     if (targets.length >= count) break;
-    // An "at least N photos" collage asks for its main (cut-out) photo on its own: a bulk pick fills only the cells.
-    if (template.minPhotos !== undefined && slot.removeBackground) continue;
+    // An "at least N photos" collage asks for its main photo(s) (the required spaces) on their own: a bulk pick fills only the cells.
+    if (template.minPhotos !== undefined && (slot.required || slot.removeBackground)) continue;
     if (!state.slots[slot.id] && !targets.includes(slot.id)) targets.push(slot.id);
   }
   return { targets: targets.slice(0, count), overflow: Math.max(0, count - targets.length) };

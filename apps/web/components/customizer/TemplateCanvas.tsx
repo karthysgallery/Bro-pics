@@ -151,12 +151,12 @@ export function TemplateCanvas({ customizer, onRequestPhoto, maxHeight = 640, fi
           ? (slotId) => {
               const index = Math.max(0, template.photoSlots.findIndex((s) => s.id === slotId));
               let pick = sampleImages[index % sampleImages.length]!;
-              // An "at least N photos" collage with a cut-out: the LAST example is the cut-out's own (a person with no
+              // An "at least N photos" collage: the LAST example is the main photo's own (e.g. a person with no
               // background); the cells repeat the others, so a mosaic of 60 needs no more than the 40 examples allowed.
-              if (template.minPhotos !== undefined && sampleImages.length > 1 && template.photoSlots.some((s) => s.removeBackground)) {
+              if (template.minPhotos !== undefined && sampleImages.length > 1 && template.photoSlots.some((s) => s.required)) {
                 const slot = template.photoSlots[index];
-                const cells = template.photoSlots.filter((s) => !s.removeBackground);
-                pick = slot?.removeBackground
+                const cells = template.photoSlots.filter((s) => !s.required);
+                pick = slot?.required
                   ? sampleImages[sampleImages.length - 1]!
                   : sampleImages[Math.max(0, cells.findIndex((s) => s.id === slotId)) % (sampleImages.length - 1)]!;
               }

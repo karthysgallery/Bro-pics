@@ -58,3 +58,18 @@ describe('minPhotos: "at least N photos" collages', () => {
     expect(validateTemplate(atLeastSix).issues.map((i) => i.code)).not.toContain('min_photos_too_high');
   });
 });
+
+describe('repeat fill on an "at least N photos" collage', () => {
+  it('never puts a repeated photo into the main (required) space, even one that is not a cut-out', async () => {
+    const { repeatPhotosIntoEmpty } = await import('./repeat-fill');
+    let s = createEmptyState(atLeastSix.id, atLeastSix.version);
+    s = setSlotPhoto(s, cells[0].id, photo(1));
+    s = setSlotPhoto(s, cells[1].id, photo(2));
+    const filled = repeatPhotosIntoEmpty(atLeastSix, s).state;
+    expect(filled.slots[main.id]).toBeUndefined();
+    expect(cells.every((c) => filled.slots[c.id])).toBe(true);
+    // Without minPhotos (an older mosaic whose spaces are all required) every space is still filled.
+    const older = { ...atLeastSix, minPhotos: undefined };
+    expect(repeatPhotosIntoEmpty(older, s).state.slots[main.id]).toBeDefined();
+  });
+});

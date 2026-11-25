@@ -117,7 +117,7 @@ describe('planPhotoTargets', () => {
   });
 
   it('an "at least N photos" collage keeps a bulk pick out of its main cut-out photo, unless that space was chosen', () => {
-    const withMain = { ...t, minPhotos: 2, photoSlots: t.photoSlots.map((s, i) => (i === 0 ? { ...s, removeBackground: true } : s)) };
+    const withMain = { ...t, minPhotos: 2, photoSlots: t.photoSlots.map((s, i) => (i === 0 ? { ...s, removeBackground: true, required: true } : { ...s, required: false })) };
     expect(planPhotoTargets(withMain, createEmptyState('grid', 1), 3)).toEqual({ targets: ['s2', 's3', 's4'], overflow: 0 });
     expect(planPhotoTargets(withMain, createEmptyState('grid', 1), 1, 's1')).toEqual({ targets: ['s1'], overflow: 0 });
     // Without minPhotos, older cut-out designs fill in order as before.
