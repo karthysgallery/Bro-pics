@@ -142,7 +142,11 @@ export function CustomizerPreview({ customizer, variant, onRequestPhoto, default
       )}
 
       {atLeast && photoCount < template.photoSlots.length && (
-        <p className="px-1 text-center text-2xs text-ink/55">Spaces marked + are empty. Any you leave empty print as plain grey tiles, as in the room views.</p>
+        <p className="px-1 text-center text-2xs text-ink/55">
+          {template.repeatToFill
+            ? 'Spaces you leave empty are filled by repeating your photos, exactly as shown. Tap any space to put a different photo there.'
+            : 'Spaces marked + are empty. Any you leave empty print as plain grey tiles, as in the room views.'}
+        </p>
       )}
 
       {glitter && roomImage && (

@@ -79,6 +79,8 @@ export interface PrintTextField {
   /** Min/max font size in EDITOR canvas px (400×400). Will be scaled to print resolution. */
   minFontSizePx?: number;
   maxFontSizePx?: number;
+  /** Neon glow under the letters; blurPx at print resolution (the browser's canvas shadowBlur at the same scale). */
+  glow?: { color: string; blurPx: number };
 }
 
 // ── Server-side text measurement heuristic ───────────────────────────
@@ -182,16 +184,34 @@ export function buildTextZoneSvg(
     })
     .join('\n');
 
+  const textAttrs = `font-family="${fontStack}"
+      font-size="${fitResult.fontSizePx}px"
+      fill="${escapeXml(field.color)}"
+      text-anchor="${textAnchor}"
+      dominant-baseline="auto"`;
+  // Glow: the letters' shape blurred and filled with the glow colour, twice, under the sharp letters. A canvas
+  // shadowBlur of B is a Gaussian of standard deviation B/2, so the print matches the browser preview.
+  const glow = field.glow && /^#[0-9a-fA-F]{6}$/.test(field.glow.color) && field.glow.blurPx > 0 ? field.glow : null;
+  const glowDefs = glow
+    ? `<defs><filter id="glow" x="-50%" y="-100%" width="200%" height="300%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="${(glow.blurPx / 2).toFixed(2)}" result="b"/>
+        <feFlood flood-color="${glow.color}"/>
+        <feComposite in2="b" operator="in" result="g"/>
+        <feMerge><feMergeNode in="g"/><feMergeNode in="g"/></feMerge>
+      </filter></defs>`
+    : '';
+  const glowText = glow ? `<text ${textAttrs} filter="url(#glow)">
+${textElements}
+    </text>` : '';
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${printWidthPx}" height="${printHeightPx}">
     <style>
         ${fontFaces}
     </style>
+    ${glowDefs}
+    ${glowText}
     <text
-      font-family="${fontStack}"
-      font-size="${fitResult.fontSizePx}px"
-      fill="${escapeXml(field.color)}"
-      text-anchor="${textAnchor}"
-      dominant-baseline="auto"
+      ${textAttrs}
     >
 ${textElements}
     </text>

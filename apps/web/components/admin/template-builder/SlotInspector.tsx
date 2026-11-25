@@ -233,6 +233,19 @@ export function TextSlotInspector({ slot, onChange, onRemove, disabled }: { slot
         <NumberField label="Smallest size" suffix="px at 400" value={slot.minFontSizePx ?? 8} step={1} min={4} onChange={(n) => onChange({ minFontSizePx: Math.max(4, n) })} disabled={disabled} />
         <NumberField label="Largest size" suffix="px at 400" value={slot.maxFontSizePx ?? 32} step={1} min={4} onChange={(n) => onChange({ maxFontSizePx: Math.max(4, n) })} disabled={disabled} />
       </div>
+      <label className="flex items-start gap-2 rounded-lg bg-tint px-2.5 py-2 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={slot.glow !== undefined}
+          onChange={(e) => onChange({ glow: e.target.checked ? { color: '#fff3d6', blur: 0.012 } : undefined })}
+          disabled={disabled}
+          className="mt-0.5 h-4 w-4 accent-[#c9861a]"
+        />
+        <span>
+          <span className="font-semibold">Glow</span>
+          <span className="block text-ink/60">A soft neon-style glow round the letters, so light text stays readable over photos.</span>
+        </span>
+      </label>
       <BoxFields box={slot} onChange={onChange} disabled={disabled} />
       {!disabled && (
         <button type="button" onClick={onRemove} className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-alert hover:border-alert">

@@ -1,4 +1,4 @@
-import {
+import { repeatPhotosIntoEmpty,
   FONT_MAP,
   calendarLayout,
   chosenCalendarDate,
@@ -421,6 +421,14 @@ function drawTextSlot(ctx: CanvasRenderingContext2D, input: RenderInput, slot: T
     const lineHeight = fit.fontSizePx * 1.2;
     const startY = zone.y + (zone.height - fit.lines.length * lineHeight) / 2 + fit.fontSizePx;
     const x = alignedX(slot, zone);
+    if (slot.glow) {
+      // Neon glow: two blurred passes in the glow colour under the letters (the print draws the same two passes).
+      ctx.save();
+      ctx.shadowColor = slot.glow.color;
+      ctx.shadowBlur = slot.glow.blur * W;
+      for (let pass = 0; pass < 2; pass++) fit.lines.forEach((line, i) => ctx.fillText(line, x, startY + i * lineHeight));
+      ctx.restore();
+    }
     fit.lines.forEach((line, i) => ctx.fillText(line, x, startY + i * lineHeight));
   }
   ctx.restore();
@@ -503,7 +511,9 @@ export function requiredImageSources(
   return { srcs: [...new Set(srcs)], unresolvedPhotos };
 }
 
-export function renderTemplate(ctx: CanvasRenderingContext2D, input: RenderInput): RenderResult {
+export function renderTemplate(ctx: CanvasRenderingContext2D, rawInput: RenderInput): RenderResult {
+  // A mosaic that fills by repeating: the empty spaces show the customer's photos again, exactly as the print does.
+  const input = rawInput.template.repeatToFill ? { ...rawInput, state: repeatPhotosIntoEmpty(rawInput.template, rawInput.state).state } : rawInput;
   const { template, width: W, height: H } = input;
   const slotsById = new Map(template.photoSlots.map((s) => [s.id, s]));
   const textsById = new Map(template.textSlots.map((s) => [s.id, s]));

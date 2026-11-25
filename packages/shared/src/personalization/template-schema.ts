@@ -118,6 +118,13 @@ export const TextSlotSchema = z.object({
   maxFontSizePx: z.number().positive().optional(),
   /** The customer pastes a Spotify link here and the design shows its scannable Spotify code, in the text colour. */
   spotifyCode: z.boolean().optional(),
+  /** A soft neon-style glow round the letters. `blur` is a fraction of the canvas width (same look at every size). */
+  glow: z
+    .object({
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      blur: z.number().positive().max(0.05),
+    })
+    .optional(),
 });
 export type TextSlot = z.infer<typeof TextSlotSchema>;
 
@@ -227,6 +234,12 @@ export const PersonalizationTemplateSchema = z.object({
    * space must be filled and optional ones may stay empty, as before.
    */
   minPhotos: z.number().int().positive().optional(),
+  /**
+   * A mosaic that always looks full: photo spaces the customer left empty are filled by repeating their photos
+   * (never the same photo side by side), in the preview AND the print file, both via repeatPhotosIntoEmpty. The
+   * state keeps only the customer's own photos, so counts and the minimum stay honest.
+   */
+  repeatToFill: z.boolean().optional(),
   textSlots: z.array(TextSlotSchema).default([]),
   /** Month calendars with a customer-chosen date. Absent on templates made before calendars existed. */
   calendarSlots: z.array(CalendarSlotSchema).optional(),

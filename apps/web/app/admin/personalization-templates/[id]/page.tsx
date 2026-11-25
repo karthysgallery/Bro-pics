@@ -615,6 +615,18 @@ export default function TemplateBuilderPage({ params }: BuilderPageProps) {
                       <span>of the {optional} optional spaces (0 = no minimum)</span>
                     </label>
                   )}
+                  {optional > 1 && (
+                    <label className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={draft.repeatToFill ?? false}
+                        disabled={!editable}
+                        onChange={(e) => change((t) => ({ ...t, repeatToFill: e.target.checked || undefined }))}
+                        className="mt-0.5 accent-[#c9861a]"
+                      />
+                      <span>Fill empty spaces by repeating the customer&apos;s photos (a mosaic that always looks full)</span>
+                    </label>
+                  )}
                   {draft.minPhotos !== undefined && (
                     <p className="text-ink/65">Customers add their required photos (e.g. the main photo) on their own, then {draft.minPhotos} to {optional} collage photos.</p>
                   )}

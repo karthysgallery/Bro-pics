@@ -501,7 +501,9 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
                   : count.filled < count.min
                     ? `${count.min - count.filled} more photo${count.min - count.filled === 1 ? '' : 's'} needed (at least ${count.min})`
                     : count.filled < count.max
-                      ? `Enough photos. Add up to ${count.max - count.filled} more, or leave the rest empty.`
+                      ? template.repeatToFill
+                        ? `Enough photos. Add up to ${count.max - count.filled} more; any space left empty repeats one of your photos.`
+                        : `Enough photos. Add up to ${count.max - count.filled} more, or leave the rest empty.`
                       : 'All photos added'}
               </span>
               <span className="shrink-0 tabular-nums text-ink/60">{count.filled}/{count.max}</span>
@@ -557,7 +559,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           </ul>
         )}
   
-        {total > 1 && emptyRegular > 0 && filledRegular > 0 && !customizer.uploading && (
+        {total > 1 && emptyRegular > 0 && filledRegular > 0 && !customizer.uploading && !template.repeatToFill && (
           <button
             type="button"
             onClick={() => customizer.repeatPhotos()}

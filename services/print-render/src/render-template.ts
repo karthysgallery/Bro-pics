@@ -1,5 +1,5 @@
 import sharp, { type OverlayOptions } from 'sharp';
-import {
+import { repeatPhotosIntoEmpty,
   cropRectInOriginalPx,
   slotAspectRatio,
   slotRectPx,
@@ -100,7 +100,9 @@ function shapeMaskSvg(slot: PhotoSlot, width: number, height: number): Buffer | 
  * decides whether an order may exist without them).
  */
 export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer> {
-  const { template, state, assets } = input;
+  const { template, assets } = input;
+  // A mosaic that fills by repeating: the same repeats the customer saw in the preview (repeatPhotosIntoEmpty).
+  const state = template.repeatToFill ? repeatPhotosIntoEmpty(template, input.state).state : input.state;
   const scale = input.scale ?? 1;
   const width = Math.max(1, Math.round(template.canvas.width * scale));
   const height = Math.max(1, Math.round(template.canvas.height * scale));
@@ -198,6 +200,7 @@ export async function renderTemplate(input: RenderTemplateInput): Promise<Buffer
         color: chosen?.color ?? slot.defaultColor ?? '#000000',
         minFontSizePx: slot.minFontSizePx,
         maxFontSizePx: slot.maxFontSizePx,
+        glow: slot.glow ? { color: slot.glow.color, blurPx: slot.glow.blur * width } : undefined,
       },
       width,
       height

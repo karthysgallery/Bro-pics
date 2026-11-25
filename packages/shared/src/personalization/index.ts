@@ -12,3 +12,4 @@ export * from './interaction';
 export * from './slot-detection';
 export * from './calendar';
 export * from './spotify';
+export * from './repeat-fill';
