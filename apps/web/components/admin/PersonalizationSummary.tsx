@@ -1,4 +1,4 @@
-import { checkCompleteness, formatCalendarDate, type OrderPersonalizationSnapshot, type PrintSizeIn } from '@bro-pics/shared';
+import { checkCompleteness, formatCalendarDate, repeatPhotosIntoEmpty, type OrderPersonalizationSnapshot, type PrintSizeIn } from '@bro-pics/shared';
 
 const TIER_STYLE = { green: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700' } as const;
 const TIER_LABEL = { green: 'Sharp', amber: 'Acceptable', red: 'Low resolution' } as const;
@@ -13,6 +13,8 @@ export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: Or
   // Sharpness at the size the customer bought (the same check the editor and checkout used).
   const status = checkCompleteness(template, state, { printSizeIn });
   const statusBySlot = new Map(status.slots.map((s) => [s.slotId, s]));
+  // A mosaic that fills by repeating: the spaces the customer left empty are printed with one of their photos.
+  const repeated = template.repeatToFill ? repeatPhotosIntoEmpty(template, state).state.slots : null;
 
   return (
     <section aria-label="Personalization" className="mt-3 rounded-xl border border-line bg-field/50 p-3 text-2xs space-y-3">
@@ -65,7 +67,13 @@ export function PersonalizationSummary({ snapshot, printSizeIn }: { snapshot: Or
                     </>
                   ) : (
                     <td colSpan={4} className="py-1 text-ink/40">
-                      Left empty
+                      {repeated?.[slot.id] ? (
+                        <>
+                          Filled automatically: repeats <span className="font-mono break-all">{repeated[slot.id]!.assetId}</span>
+                        </>
+                      ) : (
+                        'Left empty'
+                      )}
                     </td>
                   )}
                 </tr>
