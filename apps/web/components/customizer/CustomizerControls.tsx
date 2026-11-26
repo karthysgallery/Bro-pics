@@ -647,7 +647,7 @@ export function CustomizerControls({ customizer, onAddPhotos, onRequestPhoto, on
           .map(([slotId, a]) => (
             <p key={slotId} role="status" className="flex items-center gap-2 rounded-xl bg-tint px-3 py-2 text-xs text-ink">
               <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink/20 border-t-ink" aria-hidden="true" />
-              {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.working} This takes about half a minute.
+              {template.photoSlots.find((s) => s.id === slotId)?.label}: {a.working} This can take up to a minute.
             </p>
           ))}
   

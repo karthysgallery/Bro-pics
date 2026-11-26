@@ -141,21 +141,35 @@ export async function uploadPhoto(file: File, ctx: UploadContext, fetchImpl: typ
  * "cut out" photo space). Returns the copy's upload; when the photo is already
  * a cut-out, the same upload comes back.
  */
+/** A cut-out request that timed out or failed on the way is asked again this many times, after this wait. */
+const CUTOUT_RETRIES = 2;
+const CUTOUT_RETRY_DELAY_MS = 8000;
+
 export async function requestCutout(
   uploadId: string,
   ctx: Omit<UploadContext, 'variantId'>,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  retryDelayMs = CUTOUT_RETRY_DELAY_MS
 ): Promise<UploadedPhoto & { subjectBox?: { x: number; y: number; width: number; height: number } }> {
-  let res: Response;
-  try {
-    res = await fetchImpl(`/api/uploads/${encodeURIComponent(uploadId)}/cutout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Session-Id': ctx.sessionId, ...(ctx.authToken && { Authorization: `Bearer ${ctx.authToken}` }) },
-      body: '{}',
-    });
-  } catch {
-    throw new PhotoError('cutout_failed', 'The background could not be removed (no connection), so your photo is used as it is.');
+  let res: Response | null = null;
+  // The site's front door (Firebase Hosting) gives up on a request after 60 s, while a cut-out on a service that is
+  // just waking up can take about that long. The service keeps finishing the cut-out, and a second request for the
+  // same photo gets that finished cut-out straight away, so a timed-out or dropped request is asked again.
+  for (let attempt = 0; attempt <= CUTOUT_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(retryDelayMs);
+    try {
+      res = await fetchImpl(`/api/uploads/${encodeURIComponent(uploadId)}/cutout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Session-Id': ctx.sessionId, ...(ctx.authToken && { Authorization: `Bearer ${ctx.authToken}` }) },
+        body: '{}',
+      });
+    } catch {
+      res = null;
+      continue;
+    }
+    if (![502, 503, 504].includes(res.status)) break;
   }
+  if (!res) throw new PhotoError('cutout_failed', 'The background could not be removed (no connection), so your photo is used as it is.');
   const body = (await res.json().catch(() => ({}))) as {
     uploadId?: string;
     widthPx?: number;
