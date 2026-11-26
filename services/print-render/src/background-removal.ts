@@ -47,7 +47,15 @@ function loadSession(): Promise<InferenceSession> {
     const path = cutoutModelPath();
     if (!existsSync(path)) return Promise.reject(new CutoutUnavailableError(`Background removal model not found at ${path}`));
     sessionPromise = import('onnxruntime-node')
-      .then((ort) => ort.InferenceSession.create(path, { graphOptimizationLevel: 'all', executionMode: 'sequential' }))
+      .then((ort) => ort.InferenceSession.create(path, {
+        graphOptimizationLevel: 'all',
+        executionMode: 'sequential',
+        // Give the ~6 GB a cut-out needs back after each photo. With ONNX Runtime's own memory pool and pattern
+        // planning on, a warm Cloud Run instance kept that memory and the NEXT cut-out went past 8 GB and was killed
+        // (seen live 2026-11-26: first cut-out fine, second one "Memory limit of 8192 MiB exceeded").
+        enableCpuMemArena: false,
+        enableMemPattern: false,
+      }))
       .catch((err: unknown) => {
         sessionPromise = null;
         throw new CutoutUnavailableError(`Background removal model could not be loaded: ${err instanceof Error ? err.message : String(err)}`);
@@ -85,11 +93,14 @@ async function predictMask(rgb: Buffer): Promise<Uint8Array> {
   for (let i = 0; i < plane; i++) {
     for (let c = 0; c < 3; c++) input[c * plane + i] = (rgb[i * 3 + c]! / 255 - MEAN[c]!) / STD[c]!;
   }
-  const feeds = { [session.inputNames[0]!]: new ort.Tensor('float32', input, [1, 3, MODEL_SIDE, MODEL_SIDE]) };
-  const results = await session.run(feeds);
-  // The final (finest) prediction is the last output.
+  const inputTensor = new ort.Tensor('float32', input, [1, 3, MODEL_SIDE, MODEL_SIDE]);
+  const results = await session.run({ [session.inputNames[0]!]: inputTensor });
+  // The final (finest) prediction is the last output; copy it out, then release every native output right away
+  // (BiRefNet returns several full-size predictions) instead of waiting for the garbage collector.
   const output = results[session.outputNames[session.outputNames.length - 1]!]!;
-  const logits = output.data as Float32Array;
+  const logits = Float32Array.from(output.data as Float32Array);
+  for (const t of Object.values(results)) (t as { dispose?: () => void }).dispose?.();
+  (inputTensor as { dispose?: () => void }).dispose?.();
   const mask = new Uint8Array(plane);
   // The export emits logits; squash them to 0..1 (a no-op shape if they are already probabilities).
   const needsSigmoid = logits.some((v) => v < 0 || v > 1);

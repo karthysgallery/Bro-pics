@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends fontconfig \
 
 WORKDIR /app
 ENV NODE_ENV=production
+# glibc keeps per-thread memory pools; with ONNX Runtime + libvips threads on 1-2 big images that held GBs after each
+# cut-out. Two pools is the usual fix for sharp/ONNX on glibc.
+ENV MALLOC_ARENA_MAX=2
 ENV PRINT_RENDER_FONTS_DIR=/app/fonts
 
 COPY deploy/package.json ./package.json

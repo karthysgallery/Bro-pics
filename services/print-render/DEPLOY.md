@@ -49,8 +49,11 @@ gcloud run deploy print-render --project bropics-app --region asia-south1 \
   --service-account print-render@bropics-app.iam.gserviceaccount.com \
   --no-allow-unauthenticated \
   --set-env-vars FIREBASE_STORAGE_BUCKET=bropics-app.firebasestorage.app,GCLOUD_PROJECT=bropics-app \
-  --memory 2Gi --cpu 2 --concurrency 1 --max-instances 5 --timeout 540
+  --memory 8Gi --cpu 2 --concurrency 1 --max-instances 5 --timeout 540
 ```
+
+Memory: a background removal (cut-out) peaks around 1.5 GB with the memory settings in background-removal.ts and
+the Dockerfile; 8 GiB leaves room for a large print render. At 2 GiB every cut-out was killed (seen live 2026-11-26).
 
 The request timeout (540 s) is shorter than the job lease (10 min), so a
 lease can only expire after the request that held it is gone.
